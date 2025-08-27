@@ -6,27 +6,40 @@
     <title>服务器状态监控</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
     <style>
+        /* 原有的CSS样式保持不变 */
         :root {
-            --bg-color: #f4f4f4;
-            --text-color: #333;
-            --card-bg: #fff;
+            --bg-color: #f8f9fa;
+            --text-color: #212529;
+            --card-bg: #ffffff;
             --primary-color: #4a6ee0;
-            --border-color: #ddd;
-            --success-color: #4CAF50;
-            --error-color: #f44336;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --border-color: #dee2e6;
+            --table-header-bg: #e9ecef;
+            --table-row-even: #f8f9fa;
+            --table-row-hover: #ececec;
         }
 
         [data-theme="dark"] {
             --bg-color: #121212;
-            --text-color: #eee;
+            --text-color: #e9ecef;
             --card-bg: #1e1e1e;
             --primary-color: #6c8dfa;
-            --border-color: #444;
+            --secondary-color: #a0aec0;
+            --success-color: #48bb78;
+            --warning-color: #ecc94b;
+            --danger-color: #f56565;
+            --border-color: #2d3748;
+            --table-header-bg: #2d3748;
+            --table-row-even: #2a2a2a;
+            --table-row-hover: #2d2d2d;
         }
 
         * {
             box-sizing: border-box;
-            transition: background-color 0.3s, color 0.3s;
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
         }
 
         body {
@@ -64,7 +77,7 @@
         }
 
         #info {
-            font-size: 16px;
+            font-size: 14px;
             line-height: 1.6;
             padding: 15px;
         }
@@ -111,6 +124,139 @@
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
 
+        /* 状态表格样式 */
+        .status-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        .status-table th, .status-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .status-table th {
+            background-color: var(--table-header-bg);
+            font-weight: 600;
+        }
+
+        .status-table tr:nth-child(even) {
+            background-color: var(--table-row-even);
+        }
+
+        .status-table tr:hover {
+            background-color: var(--table-row-hover);
+        }
+
+        .status-value {
+            font-weight: 500;
+            color: var(--primary-color);
+        }
+
+        /* 在线用户表格样式 */
+        .online-users-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 13px;
+            table-layout: fixed;
+            word-wrap: break-word;
+        }
+
+        .online-users-table th, .online-users-table td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .online-users-table th {
+            background-color: var(--table-header-bg);
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        .online-users-table tr:nth-child(even) {
+            background-color: var(--table-row-even);
+        }
+
+        .online-users-table tr:hover {
+            background-color: var(--table-row-hover);
+        }
+
+        .online-count {
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 16px;
+            padding: 8px;
+            background-color: rgba(74, 110, 224, 0.1);
+            border-radius: 6px;
+        }
+
+        /* 用户信息表格容器 */
+        .user-table-container {
+            width: 100%;
+            overflow-x: auto;
+            margin-top: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        /* 用户离开动画 */
+        .user-leaving {
+            animation: userLeave 0.5s ease-out forwards;
+            background-color: rgba(220, 53, 69, 0.1) !important;
+        }
+
+        @keyframes userLeave {
+            0% {
+                opacity: 1;
+                max-height: 100px;
+            }
+            100% {
+                opacity: 0;
+                max-height: 0;
+                padding-top: 0;
+                padding-bottom: 0;
+                border-bottom-width: 0;
+            }
+        }
+
+        /* 用户加入动画 */
+        .user-joining {
+            animation: userJoin 0.5s ease-out;
+            background-color: rgba(40, 167, 69, 0.1) !important;
+        }
+
+        @keyframes userJoin {
+            0% {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 刷新动画 */
+        .refreshing {
+            animation: refreshing 1s infinite;
+        }
+
+        @keyframes refreshing {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
         /* 固定右下角媒体模块 */
         #fixedMediaContainer {
             position: fixed;
@@ -126,6 +272,7 @@
             display: flex;
             flex-direction: column;
             border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
         }
 
         .media-header {
@@ -145,12 +292,12 @@
 
         .media-controls {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             align-items: center;
         }
 
         .media-controls button {
-            padding: 4px 8px;
+            padding: 6px 10px;
             font-size: 12px;
         }
 
@@ -178,10 +325,34 @@
             max-width: 100%;
             max-height: 100%;
             object-fit: contain;
+            transition: transform 0.3s ease;
+        }
+
+        .media-zoomed {
+            position: fixed !important;
+            bottom: 0 !important;
+            right: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 10000;
+            border-radius: 0 !important;
+        }
+
+        .media-zoomed #fixedMediaImg,
+        .media-zoomed #fixedMediaVideo {
+            max-width: 90%;
+            max-height: 90%;
+            transform: none;
+            cursor: zoom-out;
+        }
+
+        .media-zoomed .media-header {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
         }
 
         .media-placeholder {
-            color: #999;
+            color: var(--secondary-color);
             text-align: center;
             padding: 20px;
             font-size: 14px;
@@ -192,7 +363,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: #999;
+            color: var(--secondary-color);
         }
 
         .spinner {
@@ -211,9 +382,169 @@
         }
 
         .media-error {
-            color: var(--error-color);
+            color: var(--danger-color);
             text-align: center;
             padding: 20px;
+        }
+
+        /* 移动设备特殊样式 */
+        .mobile-warning {
+            display: none;
+            background: var(--warning-color);
+            color: #000;
+            padding: 10px;
+            text-align: center;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        /* 美观的连接状态指示器 */
+        .connection-status-container {
+            display: flex;
+            align-items: center;
+            margin-left: 10px;
+            position: relative;
+        }
+
+        .connection-indicator {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .connection-indicator:hover {
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+            position: relative;
+        }
+
+        .status-connected .status-dot {
+            background-color: var(--success-color);
+            box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+            animation: pulse-green 2s infinite;
+        }
+
+        .status-connecting .status-dot {
+            background-color: var(--warning-color);
+            animation: pulse-orange 2s infinite;
+        }
+
+        .status-disconnected .status-dot {
+            background-color: var(--danger-color);
+        }
+
+        @keyframes pulse-green {
+            0% {
+                box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 6px rgba(40, 167, 69, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+            }
+        }
+
+        @keyframes pulse-orange {
+            0% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .status-text {
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .connection-details {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            padding: 12px;
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            width: 200px;
+            display: none;
+            border: 1px solid var(--border-color);
+        }
+
+        .connection-indicator:hover .connection-details {
+            display: block;
+        }
+
+        .connection-details h4 {
+            margin: 0 0 8px 0;
+            font-size: 12px;
+            color: var(--primary-color);
+        }
+
+        .connection-details p {
+            margin: 4px 0;
+            font-size: 11px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .connection-details .label {
+            color: var(--secondary-color);
+        }
+
+        .connection-details .value {
+            font-weight: 500;
+        }
+
+        .signal-strength {
+            display: flex;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .signal-bars {
+            display: flex;
+            align-items: flex-end;
+            height: 12px;
+            margin-right: 8px;
+        }
+
+        .signal-bar {
+            width: 3px;
+            margin-right: 2px;
+            background-color: var(--secondary-color);
+        }
+
+        .signal-bar.active {
+            background-color: var(--success-color);
+        }
+
+        .signal-bar:nth-child(1) { height: 4px; }
+        .signal-bar:nth-child(2) { height: 6px; }
+        .signal-bar:nth-child(3) { height: 8px; }
+        .signal-bar:nth-child(4) { height: 10px; }
+
+        .signal-text {
+            font-size: 10px;
+            color: var(--secondary-color);
         }
 
         /* 响应式设计 */
@@ -240,10 +571,94 @@
                 right: 20px;
                 bottom: 10px;
             }
+
+            .mobile-warning {
+                display: block;
+            }
+
+            .media-controls {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .volume-control {
+                order: 3;
+                width: 100%;
+                justify-content: center;
+                margin-top: 5px;
+            }
+
+            .connection-status-container {
+                margin-left: 0;
+                margin-top: 10px;
+                width: 100%;
+                justify-content: center;
+            }
+
+            /* 移动端表格优化 */
+            .online-users-table {
+                font-size: 12px;
+            }
+
+            .online-users-table th,
+            .online-users-table td {
+                padding: 6px 8px;
+            }
+
+            .status-table {
+                font-size: 12px;
+            }
+
+            .status-table th,
+            .status-table td {
+                padding: 8px 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .controls {
+                flex-direction: column;
+            }
+
+            select, button {
+                width: 100%;
+                margin: 5px 0;
+            }
+
+            #fixedMediaContainer {
+                height: 180px;
+            }
+
+            /* 超小屏幕表格优化 */
+            .online-users-table {
+                font-size: 11px;
+            }
+
+            .online-users-table th,
+            .online-users-table td {
+                padding: 4px 6px;
+            }
+
+            .status-table {
+                font-size: 11px;
+            }
+
+            .status-table th,
+            .status-table td {
+                padding: 6px 8px;
+            }
+
+            /* 在超小屏幕上隐藏不必要的列 */
+            .hide-on-mobile {
+                display: none;
+            }
         }
     </style>
 </head>
 <body data-theme="light">
+<div class="mobile-warning">
+    提示：在移动设备上，视频可能需要手动点击播放按钮
+</div>
 
 <h2>实时服务器状态监控</h2>
 
@@ -252,7 +667,33 @@
         <option value="">选择网卡...</option>
     </select>
     <button onclick="toggleTheme()">切换主题</button>
-    <button onclick="reconnectWebSocket()">重新连接</button>
+    <button onclick="reconnectWebSocket()" id="reconnectBtn">重新连接</button>
+    <button onclick="refreshAccessStats()">刷新访问统计</button>
+    <button onclick="window.location.href='ebooks.html'">电子书</button>
+
+    <!-- 美观的连接状态指示器 -->
+    <div class="connection-status-container">
+        <div class="connection-indicator status-disconnected" id="connectionIndicator">
+            <div class="status-dot"></div>
+            <span class="status-text" id="statusText">已断开</span>
+            <div class="connection-details">
+                <h4>连接状态</h4>
+                <p><span class="label">状态:</span> <span class="value" id="detailStatus">已断开</span></p>
+                <p><span class="label">网卡:</span> <span class="value" id="detailIface">-</span></p>
+                <p><span class="label">重连次数:</span> <span class="value" id="detailReconnect">0</span></p>
+                <p><span class="label">持续时间:</span> <span class="value" id="detailDuration">-</span></p>
+                <div class="signal-strength">
+                    <div class="signal-bars">
+                        <div class="signal-bar"></div>
+                        <div class="signal-bar"></div>
+                        <div class="signal-bar"></div>
+                        <div class="signal-bar"></div>
+                    </div>
+                    <span class="signal-text" id="signalText">信号强度</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="container">
@@ -262,10 +703,38 @@
             <div>等待数据连接...</div>
         </div>
     </div>
-    <div class="card"><div id="cpuChart" class="chart"></div></div>
+    <!-- 增强的在线用户卡片 -->
+    <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong>在线用户信息</strong>
+            <span id="lastUpdated" style="font-size: 12px; color: var(--secondary-color);">上次更新: -</span>
+        </div>
+        <div id="onlineUsersInfo">
+            <div class="online-count">
+                当前在线: <span id="onlineCount">0</span> 用户 | <span id="uniqueIpsCount">0</span> 个独立IP
+            </div>
+            <div class="user-table-container">
+                <table id="onlineUsersTable" class="online-users-table">
+                    <thead>
+                    <tr>
+                        <th>IP地址</th>
+                        <th>访问页面</th>
+                        <th class="hide-on-mobile">连接时间</th>
+                        <th>用户标识</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <!-- 用户数据将通过JavaScript动态生成 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
     <div class="card"><div id="memChart" class="chart"></div></div>
+    <div class="card"><div id="cpuChart" class="chart"></div></div>
     <div class="card"><div id="netChart" class="chart"></div></div>
     <div class="card"><div id="diskChart" class="chart"></div></div>
+    <div class="card"><div id="accessChart" class="chart"></div></div>
 </div>
 
 <!-- 右下角固定位置媒体模块 -->
@@ -279,11 +748,12 @@
             </div>
             <button id="refreshMedia">刷新</button>
             <button id="togglePlayPause" style="display:none;">暂停</button>
+            <button id="zoomMedia">放大</button>
         </div>
     </div>
     <div class="media-content">
         <img id="fixedMediaImg" style="display:none;" alt="媒体图片">
-        <video id="fixedMediaVideo" style="display:none;" loop muted playsinline alt="媒体视频"></video>
+        <video id="fixedMediaVideo" style="display:none;" loop muted playsinline preload="metadata" alt="媒体视频"></video>
         <div class="media-placeholder" id="mediaPlaceholder">
             媒体加载中...
         </div>
@@ -294,31 +764,310 @@
     // 全局变量
     let theme = 'light';
     let ws = null;
-    let authHeader = 123456;
-    const baseUrl = "http://wustwu.cn:9000";
+    const baseUrl = "https://wustwu.cn:9000";
     let token = prompt("请输入访问Token：");
-    if(!token){ alert("Token必填"); throw new Error("No token"); }
+    if(!token){
+        alert("Token必填");
+        throw new Error("No token");
+    }
+
+    // 在线用户相关变量
+    let onlineUsersInterval = null;
+    let lastOnlineUsers = [];
+
+    // WebSocket重连相关变量
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    let reconnectTimeout = null;
+    let isManualReconnect = false;
+    let connectionStartTime = null;
+    let currentIface = '';
+
+    // 检测移动设备
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    // 页面可见性API
+    let hidden, visibilityChange;
+    if (typeof document.hidden !== "undefined") {
+        hidden = "hidden";
+        visibilityChange = "visibilitychange";
+    } else if (typeof document.msHidden !== "undefined") {
+        hidden = "msHidden";
+        visibilityChange = "msvisibilitychange";
+    } else if (typeof document.webkitHidden !== "undefined") {
+        hidden = "webkitHidden";
+        visibilityChange = "webkitvisibilitychange";
+    }
+
+    // 更新连接状态显示
+    function updateConnectionStatus(status, text) {
+        const indicator = document.getElementById('connectionIndicator');
+        const statusText = document.getElementById('statusText');
+        const detailStatus = document.getElementById('detailStatus');
+
+        // 移除所有状态类
+        indicator.classList.remove('status-connected', 'status-connecting', 'status-disconnected');
+
+        // 添加新状态类
+        indicator.classList.add(`status-${status}`);
+        statusText.textContent = text;
+        detailStatus.textContent = text;
+
+        // 更新信号强度显示
+        updateSignalStrength(status);
+
+        // 更新连接持续时间
+        if (status === 'connected') {
+            connectionStartTime = new Date();
+            startConnectionTimer();
+        } else {
+            stopConnectionTimer();
+        }
+
+        // 更新详细信息
+        document.getElementById('detailIface').textContent = currentIface || '-';
+        document.getElementById('detailReconnect').textContent = reconnectAttempts;
+    }
+
+    // 更新信号强度显示
+    function updateSignalStrength(status) {
+        const bars = document.querySelectorAll('.signal-bar');
+        const signalText = document.getElementById('signalText');
+
+        bars.forEach(bar => bar.classList.remove('active'));
+
+        if (status === 'connected') {
+            // 模拟信号强度（随机值）
+            const strength = Math.floor(Math.random() * 4) + 1;
+            for (let i = 0; i < strength; i++) {
+                bars[i].classList.add('active');
+            }
+
+            // 设置信号文本
+            const strengths = ['弱', '一般', '良好', '优秀'];
+            signalText.textContent = `信号: ${strengths[strength - 1]}`;
+        } else {
+            signalText.textContent = '信号: 无';
+        }
+    }
+
+    // 启动连接计时器
+    function startConnectionTimer() {
+        stopConnectionTimer(); // 确保没有其他计时器运行
+
+        // 每秒更新连接持续时间
+        onlineUsersInterval = setInterval(() => {
+            if (connectionStartTime) {
+                const duration = Math.floor((new Date() - connectionStartTime) / 1000);
+                const minutes = Math.floor(duration / 60);
+                const seconds = duration % 60;
+                document.getElementById('detailDuration').textContent =
+                    `${minutes}分${seconds}秒`;
+            }
+        }, 1000);
+    }
+
+    // 停止连接计时器
+    function stopConnectionTimer() {
+        if (onlineUsersInterval) {
+            clearInterval(onlineUsersInterval);
+            onlineUsersInterval = null;
+        }
+    }
+
     // 初始化函数
     function init() {
+        // 首先检查并设置主题
+        checkAndSetTheme();
+
         initCharts();
         loadInterfaces();
         setupMediaControls();
         loadFixedMedia();
+        refreshAccessStats();
+
+        // 添加页面可见性变化监听
+        document.addEventListener(visibilityChange, handleVisibilityChange, false);
+
+        // 如果是移动设备，添加特殊处理
+        if (isMobile) {
+            console.log("移动设备检测，启用特殊处理");
+        }
+
+        // 设置定时检查主题（每5分钟检查一次）
+        setInterval(checkAndSetTheme, 5 * 60 * 1000);
     }
 
-    // 切换主题
-    function toggleTheme() {
-        theme = theme === 'light' ? 'dark' : 'light';
+    // 检查并设置主题
+    function checkAndSetTheme() {
+        // 检查是否有手动设置的主题偏好
+        const manualTheme = localStorage.getItem('manualTheme');
+
+        if (manualTheme) {
+            // 如果用户手动设置过主题，使用手动设置
+            setTheme(manualTheme, false); // false表示这是手动设置，不需要保存
+        } else {
+            // 根据时间自动设置主题（晚上18点到早上6点为暗黑模式）
+            const hour = new Date().getHours();
+            const isNightTime = hour >= 18 || hour < 6;
+            setTheme(isNightTime ? 'dark' : 'light', false);
+        }
+    }
+
+    // 设置主题
+    function setTheme(newTheme, isManual = true) {
+        theme = newTheme;
         document.body.setAttribute('data-theme', theme);
+
+        // 如果是手动设置，保存到本地存储
+        if (isManual) {
+            localStorage.setItem('manualTheme', theme);
+        }
+
         // 重新渲染图表以适应主题变化
         setTimeout(() => {
-            if (cpuChart && memChart && netChart && diskChart) {
+            if (cpuChart && memChart && netChart && diskChart && accessChart) {
                 cpuChart.resize();
                 memChart.resize();
                 netChart.resize();
                 diskChart.resize();
+                accessChart.resize();
             }
         }, 300);
+    }
+
+    // 切换主题
+    function toggleTheme() {
+        const newTheme = theme === 'light' ? 'dark' : 'light';
+        setTheme(newTheme);
+    }
+
+    // 处理页面可见性变化
+    function handleVisibilityChange() {
+        if (!document[hidden]) {
+            // 页面变为可见状态
+            console.log("页面变为可见，刷新图表和数据");
+
+            // 重新调整图表大小
+            setTimeout(() => {
+                if (cpuChart && memChart && netChart && diskChart && accessChart) {
+                    cpuChart.resize();
+                    memChart.resize();
+                    netChart.resize();
+                    diskChart.resize();
+                    accessChart.resize();
+                }
+            }, 100);
+
+            // 检查WebSocket连接状态
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                console.log("WebSocket连接已断开，尝试重新连接");
+                reconnectWebSocket();
+            }
+
+            // 刷新访问统计数据
+            refreshAccessStats();
+
+            // 刷新媒体
+            loadFixedMedia();
+
+            // 检查是否需要更新主题（例如从白天进入夜晚）
+            checkAndSetTheme();
+        }
+    }
+
+    // 更新在线用户显示
+    function updateOnlineUsersDisplay(data) {
+        if (!data || typeof data !== 'object') {
+            document.getElementById('onlineUsersInfo').innerHTML = `
+                    <div class="media-error">
+                        无效的在线用户数据
+                    </div>
+                `;
+            return;
+        }
+
+        const onlineCount = data.online_count || 0;
+        const uniqueIps = data.unique_ips || [];
+        const onlineUsers = data.online_users || [];
+
+        // 更新计数显示
+        document.getElementById('onlineCount').textContent = onlineCount;
+        document.getElementById('uniqueIpsCount').textContent = uniqueIps.length;
+
+        // 更新表格
+        updateOnlineUsersTable(onlineUsers);
+
+        document.getElementById('lastUpdated').textContent = `上次更新: ${new Date().toLocaleTimeString()}`;
+    }
+
+    // 更新在线用户表格
+    function updateOnlineUsersTable(users) {
+        const tableBody = document.querySelector('#onlineUsersTable tbody');
+        const currentUsers = Array.from(tableBody.querySelectorAll('tr')).map(row => row.getAttribute('data-ip'));
+        const newUsers = users.map(user => user.ip);
+
+        // 找出离开的用户
+        currentUsers.forEach(ip => {
+            if (!newUsers.includes(ip)) {
+                const row = tableBody.querySelector(`tr[data-ip="${ip}"]`);
+                if (row) {
+                    row.classList.add('user-leaving');
+                    // 动画结束后移除行
+                    setTimeout(() => {
+                        if (row.parentNode) {
+                            row.parentNode.removeChild(row);
+                        }
+                    }, 500);
+                }
+            }
+        });
+
+        // 找出新加入的用户并更新现有用户
+        users.forEach(user => {
+            const existingRow = tableBody.querySelector(`tr[data-ip="${user.ip}"]`);
+
+            if (existingRow) {
+                // 更新现有用户信息
+                updateUserRow(existingRow, user);
+            } else {
+                // 添加新用户行
+                const newRow = createUserRow(user);
+                newRow.classList.add('user-joining');
+                tableBody.appendChild(newRow);
+
+                // 动画结束后移除加入动画类
+                setTimeout(() => {
+                    newRow.classList.remove('user-joining');
+                }, 500);
+            }
+        });
+    }
+
+    // 创建用户行
+    function createUserRow(user) {
+        const row = document.createElement('tr');
+        row.setAttribute('data-ip', user.ip);
+
+        row.innerHTML = `
+                <td>${user.ip || 'N/A'}</td>
+                <td>${user.page || 'N/A'}</td>
+                <td class="hide-on-mobile">${user.since || 'N/A'}</td>
+                <td>${user.user_agent || 'N/A'}</td>
+            `;
+
+        return row;
+    }
+
+    // 更新用户行
+    function updateUserRow(row, user) {
+        const cells = row.cells;
+        if (cells.length >= 5) {
+            cells[0].textContent = user.ip || 'N/A';
+            cells[1].textContent = user.page || 'N/A';
+            cells[2].textContent = user.since || 'N/A';
+            cells[3].textContent = user.user_agent || 'N/A';
+        }
     }
 
     // 设置媒体控制
@@ -340,19 +1089,85 @@
             const video = document.getElementById('fixedMediaVideo');
             if (video && video.style.display === 'block') {
                 if (video.paused) {
-                    video.play();
-                    this.textContent = '暂停';
+                    // 在移动设备上，必须通过用户手势触发播放
+                    const playPromise = video.play();
+                    if (playPromise !== undefined) {
+                        playPromise.then(() => {
+                            this.textContent = '暂停';
+                        }).catch(error => {
+                            console.log('播放被阻止:', error);
+                            // 显示提示，需要用户交互
+                            alert('请在视频上点击以开始播放');
+                        });
+                    }
                 } else {
                     video.pause();
                     this.textContent = '播放';
                 }
             }
         });
+
+        // 放大/缩小按钮
+        document.getElementById('zoomMedia').addEventListener('click', function() {
+            const mediaContainer = document.getElementById('fixedMediaContainer');
+            if (mediaContainer.classList.contains('media-zoomed')) {
+                mediaContainer.classList.remove('media-zoomed');
+                this.textContent = '放大';
+            } else {
+                mediaContainer.classList.add('media-zoomed');
+                this.textContent = '缩小';
+            }
+        });
+
+        // 双击媒体放大/缩小
+        const mediaContainer = document.getElementById('fixedMediaContainer');
+        mediaContainer.addEventListener('dblclick', function() {
+            const zoomBtn = document.getElementById('zoomMedia');
+            if (this.classList.contains('media-zoomed')) {
+                this.classList.remove('media-zoomed');
+                zoomBtn.textContent = '放大';
+            } else {
+                this.classList.add('media-zoomed');
+                zoomBtn.textContent = '缩小';
+            }
+        });
+
+        // 视频元素的事件监听
+        const video = document.getElementById('fixedMediaVideo');
+        if (video) {
+            video.addEventListener('play', function() {
+                document.getElementById('togglePlayPause').textContent = '暂停';
+            });
+
+            video.addEventListener('pause', function() {
+                document.getElementById('togglePlayPause').textContent = '播放';
+            });
+
+            video.addEventListener('ended', function() {
+                document.getElementById('togglePlayPause').textContent = '播放';
+            });
+
+            // 移动设备上添加点击播放支持
+            if (isMobile) {
+                video.addEventListener('click', function() {
+                    if (video.paused) {
+                        video.play().then(() => {
+                            console.log("视频开始播放");
+                        }).catch(e => {
+                            console.log("播放失败，需要用户交互", e);
+                        });
+                    }
+                });
+            }
+        }
     }
 
     // 获取网卡列表
     function loadInterfaces() {
         fetch(`${baseUrl}/status-ifaces`, {
+            headers: {
+                'Authorization': 'Basic ' + btoa(token)
+            }
         })
             .then(response => {
                 if (!response.ok) {
@@ -361,7 +1176,6 @@
                 return response.json();
             })
             .then(ifaces => {
-                console.log("ifaces",ifaces)
                 const sel = document.getElementById('ifaceSelect');
                 sel.innerHTML = '<option value="">选择网卡...</option>';
 
@@ -373,6 +1187,7 @@
                 });
 
                 if (ifaces.length > 0) {
+                    currentIface = ifaces[1];
                     startWebSocket(ifaces[1]);
                     sel.value = ifaces[1];
                 }
@@ -380,12 +1195,14 @@
             .catch(error => {
                 console.error('获取网卡列表错误:', error);
                 // 尝试使用默认网卡
-                startWebSocket('enp4s0');
+                currentIface = 'eth4';
+                startWebSocket('eth4');
             });
 
         // 网卡选择变化事件
         document.getElementById('ifaceSelect').addEventListener('change', function() {
             if (this.value) {
+                currentIface = this.value;
                 startWebSocket(this.value);
             }
         });
@@ -393,21 +1210,39 @@
 
     // 启动WebSocket连接
     function startWebSocket(iface) {
+        // 清除之前的重连定时器
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
+        }
+
         if (ws) {
+            // 如果已有连接，先关闭它
+            ws.onclose = null; // 避免触发重连逻辑
             ws.close();
         }
 
         try {
-            ws = new WebSocket("ws://"+window.location.host+"/ws?token="+token+"&iface="+iface);
+            updateConnectionStatus('connecting', '连接中...');
+
+            // 使用baseUrl构建WebSocket连接
+            const wsUrl = `wss://${baseUrl.split('//')[1]}/ws?token=${token}&iface=${iface}`;
+            ws = new WebSocket(wsUrl);
 
             ws.onopen = function() {
                 console.log('WebSocket连接已建立');
+                updateConnectionStatus('connected', '已连接');
+                reconnectAttempts = 0; // 重置重连尝试次数
+                isManualReconnect = false;
             };
 
             ws.onmessage = function(e) {
                 try {
                     const data = JSON.parse(e.data);
                     updateCharts(data);
+                    updateStatusTable(data);
+                    // 更新在线用户信息
+                    updateOnlineUsersDisplay(data);
                 } catch (error) {
                     console.error('解析WebSocket数据错误:', error, e.data);
                 }
@@ -415,13 +1250,27 @@
 
             ws.onerror = function(error) {
                 console.error('WebSocket错误:', error);
+                updateConnectionStatus('disconnected', '连接错误');
             };
 
             ws.onclose = function(e) {
                 console.log('WebSocket连接关闭:', e.code, e.reason);
+                updateConnectionStatus('disconnected', '已断开');
+
+                // 如果不是手动重连，并且页面可见，尝试自动重连
+                if (!isManualReconnect && !document[hidden] && reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    const delay = Math.min(3000 * reconnectAttempts, 15000); // 指数退避策略，最多15秒
+                    console.log(`将在 ${delay/1000} 秒后尝试第 ${reconnectAttempts} 次重连`);
+
+                    reconnectTimeout = setTimeout(() => {
+                        startWebSocket(iface);
+                    }, delay);
+                }
             };
         } catch (error) {
             console.error('创建WebSocket错误:', error);
+            updateConnectionStatus('disconnected', '连接失败');
         }
     }
 
@@ -429,25 +1278,30 @@
     function reconnectWebSocket() {
         const iface = document.getElementById('ifaceSelect').value;
         if (iface) {
+            isManualReconnect = true;
+            reconnectAttempts = 0; // 重置重连计数
             startWebSocket(iface);
+        } else {
+            // 如果没有选择网卡，尝试重新加载网卡列表
+            loadInterfaces();
         }
     }
 
     // 初始化ECharts图表
-    let cpuChart, memChart, netChart, diskChart;
+    let cpuChart, memChart, netChart, diskChart, accessChart;
 
     function initCharts() {
         cpuChart = echarts.init(document.getElementById('cpuChart'));
         memChart = echarts.init(document.getElementById('memChart'));
         netChart = echarts.init(document.getElementById('netChart'));
         diskChart = echarts.init(document.getElementById('diskChart'));
+        accessChart = echarts.init(document.getElementById('accessChart'));
 
-        const chartOption = (title, names) => ({
+        const chartOption = (title, names, colors) => ({
             title: {
                 text: title,
                 left: 'center',
             },
-
             tooltip: {
                 trigger: 'axis',
                 axisPointer: { type: 'shadow' }
@@ -468,24 +1322,67 @@
                 type: 'value',
                 axisLine: { lineStyle: { color: 'var(--text-color)' } }
             },
-            series: names.map(name => ({
+            series: names.map((name, index) => ({
                 name: name,
                 type: 'line',
                 smooth: true,
+                itemStyle: {
+                    color: colors ? colors[index] : undefined
+                },
+                lineStyle: {
+                    width: 2
+                },
                 data: []
             })),
             textStyle: { color: 'var(--text-color)' }
         });
 
-        const cpuOpt = chartOption('CPU 使用率 (%)', ['CPU使用率']);
-        const memOpt = chartOption('内存使用率 (%)', ['内存使用率']);
-        const netOpt = chartOption('网络速率 (KB/s)', ['上传', '下载']);
-        const diskOpt = chartOption('磁盘 I/O (KB/s)', ['读取', '写入']);
+        const cpuOpt = chartOption('CPU 使用率 (%)', ['CPU使用率'], ['#5470c6']);
+        const memOpt = chartOption('内存使用率 (%)', ['内存使用率'], ['#91cc75']);
+        const netOpt = chartOption('网络速率 (KB/s)', ['上传', '下载'], ['#fac858', '#ee6666']);
+        const diskOpt = chartOption('磁盘 I/O (KB/s)', ['读取', '写入'], ['#73c0de', '#3ba272']);
+
+        // 访问统计图表使用柱状图
+        const accessOpt = {
+            title: {
+                text: '访问统计',
+                left: 'center'
+            },
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' }
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: {
+                type: 'category',
+                data: [],
+                axisLine: { lineStyle: { color: 'var(--text-color)' } }
+            },
+            yAxis: {
+                type: 'value',
+                axisLine: { lineStyle: { color: 'var(--text-color)' } }
+            },
+            series: [{
+                name: '访问量',
+                type: 'bar',
+                itemStyle: {
+                    color: '#5470c6'
+                },
+                data: []
+            }],
+            textStyle: { color: 'var(--text-color)' }
+        };
 
         cpuChart.setOption(cpuOpt);
         memChart.setOption(memOpt);
         netChart.setOption(netOpt);
         diskChart.setOption(diskOpt);
+        accessChart.setOption(accessOpt);
 
         // 监听窗口大小变化，重新调整图表大小
         window.addEventListener('resize', function() {
@@ -493,6 +1390,7 @@
             memChart.resize();
             netChart.resize();
             diskChart.resize();
+            accessChart.resize();
         });
     }
 
@@ -556,18 +1454,112 @@
                 { data: [...diskChart.getOption().series[1].data, writeSpeed.toFixed(2)] }
             ]
         });
+    }
 
-        // 更新信息面板
+    // 更新状态表格
+    function updateStatusTable(data) {
+        const cpuUsage = parseFloat(data.cpu_usage || 0);
+        const memUsage = parseFloat(data.memory_usage || 0);
+        const uploadSpeed = parseFloat(data.upload_speed || 0);
+        const downloadSpeed = parseFloat(data.download_speed || 0);
+        const readSpeed = parseFloat(data.read_speed || 0);
+        const writeSpeed = parseFloat(data.write_speed || 0);
+
         document.getElementById('info').innerHTML = `
-        <strong>服务器状态信息</strong><br>
-        CPU: ${cpuUsage.toFixed(2)}%<br>
-        内存: ${memUsage.toFixed(2)}% (总: ${data.memory_total || 'N/A'}MB)<br>
-        磁盘: ${data.disk_usage ? parseFloat(data.disk_usage).toFixed(2) : 'N/A'}% (总: ${data.disk_total || 'N/A'}GB)<br>
-        上传: ${uploadSpeed.toFixed(2)} KB/s 下载: ${downloadSpeed.toFixed(2)} KB/s<br>
-        磁盘IO: 读 ${readSpeed.toFixed(2)} KB/s 写 ${writeSpeed.toFixed(2)} KB/s<br>
-        Load: ${data.load1 || 'N/A'}, ${data.load5 || 'N/A'}, ${data.load15 || 'N/A'}<br>
-        运行时间: ${data.uptime || 'N/A'}
-    `;
+                <strong>服务器状态信息</strong>
+                <table class="status-table">
+                    <tr>
+                        <th>指标</th>
+                        <th>值</th>
+                        <th>指标</th>
+                        <th>值</th>
+                    </tr>
+                    <tr>
+                        <td>CPU使用率</td>
+                        <td class="status-value">${cpuUsage.toFixed(2)}%</td>
+                        <td>内存使用率</td>
+                        <td class="status-value">${memUsage.toFixed(2)}%</td>
+                    </tr>
+                    <tr>
+                        <td>内存总量</td>
+                        <td class="status-value">${data.memory_total || 'N/A'} MB</td>
+                        <td>磁盘使用率</td>
+                        <td class="status-value">${data.disk_usage ? parseFloat(data.disk_usage).toFixed(2) : 'N/A'}%</td>
+                    </tr>
+                    <tr>
+                        <td>磁盘总量</td>
+                        <td class="status-value">${data.disk_total || 'N/A'} GB</td>
+                        <td>上传速度</td>
+                        <td class="status-value">${uploadSpeed.toFixed(2)} KB/s</td>
+                    </tr>
+                    <tr>
+                        <td>下载速度</td>
+                        <td class="status-value">${downloadSpeed.toFixed(2)} KB/s</td>
+                        <td>磁盘读取</td>
+                        <td class="status-value">${readSpeed.toFixed(2)} KB/s</td>
+                    </tr>
+                    <tr>
+                        <td>磁盘写入</td>
+                        <td class="status-value">${writeSpeed.toFixed(2)} KB/s</td>
+                        <td>系统负载</td>
+                        <td class="status-value">${data.load1 || 'N/A'}, ${data.load5 || 'N/A'}, ${data.load15 || 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <td>运行时间</td>
+                        <td class="status-value">${data.uptime || 'N/A'}</td>
+                     <td>下载总流量</td>
+                        <td class="status-value" >${data.total_download || 'N/A'}</td>
+
+                    </tr>
+                       <tr>
+                        <td>上传总流量</td>
+                        <td class="status-value" colspan="3">${data.total_upload || 'N/A'}</td>
+                    </tr>
+                </table>
+            `;
+    }
+
+    // 获取访问统计数据并更新图表
+    function refreshAccessStats() {
+        fetch(`${baseUrl}/access-stats`, {
+            headers: {
+                'Authorization': 'Basic ' + btoa(token)
+            }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('获取访问统计数据失败: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                updateAccessChart(data);
+            })
+            .catch(error => {
+                console.error('获取访问统计数据错误:', error);
+            });
+    }
+
+    // 更新访问统计图表
+    function updateAccessChart(data) {
+        if (!data || !data.daily_visits) {
+            console.error('无效的访问统计数据:', data);
+            return;
+        }
+
+        // 准备数据
+        const dates = Object.keys(data.daily_visits).reverse();
+        const visits = dates.map(date => data.daily_visits[date]);
+
+        // 更新图表
+        accessChart.setOption({
+            xAxis: {
+                data: dates
+            },
+            series: [{
+                data: visits
+            }]
+        });
     }
 
     // 固定位置媒体模块
@@ -576,6 +1568,12 @@
         const video = document.getElementById("fixedMediaVideo");
         const placeholder = document.getElementById("mediaPlaceholder");
         const toggleBtn = document.getElementById("togglePlayPause");
+        if (!video.paused) {
+            video.pause();
+        }
+
+        video.removeAttribute('src');  // 清空视频地址
+        video.load();  // 重置视频
 
         img.style.display = "none";
         video.style.display = "none";
@@ -583,10 +1581,14 @@
         placeholder.style.display = "block";
         placeholder.className = "media-loading";
         placeholder.innerHTML = '<div class="spinner"></div><div>加载媒体中...</div>';
-
+        video.addEventListener('loadeddata', function() {
+            if (video.paused) {
+                video.currentTime = 0; // 确保显示第一帧
+            }
+        });
         fetch(`${baseUrl}/random-media`, {
             headers: {
-                'Authorization': authHeader,
+                'Authorization': 'Basic ' + btoa(token),
                 'Content-Type': 'application/json'
             }
         })
@@ -598,6 +1600,7 @@
             })
             .then(data => {
                 const src = data.src;
+
                 if (!src) {
                     placeholder.className = "media-placeholder";
                     placeholder.textContent = "无可用媒体";
@@ -606,29 +1609,51 @@
 
                 const ext = src.split('.').pop().toLowerCase();
 
-                if (ext === "mp4" || ext === "webm") {
+                if (ext === "mp4" || ext === "webm" || ext === "mov") {
                     img.style.display = "none";
                     video.src = src;
                     video.style.display = "block";
                     video.volume = document.getElementById('mediaVolume').value;
 
+                    // 移动设备上默认静音，以避免自动播放问题
+                    if (isMobile) {
+                        video.muted = true;
+                        video.setAttribute('muted', '');
+                        video.setAttribute('playsinline', '');
+                        video.setAttribute('webkit-playsinline', '');
+                    } else {
+                        video.muted = false;
+                    }
+
                     // 设置视频事件
                     video.onloadeddata = function() {
                         placeholder.style.display = "none";
                         toggleBtn.style.display = "block";
-                        toggleBtn.textContent = "暂停";
+                        toggleBtn.textContent = video.paused ? "播放" : "暂停";
 
-                        video.play().catch(e => {
-                            console.log('自动播放被阻止:', e);
+                        // 非移动设备尝试自动播放
+                        if (!isMobile) {
+                            const playPromise = video.play();
+                            if (playPromise !== undefined) {
+                                playPromise.then(() => {
+                                    toggleBtn.textContent = "暂停";
+                                }).catch(e => {
+                                    console.log('自动播放被阻止:', e);
+                                    toggleBtn.textContent = "播放";
+                                });
+                            }
+                        } else {
+                            // 移动设备上显示提示
                             toggleBtn.textContent = "播放";
-                        });
+                        }
                     };
 
-                    video.onerror = function() {
-                        placeholder.className = "media-error";
-                        placeholder.textContent = "视频加载失败";
-                        video.style.display = "none";
-                        toggleBtn.style.display = "none";
+                    video.onerror = function(e){
+                        console.error("视频加载错误:", e, src);
+                        placeholder.className='media-error';
+                        placeholder.textContent='视频加载失败';
+                        video.style.display='none';
+                        toggleBtn.style.display='none';
                     };
                 } else {
                     video.style.display = "none";
@@ -656,7 +1681,10 @@
     document.addEventListener('DOMContentLoaded', init);
 
     // 每30秒刷新媒体
-    setInterval(loadFixedMedia, 120000);
+    setInterval(loadFixedMedia, 80000);
+
+    // 每5分钟刷新访问统计数据
+    setInterval(refreshAccessStats, 5 * 60 * 1000);
 </script>
 </body>
 </html>
