@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book ✅</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap"
+          rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --text-color: #212529;
+            --card-bg: #ffffff;
+            --primary-color: #4a6ee0;
+            --secondary-color: #6c757d;
+            --border-color: #dee2e6;
+            --hover-color: #e9ecef;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --radius: 12px;
+            --success-color: #28a745;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #1a1d21;
+            --text-color: #e4e6eb;
+            --card-bg: #242526;
+            --primary-color: #5c7cfa;
+            --secondary-color: #b0b3b8;
+            --border-color: #3e4042;
+            --hover-color: #3a3b3c;
+            --success-color: #3ad15d;
+        }
+
+        * {
+            box-sizing: border-box;
+            transition: background-color 0.3s, color 0.3s, transform 0.2s;
+        }
+
+        body {
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Noto Sans SC', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+
+        header {
+            padding: 15px 20px;
+            background: var(--card-bg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow);
+        }
+
+        header h2 {
+            margin: 0;
+            color: var(--primary-color);
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        header h2 i {
+            font-size: 1.4rem;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+        }
+
+        .btn-icon {
+            padding: 8px 12px;
+            border-radius: 50%;
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+        }
+
+        .container {
+            display: flex;
+            min-height: calc(100vh - 60px);
+        }
+
+        .sidebar {
+            width: 250px;
+            background: var(--card-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .sidebar h3 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar li {
+            margin: 12px 0;
+            cursor: pointer;
+            color: var(--text-color);
+            padding: 8px 12px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+        }
+
+        .sidebar li:hover {
+            background-color: var(--hover-color);
+        }
+
+        .sidebar li.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .main {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .book-card {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: var(--radius);
+            text-align: center;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            transition: transform 0.3s, box-shadow 0.3s;
+            display: flex;
+            flex-direction: column;
+            height: auto;
+            position: relative;
+        }
+
+        .book-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        .book-cover {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .book-title {
+            font-weight: 700;
+            margin: 8px 0 5px;
+            font-size: 15px;
+            flex-grow: 1;
+            color: var(--text-color);
+        }
+
+        .book-desc {
+            font-size: 13px;
+            color: var(--secondary-color);
+            margin-bottom: 12px;
+        }
+
+        .book-meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--secondary-color);
+            margin-top: auto;
+        }
+
+        .progress-container {
+            width: 100%;
+            height: 6px;
+            background-color: var(--border-color);
+            border-radius: 3px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: var(--primary-color);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .reader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--card-bg);
+            display: none;
+            flex-direction: column;
+            z-index: 1000;
+        }
+
+        .reader-header {
+            padding: 15px 20px;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .reader-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .font-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--bg-color);
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+
+        .font-size-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            font-weight: bold;
+            color: var(--text-color);
+        }
+
+        .font-size-btn:hover {
+            background: var(--hover-color);
+        }
+
+        .font-size-value {
+            min-width: 40px;
+            text-align: center;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+
+        #viewer {
+            flex: 1;
+            width: 100%;
+            margin: 0 auto;
+            overflow: auto;
+            background: var(--bg-color);
+            position: relative;
+        }
+
+        #prev, #next {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 10;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+            color: var(--text-color);
+        }
+
+        #prev:hover, #next:hover {
+            opacity: 1;
+        }
+
+        #prev {
+            left: 20px;
+        }
+
+        #next {
+            right: 20px;
+        }
+
+        .theme-toggle {
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: var(--secondary-color);
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            font-size: 1.2rem;
+            color: var(--secondary-color);
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .loading i {
+            margin-right: 10px;
+            animation: spin 1s linear infinite;
+        }
+
+        .progress-bar-loader {
+            width: 80%;
+            max-width: 400px;
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-loader {
+            height: 100%;
+            background: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .mobile-menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: var(--text-color);
+            cursor: pointer;
+        }
+
+        .reader-progress {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: 15px;
+            padding: 5px 12px;
+            background: var(--bg-color);
+            border-radius: 20px;
+            font-size: 14px;
+            color: var(--text-color);
+        }
+
+        .reader-progress-bar {
+            width: 80px;
+            height: 6px;
+            background: var(--border-color);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .reader-progress-fill {
+            height: 100%;
+            background: var(--primary-color);
+            border-radius: 3px;
+        }
+
+        @media (max-width: 992px) {
+            .sidebar {
+                position: fixed;
+                left: 0;
+                top: 60px;
+                height: calc(100vh - 60px);
+                z-index: 90;
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .mobile-menu-btn {
+                display: block;
+            }
+
+            .main {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+                gap: 15px;
+                padding: 15px;
+            }
+
+            .book-cover {
+                height: 160px;
+            }
+
+            .reader-controls {
+                gap: 10px;
+            }
+
+            .font-controls {
+                order: 3;
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .main {
+                grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+                gap: 12px;
+                padding: 12px;
+            }
+
+            .book-cover {
+                height: 150px;
+            }
+
+            header h2 {
+                font-size: 1.2rem;
+            }
+
+            .btn span {
+                display: none;
+            }
+
+            .btn {
+                padding: 8px 12px;
+            }
+
+            .reader-header {
+                flex-wrap: wrap;
+                padding: 10px;
+            }
+
+            .reader-controls {
+                width: 100%;
+                justify-content: center;
+                margin-top: 10px;
+            }
+
+            .reader-progress {
+                margin: 0 auto;
+            }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h2><i class="fas fa-book-open"></i> 电子书阅读</h2>
+    <div class="header-controls">
+        <button class="btn" onclick="window.location.href='index.html'">
+            <i class="fas fa-home"></i> <span>返回首页</span>
+        </button>
+        <button class="btn btn-outline theme-toggle" onclick="toggleTheme()">
+            <i class="fas fa-moon"></i>
+        </button>
+        <button class="mobile-menu-btn" onclick="toggleSidebar()">
+            <i class="fas fa-bars"></i>
+        </button>
+    </div>
+</header>
+
+<div class="container">
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3><i class="fas fa-list"></i> 分类</h3>
+        </div>
+        <ul>
+            <li class="active" onclick="filterCategory('all')"><i class="fas fa-th-large"></i> 全部</li>
+            <li onclick="filterCategory('novel')"><i class="fas fa-book"></i> 小说</li>
+            <li onclick="filterCategory('tech')"><i class="fas fa-laptop-code"></i> 技术</li>
+            <li onclick="filterCategory('magazine')"><i class="fas fa-newspaper"></i> 杂志</li>
+        </ul>
+
+        <h3><i class="fas fa-history"></i> 最近阅读</h3>
+        <ul id="recent-books">
+            <!-- 动态生成最近阅读 -->
+        </ul>
+    </div>
+
+    <div class="main" id="bookList">
+        <!-- 动态生成书籍 -->
+    </div>
+</div>
+
+<!-- 阅读器 -->
+<div class="reader" id="reader">
+    <div class="reader-header">
+        <h3 id="book-title">电子书阅读器</h3>
+        <div class="reader-controls">
+            <div class="font-controls">
+                <button class="font-size-btn" onclick="changeFontSize(-2)">A-</button>
+                <span class="font-size-value" id="font-size">100%</span>
+                <button class="font-size-btn" onclick="changeFontSize(2)">A+</button>
+            </div>
+            <button class="btn btn-outline" onclick="changeFontSize(-1)">
+                <i class="fas fa-font"></i> <span>减小字体</span>
+            </button>
+            <button class="btn btn-outline" onclick="changeFontSize(1)">
+                <i class="fas fa-font"></i> <span>增大字体</span>
+            </button>
+            <button class="btn btn-outline" onclick="toggleTheme()">
+                <i class="fas fa-adjust"></i> <span>切换主题</span>
+            </button>
+            <div class="reader-progress">
+                <span id="progress-text">0%</span>
+                <div class="reader-progress-bar">
+                    <div class="reader-progress-fill" id="reader-progress-fill" style="width: 0%"></div>
+                </div>
+            </div>
+            <button class="btn" onclick="closeReader()">
+                <i class="fas fa-times"></i> <span>关闭</span>
+            </button>
+        </div>
+    </div>
+    <div id="viewer">
+        <div class="loading" id="loading">
+            <i class="fas fa-spinner"></i>
+            <div>正在加载电子书...</div>
+            <div class="progress-bar-loader">
+                <div class="progress-loader" id="loading-progress"></div>
+            </div>
+        </div>
+        <div id="prev"><i class="fas fa-chevron-left"></i></div>
+        <div id="next"><i class="fas fa-chevron-right"></i></div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
+<script src="./epub.js"></script>
+
+<script>
+    let books = [];
+    let currentBook = null;
+    let rendition = null;
+    let currentTheme = 'light';
+    let bookLocations = {}; // 存储阅读位置
+    let currentBookId = null;
+    let fontSize = 100; // 默认字体大小百分比
+
+    // 获取书籍列表
+    async function fetchBooks() {
+        try {
+            // 显示加载状态
+            document.getElementById('bookList').innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 2rem; color: var(--secondary-color); margin-bottom: 15px;"></i>
+                    <div>正在加载书籍列表...</div>
+                </div>
+            `;
+
+            const res = await fetch('https://wustwu.cn:9000/epubs');
+            if (!res.ok) {
+                throw new Error(`HTTP错误: ${res.status}`);
+            }
+
+            const data = await res.json();
+            if (!Array.isArray(data)) {
+                throw new Error('API返回的数据格式不正确');
+            }
+
+            // 直接使用API返回的URL数组
+            books = data.map((url, index) => {
+                const bookId = generateBookId(url);
+                const fileName = url.substring(url.lastIndexOf('/') + 1);
+                const title = fileName.replace('.epub', '');
+
+                return {
+                    id: bookId,
+                    title: title,
+                    desc: '电子书资源',
+                    cover: 'https://wustwu.cn:8081/static/IMG_3578.jpeg',
+                    category: getCategoryFromTitle(title, index),
+                    file: url,
+                    pages: Math.floor(Math.random() * 300) + 100,
+                    progress: bookLocations[bookId] ? Math.floor(bookLocations[bookId].progress * 100) : 0
+                };
+            });
+
+            renderBooks();
+            updateRecentBooks();
+        } catch (err) {
+            console.error('获取书籍列表失败:', err);
+            document.getElementById('bookList').innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--secondary-color); margin-bottom: 15px;"></i>
+                    <h3 style="color: var(--secondary-color);">无法加载书籍</h3>
+                    <p>${err.message || '请检查网络或稍后重试'}</p>
+                    <button class="btn" onclick="fetchBooks()">
+                        <i class="fas fa-redo"></i> 重新加载
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    // 根据书名猜测分类
+    function getCategoryFromTitle(title, index) {
+        const lowerTitle = title.toLowerCase();
+        if (lowerTitle.includes('小说') || lowerTitle.includes('文学') || lowerTitle.includes('故事')) {
+            return 'novel';
+        } else if (lowerTitle.includes('技术') || lowerTitle.includes('编程') || lowerTitle.includes('开发')) {
+            return 'tech';
+        } else if (lowerTitle.includes('杂志') || lowerTitle.includes('月刊') || lowerTitle.includes('周刊')) {
+            return 'magazine';
+        }
+        // 默认分类，防止没有匹配
+        return index % 2 === 0 ? 'novel' : 'tech';
+    }
+
+    // 生成书籍ID（基于URL的简单哈希）
+    function generateBookId(url) {
+        let hash = 0;
+        for (let i = 0; i < url.length; i++) {
+            hash = ((hash << 5) - hash) + url.charCodeAt(i);
+            hash |= 0; // 转换为32位整数
+        }
+        return 'book_' + Math.abs(hash);
+    }
+
+    function base64EncodeUnicode(str) {
+        // 先用 encodeURIComponent 将 Unicode 转成 UTF-8，再转成字符
+        return btoa(unescape(encodeURIComponent(str)));
+    }
+
+    // 渲染书籍列表
+    function renderBooks(filter = 'all') {
+        const container = document.getElementById('bookList');
+        container.innerHTML = '';
+
+        const filteredBooks = filter === 'all' ? books : books.filter(book => book.category === filter);
+
+        if (filteredBooks.length === 0) {
+            container.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                    <i class="fas fa-inbox" style="font-size: 3rem; color: var(--secondary-color); margin-bottom: 15px;"></i>
+                    <h3 style="color: var(--secondary-color);">没有找到相关书籍</h3>
+                    <p>请尝试其他分类</p>
+                </div>
+            `;
+            return;
+        }
+
+        filteredBooks.forEach(book => {
+            const div = document.createElement('div');
+            div.className = 'book-card';
+            div.innerHTML = `
+                <img src="${book.cover}" alt="${book.title}" class="book-cover">
+                <div class="book-title">${book.title}</div>
+                <div class="book-desc">${book.desc}</div>
+                <div class="book-meta">
+                    <span><i class="fas fa-file"></i> ${book.pages}页</span>
+                    <span><i class="fas fa-tasks"></i> ${book.progress}%</span>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: ${book.progress}%"></div>
+                </div>
+                <button class="btn ${book.progress > 0 ? '' : 'btn-success'}" onclick="openBook('${book.file}', '${book.title}', '${book.id}')">
+                    <i class="fas fa-book-open"></i> ${book.progress > 0 ? '继续阅读' : '开始阅读'}
+                </button>
+            `;
+            container.appendChild(div);
+        });
+
+        // 更新分类激活状态
+        document.querySelectorAll('.sidebar li').forEach(item => {
+            item.classList.remove('active');
+        });
+
+        const activeItem = Array.from(document.querySelectorAll('.sidebar li')).find(item => {
+            return item.textContent.includes(getCategoryName(filter));
+        });
+
+        if (activeItem) {
+            activeItem.classList.add('active');
+        }
+    }
+
+    // 打开电子书 - 使用EPUB.js直接处理远程文件
+    async function openBook(fileUrl, title, bookId) {
+        document.getElementById('reader').style.display = 'flex';
+        document.getElementById('book-title').textContent = title;
+        document.getElementById('loading').style.display = 'flex';
+
+        // 更新当前书籍ID
+        currentBookId = bookId;
+
+        try {
+            // 销毁之前的实例
+            if (currentBook) {
+                currentBook.destroy();
+                currentBook = null;
+            }
+
+            // 修改认证头生成方式
+            const user = "夏雨欣";
+            const pass = "20010405";
+            const authHeader = "Basic " + base64EncodeUnicode(`${user}:${pass}`);
+
+            // 创建新的电子书实例 - 直接使用远程URL
+            currentBook = ePub(fileUrl, {
+                openAs: 'epub', // 明确指定为epub格式
+                requestHeaders: {
+                    'Authorization': authHeader
+                },
+            });
+
+            rendition = currentBook.renderTo("viewer", {
+                width: "100%",
+                height: "100%",
+                spread: "auto"
+            });
+
+            // 设置初始字体大小
+            rendition.themes.fontSize(fontSize + "%");
+            document.getElementById('font-size').textContent = fontSize + "%";
+
+            // 设置主题
+            rendition.themes.default({
+                'body': {
+                    'color': 'var(--text-color)',
+                    'background': 'var(--bg-color)',
+                    'font-family': 'Noto Sans SC, sans-serif',
+                    'line-height': '1.6',
+                    'padding': '20px',
+                    'font-size': '18px'
+                }
+            });
+
+            // 恢复阅读位置（如果有）
+            if (bookLocations[bookId]) {
+                rendition.display(bookLocations[bookId].cfi);
+            } else {
+                rendition.display();
+            }
+
+            document.getElementById('loading').style.display = 'none';
+
+            // 添加导航事件
+            document.getElementById("prev").addEventListener("click", function (e) {
+                rendition.prev();
+                e.stopPropagation();
+            }, false);
+
+            document.getElementById("next").addEventListener("click", function (e) {
+                rendition.next();
+                e.stopPropagation();
+            }, false);
+
+            // 监听位置变化
+            rendition.on("relocated", function (location) {
+                if (location && location.start) {
+                    const progress = location.start.percentage;
+                    bookLocations[bookId] = {
+                        cfi: location.start.cfi,
+                        progress: progress
+                    };
+
+                    // 更新本地存储
+                    localStorage.setItem('bookLocations', JSON.stringify(bookLocations));
+
+                    // 更新阅读器进度显示
+                    const progressPercent = Math.floor(progress * 100);
+                    document.getElementById('progress-text').textContent = progressPercent + '%';
+                    document.getElementById('reader-progress-fill').style.width = progressPercent + '%';
+
+                    // 更新书籍进度
+                    const book = books.find(b => b.id === bookId);
+                    if (book) {
+                        book.progress = progressPercent;
+                    }
+
+                    // 如果阅读完成(进度>=99.9%)
+                    if (progress >= 0.999) {
+                        book.progress = 100;
+                        // 显示完成提示
+                        showCompletionToast();
+                    }
+                }
+            });
+
+            // 添加到最近阅读
+            addToRecentBooks(bookId, title);
+
+        } catch (error) {
+            console.error('打开电子书失败:', error);
+            document.getElementById('loading').innerHTML = `
+                <i class="fas fa-exclamation-triangle"></i>
+                <div>打开电子书失败</div>
+                <div>${error.message || '请检查网络连接'}</div>
+                <button class="btn" onclick="openBook('${fileUrl}', '${title}', '${bookId}')">
+                    <i class="fas fa-redo"></i> 重试
+                </button>
+            `;
+        }
+    }
+
+    // 显示阅读完成提示
+    function showCompletionToast() {
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--success-color);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        `;
+        toast.innerHTML = `
+            <i class="fas fa-check-circle"></i>
+            <span>恭喜！您已阅读完本书</span>
+        `;
+        document.body.appendChild(toast);
+
+        // 3秒后自动消失
+        setTimeout(() => {
+            document.body.removeChild(toast);
+        }, 3000);
+    }
+
+    // 添加到最近阅读列表
+    function addToRecentBooks(bookId, title) {
+        let recentBooks = JSON.parse(localStorage.getItem('recentBooks') || '{}');
+
+        // 更新阅读时间
+        recentBooks[bookId] = {
+            title: title,
+            timestamp: Date.now()
+        };
+
+        // 只保留最近5本
+        const keys = Object.keys(recentBooks);
+        if (keys.length > 5) {
+            // 按时间排序并删除最旧的
+            const sortedKeys = keys.sort((a, b) => recentBooks[a].timestamp - recentBooks[b].timestamp);
+            delete recentBooks[sortedKeys[0]];
+        }
+
+        localStorage.setItem('recentBooks', JSON.stringify(recentBooks));
+        updateRecentBooks();
+    }
+
+    // 更新最近阅读列表
+    function updateRecentBooks() {
+        const recentBooks = JSON.parse(localStorage.getItem('recentBooks') || '{}');
+        const recentList = document.getElementById('recent-books');
+        recentList.innerHTML = '';
+
+        // 按时间倒序排列
+        const sortedBooks = Object.entries(recentBooks)
+            .sort((a, b) => b[1].timestamp - a[1].timestamp);
+
+        if (sortedBooks.length === 0) {
+            recentList.innerHTML = '<li style="color: var(--secondary-color);"><i class="fas fa-clock"></i> 暂无阅读记录</li>';
+            return;
+        }
+
+        sortedBooks.forEach(([bookId, bookInfo]) => {
+            const li = document.createElement('li');
+            // 检查这本书是否在当前的书籍列表中，避免undefined错误
+            const book = books.find(b => b.id === bookId);
+            if (book) {
+                li.innerHTML = `<i class="fas fa-bookmark"></i> ${bookInfo.title}`;
+                li.onclick = () => {
+                    openBook(book.file, book.title, book.id);
+                };
+                recentList.appendChild(li);
+            }
+        });
+    }
+
+    // 关闭阅读器
+    function closeReader() {
+        document.getElementById('reader').style.display = 'none';
+        if (currentBook) {
+            currentBook.destroy();
+            currentBook = null;
+        }
+
+        // 刷新书籍列表以更新进度
+        renderBooks();
+    }
+
+    // 获取分类名称
+    function getCategoryName(category) {
+        const names = {
+            'all': '全部',
+            'novel': '小说',
+            'tech': '技术',
+            'magazine': '杂志'
+        };
+        return names[category] || '全部';
+    }
+
+    // 分类筛选
+    function filterCategory(category) {
+        renderBooks(category);
+    }
+
+    // 切换主题
+    function toggleTheme() {
+        const body = document.body;
+        if (currentTheme === 'light') {
+            body.setAttribute('data-theme', 'dark');
+            currentTheme = 'dark';
+            document.querySelectorAll('.theme-toggle i').forEach(icon => {
+                icon.className = 'fas fa-sun';
+            });
+        } else {
+            body.removeAttribute('data-theme');
+            currentTheme = 'light';
+            document.querySelectorAll('.theme-toggle i').forEach(icon => {
+                icon.className = 'fas fa-moon';
+            });
+        }
+
+        // 保存主题偏好
+        localStorage.setItem('theme', currentTheme);
+
+        // 更新阅读器内的主题
+        if (rendition) {
+            rendition.themes.default({
+                'body': {
+                    'color': 'var(--text-color)',
+                    'background': 'var(--bg-color)'
+                }
+            });
+        }
+    }
+
+    // 调整字体大小
+    function changeFontSize(delta) {
+        if (!rendition) return;
+
+        fontSize += delta;
+
+        // 限制字体大小范围
+        if (fontSize < 50) fontSize = 50;
+        if (fontSize > 200) fontSize = 200;
+
+        rendition.themes.fontSize(fontSize + "%");
+        document.getElementById('font-size').textContent = fontSize + "%";
+
+        // 保存字体大小设置
+        localStorage.setItem('fontSize', fontSize);
+    }
+
+    // 切换侧边栏
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('open');
+    }
+
+    // 页面初始化
+    document.addEventListener('DOMContentLoaded', function () {
+        // 加载存储的数据
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') {
+            toggleTheme();
+        }
+
+        const savedLocations = localStorage.getItem('bookLocations');
+        if (savedLocations) {
+            bookLocations = JSON.parse(savedLocations);
+        }
+
+        const savedFontSize = localStorage.getItem('fontSize');
+        if (savedFontSize) {
+            fontSize = parseInt(savedFontSize);
+        }
+
+        fetchBooks();
+
+        // 点击其他地方关闭移动端侧边栏
+        document.addEventListener('click', function (e) {
+            if (window.innerWidth < 992 &&
+                !e.target.closest('.sidebar') &&
+                !e.target.closest('.mobile-menu-btn')) {
+                document.getElementById('sidebar').classList.remove('open');
+            }
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务器状态监控</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f4f4f4;
+            --text-color: #333;
+            --card-bg: #fff;
+            --primary-color: #4a6ee0;
+            --border-color: #ddd;
+            --success-color: #4CAF50;
+            --error-color: #f44336;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #121212;
+            --text-color: #eee;
+            --card-bg: #1e1e1e;
+            --primary-color: #6c8dfa;
+            --border-color: #444;
+        }
+
+        * {
+            box-sizing: border-box;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-top: 20px;
+            color: var(--primary-color);
+        }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            padding: 20px;
+            margin-bottom: 240px;
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 20px;
+            width: calc(50% - 20px);
+            border: 1px solid var(--border-color);
+        }
+
+        #info {
+            font-size: 16px;
+            line-height: 1.6;
+            padding: 15px;
+        }
+
+        .chart {
+            height: 300px;
+            width: 100%;
+        }
+
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        select, button {
+            padding: 10px 16px;
+            margin: 5px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-size: 14px;
+            cursor: pointer;
+            outline: none;
+        }
+
+        button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            filter: brightness(1.1);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 固定右下角媒体模块 */
+        #fixedMediaContainer {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 380px;
+            height: 240px;
+            overflow: hidden;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            background: var(--card-bg);
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--border-color);
+        }
+
+        .media-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.03);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .media-title {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--primary-color);
+        }
+
+        .media-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .media-controls button {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        #mediaVolume {
+            width: 80px;
+        }
+
+        .media-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #fixedMediaImg,
+        #fixedMediaVideo {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .media-placeholder {
+            color: #999;
+            text-align: center;
+            padding: 20px;
+            font-size: 14px;
+        }
+
+        .media-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+        }
+
+        .spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 3px solid var(--primary-color);
+            animation: spin 1s linear infinite;
+            margin-bottom: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .media-error {
+            color: var(--error-color);
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1200px) {
+            .card {
+                width: 100%;
+            }
+
+            #fixedMediaContainer {
+                width: 320px;
+                height: 200px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+                margin-bottom: 200px;
+            }
+
+            #fixedMediaContainer {
+                width: calc(100% - 40px);
+                left: 20px;
+                right: 20px;
+                bottom: 10px;
+            }
+        }
+    </style>
+</head>
+<body data-theme="light">
+
+<h2>实时服务器状态监控</h2>
+
+<div class="controls">
+    <select id="ifaceSelect">
+        <option value="">选择网卡...</option>
+    </select>
+    <button onclick="toggleTheme()">切换主题</button>
+    <button onclick="reconnectWebSocket()">重新连接</button>
+</div>
+
+<div class="container">
+    <div class="card" id="info">
+        <div class="media-loading">
+            <div class="spinner"></div>
+            <div>等待数据连接...</div>
+        </div>
+    </div>
+    <div class="card"><div id="cpuChart" class="chart"></div></div>
+    <div class="card"><div id="memChart" class="chart"></div></div>
+    <div class="card"><div id="netChart" class="chart"></div></div>
+    <div class="card"><div id="diskChart" class="chart"></div></div>
+</div>
+
+<!-- 右下角固定位置媒体模块 -->
+<div id="fixedMediaContainer">
+    <div class="media-header">
+        <div class="media-title">媒体展示</div>
+        <div class="media-controls">
+            <div class="volume-control">
+                <span>音量:</span>
+                <input type="range" id="mediaVolume" min="0" max="1" step="0.1" value="0.5">
+            </div>
+            <button id="refreshMedia">刷新</button>
+            <button id="togglePlayPause" style="display:none;">暂停</button>
+        </div>
+    </div>
+    <div class="media-content">
+        <img id="fixedMediaImg" style="display:none;" alt="媒体图片">
+        <video id="fixedMediaVideo" style="display:none;" loop muted playsinline alt="媒体视频"></video>
+        <div class="media-placeholder" id="mediaPlaceholder">
+            媒体加载中...
+        </div>
+    </div>
+</div>
+
+<script>
+    // 全局变量
+    let theme = 'light';
+    let ws = null;
+    let authHeader = 123456;
+    const baseUrl = "http://wustwu.cn:9000";
+    let token = prompt("请输入访问Token：");
+    if(!token){ alert("Token必填"); throw new Error("No token"); }
+    // 初始化函数
+    function init() {
+        initCharts();
+        loadInterfaces();
+        setupMediaControls();
+        loadFixedMedia();
+    }
+
+    // 切换主题
+    function toggleTheme() {
+        theme = theme === 'light' ? 'dark' : 'light';
+        document.body.setAttribute('data-theme', theme);
+        // 重新渲染图表以适应主题变化
+        setTimeout(() => {
+            if (cpuChart && memChart && netChart && diskChart) {
+                cpuChart.resize();
+                memChart.resize();
+                netChart.resize();
+                diskChart.resize();
+            }
+        }, 300);
+    }
+
+    // 设置媒体控制
+    function setupMediaControls() {
+        // 音量控制
+        const volumeControl = document.getElementById('mediaVolume');
+        volumeControl.addEventListener('input', function() {
+            const video = document.getElementById('fixedMediaVideo');
+            if (video) {
+                video.volume = this.value;
+            }
+        });
+
+        // 刷新媒体按钮
+        document.getElementById('refreshMedia').addEventListener('click', loadFixedMedia);
+
+        // 播放/暂停按钮
+        document.getElementById('togglePlayPause').addEventListener('click', function() {
+            const video = document.getElementById('fixedMediaVideo');
+            if (video && video.style.display === 'block') {
+                if (video.paused) {
+                    video.play();
+                    this.textContent = '暂停';
+                } else {
+                    video.pause();
+                    this.textContent = '播放';
+                }
+            }
+        });
+    }
+
+    // 获取网卡列表
+    function loadInterfaces() {
+        fetch(`${baseUrl}/status-ifaces`, {
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('获取网卡列表失败: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(ifaces => {
+                console.log("ifaces",ifaces)
+                const sel = document.getElementById('ifaceSelect');
+                sel.innerHTML = '<option value="">选择网卡...</option>';
+
+                ifaces.forEach(i => {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.textContent = i;
+                    sel.appendChild(opt);
+                });
+
+                if (ifaces.length > 0) {
+                    startWebSocket(ifaces[1]);
+                    sel.value = ifaces[1];
+                }
+            })
+            .catch(error => {
+                console.error('获取网卡列表错误:', error);
+                // 尝试使用默认网卡
+                startWebSocket('enp4s0');
+            });
+
+        // 网卡选择变化事件
+        document.getElementById('ifaceSelect').addEventListener('change', function() {
+            if (this.value) {
+                startWebSocket(this.value);
+            }
+        });
+    }
+
+    // 启动WebSocket连接
+    function startWebSocket(iface) {
+        if (ws) {
+            ws.close();
+        }
+
+        try {
+            ws = new WebSocket("ws://"+window.location.host+"/ws?token="+token+"&iface="+iface);
+
+            ws.onopen = function() {
+                console.log('WebSocket连接已建立');
+            };
+
+            ws.onmessage = function(e) {
+                try {
+                    const data = JSON.parse(e.data);
+                    updateCharts(data);
+                } catch (error) {
+                    console.error('解析WebSocket数据错误:', error, e.data);
+                }
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket错误:', error);
+            };
+
+            ws.onclose = function(e) {
+                console.log('WebSocket连接关闭:', e.code, e.reason);
+            };
+        } catch (error) {
+            console.error('创建WebSocket错误:', error);
+        }
+    }
+
+    // 重新连接WebSocket
+    function reconnectWebSocket() {
+        const iface = document.getElementById('ifaceSelect').value;
+        if (iface) {
+            startWebSocket(iface);
+        }
+    }
+
+    // 初始化ECharts图表
+    let cpuChart, memChart, netChart, diskChart;
+
+    function initCharts() {
+        cpuChart = echarts.init(document.getElementById('cpuChart'));
+        memChart = echarts.init(document.getElementById('memChart'));
+        netChart = echarts.init(document.getElementById('netChart'));
+        diskChart = echarts.init(document.getElementById('diskChart'));
+
+        const chartOption = (title, names) => ({
+            title: {
+                text: title,
+                left: 'center',
+            },
+
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'shadow' }
+            },
+            grid: {
+                left: '3%',
+                right: '4%',
+                bottom: '3%',
+                containLabel: true
+            },
+            xAxis: {
+                type: 'category',
+                boundaryGap: false,
+                data: [],
+                axisLine: { lineStyle: { color: 'var(--text-color)' } }
+            },
+            yAxis: {
+                type: 'value',
+                axisLine: { lineStyle: { color: 'var(--text-color)' } }
+            },
+            series: names.map(name => ({
+                name: name,
+                type: 'line',
+                smooth: true,
+                data: []
+            })),
+            textStyle: { color: 'var(--text-color)' }
+        });
+
+        const cpuOpt = chartOption('CPU 使用率 (%)', ['CPU使用率']);
+        const memOpt = chartOption('内存使用率 (%)', ['内存使用率']);
+        const netOpt = chartOption('网络速率 (KB/s)', ['上传', '下载']);
+        const diskOpt = chartOption('磁盘 I/O (KB/s)', ['读取', '写入']);
+
+        cpuChart.setOption(cpuOpt);
+        memChart.setOption(memOpt);
+        netChart.setOption(netOpt);
+        diskChart.setOption(diskOpt);
+
+        // 监听窗口大小变化，重新调整图表大小
+        window.addEventListener('resize', function() {
+            cpuChart.resize();
+            memChart.resize();
+            netChart.resize();
+            diskChart.resize();
+        });
+    }
+
+    // 更新图表数据
+    const labels = [];
+    const maxDataPoints = 20;
+
+    function updateCharts(data) {
+        if (!data || typeof data !== 'object') {
+            console.error('无效的数据格式:', data);
+            return;
+        }
+
+        const time = new Date().toLocaleTimeString();
+
+        // 限制数据点数量
+        if (labels.length >= maxDataPoints) {
+            labels.shift();
+            cpuChart.getOption().series[0].data.shift();
+            memChart.getOption().series[0].data.shift();
+            netChart.getOption().series[0].data.shift();
+            netChart.getOption().series[1].data.shift();
+            diskChart.getOption().series[0].data.shift();
+            diskChart.getOption().series[1].data.shift();
+        }
+
+        labels.push(time);
+
+        // 更新CPU图表
+        const cpuUsage = parseFloat(data.cpu_usage || 0);
+        cpuChart.setOption({
+            xAxis: { data: labels },
+            series: [{ data: [...cpuChart.getOption().series[0].data, cpuUsage.toFixed(2)] }]
+        });
+
+        // 更新内存图表
+        const memUsage = parseFloat(data.memory_usage || 0);
+        memChart.setOption({
+            xAxis: { data: labels },
+            series: [{ data: [...memChart.getOption().series[0].data, memUsage.toFixed(2)] }]
+        });
+
+        // 更新网络图表
+        const uploadSpeed = parseFloat(data.upload_speed || 0);
+        const downloadSpeed = parseFloat(data.download_speed || 0);
+        netChart.setOption({
+            xAxis: { data: labels },
+            series: [
+                { data: [...netChart.getOption().series[0].data, uploadSpeed.toFixed(2)] },
+                { data: [...netChart.getOption().series[1].data, downloadSpeed.toFixed(2)] }
+            ]
+        });
+
+        // 更新磁盘图表
+        const readSpeed = parseFloat(data.read_speed || 0);
+        const writeSpeed = parseFloat(data.write_speed || 0);
+        diskChart.setOption({
+            xAxis: { data: labels },
+            series: [
+                { data: [...diskChart.getOption().series[0].data, readSpeed.toFixed(2)] },
+                { data: [...diskChart.getOption().series[1].data, writeSpeed.toFixed(2)] }
+            ]
+        });
+
+        // 更新信息面板
+        document.getElementById('info').innerHTML = `
+        <strong>服务器状态信息</strong><br>
+        CPU: ${cpuUsage.toFixed(2)}%<br>
+        内存: ${memUsage.toFixed(2)}% (总: ${data.memory_total || 'N/A'}MB)<br>
+        磁盘: ${data.disk_usage ? parseFloat(data.disk_usage).toFixed(2) : 'N/A'}% (总: ${data.disk_total || 'N/A'}GB)<br>
+        上传: ${uploadSpeed.toFixed(2)} KB/s 下载: ${downloadSpeed.toFixed(2)} KB/s<br>
+        磁盘IO: 读 ${readSpeed.toFixed(2)} KB/s 写 ${writeSpeed.toFixed(2)} KB/s<br>
+        Load: ${data.load1 || 'N/A'}, ${data.load5 || 'N/A'}, ${data.load15 || 'N/A'}<br>
+        运行时间: ${data.uptime || 'N/A'}
+    `;
+    }
+
+    // 固定位置媒体模块
+    function loadFixedMedia() {
+        const img = document.getElementById("fixedMediaImg");
+        const video = document.getElementById("fixedMediaVideo");
+        const placeholder = document.getElementById("mediaPlaceholder");
+        const toggleBtn = document.getElementById("togglePlayPause");
+
+        img.style.display = "none";
+        video.style.display = "none";
+        toggleBtn.style.display = "none";
+        placeholder.style.display = "block";
+        placeholder.className = "media-loading";
+        placeholder.innerHTML = '<div class="spinner"></div><div>加载媒体中...</div>';
+
+        fetch(`${baseUrl}/random-media`, {
+            headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('获取媒体失败: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                const src = data.src;
+                if (!src) {
+                    placeholder.className = "media-placeholder";
+                    placeholder.textContent = "无可用媒体";
+                    return;
+                }
+
+                const ext = src.split('.').pop().toLowerCase();
+
+                if (ext === "mp4" || ext === "webm") {
+                    img.style.display = "none";
+                    video.src = src;
+                    video.style.display = "block";
+                    video.volume = document.getElementById('mediaVolume').value;
+
+                    // 设置视频事件
+                    video.onloadeddata = function() {
+                        placeholder.style.display = "none";
+                        toggleBtn.style.display = "block";
+                        toggleBtn.textContent = "暂停";
+
+                        video.play().catch(e => {
+                            console.log('自动播放被阻止:', e);
+                            toggleBtn.textContent = "播放";
+                        });
+                    };
+
+                    video.onerror = function() {
+                        placeholder.className = "media-error";
+                        placeholder.textContent = "视频加载失败";
+                        video.style.display = "none";
+                        toggleBtn.style.display = "none";
+                    };
+                } else {
+                    video.style.display = "none";
+                    toggleBtn.style.display = "none";
+                    img.src = src;
+                    img.style.display = "block";
+                    placeholder.style.display = "none";
+
+                    img.onerror = function() {
+                        img.style.display = "none";
+                        placeholder.className = "media-error";
+                        placeholder.textContent = "图片加载失败";
+                        placeholder.style.display = "block";
+                    };
+                }
+            })
+            .catch(error => {
+                console.error("加载随机媒体失败:", error);
+                placeholder.className = "media-error";
+                placeholder.textContent = "媒体加载失败";
+            });
+    }
+
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', init);
+
+    // 每30秒刷新媒体
+    setInterval(loadFixedMedia, 120000);
+</script>
+</body>
+</html>

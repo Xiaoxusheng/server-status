@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>响应式媒体播放器 - Acro Design风格</title>
+    <link rel="icon" href="/templates/hippo.svg" type="image/svg+xml">
+    <link rel="icon" href="templates/hippo.png" type="image/png">
+    <link rel="shortcut icon" href="1.png" type="image/x-icon"/>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Acro Design 风格变量 */
+        :root {
+            --primary-color: #165DFF;
+            --primary-hover: #0E42D2;
+            --success-color: #00B42A;
+            --warning-color: #FF7D00;
+            --danger-color: #F53F3F;
+            --text-primary: #1D2129;
+            --text-secondary: #86909C;
+            --text-tertiary: #C9CDD4;
+            --bg-white: #FFFFFF;
+            --bg-gray: #F7F8FA;
+            --border-color: #E5E6EB;
+            --border-radius: 6px;
+            --border-radius-medium: 8px;
+            --border-radius-large: 12px;
+            --box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+            --box-shadow-hover: 0 6px 16px 0 rgba(0, 0, 0, 0.12);
+            --transition: all 0.2s cubic-bezier(0.34, 0.69, 0.1, 1);
+            --control-height: 32px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-gray);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            color: var(--text-primary);
+        }
+
+        .player-container {
+            width: 100%;
+            max-width: 900px;
+            background: var(--bg-white);
+            border-radius: var(--border-radius-large);
+            box-shadow: var(--box-shadow);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: var(--transition);
+        }
+
+        .player-container:hover {
+            box-shadow: var(--box-shadow-hover);
+        }
+
+        /* 媒体展示区域 */
+        .media-box {
+            position: relative;
+            width: 100%;
+            height: 0;
+            padding-bottom: 56.25%; /* 16:9 宽高比 */
+            background-color: #000;
+            overflow: hidden;
+            cursor: zoom-in;
+        }
+
+        .media-box.zoomed {
+            position: fixed;
+            top:0;
+            left:0;
+            width:100vw;
+            height:100vh;
+            z-index: 1000;
+            background-color: rgba(0,0,0,0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: zoom-out;
+            padding-bottom: 0;
+        }
+
+        .media-box-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width:100%;
+            height:100%;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            transition: var(--transition);
+        }
+
+        .media-box-content img, .media-box-content video {
+            max-width:100%;
+            max-height:100%;
+            object-fit:contain;
+            transition: transform 0.3s ease;
+        }
+
+        .media-box.zoomed .media-box-content img,
+        .media-box.zoomed .media-box-content video {
+            max-width: 90vw;
+            max-height:90vh;
+        }
+
+        /* 错误提示样式 - Acro风格 */
+        .error-toast {
+            position: absolute;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .error-toast.show {
+            opacity: 1;
+        }
+
+        .error-toast i {
+            font-size: 16px;
+            color: var(--danger-color);
+        }
+
+        /* 进度条样式 - Acro风格 */
+        .progress-container {
+            position: absolute;
+            bottom: 60px;
+            left: 10px;
+            right: 10px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            cursor: pointer;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .media-box:hover .progress-container {
+            opacity: 1;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--primary-color);
+            border-radius: 2px;
+            width: 0%;
+            position: relative;
+            transition: width 0.1s ease;
+        }
+
+        .progress-slider {
+            position: absolute;
+            top: 50%;
+            right: -8px;
+            width: 16px;
+            height: 16px;
+            background: #fff;
+            border-radius: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+            z-index: 101;
+            transition: var(--transition);
+        }
+
+        .progress-slider:hover {
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .progress-time-tooltip {
+            position: absolute;
+            bottom: 20px;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 5px 10px;
+            border-radius: var(--border-radius);
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+        }
+
+        /* 控件区域样式 - Acro风格 */
+        .controls {
+            padding: 16px;
+            background: var(--bg-white);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: var(--transition);
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        /* Acro风格按钮 */
+        .control-btn, .speed-btn {
+            height: var(--control-height);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 0 12px;
+            background-color: var(--bg-white);
+            cursor: pointer;
+            transition: var(--transition);
+            font-weight: 400;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+
+        .control-btn:hover, .speed-btn:hover {
+            border-color: var(--primary-color);
+            background-color: rgba(22, 93, 255, 0.06);
+        }
+
+        .control-btn:active, .speed-btn:active {
+            transform: scale(0.96);
+        }
+
+        .control-btn i, .speed-btn i {
+            font-size: 14px;
+        }
+
+        /* 主要操作按钮样式 */
+        #playPauseBtn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+        }
+
+        #playPauseBtn:hover {
+            background-color: var(--primary-hover);
+        }
+
+        /* 选中状态的速率按钮 */
+        .speed-btn.selected {
+            background-color: rgba(22, 93, 255, 0.1);
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        /* 音量控制 */
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-grow: 1;
+            min-width: 120px;
+        }
+
+        .volume-slider-container {
+            flex-grow: 1;
+        }
+
+        input[type="range"].volume-slider {
+            width: 100%;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--border-color);
+            outline: none;
+            -webkit-appearance: none;
+            transition: var(--transition);
+        }
+
+        input[type="range"].volume-slider:hover {
+            background: var(--text-tertiary);
+        }
+
+        input[type="range"].volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            cursor: pointer;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: var(--transition);
+        }
+
+        input[type="range"].volume-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .time-display {
+            font-size: 14px;
+            color: var(--text-secondary);
+            min-width: 100px;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* 说明文本 */
+        .instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.6);
+            color: white;
+            padding: 5px 10px;
+            border-radius: var(--border-radius);
+            font-size: 12px;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+        }
+
+        .media-box:hover .instructions {
+            opacity: 1;
+        }
+
+        .media-box.zoomed .instructions {
+            display: none;
+        }
+
+        /* 圆环倒计时 - 修正位置 */
+        .countdown-ring {
+            width: 32px;
+            height: 32px;
+            position: relative;
+            margin-left: auto;
+        }
+
+        .countdown-ring svg {
+            transform: rotate(-90deg);
+            width: 32px;
+            height: 32px;
+        }
+
+        .countdown-ring circle {
+            fill: none;
+            stroke-width: 4;
+            stroke-linecap: round;
+            transition: stroke 0.5s linear;
+        }
+
+        .countdown-ring .bg {
+            stroke: var(--border-color);
+        }
+
+        .countdown-ring .progress {
+            stroke-dasharray: 94; /* 2 * π * 15 */
+            stroke-dashoffset: 94;
+        }
+
+        .countdown-ring .time-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 11px; /* 字体改小一点 */
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-family: inherit; /* 字体风格统一 */
+        }
+
+        /* 加载动画 */
+        .loading-spinner {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(22, 93, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 响应式设计 - 媒体查询 */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+
+            .controls {
+                padding: 12px;
+            }
+
+            .control-row {
+                gap: 8px;
+            }
+
+            .control-btn, .speed-btn {
+                padding: 0 10px;
+                font-size: 13px;
+                height: 28px;
+            }
+
+            .time-display {
+                font-size: 13px;
+                min-width: 90px;
+            }
+
+            .countdown-ring {
+                width: 28px;
+                height: 28px;
+                margin-left: 0; /* 移除自动左边距 */
+            }
+
+            .countdown-ring svg {
+                width: 28px;
+                height: 28px;
+            }
+
+            .countdown-ring .progress {
+                stroke-dasharray: 82; /* 2 * π * 13 */
+                stroke-dashoffset: 82;
+            }
+
+            .countdown-ring .time-text {
+                font-size: 10px; /* 移动端字体也相应改小 */
+            }
+
+            .progress-container {
+                height: 6px;
+            }
+
+            .progress-slider {
+                width: 18px;
+                height: 18px;
+            }
+
+            .instructions {
+                font-size: 11px;
+                padding: 4px 8px;
+            }
+
+            input[type="range"].volume-slider::-webkit-slider-thumb {
+                width: 16px;
+                height: 16px;
+            }
+
+            .volume-control {
+                min-width: 100px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .control-row {
+                justify-content: space-between;
+                width: 100%;
+            }
+
+            .control-btn, .speed-btn {
+                padding: 0 8px;
+                font-size: 12px;
+                height: 26px;
+            }
+
+            #speedControls {
+                order: 3;
+                width: 100%;
+                justify-content: center;
+                margin-top: 5px;
+            }
+
+            .time-display {
+                order: 2;
+                flex-grow: 1;
+                text-align: right;
+            }
+
+            .countdown-ring {
+                order: 4;
+                margin-top: 10px; /* 添加上边距，避免被遮挡 */
+                margin-left: auto; /* 恢复自动左边距以居中 */
+                margin-right: auto; /* 添加右边距使其居中 */
+            }
+
+            .volume-control {
+                min-width: 100%;
+                order: 5;
+                margin-top: 5px;
+            }
+
+            .instructions {
+                font-size: 10px;
+            }
+        }
+
+        /* 触摸设备优化 */
+        @media (hover: none) {
+            .progress-container {
+                opacity: 1;
+                height: 6px;
+            }
+
+            .media-box:hover .instructions {
+                opacity: 0.7;
+            }
+
+            .control-btn, .speed-btn {
+                padding: 0 14px;
+                height: 36px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="player-container">
+    <div class="media-box" id="mediaBox">
+        <div class="media-box-content" id="mediaContainer">
+            <div class="loading-spinner" id="loadingSpinner"></div>
+            <div class="error-toast" id="errorToast">
+                <i class="fas fa-exclamation-circle"></i>
+                <span id="errorText"></span>
+            </div>
+        </div>
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar" id="progressBar">
+                <div class="progress-slider" id="progressSlider"></div>
+            </div>
+            <div class="progress-time-tooltip" id="progressTooltip">00:00</div>
+        </div>
+        <div class="instructions" id="instructions">双击放大 / 缩小</div>
+    </div>
+    <div class="controls" id="controls">
+        <div class="control-row">
+            <button class="control-btn" id="playPauseBtn"><i class="fa fa-play"></i>播放</button>
+            <button class="control-btn" id="refreshBtn"><i class="fa fa-arrows-rotate"></i>刷新</button>
+            <div class="time-display" id="timeDisplay">00:00 / 00:00</div>
+            <div id="speedControls" style="display:flex; gap:6px;">
+                <button class="speed-btn" data-speed="0.5">0.5x</button>
+                <button class="speed-btn selected" data-speed="1.0">1x</button>
+                <button class="speed-btn" data-speed="1.5">1.5x</button>
+                <button class="speed-btn" data-speed="2.0">2x</button>
+            </div>
+            <div class="countdown-ring" id="countdownRing">
+                <svg>
+                    <circle class="bg" cx="16" cy="16" r="15"></circle>
+                    <circle class="progress" cx="16" cy="16" r="15"></circle>
+                </svg>
+                <div class="time-text" id="countdownText">60</div>
+            </div>
+        </div>
+        <div class="control-row">
+            <div class="volume-control">
+                <span>音量:</span>
+                <div class="volume-slider-container">
+                    <input type="range" min="0" max="100" value="50" class="volume-slider" id="volumeSlider">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    class MediaPlayer {
+        constructor(){
+            this.mediaBox = document.getElementById('mediaBox');
+            this.mediaContainer = document.getElementById('mediaContainer');
+            this.loadingSpinner = document.getElementById('loadingSpinner');
+            this.errorToast = document.getElementById('errorToast');
+            this.errorText = document.getElementById('errorText');
+            this.playPauseBtn = document.getElementById('playPauseBtn');
+            this.refreshBtn = document.getElementById('refreshBtn');
+            this.timeDisplay = document.getElementById('timeDisplay');
+            this.volumeSlider = document.getElementById('volumeSlider');
+            this.speedBtns = document.querySelectorAll('.speed-btn');
+            this.countdownText = document.getElementById('countdownText');
+            this.countdownRing = document.querySelector('.countdown-ring .progress');
+            this.progressContainer = document.getElementById('progressContainer');
+            this.progressBar = document.getElementById('progressBar');
+            this.progressSlider = document.getElementById('progressSlider');
+            this.progressTooltip = document.getElementById('progressTooltip');
+
+            this.currentMedia = null;
+            this.isVideo = false;
+            this.isZoomed = false;
+            this.autoRefreshSec = 60;
+            this.maxSec = 60;
+            this.isDraggingProgress = false;
+            this.isTouchDevice = 'ontouchstart' in window;
+
+            this.bindEvents();
+            this.loadMedia();
+            this.startCountdown();
+        }
+
+        bindEvents(){
+            this.playPauseBtn.addEventListener('click', () => this.togglePlayPause());
+            this.refreshBtn.addEventListener('click', () => this.loadMedia());
+            this.volumeSlider.addEventListener('input', (e) => this.setVolume(e.target.value/100));
+
+            // 速率按钮事件 - 修复同时选中多个的问题
+            this.speedBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    this.setPlaybackRate(parseFloat(btn.dataset.speed));
+
+                    // 移除所有按钮的选中状态
+                    this.speedBtns.forEach(b => b.classList.remove('selected'));
+
+                    // 只选中当前点击的按钮
+                    btn.classList.add('selected');
+                });
+            });
+
+            // 双击/双指点击事件
+            this.mediaBox.addEventListener('dblclick', () => this.toggleZoom());
+
+            // 触摸设备支持双指点击缩放
+            if (this.isTouchDevice) {
+                let lastTap = 0;
+                this.mediaBox.addEventListener('touchend', (e) => {
+                    const currentTime = new Date().getTime();
+                    const tapLength = currentTime - lastTap;
+                    if (tapLength < 300 && tapLength > 0) {
+                        this.toggleZoom();
+                        e.preventDefault();
+                    }
+                    lastTap = currentTime;
+                });
+            }
+
+            document.addEventListener('keydown', e => {
+                if(e.key === 'Escape' && this.isZoomed) this.toggleZoom();
+                if(e.key === ' ') this.togglePlayPause();
+            });
+
+            // 进度条事件
+            this.progressContainer.addEventListener('click', (e) => this.seek(e));
+
+            // 鼠标和触摸事件处理
+            this.progressSlider.addEventListener('mousedown', () => {
+                this.isDraggingProgress = true;
+                if(this.isVideo && this.currentMedia) this.currentMedia.pause();
+            });
+
+            // 触摸事件
+            this.progressSlider.addEventListener('touchstart', (e) => {
+                this.isDraggingProgress = true;
+                if(this.isVideo && this.currentMedia) this.currentMedia.pause();
+                e.preventDefault();
+            }, { passive: false });
+
+            document.addEventListener('mousemove', (e) => {
+                if(this.isDraggingProgress) this.dragProgress(e);
+            });
+
+            document.addEventListener('touchmove', (e) => {
+                if(this.isDraggingProgress && e.touches.length === 1) {
+                    this.dragProgress(e.touches[0]);
+                    e.preventDefault();
+                }
+            }, { passive: false });
+
+            document.addEventListener('mouseup', () => {
+                if(this.isDraggingProgress) {
+                    this.isDraggingProgress = false;
+                    if(this.isVideo && this.currentMedia && !this.currentMedia.paused) {
+                        this.currentMedia.play();
+                    }
+                }
+            });
+
+            document.addEventListener('touchend', () => {
+                if(this.isDraggingProgress) {
+                    this.isDraggingProgress = false;
+                    if(this.isVideo && this.currentMedia && !this.currentMedia.paused) {
+                        this.currentMedia.play();
+                    }
+                }
+            });
+
+            this.progressContainer.addEventListener('mousemove', (e) => this.showTooltip(e));
+            this.progressContainer.addEventListener('mouseleave', () => {
+                this.progressTooltip.style.opacity = '0';
+            });
+
+            // 触摸设备上自动显示进度条
+            if (this.isTouchDevice) {
+                this.progressContainer.style.opacity = '1';
+            }
+        }
+
+        startCountdown(){
+            setInterval(() => {
+                this.autoRefreshSec--;
+                if(this.autoRefreshSec <= 0){
+                    this.loadMedia();
+                    this.autoRefreshSec = this.maxSec;
+                }
+                this.updateCountdownRing();
+            }, 1000);
+        }
+
+        updateCountdownRing(){
+            const radius = 15;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference * (1 - this.autoRefreshSec / this.maxSec);
+            this.countdownRing.style.strokeDasharray = circumference;
+            this.countdownRing.style.strokeDashoffset = circumference - offset;
+            this.countdownText.textContent = this.autoRefreshSec;
+
+            // 颜色渐变
+            if(this.autoRefreshSec > 40) {
+                this.countdownRing.style.stroke = 'var(--primary-color)';
+            } else if(this.autoRefreshSec > 20) {
+                this.countdownRing.style.stroke = 'var(--warning-color)';
+            } else {
+                this.countdownRing.style.stroke = 'var(--danger-color)';
+            }
+        }
+
+        toggleZoom(){
+            // 在移动设备上使用全屏API
+            if (this.isTouchDevice && this.isVideo && this.currentMedia) {
+                this.toggleFullscreen();
+            } else {
+                this.isZoomed = !this.isZoomed;
+                if(this.isZoomed){
+                    this.mediaBox.classList.add('zoomed');
+                    document.body.style.overflow = 'hidden';
+                } else {
+                    this.mediaBox.classList.remove('zoomed');
+                    document.body.style.overflow = '';
+                }
+            }
+        }
+
+        // 切换全屏模式
+        toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                if (this.mediaBox.requestFullscreen) {
+                    this.mediaBox.requestFullscreen();
+                } else if (this.mediaBox.webkitRequestFullscreen) {
+                    this.mediaBox.webkitRequestFullscreen();
+                } else if (this.mediaBox.msRequestFullscreen) {
+                    this.mediaBox.msRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        showLoading(){
+            this.loadingSpinner.style.display = 'block';
+            this.errorToast.classList.remove('show');
+            this.mediaContainer.innerHTML = '';
+            this.mediaContainer.appendChild(this.loadingSpinner);
+            this.updatePlayPauseButton(false);
+            this.timeDisplay.textContent = '00:00 / 00:00';
+        }
+
+        showError(msg){
+            this.loadingSpinner.style.display = 'none';
+            this.errorText.textContent = msg || '加载媒体时出错';
+            this.errorToast.classList.add('show');
+
+            // 3秒后淡出
+            setTimeout(() => {
+                this.errorToast.classList.remove('show');
+            }, 3000);
+
+            this.updatePlayPauseButton(false);
+            this.timeDisplay.textContent = '00:00 / 00:00';
+        }
+
+        async loadMedia(){
+            this.showLoading();
+            try{
+                const res = await fetch('https://wustwu.cn:9000/random-media');
+                if(!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if(data.code === 200 && data.src) this.displayMedia(data.src);
+                else throw new Error('API 返回无效数据');
+                this.autoRefreshSec = this.maxSec;
+            } catch(e) {
+                console.error(e);
+                this.showError('无法加载媒体，请点击刷新重试！');
+            }
+        }
+
+        displayMedia(src){
+            this.loadingSpinner.style.display = 'none';
+            this.errorToast.classList.remove('show');
+            this.mediaContainer.innerHTML = '';
+            this.isZoomed = false;
+            this.mediaBox.classList.remove('zoomed');
+            document.body.style.overflow = '';
+
+            const isVideo = /\.(mp4|webm|ogg|mov)$/i.test(src);
+            if(isVideo){
+                this.isVideo = true;
+                this.currentMedia = document.createElement('video');
+                this.currentMedia.src = src;
+                this.currentMedia.controls = false;
+                this.currentMedia.volume = this.volumeSlider.value/100;
+                this.currentMedia.playbackRate = 1.0;
+                this.currentMedia.addEventListener('timeupdate', () => {
+                    this.updateTimeDisplay();
+                    this.updateProgressBar();
+                });
+                this.currentMedia.addEventListener('loadedmetadata', () => {
+                    this.updateTimeDisplay();
+                    this.updateProgressBar();
+                });
+                this.currentMedia.addEventListener('ended', () => this.updatePlayPauseButton(false));
+                this.mediaContainer.appendChild(this.currentMedia);
+                this.updatePlayPauseButton(false);
+
+                // 显示进度条
+                this.progressContainer.style.display = 'block';
+
+                // 触摸设备添加视频控制
+                if (this.isTouchDevice) {
+                    this.currentMedia.addEventListener('touchstart', (e) => {
+                        if (e.touches.length === 1) {
+                            this.togglePlayPause();
+                        }
+                    });
+                }
+            } else {
+                this.isVideo = false;
+                this.currentMedia = document.createElement('img');
+                this.currentMedia.src = src;
+                this.currentMedia.draggable = false;
+                this.currentMedia.alt = "随机图片";
+                this.currentMedia.onerror = () => this.showError('图片加载失败，请点击刷新重试！');
+                this.mediaContainer.appendChild(this.currentMedia);
+                this.timeDisplay.textContent = '--:-- / --:--';
+
+                // 隐藏进度条
+                this.progressContainer.style.display = 'none';
+            }
+        }
+
+        updateProgressBar() {
+            if (!this.isVideo || !this.currentMedia) return;
+
+            const percent = (this.currentMedia.currentTime / this.currentMedia.duration) * 100;
+            this.progressBar.style.width = percent + '%';
+        }
+
+        seek(e) {
+            if (!this.isVideo || !this.currentMedia) return;
+
+            const rect = this.progressContainer.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX) || 0;
+            const percent = (clientX - rect.left) / rect.width;
+            this.currentMedia.currentTime = percent * this.currentMedia.duration;
+        }
+
+        dragProgress(e) {
+            if (!this.isVideo || !this.currentMedia) return;
+
+            const rect = this.progressContainer.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX) || 0;
+            let percent = (clientX - rect.left) / rect.width;
+            percent = Math.max(0, Math.min(1, percent)); // 限制在0-1之间
+
+            this.currentMedia.currentTime = percent * this.currentMedia.duration;
+            this.progressBar.style.width = percent * 100 + '%';
+
+            // 更新工具提示
+            this.progressTooltip.textContent = this.formatTime(percent * this.currentMedia.duration);
+            this.progressTooltip.style.left = (percent * 100) + '%';
+        }
+
+        showTooltip(e) {
+            if (!this.isVideo || !this.currentMedia) return;
+
+            const rect = this.progressContainer.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX) || 0;
+            const percent = (clientX - rect.left) / rect.width;
+            const time = percent * this.currentMedia.duration;
+
+            this.progressTooltip.textContent = this.formatTime(time);
+            this.progressTooltip.style.left = (percent * 100) + '%';
+            this.progressTooltip.style.opacity = '1';
+        }
+
+        togglePlayPause(){
+            if(!this.isVideo || !this.currentMedia) return;
+            if(this.currentMedia.paused) {
+                this.currentMedia.play().then(() => this.updatePlayPauseButton(true));
+            } else {
+                this.currentMedia.pause();
+                this.updatePlayPauseButton(false);
+            }
+        }
+
+        updatePlayPauseButton(isPlaying){
+            if(isPlaying) {
+                this.playPauseBtn.innerHTML = '<i class="fa fa-pause"></i>暂停';
+                this.playPauseBtn.style.backgroundColor = 'var(--primary-color)';
+            } else {
+                this.playPauseBtn.innerHTML = '<i class="fa fa-play"></i>播放';
+                this.playPauseBtn.style.backgroundColor = 'var(--primary-color)';
+            }
+        }
+
+        setVolume(vol){
+            if(this.isVideo && this.currentMedia) this.currentMedia.volume = vol;
+        }
+
+        setPlaybackRate(rate){
+            if(this.isVideo && this.currentMedia) this.currentMedia.playbackRate = rate;
+        }
+
+        formatTime(sec){
+            if(isNaN(sec)) return '00:00';
+            const m = Math.floor(sec/60);
+            const s = Math.floor(sec%60);
+            return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        }
+
+        updateTimeDisplay(){
+            if(this.isVideo && this.currentMedia){
+                this.timeDisplay.textContent = `${this.formatTime(this.currentMedia.currentTime)} / ${this.formatTime(this.currentMedia.duration || 0)}`;
+            }
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => { new MediaPlayer(); });
+</script>
+</body>
+</html>
