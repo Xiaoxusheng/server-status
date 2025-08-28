@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -22,6 +23,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
+	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/load"
 	"github.com/shirou/gopsutil/v3/mem"
 	psnet "github.com/shirou/gopsutil/v3/net"
@@ -45,7 +47,13 @@ type ServerStatus struct {
 	Uptime        string           `json:"uptime"`
 	OnlineCount   int              `json:"online_count"`
 	UniqueIPs     []string         `json:"unique_ips"`
-	OnlineUsers   []OnlineUserInfo `json:"online_users"` // 新增详细在线用户信息
+	OnlineUsers   []OnlineUserInfo `json:"online_users"`
+	// 新增主机信息字段
+	Hostname      string `json:"hostname"`
+	OS            string `json:"os"`
+	Platform      string `json:"platform"`
+	KernelVersion string `json:"kernel_version"`
+	Architecture  string `json:"architecture"`
 }
 
 // 新增：用于WebSocket传输的在线用户信息结构
@@ -106,6 +114,10 @@ var (
 		Users: make(map[string]*OnlineUser),
 	}
 	url = "https://wustwu.cn:8081/static/"
+	// 新增：主机信息缓存
+	hostInfo      *host.InfoStat
+	hostInfoErr   error
+	hostInfoMutex sync.Mutex
 )
 
 const dataFile = "server_data.json"
@@ -129,6 +141,26 @@ type EpubInfo struct {
 	Author       string `json:"author"`
 	ChapterCount int    `json:"chapter_count"`
 	Url          string `json:"url"`
+}
+
+// 新增：获取主机信息函数
+func getHostInfo() (*host.InfoStat, error) {
+	hostInfoMutex.Lock()
+	defer hostInfoMutex.Unlock()
+
+	// 如果已经获取过且没有错误，直接返回缓存的信息
+	if hostInfo != nil && hostInfoErr == nil {
+		return hostInfo, nil
+	}
+
+	// 重新获取主机信息
+	hostInfo, hostInfoErr = host.Info()
+	if hostInfoErr != nil {
+		log.Printf("获取主机信息失败: %v", hostInfoErr)
+		return nil, hostInfoErr
+	}
+
+	return hostInfo, nil
 }
 
 func enableCORSh(h http.Handler) http.HandlerFunc {
@@ -207,6 +239,16 @@ var files = []string{}
 
 func main() {
 	loadData()
+
+	// 启动时获取主机信息
+	go func() {
+		_, err := getHostInfo()
+		if err != nil {
+			log.Printf("初始化主机信息失败: %v", err)
+		} else {
+			log.Println("✅ 主机信息获取完成")
+		}
+	}()
 
 	// 定时保存数据
 	go func() {
@@ -546,7 +588,6 @@ func ifacesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------- WebSocket ----------------
-// ---------------- WebSocket ----------------
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	updateOnlineUser(r, "websocket")
@@ -729,6 +770,23 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 	// 获取在线用户统计信息和详细列表
 	onlineCount, uniqueIPs, onlineUsersList := getOnlineUsersStats()
 
+	// 获取主机信息
+	hostInfo, err := getHostInfo()
+	var hostname, osName, platform, kernelVersion string
+
+	if err == nil && hostInfo != nil {
+		hostname = hostInfo.Hostname
+		osName = hostInfo.OS
+		platform = hostInfo.Platform
+		kernelVersion = hostInfo.KernelVersion
+	} else {
+		// 如果获取失败，使用备用方法
+		hostname, _ = os.Hostname()
+		osName = runtime.GOOS
+		platform = runtime.GOOS
+		kernelVersion = "unknown"
+	}
+
 	return &ServerStatus{
 		CPUUsage:      cpuPercent[0],
 		MemoryUsage:   memInfo.UsedPercent,
@@ -747,7 +805,12 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 		Uptime:        uptimeStr,
 		OnlineCount:   onlineCount,
 		UniqueIPs:     uniqueIPs,
-		OnlineUsers:   onlineUsersList, // 新增详细在线用户信息
+		OnlineUsers:   onlineUsersList,
+		Hostname:      hostname,
+		OS:            osName,
+		Platform:      platform,
+		KernelVersion: kernelVersion,
+		Architecture:  runtime.GOARCH,
 	}, nil
 }
 

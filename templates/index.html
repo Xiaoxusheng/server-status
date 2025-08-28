@@ -1466,13 +1466,31 @@
         const writeSpeed = parseFloat(data.write_speed || 0);
 
         document.getElementById('info').innerHTML = `
-                <strong>服务器状态信息</strong>
+                   <strong>服务器状态信息</strong>
                 <table class="status-table">
                     <tr>
                         <th>指标</th>
                         <th>值</th>
                         <th>指标</th>
                         <th>值</th>
+                    </tr>
+                    <tr>
+                        <td>主机名</td>
+                        <td class="status-value">${data.hostname || 'N/A'}</td>
+                        <td>操作系统</td>
+                        <td class="status-value">${data.os || 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <td>平台</td>
+                        <td class="status-value">${data.platform || 'N/A'}</td>
+                        <td>内核版本</td>
+                        <td class="status-value">${data.kernel_version || 'N/A'}</td>
+                    </tr>
+                    <tr>
+                        <td>系统架构</td>
+                        <td class="status-value">${data.architecture || 'N/A'}</td>
+                        <td>运行时间</td>
+                        <td class="status-value">${data.uptime || 'N/A'}</td>
                     </tr>
                     <tr>
                         <td>CPU使用率</td>
@@ -1505,15 +1523,10 @@
                         <td class="status-value">${data.load1 || 'N/A'}, ${data.load5 || 'N/A'}, ${data.load15 || 'N/A'}</td>
                     </tr>
                     <tr>
-                        <td>运行时间</td>
-                        <td class="status-value">${data.uptime || 'N/A'}</td>
-                     <td>下载总流量</td>
-                        <td class="status-value" >${data.total_download || 'N/A'}</td>
-
-                    </tr>
-                       <tr>
+                        <td>下载总流量</td>
+                        <td class="status-value">${data.total_download || 'N/A'}</td>
                         <td>上传总流量</td>
-                        <td class="status-value" colspan="3">${data.total_upload || 'N/A'}</td>
+                        <td class="status-value">${data.total_upload || 'N/A'}</td>
                     </tr>
                 </table>
             `;
