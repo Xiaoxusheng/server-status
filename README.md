@@ -115,6 +115,11 @@ Uptime        string  // 运行时间
 OnlineCount   int     // 在线用户数
 UniqueIPs     []string         // 唯一IP列表
 OnlineUsers   []OnlineUserInfo // 在线用户详情
+Hostname      string  // 主机名
+OS            string  //操作系统名称
+Platform      string  //平台名称
+KernelVersion string  //内核版本
+Architecture  string  //系统架构
 }
 ```
 
