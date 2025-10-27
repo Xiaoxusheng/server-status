@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"html/template"
+	"io"
 	"io/fs"
 	"log"
 	"math/rand"
@@ -27,6 +27,17 @@ import (
 	"github.com/shirou/gopsutil/v3/load"
 	"github.com/shirou/gopsutil/v3/mem"
 	psnet "github.com/shirou/gopsutil/v3/net"
+)
+
+// 配置项
+const (
+	mediaDir          = "/root/file/static"
+	url               = "https://wustwu.cn:8081/static/"
+	authToken         = "123456"
+	dataFile          = "server_data.json"
+	rateLimit         = 10             // 每分钟最大请求数
+	rateLimitDuration = time.Minute    // 速率限制时间窗口
+	logDir            = "/root/os/log" // 日志目录
 )
 
 type ServerStatus struct {
@@ -56,7 +67,7 @@ type ServerStatus struct {
 	Architecture  string `json:"architecture"`
 }
 
-// 新增：用于WebSocket传输的在线用户信息结构
+// OnlineUserInfo 新增：用于WebSocket传输的在线用户信息结构
 type OnlineUserInfo struct {
 	IP        string `json:"ip"`
 	UserAgent string `json:"user_agent"`
@@ -64,7 +75,7 @@ type OnlineUserInfo struct {
 	Page      string `json:"page"`
 }
 
-// 访问统计结构体
+// AccessStats 访问统计结构体
 type AccessStats struct {
 	sync.RWMutex
 	DailyVisits    map[string]int
@@ -77,7 +88,7 @@ type AccessStatsSnapshot struct {
 	WeeklyVisits map[string]int `json:"weekly_visits"`
 }
 
-// 在线用户结构体
+// OnlineUser 在线用户结构体
 type OnlineUser struct {
 	IP        string    `json:"ip"`
 	UserAgent string    `json:"user_agent"`
@@ -90,7 +101,7 @@ type OnlineUsers struct {
 	Users map[string]*OnlineUser // key is IP+UserAgent to identify unique sessions
 }
 
-// 持久化结构体
+// PersistData 持久化结构体
 type PersistData struct {
 	TotalUploadAccum   uint64              `json:"total_upload_accum"`
 	TotalDownloadAccum uint64              `json:"total_download_accum"`
@@ -98,7 +109,6 @@ type PersistData struct {
 }
 
 var (
-	authToken          = "123456"
 	upgrader           = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
 	startTime          = time.Now()
 	lastNetStats       = map[string]NetStat{}
@@ -113,14 +123,17 @@ var (
 	onlineUsers = &OnlineUsers{
 		Users: make(map[string]*OnlineUser),
 	}
-	url = "https://wustwu.cn:8081/static/"
+
+	//返回随机视频照片
+	num   = 0
+	key   = 0
+	files []string
+
 	// 新增：主机信息缓存
 	hostInfo      *host.InfoStat
 	hostInfoErr   error
 	hostInfoMutex sync.Mutex
 )
-
-const dataFile = "server_data.json"
 
 type NetStat struct {
 	BytesSent uint64
@@ -232,13 +245,158 @@ func saveData() {
 	}
 }
 
-var mediaDir = "/root/file/static"
-var num = 0
-var key = 0
-var files = []string{}
+//请求速率限制
+// 速率限制配置
+
+// 速率限制器结构体
+type RateLimiter struct {
+	sync.RWMutex
+	requests    map[string][]time.Time
+	limit       int
+	window      time.Duration
+	cleanupTick *time.Ticker
+}
+
+// 创建新的速率限制器
+func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
+	rl := &RateLimiter{
+		requests: make(map[string][]time.Time),
+		limit:    limit,
+		window:   window,
+	}
+
+	// 启动定期清理过期记录的goroutine
+	rl.cleanupTick = time.NewTicker(time.Minute * 5)
+	go rl.cleanupExpired()
+
+	return rl
+}
+
+// 检查是否允许请求
+func (rl *RateLimiter) Allow(ip string) bool {
+	rl.Lock()
+	defer rl.Unlock()
+
+	now := time.Now()
+
+	// 清理过期请求
+	var validRequests []time.Time
+	for _, t := range rl.requests[ip] {
+		if now.Sub(t) <= rl.window {
+			validRequests = append(validRequests, t)
+		}
+	}
+	rl.requests[ip] = validRequests
+
+	// 检查是否超过限制
+	if len(rl.requests[ip]) >= rl.limit {
+		return false
+	}
+
+	// 添加新请求
+	rl.requests[ip] = append(rl.requests[ip], now)
+	return true
+}
+
+// 定期清理过期记录
+func (rl *RateLimiter) cleanupExpired() {
+	for range rl.cleanupTick.C {
+		rl.Lock()
+		now := time.Now()
+		for ip, requests := range rl.requests {
+			var validRequests []time.Time
+			for _, t := range requests {
+				if now.Sub(t) <= rl.window {
+					validRequests = append(validRequests, t)
+				}
+			}
+			if len(validRequests) == 0 {
+				delete(rl.requests, ip)
+			} else {
+				rl.requests[ip] = validRequests
+			}
+		}
+		rl.Unlock()
+	}
+}
+
+// 停止清理goroutine
+func (rl *RateLimiter) Stop() {
+	if rl.cleanupTick != nil {
+		rl.cleanupTick.Stop()
+	}
+}
+
+// 全局速率限制器实例
+var globalRateLimiter = NewRateLimiter(rateLimit, rateLimitDuration)
+
+/*--------------------日志-------------------------*/
+var logFile *os.File
+
+func init() {
+	setupLog()
+	go scheduleLogRotation()
+}
+
+func setupLog() {
+	// 创建日志目录（如果不存在）
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		log.Fatalf("创建日志目录失败: %v", err)
+	}
+
+	// 关闭旧日志文件（如果存在）
+	if logFile != nil {
+		logFile.Close()
+	}
+
+	// 创建新的日志文件，使用当前日期作为文件名
+	logFileName := time.Now().Format(time.DateOnly) + ".log"
+	logFilePath := filepath.Join(logDir, logFileName)
+
+	file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("打开日志文件失败: %v", err)
+	}
+
+	logFile = file
+
+	// 设置输出到控制台和新日志文件
+	log.SetOutput(io.MultiWriter(os.Stdout, logFile))
+}
+
+func scheduleLogRotation() {
+	// 计算到下一个0点的时间
+	next := nextMidnight()
+	timer := time.NewTimer(next)
+
+	for {
+		<-timer.C
+		setupLog()
+
+		// 重新计算到下一个0点的时间并重置定时器
+		next = nextMidnight()
+		timer.Reset(next)
+	}
+}
+
+func nextMidnight() time.Duration {
+	now := time.Now()
+	// 计算下一个0点时间
+	next := now.Add(24 * time.Hour)
+	next = time.Date(next.Year(), next.Month(), next.Day(), 0, 0, 0, 0, next.Location())
+	return next.Sub(now)
+}
 
 func main() {
+	// 初始化日志系统
+
+	//initLogger()
+	//defer logger.Close()
+
 	loadData()
+
+	// 确保在程序退出时停止速率限制器的清理goroutine
+	defer globalRateLimiter.Stop()
 
 	// 启动时获取主机信息
 	go func() {
@@ -258,25 +416,6 @@ func main() {
 		}
 	}()
 
-	// 定时清理长时间无活动的在线用户
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-
-		for {
-			<-ticker.C
-			onlineUsers.Lock()
-			now := time.Now()
-			for key, user := range onlineUsers.Users {
-				// 如果用户超过30分钟无活动，移除
-				if now.Sub(user.Since) > 30*time.Minute {
-					delete(onlineUsers.Users, key)
-				}
-			}
-			onlineUsers.Unlock()
-		}
-	}()
-
 	// 监听退出信号
 	go func() {
 		c := make(chan os.Signal, 1)
@@ -290,8 +429,12 @@ func main() {
 	// 每日统计重置
 	go resetDailyStats()
 
+	//计算位置
+	go startWebSocketServer()
 	//http.HandleFunc("/", indexHandler)
 	http.Handle("/", http.FileServer(http.Dir("/root/os/templates")))
+	http.HandleFunc("/location", handleWebSocket)
+	http.HandleFunc("/health", healthCheck)
 	http.HandleFunc("/ws", wsHandler)
 	http.HandleFunc("/video", homeHandler)
 	http.HandleFunc("/status-ifaces", enableCORSh(http.HandlerFunc(ifacesHandler)))
@@ -482,6 +625,19 @@ func recordAccess(r *http.Request) {
 
 // ---------------- 媒体文件 ----------------
 func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
+	// 添加速率限制检查
+	clientIP := getClientIP(r)
+	if !globalRateLimiter.Allow(clientIP) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"code": http.StatusTooManyRequests,
+			"msg":  "Rate limit exceeded. Please try again later.",
+		})
+		return
+	}
+
+	//记录访问
 	recordAccess(r)
 	updateOnlineUser(r, "random-media")
 
@@ -501,8 +657,8 @@ func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 	if num > 0 && key <= 10 {
 		key++
 		randIdx := rand.Intn(len(files))
-		s.Code = 200
-		s.Src = "https://wustwu.cn:8081/static/" + files[randIdx]
+		s.Code = http.StatusOK
+		s.Src = url + files[randIdx]
 		json.NewEncoder(w).Encode(s)
 	} else {
 		key = 0
@@ -538,8 +694,8 @@ func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		randIdx := rand.Intn(len(files))
-		s.Code = 200
-		s.Src = "https://wustwu.cn:8081/static/" + files[randIdx]
+		s.Code = http.StatusOK
+		s.Src = url + files[randIdx]
 		json.NewEncoder(w).Encode(s)
 	}
 }
@@ -561,14 +717,14 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
+/*func indexHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	updateOnlineUser(r, "index")
 	tmpl := template.Must(template.ParseFiles("/root/os/templates/index.html"))
 	if err := tmpl.Execute(w, nil); err != nil {
 		http.Error(w, "Error rendering page", http.StatusInternalServerError)
 	}
-}
+}*/
 
 func ifacesHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
@@ -621,24 +777,6 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 
-	// 创建退出通道
-	done := make(chan struct{})
-
-	// 启动goroutine读取客户端消息（主要用于检测连接状态）
-	go func() {
-		defer close(done)
-		for {
-			_, _, err := conn.ReadMessage()
-			if err != nil {
-				// 检查是否是正常关闭
-				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-					log.Printf("WebSocket读取错误: %v", err)
-				}
-				break
-			}
-		}
-	}()
-
 	ticker := time.NewTicker(1 * time.Second)
 	pingTicker := time.NewTicker(30 * time.Second) // 每30秒发送一次ping
 	defer func() {
@@ -653,9 +791,6 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		select {
-		case <-done:
-			// 客户端断开连接
-			return
 		case <-ticker.C:
 			// 更新在线用户时间
 			updateOnlineUser(r, "websocket")
@@ -883,8 +1018,12 @@ func execHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	err = json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": "success",
 		"output": string(output),
 	})
+	if err != nil {
+		log.Println("err:", err)
+		return
+	}
 }
