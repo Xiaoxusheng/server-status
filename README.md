@@ -166,7 +166,7 @@ Architecture  string  //系统架构
         </tr>
         <tr>
             <td><img src="img/4.png" alt="暗黑模式" width="1920" /></td>
-           <td><img src="img/3.png" alt="移动端" width="1920" /></td>
+           <td><img src="img/5.png" alt="移动端" width="1920" /></td>
         </tr>
     </tbody>
 </table>
