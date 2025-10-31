@@ -1,0 +1,2135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安全下载 - 服务器文件下载</title>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --text-color: #212529;
+            --card-bg: #ffffff;
+            --primary-color: #4a6ee0;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --border-color: #dee2e6;
+            --table-header-bg: #e9ecef;
+            --table-row-even: #f8f9fa;
+            --table-row-hover: #ececec;
+            --debug-bg: #f8f9fa;
+            --debug-text: #212529;
+            --debug-border: #dee2e6;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #121212;
+            --text-color: #e9ecef;
+            --card-bg: #1e1e1e;
+            --primary-color: #6c8dfa;
+            --secondary-color: #a0aec0;
+            --success-color: #48bb78;
+            --warning-color: #ecc94b;
+            --danger-color: #f56565;
+            --border-color: #2d3748;
+            --table-header-bg: #2d3748;
+            --table-row-even: #2a2a2a;
+            --table-row-hover: #2d2d2d;
+            --debug-bg: #2d3748;
+            --debug-text: #e9ecef;
+            --debug-border: #4a5568;
+        }
+        * {
+            box-sizing: border-box;
+            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header h1 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: var(--secondary-color);
+            font-size: 16px;
+        }
+
+        .nav-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            background: var(--primary-color);
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            filter: brightness(1.1);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(74, 110, 224, 0.3);
+        }
+
+        .btn-secondary {
+            background: var(--secondary-color);
+        }
+
+        .btn-success {
+            background: var(--success-color);
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+        }
+
+        .btn:disabled {
+            background: var(--secondary-color);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn:disabled:hover {
+            filter: none;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 1px solid var(--border-color);
+        }
+
+        .card-title {
+            color: var(--primary-color);
+            margin-bottom: 20px;
+            font-size: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(74, 110, 224, 0.1);
+        }
+
+        .form-input.error {
+            border-color: var(--danger-color);
+            box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.1);
+        }
+
+        .token-display {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .token-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .token-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: var(--secondary-color);
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-weight: 500;
+            color: var(--text-color);
+        }
+
+        .tokens-list {
+            margin-top: 20px;
+        }
+
+        .token-item {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+
+        .token-item:hover {
+            border-color: var(--primary-color);
+            box-shadow: 0 2px 8px rgba(74, 110, 224, 0.1);
+        }
+
+        .token-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .token-id {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-family: 'Courier New', monospace;
+        }
+
+        .token-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-active {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--success-color);
+        }
+
+        .status-expired {
+            background: rgba(108, 117, 125, 0.1);
+            color: var(--secondary-color);
+        }
+
+        .status-revoked {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--danger-color);
+        }
+
+        .token-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+
+        .usage-bar {
+            height: 6px;
+            background: var(--border-color);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .usage-progress {
+            height: 100%;
+            background: var(--primary-color);
+            transition: width 0.3s;
+        }
+
+        .usage-warning {
+            background: var(--warning-color);
+        }
+
+        .usage-danger {
+            background: var(--danger-color);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--secondary-color);
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alert-success {
+            background: rgba(40, 167, 69, 0.1);
+            border: 1px solid rgba(40, 167, 69, 0.2);
+            color: var(--success-color);
+        }
+
+        .alert-error {
+            background: rgba(220, 53, 69, 0.1);
+            border: 1px solid rgba(220, 53, 69, 0.2);
+            color: var(--danger-color);
+        }
+
+        .alert-info {
+            background: rgba(13, 110, 253, 0.1);
+            border: 1px solid rgba(13, 110, 253, 0.2);
+            color: var(--primary-color);
+        }
+
+        .alert-warning {
+            background: rgba(255, 193, 7, 0.1);
+            border: 1px solid rgba(255, 193, 7, 0.2);
+            color: var(--warning-color);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            background: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px;
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .user-details {
+            flex: 1;
+        }
+
+        .username {
+            font-weight: 500;
+            font-size: 16px;
+        }
+
+        .user-role {
+            font-size: 14px;
+            color: var(--secondary-color);
+        }
+
+        .logout-btn {
+            background: var(--danger-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .logout-btn:hover {
+            filter: brightness(1.1);
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: var(--secondary-color);
+            padding: 20px;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 2px solid var(--primary-color);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 修复调试面板样式 */
+        /* 修复调试面板样式 */
+        .debug-panel {
+            background: var(--debug-bg);
+            border: 1px solid var(--debug-border);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            color: var(--debug-text);
+        }
+
+        .debug-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            color: var(--debug-text);
+        }
+
+        .debug-toggle {
+            background: var(--secondary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .debug-toggle:hover {
+            filter: brightness(1.1);
+        }
+
+        #debugContent {
+            color: var(--debug-text);
+            line-height: 1.4;
+        }
+
+        #debugContent div {
+            margin-bottom: 4px;
+            padding: 2px 0;
+            /* 移除了分割线 */
+        }
+
+        /* 下载进度条样式 */
+        .progress-container {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--bg-color);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .progress-title {
+            font-weight: 500;
+            color: var(--primary-color);
+        }
+
+        .progress-percent {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .progress-bar-container {
+            height: 10px;
+            background: var(--border-color);
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: var(--primary-color);
+            border-radius: 5px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-details {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--secondary-color);
+        }
+
+        .progress-speed {
+            font-family: 'Courier New', monospace;
+        }
+
+        .progress-time {
+            font-family: 'Courier New', monospace;
+        }
+
+        .download-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .quick-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .quick-link-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-link-btn:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .file-preview {
+            margin-top: 15px;
+            padding: 12px;
+            background: var(--bg-color);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .preview-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .preview-icon {
+            font-size: 24px;
+        }
+
+        .preview-details {
+            flex: 1;
+        }
+
+        .preview-filename {
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+
+        .preview-size {
+            font-size: 12px;
+            color: var(--secondary-color);
+        }
+
+        .auto-fill-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 4px;
+            color: var(--primary-color);
+        }
+
+        .token-input-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .clipboard-btn {
+            margin-top: 10px;
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+
+        .error-hint {
+            color: var(--danger-color);
+            font-size: 12px;
+            margin-top: 5px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .download-error-details {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(220, 53, 69, 0.05);
+            border: 1px solid rgba(220, 53, 69, 0.2);
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .error-solution {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(255, 193, 7, 0.1);
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            .nav-buttons {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .token-details {
+                grid-template-columns: 1fr;
+            }
+
+            .token-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .token-actions {
+                justify-content: flex-start;
+                width: 100%;
+            }
+
+            .quick-links {
+                justify-content: center;
+            }
+
+            .progress-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+
+            .progress-details {
+                flex-direction: column;
+                gap: 5px;
+            }
+
+            .token-input-group {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body data-theme="light">
+<div class="container">
+    <!-- 头部 -->
+    <div class="header">
+        <h1>🔐 安全文件下载</h1>
+        <p>使用下载令牌安全地访问服务器文件资源</p>
+    </div>
+
+    <!-- 调试面板 -->
+    <div class="debug-panel" id="debugPanel" style="display: none;">
+        <div class="debug-header">
+            <strong>调试信息</strong>
+            <button class="debug-toggle" onclick="toggleDebug()">隐藏调试</button>
+        </div>
+        <div id="debugContent"></div>
+    </div>
+
+    <!-- 导航按钮 -->
+    <div class="nav-buttons">
+        <button class="btn" onclick="window.location.href='index.html'">
+            📊 返回监控面板
+        </button>
+        <button class="btn btn-secondary" onclick="toggleTheme()">
+            🌙 切换主题
+        </button>
+        <button class="btn" onclick="toggleDebug()">
+            🐛 显示调试
+        </button>
+    </div>
+
+    <!-- 认证状态显示 -->
+    <div id="authStatusCard" class="card">
+        <div class="card-title">
+            <span>🔍 认证状态</span>
+        </div>
+        <div id="authStatus">
+            <div class="loading">
+                <div class="spinner"></div>
+                <span>检查认证状态...</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户信息 -->
+    <div class="user-info" id="userInfo" style="display: none;">
+        <div class="user-avatar" id="userAvatar">U</div>
+        <div class="user-details">
+            <div class="username" id="usernameDisplay">用户</div>
+            <div class="user-role" id="userRole">用户</div>
+        </div>
+        <button class="logout-btn" onclick="logout()">退出登录</button>
+    </div>
+
+    <!-- 成功/错误提示 -->
+    <div class="alert alert-success" id="successAlert" style="display: none;"></div>
+    <div class="alert alert-error" id="errorAlert" style="display: none;"></div>
+    <div class="alert alert-info" id="infoAlert" style="display: none;"></div>
+    <div class="alert alert-warning" id="warningAlert" style="display: none;"></div>
+
+    <!-- 主要内容区域 -->
+    <div id="mainContent" style="display: none;">
+        <!-- 生成新令牌卡片 -->
+        <div class="card">
+            <div class="card-title">
+                <span>🔑 生成新下载令牌</span>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="tokenDescription">令牌描述（可选）</label>
+                <input type="text" id="tokenDescription" class="form-input"
+                       placeholder="例如：临时下载令牌、项目文件下载等">
+            </div>
+            <button class="btn btn-success" onclick="generateToken()" id="generateBtn">
+                🎫 生成下载令牌
+            </button>
+
+            <!-- 新令牌显示区域 -->
+            <div id="newTokenSection" style="display: none;">
+                <div class="token-display">
+                    <strong>您的下载令牌信息：</strong>
+                    <div class="token-info">
+                        <div class="info-item">
+                            <span class="info-label">令牌ID</span>
+                            <span class="info-value" id="displayTokenId"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">令牌值</span>
+                            <span class="info-value" id="displayTokenValue"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">过期时间</span>
+                            <span class="info-value" id="tokenExpiry"></span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">流量限制</span>
+                            <span class="info-value" id="tokenLimit"> GB</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="token-actions">
+                    <button class="btn" onclick="copyToken()">
+                        📋 复制令牌
+                    </button>
+                    <button class="btn btn-secondary" onclick="hideNewToken()">
+                        ✕ 关闭
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 直接下载卡片 -->
+        <div class="card">
+            <div class="card-title">
+                <span>⬇️ 安全文件下载</span>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="fileUrl">文件链接</label>
+                <input type="text" id="fileUrl" class="form-input"
+                       placeholder="请输入完整的文件URL，例如：https://example.com:8081/static/example.pdf">
+                <div style="font-size: 12px; color: var(--secondary-color); margin-top: 5px;">
+                    支持的文件类型：PDF、文档、图片、视频等
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">下载令牌 <span style="color: var(--danger-color);">*</span></label>
+                <div class="token-input-group">
+                    <div class="form-group">
+                        <input type="text" id="downloadTokenId" class="form-input"
+                               placeholder="令牌ID" required>
+                        <div style="font-size: 12px; color: var(--secondary-color); margin-top: 5px;">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <input type="text" id="downloadTokenValue" class="form-input"
+                               placeholder="令牌值" required>
+                        <button class="auto-fill-btn" onclick="autoFillToken()" title="使用当前令牌">🔑</button>
+                        <div style="font-size: 12px; color: var(--secondary-color); margin-top: 5px;">
+                        </div>
+                    </div>
+                </div>
+                <div style="font-size: 12px; color: var(--secondary-color); margin-top: 5px;">
+                    所有文件下载都需要令牌ID和令牌值验证
+                </div>
+
+                <!-- 剪贴板操作按钮 -->
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn clipboard-btn" onclick="readFromClipboard()">
+                        📋 从剪贴板读取令牌
+                    </button>
+                    <button class="btn btn-secondary clipboard-btn" onclick="enableAutoClipboard()" id="autoClipboardBtn">
+                        🔄 启用自动读取剪贴板
+                    </button>
+                </div>
+            </div>
+
+            <button class="btn btn-success" onclick="startDownload()" id="downloadBtn">
+                🚀 开始下载
+            </button>
+            <button class="btn btn-danger" onclick="cancelDownload()" id="cancelBtn" style="display: none; margin-left: 10px;">
+                ❌ 取消下载
+            </button>
+
+            <!-- 下载进度显示 -->
+            <div id="progressContainer" class="progress-container" style="display: none;">
+                <div class="progress-header">
+                    <div class="progress-title">下载进度</div>
+                    <div class="progress-percent" id="progressPercent">0%</div>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="progress-details">
+                    <div class="progress-size">
+                        已下载: <span id="downloadedSize">0 B</span> / <span id="totalSize">0 B</span>
+                    </div>
+                    <div class="progress-speed" id="downloadSpeed">速度: 0 KB/s</div>
+                    <div class="progress-time" id="timeRemaining">剩余时间: 计算中...</div>
+                </div>
+            </div>
+
+            <!-- 下载错误详情 -->
+            <div id="downloadErrorDetails" class="download-error-details" style="display: none;">
+                <div style="font-weight: 500; margin-bottom: 8px;">⚠️ 下载失败原因:</div>
+                <div id="errorMessage"></div>
+                <div id="errorSolution" class="error-solution" style="display: none;">
+                    <div style="font-weight: 500; margin-bottom: 5px;">💡 解决方案:</div>
+                    <div id="solutionText"></div>
+                </div>
+            </div>
+
+            <!-- 快速链接示例 -->
+            <div style="margin-top: 20px; padding: 15px; background: var(--bg-color); border-radius: 8px;">
+                <div style="font-weight: 500; margin-bottom: 10px;">📎 快速下载示例：</div>
+                <div class="quick-links">
+                    <button class="quick-link-btn" onclick="setExampleFile('example.pdf')">示例PDF</button>
+                    <button class="quick-link-btn" onclick="setExampleFile('document.docx')">示例文档</button>
+                    <button class="quick-link-btn" onclick="setExampleFile('image.jpg')">示例图片</button>
+                    <button class="quick-link-btn" onclick="setExampleFile('video.mp4')">示例视频</button>
+                    <button class="quick-link-btn" onclick="clearDownloadForm()" style="background: var(--secondary-color);">清空表单</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 使用说明卡片 -->
+        <div class="card">
+            <div class="card-title">
+                <span>📖 使用说明</span>
+            </div>
+            <div style="line-height: 1.8;">
+                <h4>如何使用下载令牌：</h4>
+                <ol style="margin-left: 20px; margin-bottom: 20px;">
+                    <li>点击上方"生成下载令牌"按钮创建新的令牌</li>
+                    <li>复制生成的令牌ID和令牌值</li>
+                    <li>在下方输入文件链接、令牌ID和令牌值，开始下载</li>
+                    <li>或者使用"从剪贴板读取令牌"自动填入</li>
+                </ol>
+                <div class="token-display" style="background: var(--card-bg);">
+                    https://example.com:9000/download?token_id=<strong>[令牌ID]</strong>&token=<strong>[令牌值]</strong>&file=<strong>[文件名]</strong>
+                </div>
+                <div style="margin-top: 15px; padding: 15px; background: rgba(255, 193, 7, 0.1); border-radius: 8px;">
+                    <strong>⚠️ 重要提示：</strong>
+                    <ul style="margin: 10px 0 0 20px;">
+                        <li>每个令牌有效期为30分钟</li>
+                        <li>每个令牌最多下载3GB数据</li>
+                        <li>请妥善保管您的令牌，不要泄露给他人</li>
+                        <li>可随时撤销不再需要的令牌</li>
+                        <li><strong>所有文件下载都需要令牌ID和令牌值验证</strong></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 令牌列表卡片 -->
+        <div class="card">
+            <div class="card-title">
+                <span>📋 我的下载令牌</span>
+                <button class="btn btn-secondary" onclick="refreshTokens()"
+                        style="margin-left: auto; padding: 8px 16px;">
+                    🔄 刷新列表
+                </button>
+            </div>
+            <div id="tokensList" class="tokens-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <span>加载令牌列表...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 全局变量
+    const baseUrl = "https://example.com:9000";
+    let currentUser = null;
+    let currentToken = null;
+    let debugMode = true;
+    let downloadController = null;
+    let downloadInProgress = false;
+    let autoClipboardEnabled = false;
+    let clipboardInterval = null;
+
+    // 显示调试信息
+    function showDebugInfo(message) {
+        if (!debugMode) return;
+
+        const debugContent = document.getElementById('debugContent');
+        const timestamp = new Date().toLocaleTimeString();
+        debugContent.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+        debugContent.scrollTop = debugContent.scrollHeight;
+    }
+
+    // 切换调试面板
+    function toggleDebug() {
+        const debugPanel = document.getElementById('debugPanel');
+        const isVisible = debugPanel.style.display !== 'none';
+        debugPanel.style.display = isVisible ? 'none' : 'block';
+    }
+
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function () {
+        showDebugInfo('页面开始加载...');
+        checkAuthStatus();
+        setupEventListeners();
+        initTheme();
+
+        // 检查是否已经启用自动剪贴板
+        const savedAutoClipboard = localStorage.getItem('autoClipboardEnabled');
+        if (savedAutoClipboard === 'true') {
+            enableAutoClipboard();
+        }
+    });
+
+    // 设置事件监听器
+    function setupEventListeners() {
+        // 回车键生成令牌
+        document.getElementById('tokenDescription').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                generateToken();
+            }
+        });
+
+        // 实时验证输入
+        document.getElementById('fileUrl').addEventListener('input', validateDownloadForm);
+        document.getElementById('downloadTokenId').addEventListener('input', validateDownloadForm);
+        document.getElementById('downloadTokenValue').addEventListener('input', validateDownloadForm);
+    }
+
+    // 验证下载表单
+    function validateDownloadForm() {
+        const fileUrl = document.getElementById('fileUrl').value.trim();
+        const tokenId = document.getElementById('downloadTokenId').value.trim();
+        const tokenValue = document.getElementById('downloadTokenValue').value.trim();
+
+        const fileUrlInput = document.getElementById('fileUrl');
+        const tokenIdInput = document.getElementById('downloadTokenId');
+        const tokenValueInput = document.getElementById('downloadTokenValue');
+
+        // 重置错误状态
+        fileUrlInput.classList.remove('error');
+        tokenIdInput.classList.remove('error');
+        tokenValueInput.classList.remove('error');
+
+        let isValid = true;
+
+        if (!fileUrl) {
+            fileUrlInput.classList.add('error');
+            isValid = false;
+        }
+
+        if (!tokenId) {
+            tokenIdInput.classList.add('error');
+            isValid = false;
+        }
+
+        if (!tokenValue) {
+            tokenValueInput.classList.add('error');
+            isValid = false;
+        }
+
+        return isValid;
+    }
+
+    // 检查认证状态
+    function checkAuthStatus()  {
+        showDebugInfo('开始认证状态检查...');
+
+        // 直接尝试调用认证接口，依赖浏览器自动发送 cookie
+        secureFetch(`${baseUrl}/check-auth`)
+            .then(response => {
+                showDebugInfo(`认证检查响应状态: ${response.status}`);
+
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error('会话无效或已过期');
+                }
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                showDebugInfo(`认证检查返回数据: ${JSON.stringify(data)}`);
+
+                if (data.code === 200) {
+                    currentUser = data.user;
+                    showDebugInfo(`认证成功，用户: ${data.user.username}`);
+                    showMainContent();
+                } else {
+                    throw new Error(data.message || '认证失败');
+                }
+            })
+            .catch(error => {
+                console.error('认证检查失败:', error);
+                showDebugInfo(`认证检查错误: ${error.message}`);
+                showAuthError(`认证失败: ${error.message}`);
+            });
+    }
+
+    // 显示认证错误
+    function showAuthError(message) {
+        document.getElementById('authStatus').innerHTML = `
+                <div class="alert alert-error">
+                    ❌ ${message}
+                </div>
+                <div style="text-align: center; margin-top: 15px;">
+                    <button class="btn" onclick="window.location.href='index.html'">
+                        🔄 返回登录页面
+                    </button>
+                    <button class="btn btn-secondary" onclick="checkAuthStatus()" style="margin-left: 10px;">
+                        🔁 重新检查
+                    </button>
+                </div>
+            `;
+    }
+
+    // 显示主内容
+    function showMainContent() {
+        showDebugInfo('显示主内容区域');
+
+        // 隐藏认证状态卡片
+        document.getElementById('authStatusCard').style.display = 'none';
+
+        // 显示用户信息和主要内容
+        document.getElementById('userInfo').style.display = 'flex';
+        document.getElementById('mainContent').style.display = 'block';
+
+        updateUserInfo();
+        loadTokens();
+
+        // 设置下载表单事件监听
+        setupDownloadFormListeners();
+
+        // 显示成功消息
+        showInfo('认证成功！您现在可以使用下载功能。');
+    }
+
+    // 设置下载表单事件监听
+    function setupDownloadFormListeners() {
+        // 回车键触发下载
+        document.getElementById('fileUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                startDownload();
+            }
+        });
+
+        document.getElementById('downloadTokenId').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                startDownload();
+            }
+        });
+
+        document.getElementById('downloadTokenValue').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                startDownload();
+            }
+        });
+    }
+
+    // 更新用户信息显示
+    function updateUserInfo() {
+        if (currentUser) {
+            document.getElementById('usernameDisplay').textContent = currentUser.username;
+            document.getElementById('userRole').textContent =
+                currentUser.permissions && currentUser.permissions.includes('admin') ? '管理员' : '用户';
+            document.getElementById('userAvatar').textContent =
+                currentUser.username.charAt(0).toUpperCase();
+
+            showDebugInfo(`用户信息更新: ${currentUser.username}`);
+        }
+    }
+
+    // 生成下载令牌
+    function generateToken() {
+        const description = document.getElementById('tokenDescription').value;
+        const generateBtn = document.getElementById('generateBtn');
+
+        // 显示加载状态
+        generateBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px;"></div> 生成中...';
+        generateBtn.disabled = true;
+
+        hideAlerts();
+
+        const tokenData = {
+            description: description || '临时下载令牌'
+        };
+
+        showDebugInfo('开始生成下载令牌...');
+
+        secureFetch(`${baseUrl}/generate-download-token`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(tokenData)
+        })
+            .then(response => {
+                showDebugInfo(`生成令牌响应状态: ${response.status}`);
+
+                if (!response.ok) {
+                    throw new Error('生成令牌失败');
+                }
+                return response.json();
+            })
+            .then(data => {
+                showDebugInfo(`生成令牌返回数据: ${JSON.stringify(data)}`);
+
+                if (data.code === 200) {
+                    currentToken = data.data;
+                    showNewToken(currentToken);
+                    showSuccess('下载令牌生成成功！');
+                    loadTokens(); // 刷新令牌列表
+                } else {
+                    throw new Error(data.message || '生成令牌失败');
+                }
+            })
+            .catch(error => {
+                console.error('生成令牌错误:', error);
+                showError(error.message || '网络错误，请稍后重试');
+            })
+            .finally(() => {
+                // 恢复按钮状态
+                generateBtn.innerHTML = '🎫 生成下载令牌';
+                generateBtn.disabled = false;
+            });
+    }
+
+    // 显示新生成的令牌
+    function showNewToken(tokenData) {
+        document.getElementById('displayTokenId').textContent = tokenData.token_id;
+        document.getElementById('displayTokenValue').textContent = tokenData.token;
+        document.getElementById('tokenExpiry').textContent = tokenData.expires_at;
+        document.getElementById('tokenLimit').textContent = tokenData.max_bytes/(1024 * 1024 * 1024)+" GB";
+        document.getElementById('newTokenSection').style.display = 'block';
+
+        showDebugInfo(`新令牌生成: ${tokenData.token_id}`);
+
+        // 滚动到令牌显示区域
+        document.getElementById('newTokenSection').scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        });
+    }
+
+    // 隐藏新令牌显示
+    function hideNewToken() {
+        document.getElementById('newTokenSection').style.display = 'none';
+        document.getElementById('tokenDescription').value = '';
+    }
+
+    // 复制令牌到剪贴板
+    function copyToken() {
+        const tokenId = document.getElementById('displayTokenId').textContent;
+        const tokenValue = document.getElementById('displayTokenValue').textContent;
+
+        const tokenData = `令牌ID: ${tokenId}\n令牌值: ${tokenValue}`;
+
+        navigator.clipboard.writeText(tokenData).then(() => {
+            showSuccess('令牌信息已复制到剪贴板！');
+            showDebugInfo('令牌信息已复制到剪贴板');
+        }).catch(err => {
+            // 备用复制方法
+            const textArea = document.createElement('textarea');
+            textArea.value = tokenData;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showSuccess('令牌信息已复制到剪贴板！');
+            showDebugInfo('使用备用方法复制令牌信息');
+        });
+    }
+
+    // 从剪贴板读取令牌
+    function readFromClipboard() {
+        navigator.clipboard.readText().then(text => {
+            showDebugInfo(`从剪贴板读取内容: ${text}`);
+            parseAndFillToken(text);
+        }).catch(err => {
+            console.error('读取剪贴板失败:', err);
+            showError('读取剪贴板失败，请确保已授予剪贴板访问权限');
+            showDebugInfo(`读取剪贴板失败: ${err.message}`);
+        });
+    }
+
+    // 解析并填充令牌
+    function parseAndFillToken(text) {
+        // 尝试多种格式解析
+        let tokenId = null;
+        let tokenValue = null;
+
+        showDebugInfo(`开始解析剪贴板内容: ${text}`);
+
+        // 格式1: 令牌ID: xxxx\n令牌值: yyyy (您提供的格式)
+        const format1 = text.match(/令牌ID:\s*([^\n\r]+)[\n\r]+令牌值:\s*([^\n\r]+)/i);
+        if (format1) {
+            tokenId = format1[1].trim();
+            tokenValue = format1[2].trim();
+            showDebugInfo(`使用格式1解析成功: ID=${tokenId}, Value=${tokenValue}`);
+        }
+
+        // 格式2: 令牌ID: xxxx 令牌值: yyyy (同一行)
+        const format2 = text.match(/令牌ID:\s*([^\s]+)\s+令牌值:\s*([^\n\r]+)/i);
+        if (format2 && !tokenId) {
+            tokenId = format2[1].trim();
+            tokenValue = format2[2].trim();
+            showDebugInfo(`使用格式2解析成功: ID=${tokenId}, Value=${tokenValue}`);
+        }
+
+        // 格式3: 只有令牌ID和令牌值，没有标签
+        const lines = text.split(/[\n\r]+/);
+        if (lines.length >= 2 && !tokenId) {
+            const line1 = lines[0].trim();
+            const line2 = lines[1].trim();
+
+            // 检查是否是有效的令牌格式（通常令牌ID和令牌值都是特定长度的字符串）
+            if (line1.length > 5 && line2.length > 5 && !line1.includes('：') && !line2.includes('：')) {
+                tokenId = line1;
+                tokenValue = line2;
+                showDebugInfo(`使用格式3解析成功: ID=${tokenId}, Value=${tokenValue}`);
+            }
+        }
+
+        // 格式4: 单行，用空格或制表符分隔
+        const parts = text.split(/[\s\t]+/);
+        if (parts.length >= 2 && !tokenId) {
+            if (parts[0].length > 5 && parts[1].length > 5) {
+                tokenId = parts[0];
+                tokenValue = parts[1];
+                showDebugInfo(`使用格式4解析成功: ID=${tokenId}, Value=${tokenValue}`);
+            }
+        }
+
+        // 格式5: 中文冒号格式 (支持全角冒号)
+        const format5 = text.match(/令牌ID[：:]\s*([^\n\r]+)[\n\r]+令牌值[：:]\s*([^\n\r]+)/i);
+        if (format5 && !tokenId) {
+            tokenId = format5[1].trim();
+            tokenValue = format5[2].trim();
+            showDebugInfo(`使用格式5解析成功: ID=${tokenId}, Value=${tokenValue}`);
+        }
+
+        if (tokenId && tokenValue) {
+            document.getElementById('downloadTokenId').value = tokenId;
+            document.getElementById('downloadTokenValue').value = tokenValue;
+            showSuccess('已从剪贴板自动填入令牌信息');
+            showDebugInfo(`最终解析结果: ID=${tokenId}, Value=${tokenValue}`);
+        } else {
+            showError('无法从剪贴板内容中识别出令牌信息，请确保格式为：令牌ID: xxxx 令牌值: yyyy');
+            showDebugInfo('所有格式解析都失败了，剪贴板内容无法识别');
+        }
+    }
+
+    // 启用自动读取剪贴板
+    function enableAutoClipboard() {
+        if (autoClipboardEnabled) {
+            // 如果已经启用，则禁用
+            autoClipboardEnabled = false;
+            clearInterval(clipboardInterval);
+            document.getElementById('autoClipboardBtn').textContent = '🔄 启用自动读取剪贴板';
+            localStorage.setItem('autoClipboardEnabled', 'false');
+            showInfo('已禁用自动读取剪贴板');
+            showDebugInfo('禁用自动读取剪贴板');
+            return;
+        }
+
+        // 请求剪贴板读取权限
+        navigator.permissions.query({ name: 'clipboard-read' }).then(permissionStatus => {
+            if (permissionStatus.state === 'granted' || permissionStatus.state === 'prompt') {
+                autoClipboardEnabled = true;
+                document.getElementById('autoClipboardBtn').textContent = '⏹️ 停止自动读取';
+                localStorage.setItem('autoClipboardEnabled', 'true');
+
+                // 设置定期检查剪贴板
+                clipboardInterval = setInterval(() => {
+                    if (autoClipboardEnabled) {
+                        navigator.clipboard.readText().then(text => {
+                            // 只有当两个输入框都为空时才自动填充
+                            const tokenIdInput = document.getElementById('downloadTokenId');
+                            const tokenValueInput = document.getElementById('downloadTokenValue');
+
+                            if (!tokenIdInput.value && !tokenValueInput.value && text.trim()) {
+                                parseAndFillToken(text);
+                            }
+                        }).catch(err => {
+                            // 权限错误，停止自动读取
+                            if (err.name === 'NotAllowedError') {
+                                autoClipboardEnabled = false;
+                                clearInterval(clipboardInterval);
+                                document.getElementById('autoClipboardBtn').textContent = '🔄 启用自动读取剪贴板';
+                                localStorage.setItem('autoClipboardEnabled', 'false');
+                                showError('自动读取剪贴板权限已丢失');
+                                showDebugInfo('自动读取剪贴板权限丢失');
+                            }
+                        });
+                    }
+                }, 2000); // 每2秒检查一次
+
+                showSuccess('已启用自动读取剪贴板，当剪贴板中有令牌信息时会自动填入');
+                showDebugInfo('启用自动读取剪贴板');
+            } else {
+                showError('浏览器不允许读取剪贴板，请手动授权');
+            }
+        }).catch(err => {
+            console.error('检查剪贴板权限失败:', err);
+            showError('检查剪贴板权限失败，请手动授权');
+        });
+    }
+
+    // 加载令牌列表
+    function loadTokens() {
+        const tokensList = document.getElementById('tokensList');
+
+        showDebugInfo('开始加载令牌列表...');
+
+        secureFetch(`${baseUrl}/list-download-tokens`)
+            .then(response => {
+                showDebugInfo(`加载令牌列表响应状态: ${response.status}`);
+
+                if (!response.ok) {
+                    throw new Error('获取令牌列表失败');
+                }
+                return response.json();
+            })
+            .then(data => {
+                showDebugInfo(`加载令牌列表返回数据: ${JSON.stringify(data).substring(0, 200)}...`);
+
+                if (data.code === 200) {
+                    displayTokens(data.data || []);
+                } else {
+                    throw new Error(data.message || '获取令牌列表失败');
+                }
+            })
+            .catch(error => {
+                console.error('加载令牌列表错误:', error);
+                tokensList.innerHTML = `
+                        <div class="alert alert-error">
+                            ❌ 加载令牌列表失败: ${error.message}
+                        </div>
+                    `;
+                showDebugInfo(`加载令牌列表失败: ${error.message}`);
+            });
+    }
+
+    // 显示令牌列表 - 修改为显示令牌ID、令牌值、创建时间、失效时间和剩余流量
+    function displayTokens(tokens) {
+        const tokensList = document.getElementById('tokensList');
+
+        if (!tokens || tokens.length === 0) {
+            tokensList.innerHTML = `
+                    <div class="empty-state">
+                        <div>📭</div>
+                        <h3>暂无下载令牌</h3>
+                        <p>点击上方"生成下载令牌"按钮创建您的第一个令牌</p>
+                    </div>
+                `;
+            showDebugInfo('令牌列表为空');
+            return;
+        }
+
+        // 按创建时间降序排序
+        tokens.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        tokensList.innerHTML = tokens.map(token => {
+            // 计算剩余流量
+            const remainingBytes = token.max_bytes - token.used_bytes;
+            const remainingBytesFormatted = formatBytes(remainingBytes);
+            const maxBytesFormatted = formatBytes(token.max_bytes);
+
+            // 计算剩余流量百分比
+            const remainingPercentage = Math.max(0, (remainingBytes / token.max_bytes) * 100);
+
+            // 判断流量使用状态
+            let usageClass = '';
+            if (remainingPercentage < 10) {
+                usageClass = 'usage-danger';
+            } else if (remainingPercentage < 30) {
+                usageClass = 'usage-warning';
+            }
+
+            return `
+                <div class="token-item">
+                    <div class="token-header">
+                        <div class="token-id">${token.token_id}</div>
+                        <div class="token-status ${getStatusClass(token)}">
+                            ${getStatusText(token)}
+                        </div>
+                    </div>
+                    <div class="token-details">
+                        <div class="info-item">
+                            <span class="info-label">令牌值</span>
+                            <span class="info-value" style="font-family: 'Courier New', monospace; word-break: break-all;">${token.token || '未保存'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">创建时间</span>
+                            <span class="info-value">${formatDate(token.created_at)}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">失效时间</span>
+                            <span class="info-value">${formatDate(token.expires_at)}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">剩余流量</span>
+                            <span class="info-value">${remainingBytesFormatted} / ${maxBytesFormatted}</span>
+                        </div>
+                    </div>
+                    <div class="usage-bar">
+                        <div class="usage-progress ${usageClass}" style="width: ${remainingPercentage}%"></div>
+                    </div>
+                    ${token.is_active ? `
+                    <div class="token-actions">
+                        <button class="btn btn-danger" onclick="revokeToken('${token.token_id}')"
+                                style="padding: 6px 12px; font-size: 12px;">
+                            🚫 撤销令牌
+                        </button>
+                        <button class="btn" onclick="copyTokenFromList('${token.token_id}', '${token.token || ''}')"
+                                style="padding: 6px 12px; font-size: 12px;">
+                            📋 复制令牌
+                        </button>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+
+        showDebugInfo(`显示 ${tokens.length} 个令牌`);
+    }
+
+    // 复制令牌列表中的令牌
+    function copyTokenFromList(tokenId, tokenValue) {
+        if (!tokenValue) {
+            showError('该令牌的值未保存，无法复制');
+            return;
+        }
+
+        const tokenData = `令牌ID: ${tokenId}\n令牌值: ${tokenValue}`;
+
+        navigator.clipboard.writeText(tokenData).then(() => {
+            showSuccess('令牌信息已复制到剪贴板！');
+            showDebugInfo('令牌列表中的令牌信息已复制到剪贴板');
+        }).catch(err => {
+            // 备用复制方法
+            const textArea = document.createElement('textarea');
+            textArea.value = tokenData;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showSuccess('令牌信息已复制到剪贴板！');
+            showDebugInfo('使用备用方法复制令牌列表中的令牌信息');
+        });
+    }
+
+    // 获取令牌状态类
+    function getStatusClass(token) {
+        if (!token.is_active) return 'status-revoked';
+        if (new Date(token.expires_at) < new Date()) return 'status-expired';
+        return 'status-active';
+    }
+
+    // 获取令牌状态文本
+    function getStatusText(token) {
+        if (!token.is_active) return '已撤销';
+        if (new Date(token.expires_at) < new Date()) return '已过期';
+        return '活跃';
+    }
+
+    // 撤销令牌
+    function revokeToken(tokenId) {
+        if (!confirm('确定要撤销这个下载令牌吗？此操作不可撤销。')) {
+            return;
+        }
+
+        showDebugInfo(`开始撤销令牌: ${tokenId}`);
+
+        secureFetch(`${baseUrl}/revoke-download-token?token_id=${tokenId}`, {
+            method: 'POST'
+        })
+            .then(response => {
+                showDebugInfo(`撤销令牌响应状态: ${response.status}`);
+
+                if (!response.ok) {
+                    throw new Error('撤销令牌失败');
+                }
+                return response.json();
+            })
+            .then(data => {
+                showDebugInfo(`撤销令牌返回数据: ${JSON.stringify(data)}`);
+
+                if (data.code === 200) {
+                    showSuccess('令牌已成功撤销');
+                    loadTokens(); // 刷新列表
+                } else {
+                    throw new Error(data.message || '撤销令牌失败');
+                }
+            })
+            .catch(error => {
+                console.error('撤销令牌错误:', error);
+                showError(error.message || '网络错误，请稍后重试');
+            });
+    }
+
+    // 刷新令牌列表
+    function refreshTokens() {
+        loadTokens();
+        showSuccess('令牌列表已刷新');
+        showDebugInfo('手动刷新令牌列表');
+    }
+
+    // ==================== 带进度显示的下载功能 ====================
+
+    // 开始下载
+    function startDownload() {
+        const fileUrl = document.getElementById('fileUrl').value.trim();
+        const tokenId = document.getElementById('downloadTokenId').value.trim();
+        const tokenValue = document.getElementById('downloadTokenValue').value.trim();
+        const downloadBtn = document.getElementById('downloadBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+
+        // 验证输入
+        if (!fileUrl) {
+            showError('请输入文件链接');
+            highlightErrorField('fileUrl');
+            return;
+        }
+
+        if (!tokenId) {
+            showError('请输入令牌ID');
+            highlightErrorField('downloadTokenId');
+            return;
+        }
+
+        if (!tokenValue) {
+            showError('请输入令牌值');
+            highlightErrorField('downloadTokenValue');
+            return;
+        }
+
+        // 验证URL格式
+        if (!isValidUrl(fileUrl)) {
+            showError('请输入有效的文件URL链接');
+            highlightErrorField('fileUrl');
+            return;
+        }
+
+        // 显示加载状态
+        downloadBtn.innerHTML = '<div class="spinner" style="width: 16px; height: 16px;"></div> 准备中...';
+        downloadBtn.disabled = true;
+        cancelBtn.style.display = 'inline-flex';
+
+        hideAlerts();
+        hideDownloadError();
+        showDebugInfo(`开始下载: ${fileUrl}`);
+
+        // 显示进度容器
+        document.getElementById('progressContainer').style.display = 'block';
+        resetProgress();
+
+        // 设置取消控制器
+        downloadController = new AbortController();
+        downloadInProgress = true;
+
+        // 提取文件路径
+        const filePath = extractFilePath(fileUrl);
+        if (!filePath) {
+            const errorMsg = '无法解析文件路径，请检查文件链接格式';
+            showDownloadError(errorMsg, '请确保文件链接格式正确，例如：https://example.com:8081/static/example.pdf');
+            resetDownloadButton();
+            return;
+        }
+
+        // 构建下载URL - 使用令牌ID和令牌值两个参数
+        const downloadUrl = `${baseUrl}/download?token_id=${encodeURIComponent(tokenId)}&token=${encodeURIComponent(tokenValue)}&file=${encodeURIComponent(filePath)}`;
+        showDebugInfo(`下载URL: ${downloadUrl}`);
+
+        // 设置超时（30秒）
+        const timeoutId = setTimeout(() => {
+            if (downloadInProgress) {
+                downloadController.abort();
+                const errorMsg = '下载超时，请检查网络连接或文件大小';
+                const solution = '1. 检查网络连接<br>2. 如果文件较大，请耐心等待<br>3. 尝试重新下载';
+                showDownloadError(errorMsg, solution);
+                showDebugInfo('下载超时，已取消');
+            }
+        }, 30000);
+
+        // 开始下载
+        fetchWithProgress(downloadUrl, filePath)
+            .then(() => {
+                clearTimeout(timeoutId);
+                showSuccess(`文件下载完成: ${getFileNameFromUrl(fileUrl)}`);
+                showDebugInfo('下载完成');
+            })
+            .catch(error => {
+                clearTimeout(timeoutId);
+                if (error.name !== 'AbortError') {
+                    console.error('下载错误:', error);
+                    let errorMsg = `下载失败: ${error.message}`;
+                    let solution = '';
+
+                    // 根据错误类型提供具体的解决方案
+                    if (error.message.includes('404')) {
+                        errorMsg = '文件未找到 (404错误)';
+                        solution = '1. 检查文件链接是否正确<br>2. 确认文件是否存在<br>3. 联系管理员确认文件状态';
+                    } else if (error.message.includes('403')) {
+                        errorMsg = '访问被拒绝 (403错误)';
+                        solution = '1. 检查令牌是否正确<br>2. 确认令牌是否已过期或被撤销<br>3. 确认是否有权限访问该文件';
+                    } else if (error.message.includes('401')) {
+                        errorMsg = '认证失败 (401错误)';
+                        solution = '1. 检查令牌是否正确<br>2. 重新生成令牌<br>3. 重新登录系统';
+                    } else if (error.message.includes('network') || error.message.includes('Network')) {
+                        errorMsg = '网络连接错误';
+                        solution = '1. 检查网络连接<br>2. 检查服务器状态<br>3. 稍后重试';
+                    } else if (error.message.includes('CORS')) {
+                        errorMsg = '跨域访问错误';
+                        solution = '1. 请联系管理员检查服务器CORS配置<br>2. 尝试使用其他浏览器';
+                    }
+
+                    showDownloadError(errorMsg, solution);
+                    showDebugInfo(`下载错误: ${error.message}`);
+                } else {
+                    showInfo('下载已取消');
+                    showDebugInfo('下载已取消');
+                }
+            })
+            .finally(() => {
+                resetDownloadButton();
+                downloadInProgress = false;
+            });
+    }
+
+    // 高亮显示错误字段
+    function highlightErrorField(fieldId) {
+        const field = document.getElementById(fieldId);
+        field.classList.add('error');
+        field.focus();
+
+        // 3秒后移除错误样式
+        setTimeout(() => {
+            field.classList.remove('error');
+        }, 3000);
+    }
+
+    // 验证URL格式
+    function isValidUrl(string) {
+        try {
+            new URL(string);
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    // 显示下载错误详情
+    function showDownloadError(errorMessage, solution = '') {
+        const errorDetails = document.getElementById('downloadErrorDetails');
+        const errorMessageEl = document.getElementById('errorMessage');
+        const errorSolution = document.getElementById('errorSolution');
+        const solutionText = document.getElementById('solutionText');
+
+        errorMessageEl.textContent = errorMessage;
+
+        if (solution) {
+            solutionText.innerHTML = solution;
+            errorSolution.style.display = 'block';
+        } else {
+            errorSolution.style.display = 'none';
+        }
+
+        errorDetails.style.display = 'block';
+        showError('下载失败，请查看下方错误详情');
+
+        // 滚动到错误详情
+        errorDetails.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        });
+    }
+
+    // 隐藏下载错误详情
+    function hideDownloadError() {
+        document.getElementById('downloadErrorDetails').style.display = 'none';
+    }
+
+    // 增强的文件路径提取函数
+    function extractFilePath(fileUrl) {
+        try {
+            console.log('原始文件URL:', fileUrl);
+
+            // 先解码整个URL（处理可能的多重编码）
+            let decodedUrl = fileUrl;
+            try {
+                decodedUrl = decodeURIComponent(fileUrl);
+            } catch (e) {
+                // 如果解码失败，保持原样
+                console.log('URL解码失败，使用原始URL');
+            }
+
+            console.log('解码后URL:', decodedUrl);
+
+            return decodedUrl;
+
+        } catch (error) {
+            console.error('URL解析错误:', error);
+
+            // 备用方案：手动提取
+            const staticBase = 'https://example.com:8081/static/';
+            if (fileUrl.includes(staticBase)) {
+                let startIndex = fileUrl.indexOf(staticBase) + staticBase.length;
+                let path = fileUrl.substring(startIndex);
+
+                // 解码路径
+                try {
+                    path = decodeURIComponent(path);
+                } catch (e) {
+                    console.log('路径解码失败，使用原始路径');
+                }
+
+                console.log('手动提取的文件路径:', path);
+                return path;
+            }
+
+            return null;
+        }
+    }
+
+    // 带进度显示的下载
+    function fetchWithProgress(url, filename) {
+        return new Promise((resolve, reject) => {
+            fetch(url, {
+                signal: downloadController.signal,
+                credentials: 'include'
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const contentLength = response.headers.get('Content-Length');
+                    const total = parseInt(contentLength, 10);
+                    let loaded = 0;
+                    let startTime = Date.now();
+
+                    if (!contentLength) {
+                        showDebugInfo('无法获取文件大小，进度显示可能不准确');
+                    }
+
+                    const reader = response.body.getReader();
+                    const chunks = [];
+
+                    function read() {
+                        reader.read().then(({ done, value }) => {
+                            if (done) {
+                                // 下载完成
+                                const blob = new Blob(chunks);
+                                const downloadUrl = window.URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = downloadUrl;
+                                a.download = filename;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                window.URL.revokeObjectURL(downloadUrl);
+
+                                // 更新进度为100%
+                                updateProgress(total, total);
+                                resolve();
+                                return;
+                            }
+
+                            loaded += value.length;
+                            chunks.push(value);
+
+                            // 更新进度
+                            updateProgress(loaded, total, startTime);
+
+                            // 继续读取
+                            read();
+                        }).catch(reject);
+                    }
+
+                    read();
+                })
+                .catch(reject);
+        });
+    }
+
+    // 更新下载进度
+    function updateProgress(loaded, total, startTime) {
+        const progressPercent = document.getElementById('progressPercent');
+        const progressBar = document.getElementById('progressBar');
+        const downloadedSize = document.getElementById('downloadedSize');
+        const totalSize = document.getElementById('totalSize');
+        const downloadSpeed = document.getElementById('downloadSpeed');
+        const timeRemaining = document.getElementById('timeRemaining');
+
+        // 计算百分比
+        let percent = 0;
+        if (total > 0) {
+            percent = Math.min(100, (loaded / total) * 100);
+        }
+
+        // 更新UI
+        progressPercent.textContent = `${percent.toFixed(1)}%`;
+        progressBar.style.width = `${percent}%`;
+        downloadedSize.textContent = formatBytes(loaded);
+        totalSize.textContent = total > 0 ? formatBytes(total) : '未知';
+
+        // 计算下载速度和剩余时间
+        if (startTime && loaded > 0) {
+            const elapsedTime = (Date.now() - startTime) / 1000; // 秒
+            const speed = loaded / elapsedTime; // 字节/秒
+
+            downloadSpeed.textContent = `速度: ${formatBytes(speed)}/s`;
+
+            if (total > 0 && speed > 0) {
+                const remainingBytes = total - loaded;
+                const remainingTime = remainingBytes / speed;
+                timeRemaining.textContent = `剩余时间: ${formatTime(remainingTime)}`;
+            } else {
+                timeRemaining.textContent = '剩余时间: 计算中...';
+            }
+        }
+    }
+
+    // 重置进度显示
+    function resetProgress() {
+        document.getElementById('progressPercent').textContent = '0%';
+        document.getElementById('progressBar').style.width = '0%';
+        document.getElementById('downloadedSize').textContent = '0 B';
+        document.getElementById('totalSize').textContent = '0 B';
+        document.getElementById('downloadSpeed').textContent = '速度: 0 KB/s';
+        document.getElementById('timeRemaining').textContent = '剩余时间: 计算中...';
+    }
+
+    // 重置下载按钮状态
+    function resetDownloadButton() {
+        const downloadBtn = document.getElementById('downloadBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+
+        downloadBtn.innerHTML = '🚀 开始下载';
+        downloadBtn.disabled = false;
+        cancelBtn.style.display = 'none';
+    }
+
+    // 取消下载
+    function cancelDownload() {
+        if (downloadController && downloadInProgress) {
+            downloadController.abort();
+            downloadInProgress = false;
+            resetDownloadButton();
+            showInfo('下载已取消');
+            showDebugInfo('用户取消了下载');
+        }
+    }
+
+    // 从URL中提取文件名
+    function getFileNameFromUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            const pathname = urlObj.pathname;
+            return pathname.split('/').pop() || 'download';
+        } catch (error) {
+            // 如果URL解析失败，尝试从字符串中提取
+            const segments = url.split('/');
+            return segments.pop() || 'download';
+        }
+    }
+
+    // 设置示例文件
+    function setExampleFile(filename) {
+        const baseUrl = 'https://example.com:8081/static';
+        const exampleUrl = `${baseUrl}/${filename}`;
+
+        document.getElementById('fileUrl').value = exampleUrl;
+        showDebugInfo(`设置示例文件: ${exampleUrl}`);
+
+        // 如果有当前令牌，自动填入
+        if (currentToken) {
+            document.getElementById('downloadTokenId').value = currentToken.token_id;
+            document.getElementById('downloadTokenValue').value = currentToken.token;
+        }
+
+        showInfo(`已设置示例文件: ${filename}`);
+    }
+
+    // 自动填入当前令牌
+    function autoFillToken() {
+        if (currentToken) {
+            document.getElementById('downloadTokenId').value = currentToken.token_id;
+            document.getElementById('downloadTokenValue').value = currentToken.token;
+            showSuccess('已自动填入当前令牌');
+            showDebugInfo('自动填入当前令牌');
+        } else {
+            showError('请先生成下载令牌');
+        }
+    }
+
+    // 清空下载表单
+    function clearDownloadForm() {
+        document.getElementById('fileUrl').value = '';
+        document.getElementById('downloadTokenId').value = '';
+        document.getElementById('downloadTokenValue').value = '';
+        document.getElementById('progressContainer').style.display = 'none';
+        document.getElementById('downloadErrorDetails').style.display = 'none';
+        showDebugInfo('清空下载表单');
+        showInfo('下载表单已清空');
+    }
+
+    // ==================== 通用功能 ====================
+
+    // 退出登录
+    function logout() {
+        showDebugInfo('开始退出登录...');
+
+        secureFetch(`${baseUrl}/logout`, {
+            method: 'POST'
+        })
+            .then(() => {
+                showDebugInfo('退出登录成功，跳转到首页');
+                window.location.href = 'index.html';
+            })
+            .catch(error => {
+                console.error('退出登录错误:', error);
+                showDebugInfo(`退出登录失败: ${error.message}`);
+                window.location.href = 'index.html';
+            });
+    }
+
+    // 切换主题
+    function toggleTheme() {
+        const currentTheme = document.body.getAttribute('data-theme') || 'light';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        document.body.setAttribute('data-theme', newTheme);
+        localStorage.setItem('manualTheme', newTheme);
+        showDebugInfo(`主题切换为: ${newTheme}`);
+    }
+
+    // 初始化主题
+    function initTheme() {
+        const savedTheme = localStorage.getItem('manualTheme') || 'light';
+        document.body.setAttribute('data-theme', savedTheme);
+        showDebugInfo(`初始化主题: ${savedTheme}`);
+    }
+
+    // 显示成功消息
+    function showSuccess(message) {
+        const alert = document.getElementById('successAlert');
+        alert.innerHTML = `✅ ${message}`;
+        alert.style.display = 'block';
+        setTimeout(() => {
+            alert.style.display = 'none';
+        }, 5000);
+        showDebugInfo(`成功消息: ${message}`);
+    }
+
+    // 显示错误消息
+    function showError(message) {
+        const alert = document.getElementById('errorAlert');
+        alert.innerHTML = `❌ ${message}`;
+        alert.style.display = 'block';
+        setTimeout(() => {
+            alert.style.display = 'none';
+        }, 5000);
+        showDebugInfo(`错误消息: ${message}`);
+    }
+
+    // 显示信息消息
+    function showInfo(message) {
+        const alert = document.getElementById('infoAlert');
+        alert.innerHTML = `ℹ️ ${message}`;
+        alert.style.display = 'block';
+        setTimeout(() => {
+            alert.style.display = 'none';
+        }, 5000);
+        showDebugInfo(`信息消息: ${message}`);
+    }
+
+    // 显示警告消息
+    function showWarning(message) {
+        const alert = document.getElementById('warningAlert');
+        alert.innerHTML = `⚠️ ${message}`;
+        alert.style.display = 'block';
+        setTimeout(() => {
+            alert.style.display = 'none';
+        }, 5000);
+        showDebugInfo(`警告消息: ${message}`);
+    }
+
+    // 隐藏所有提示
+    function hideAlerts() {
+        document.getElementById('successAlert').style.display = 'none';
+        document.getElementById('errorAlert').style.display = 'none';
+        document.getElementById('infoAlert').style.display = 'none';
+        document.getElementById('warningAlert').style.display = 'none';
+    }
+
+    // ==================== 工具函数 ====================
+
+    // 安全fetch函数
+    function secureFetch(url, options = {}) {
+        const defaultOptions = {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include'
+        };
+
+        const finalOptions = {
+            ...defaultOptions,
+            ...options,
+            headers: {
+                ...defaultOptions.headers,
+                ...(options.headers || {})
+            }
+        };
+
+        showDebugInfo(`发送请求到: ${url}`);
+        showDebugInfo(`请求选项: ${JSON.stringify(finalOptions)}`);
+
+        return fetch(url, finalOptions);
+    }
+
+    // 格式化日期
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleString('zh-CN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    // 格式化字节大小
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // 格式化时间（秒转换为可读格式）
+    function formatTime(seconds) {
+        if (seconds < 60) {
+            return `${Math.ceil(seconds)}秒`;
+        } else if (seconds < 3600) {
+            return `${Math.ceil(seconds / 60)}分钟`;
+        } else {
+            return `${Math.ceil(seconds / 3600)}小时`;
+        }
+    }
+</script>
+</body>
+</html>
