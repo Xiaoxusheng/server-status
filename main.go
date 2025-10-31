@@ -2794,7 +2794,7 @@ func main() {
 	// 使用认证中间件和安全中间件包装所有处理函数
 	http.Handle("/", http.FileServer(http.Dir("/root/os/templates")))
 	//http.HandleFunc("/location", authMiddleware(securityMiddleware(handleWebSocket)))
-	http.HandleFunc("/health", authMiddleware(securityMiddleware(healthCheck)))
+	//http.HandleFunc("/health", authMiddleware(securityMiddleware(healthCheck)))
 	http.HandleFunc("/ws", authMiddleware(securityMiddleware(wsHandler)))
 	http.HandleFunc("/video", authMiddleware(securityMiddleware(homeHandler)))
 	http.HandleFunc("/status-ifaces", enableCORSh(authMiddleware(securityMiddleware(ifacesHandler))))
