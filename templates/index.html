@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>服务器状态监控</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <!-- 引入CryptoJS用于HMAC签名 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <style>
         /* 原有的CSS样式保持不变 */
         :root {
@@ -51,6 +53,265 @@
             min-height: 100vh;
         }
 
+        /* 登录和注册界面样式 */
+        .auth-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .auth-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            padding: 40px;
+            width: 100%;
+            max-width: 450px;
+            border: 1px solid var(--border-color);
+        }
+
+        .auth-title {
+            text-align: center;
+            color: var(--primary-color);
+            margin-bottom: 30px;
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-label {
+            font-weight: 500;
+            color: var(--text-color);
+            font-size: 14px;
+        }
+
+        .form-input {
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            color: var(--text-color);
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(74, 110, 224, 0.1);
+        }
+
+        .form-input.error {
+            border-color: var(--danger-color);
+        }
+
+        .form-input.success {
+            border-color: var(--success-color);
+        }
+
+        .form-hint {
+            font-size: 12px;
+            color: var(--secondary-color);
+            margin-top: 4px;
+        }
+
+        .form-error {
+            font-size: 12px;
+            color: var(--danger-color);
+            margin-top: 4px;
+        }
+
+        .password-strength {
+            margin-top: 5px;
+            height: 4px;
+            border-radius: 2px;
+            background-color: var(--border-color);
+            overflow: hidden;
+        }
+
+        .password-strength-bar {
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s, background-color 0.3s;
+        }
+
+        .password-strength.weak .password-strength-bar {
+            width: 25%;
+            background-color: var(--danger-color);
+        }
+
+        .password-strength.fair .password-strength-bar {
+            width: 50%;
+            background-color: var(--warning-color);
+        }
+
+        .password-strength.good .password-strength-bar {
+            width: 75%;
+            background-color: #ffa500;
+        }
+
+        .password-strength.strong .password-strength-bar {
+            width: 100%;
+            background-color: var(--success-color);
+        }
+
+        .auth-button {
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: none;
+            background: var(--primary-color);
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+
+        .auth-button:hover {
+            filter: brightness(1.1);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(74, 110, 224, 0.3);
+        }
+
+        .auth-button:disabled {
+            background: var(--secondary-color);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .auth-error {
+            color: var(--danger-color);
+            text-align: center;
+            font-size: 14px;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(220, 53, 69, 0.1);
+            border-radius: 6px;
+            display: none;
+        }
+
+        .auth-success {
+            color: var(--success-color);
+            text-align: center;
+            font-size: 14px;
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(40, 167, 69, 0.1);
+            border-radius: 6px;
+            display: none;
+        }
+
+        .auth-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: var(--secondary-color);
+        }
+
+        .auth-loading .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 2px solid var(--primary-color);
+            animation: spin 1s linear infinite;
+        }
+
+        .auth-switch {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: var(--secondary-color);
+        }
+
+        .auth-switch a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .auth-switch a:hover {
+            text-decoration: underline;
+        }
+
+        /* 用户信息样式 */
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            background: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-left: 10px;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .user-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .username {
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .user-role {
+            font-size: 12px;
+            color: var(--secondary-color);
+        }
+
+        .logout-button {
+            background: var(--danger-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .logout-button:hover {
+            filter: brightness(1.1);
+        }
+
+        /* 主内容容器 - 登录后显示 */
+        .main-content {
+            display: none;
+        }
+
+        /* 其余样式保持不变 */
         h2 {
             text-align: center;
             margin-bottom: 20px;
@@ -537,6 +798,15 @@
             background-color: var(--success-color);
         }
 
+        /* 记住我选项样式 */
+        .remember-me {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+
         .signal-bar:nth-child(1) { height: 4px; }
         .signal-bar:nth-child(2) { height: 6px; }
         .signal-bar:nth-child(3) { height: 8px; }
@@ -613,6 +883,23 @@
             .status-table td {
                 padding: 8px 10px;
             }
+
+            /* 登录表单响应式 */
+            .auth-card {
+                padding: 30px 20px;
+                margin: 10px;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .user-info {
+                margin-left: 0;
+                margin-top: 10px;
+                width: 100%;
+                justify-content: center;
+            }
         }
 
         @media (max-width: 480px) {
@@ -653,109 +940,223 @@
                 display: none;
             }
         }
+
     </style>
 </head>
 <body data-theme="light">
-<div class="mobile-warning">
-    提示：在移动设备上，视频可能需要手动点击播放按钮
+<!-- 登录/注册界面 -->
+<div id="authContainer" class="auth-container">
+    <!-- 登录卡片 -->
+    <div id="loginCard" class="auth-card">
+        <div class="auth-title">服务器状态监控系统</div>
+        <form id="loginForm" class="auth-form">
+            <div class="form-group">
+                <label class="form-label" for="username">用户名</label>
+                <input type="text" id="username" class="form-input" placeholder="请输入用户名" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="password">密码</label>
+                <input type="password" id="password" class="form-input" placeholder="请输入密码" required>
+            </div>
+            <div class="remember-me">
+                <input type="checkbox" id="rememberMe">
+                <label for="rememberMe">记住我</label>
+            </div>
+            <button type="submit" class="auth-button" id="loginButton">
+                <span id="loginButtonText">登录</span>
+                <div id="loginLoading" class="auth-loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <span>登录中...</span>
+                </div>
+            </button>
+            <div id="loginError" class="auth-error">
+                用户名或密码错误
+            </div>
+        </form>
+        <div class="auth-switch">
+            还没有账户？ <a id="showRegister">注册新账户</a>
+        </div>
+        <div style="margin-top: 20px; text-align: center; font-size: 12px; color: var(--secondary-color);">
+            默认账号: admin / admin123
+        </div>
+    </div>
+
+    <!-- 注册卡片 -->
+    <div id="registerCard" class="auth-card" style="display: none;">
+        <div class="auth-title">注册新账户</div>
+        <form id="registerForm" class="auth-form">
+            <div class="form-group">
+                <label class="form-label" for="regUsername">用户名</label>
+                <input type="text" id="regUsername" class="form-input" placeholder="请输入用户名" required>
+                <div class="form-hint">用户名长度应在3-20个字符之间</div>
+                <div class="form-error" id="regUsernameError"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="regEmail">邮箱地址</label>
+                <input type="email" id="regEmail" class="form-input" placeholder="请输入邮箱地址" required>
+                <div class="form-hint">请输入有效的邮箱地址</div>
+                <div class="form-error" id="regEmailError"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="regPassword">密码</label>
+                <input type="password" id="regPassword" class="form-input" placeholder="请输入密码" required>
+                <div class="form-hint">密码长度至少8位，包含字母和数字</div>
+                <div class="password-strength" id="passwordStrength">
+                    <div class="password-strength-bar"></div>
+                </div>
+                <div class="form-error" id="regPasswordError"></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="regConfirmPassword">确认密码</label>
+                <input type="password" id="regConfirmPassword" class="form-input" placeholder="请再次输入密码" required>
+                <div class="form-error" id="regConfirmPasswordError"></div>
+            </div>
+            <div class="remember-me">
+                <input type="checkbox" id="regRememberMe">
+                <label for="regRememberMe">记住我</label>
+            </div>
+            <button type="submit" class="auth-button" id="registerButton">
+                <span id="registerButtonText">注册</span>
+                <div id="registerLoading" class="auth-loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <span>注册中...</span>
+                </div>
+            </button>
+            <div id="registerError" class="auth-error">
+                注册失败，请稍后重试
+            </div>
+            <div id="registerSuccess" class="auth-success">
+                注册成功！正在跳转...
+            </div>
+        </form>
+        <div class="auth-switch">
+            已有账户？ <a id="showLogin">返回登录</a>
+        </div>
+    </div>
 </div>
 
-<h2>实时服务器状态监控</h2>
+<!-- 主内容界面 - 登录后显示 -->
+<div id="mainContent" class="main-content">
+    <!-- 其余内容保持不变 -->
+    <div class="mobile-warning">
+        提示：在移动设备上，视频可能需要手动点击播放按钮
+    </div>
 
-<div class="controls">
-    <select id="ifaceSelect">
-        <option value="">选择网卡...</option>
-    </select>
-    <button onclick="toggleTheme()">切换主题</button>
-    <button onclick="reconnectWebSocket()" id="reconnectBtn">重新连接</button>
-    <button onclick="refreshAccessStats()">刷新访问统计</button>
-    <button onclick="window.location.href='ebooks.html'">电子书</button>
+    <h2>实时服务器状态监控</h2>
 
-    <!-- 美观的连接状态指示器 -->
-    <div class="connection-status-container">
-        <div class="connection-indicator status-disconnected" id="connectionIndicator">
-            <div class="status-dot"></div>
-            <span class="status-text" id="statusText">已断开</span>
-            <div class="connection-details">
-                <h4>连接状态</h4>
-                <p><span class="label">状态:</span> <span class="value" id="detailStatus">已断开</span></p>
-                <p><span class="label">网卡:</span> <span class="value" id="detailIface">-</span></p>
-                <p><span class="label">重连次数:</span> <span class="value" id="detailReconnect">0</span></p>
-                <p><span class="label">持续时间:</span> <span class="value" id="detailDuration">-</span></p>
-                <div class="signal-strength">
-                    <div class="signal-bars">
-                        <div class="signal-bar"></div>
-                        <div class="signal-bar"></div>
-                        <div class="signal-bar"></div>
-                        <div class="signal-bar"></div>
+    <div class="controls">
+        <select id="ifaceSelect">
+            <option value="">选择网卡...</option>
+        </select>
+        <button class="btn btn-secondary" onclick="toggleTheme()">
+            🌙 切换主题
+        </button>
+        <button class="btn" onclick="reconnectWebSocket()" id="reconnectBtn">
+            🔄 重新连接
+        </button>
+        <button class="btn" onclick="refreshAccessStats()">
+            📈 刷新统计
+        </button>
+        <button class="btn" onclick="window.location.href='ebooks.html'">
+            📚 电子书
+        </button>
+        <!-- 用户信息 -->
+        <div class="user-info" id="userInfo">
+            <div class="user-avatar" id="userAvatar">A</div>
+            <div class="user-details">
+                <div class="username" id="usernameDisplay">管理员</div>
+                <div class="user-role" id="userRole">管理员</div>
+            </div>
+            <button class="logout-button" onclick="logout()">退出登录</button>
+        </div>
+
+
+        <!-- 美观的连接状态指示器 -->
+        <div class="connection-status-container">
+            <div class="connection-indicator status-disconnected" id="connectionIndicator">
+                <div class="status-dot"></div>
+                <span class="status-text" id="statusText">已断开</span>
+                <div class="connection-details">
+                    <h4>连接状态</h4>
+                    <p><span class="label">状态:</span> <span class="value" id="detailStatus">已断开</span></p>
+                    <p><span class="label">网卡:</span> <span class="value" id="detailIface">-</span></p>
+                    <p><span class="label">重连次数:</span> <span class="value" id="detailReconnect">0</span></p>
+                    <p><span class="label">持续时间:</span> <span class="value" id="detailDuration">-</span></p>
+                    <div class="signal-strength">
+                        <div class="signal-bars">
+                            <div class="signal-bar"></div>
+                            <div class="signal-bar"></div>
+                            <div class="signal-bar"></div>
+                            <div class="signal-bar"></div>
+                        </div>
+                        <span class="signal-text" id="signalText">信号强度</span>
                     </div>
-                    <span class="signal-text" id="signalText">信号强度</span>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<div class="container">
-    <div class="card" id="info">
-        <div class="media-loading">
-            <div class="spinner"></div>
-            <div>等待数据连接...</div>
-        </div>
-    </div>
-    <!-- 增强的在线用户卡片 -->
-    <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <strong>在线用户信息</strong>
-            <span id="lastUpdated" style="font-size: 12px; color: var(--secondary-color);">上次更新: -</span>
-        </div>
-        <div id="onlineUsersInfo">
-            <div class="online-count">
-                当前在线: <span id="onlineCount">0</span> 用户 | <span id="uniqueIpsCount">0</span> 个独立IP
-            </div>
-            <div class="user-table-container">
-                <table id="onlineUsersTable" class="online-users-table">
-                    <thead>
-                    <tr>
-                        <th>IP地址</th>
-                        <th>访问页面</th>
-                        <th class="hide-on-mobile">连接时间</th>
-                        <th>用户标识</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <!-- 用户数据将通过JavaScript动态生成 -->
-                    </tbody>
-                </table>
+    <div class="container">
+        <div class="card" id="info">
+            <div class="media-loading">
+                <div class="spinner"></div>
+                <div>等待数据连接...</div>
             </div>
         </div>
+        <!-- 增强的在线用户卡片 -->
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong>在线用户信息</strong>
+                <span id="lastUpdated" style="font-size: 12px; color: var(--secondary-color);">上次更新: -</span>
+            </div>
+            <div id="onlineUsersInfo">
+                <div class="online-count">
+                    当前在线: <span id="onlineCount">0</span> 用户 | <span id="uniqueIpsCount">0</span> 个独立IP
+                </div>
+                <div class="user-table-container">
+                    <table id="onlineUsersTable" class="online-users-table">
+                        <thead>
+                        <tr>
+                            <th>IP地址</th>
+                            <th>访问页面</th>
+                            <th class="hide-on-mobile">连接时间</th>
+                            <th>用户标识</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <!-- 用户数据将通过JavaScript动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="card"><div id="memChart" class="chart"></div></div>
+        <div class="card"><div id="cpuChart" class="chart"></div></div>
+        <div class="card"><div id="netChart" class="chart"></div></div>
+        <div class="card"><div id="diskChart" class="chart"></div></div>
+        <div class="card"><div id="accessChart" class="chart"></div></div>
     </div>
-    <div class="card"><div id="memChart" class="chart"></div></div>
-    <div class="card"><div id="cpuChart" class="chart"></div></div>
-    <div class="card"><div id="netChart" class="chart"></div></div>
-    <div class="card"><div id="diskChart" class="chart"></div></div>
-    <div class="card"><div id="accessChart" class="chart"></div></div>
-</div>
 
-<!-- 右下角固定位置媒体模块 -->
-<div id="fixedMediaContainer">
-    <div class="media-header">
-        <div class="media-title">媒体展示</div>
-        <div class="media-controls">
-            <div class="volume-control">
-                <span>音量:</span>
-                <input type="range" id="mediaVolume" min="0" max="1" step="0.1" value="0.5">
+    <!-- 右下角固定位置媒体模块 -->
+    <div id="fixedMediaContainer">
+        <div class="media-header">
+            <div class="media-title">媒体展示</div>
+            <div class="media-controls">
+                <div class="volume-control">
+                    <span>音量:</span>
+                    <input type="range" id="mediaVolume" min="0" max="1" step="0.1" value="0.5">
+                </div>
+                <button id="refreshMedia">刷新</button>
+                <button id="togglePlayPause" style="display:none;">暂停</button>
+                <button id="zoomMedia">放大</button>
             </div>
-            <button id="refreshMedia">刷新</button>
-            <button id="togglePlayPause" style="display:none;">暂停</button>
-            <button id="zoomMedia">放大</button>
         </div>
-    </div>
-    <div class="media-content">
-        <img id="fixedMediaImg" style="display:none;" alt="媒体图片">
-        <video id="fixedMediaVideo" style="display:none;" loop muted playsinline preload="metadata" alt="媒体视频"></video>
-        <div class="media-placeholder" id="mediaPlaceholder">
-            媒体加载中...
+        <div class="media-content">
+            <img id="fixedMediaImg" style="display:none;" alt="媒体图片">
+            <video id="fixedMediaVideo" style="display:none;" loop muted playsinline preload="metadata" alt="媒体视频"></video>
+            <div class="media-placeholder" id="mediaPlaceholder">
+                媒体加载中...
+            </div>
         </div>
     </div>
 </div>
@@ -765,11 +1166,18 @@
     let theme = 'light';
     let ws = null;
     const baseUrl = "https://wustwu.cn:9000";
-    let token = prompt("请输入访问Token：");
-    if(!token){
-        alert("Token必填");
-        throw new Error("No token");
-    }
+
+    // 用户认证相关变量
+    let currentUser = null;
+    let authToken = null;
+
+    // 会话管理配置
+    const SESSION_STORAGE_KEY = 'server_monitor_session';
+    const LOCAL_STORAGE_KEY = 'server_monitor_remember';
+    const SESSION_EXPIRY_DAYS = 30;
+    // 安全配置 - 与服务器端保持一致
+    const securityToken = "wustwu_anti_crawler_2024_security_key";
+    const signatureTimeout = 30000; // 30秒
 
     // 在线用户相关变量
     let onlineUsersInterval = null;
@@ -798,6 +1206,674 @@
         hidden = "webkitHidden";
         visibilityChange = "webkitvisibilitychange";
     }
+    // ==================== 会话管理功能 ====================
+
+    // 会话存储管理
+    const SessionManager = {
+        // 保存登录状态
+        saveLoginState: function(user, rememberMe = false) {
+            const sessionData = {
+                user: user,
+                timestamp: Date.now(),
+                expiry: Date.now() + (SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000) // 30天后过期
+            };
+
+            if (rememberMe) {
+                // 长期保存到localStorage
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessionData));
+                console.log('登录状态已保存到localStorage');
+            } else {
+                // 临时保存到sessionStorage
+                sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
+                console.log('登录状态已保存到sessionStorage');
+            }
+        },
+
+        // 获取保存的登录状态
+        getSavedLoginState: function() {
+            // 首先检查sessionStorage（会话期间）
+            let sessionData = sessionStorage.getItem(SESSION_STORAGE_KEY);
+            if (sessionData) {
+                console.log('从sessionStorage获取登录状态');
+                return JSON.parse(sessionData);
+            }
+
+            // 然后检查localStorage（长期保存）
+            sessionData = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (sessionData) {
+                console.log('从localStorage获取登录状态');
+                return JSON.parse(sessionData);
+            }
+
+            return null;
+        },
+
+        // 检查会话是否有效
+        isSessionValid: function(sessionData) {
+            if (!sessionData || !sessionData.expiry) {
+                return false;
+            }
+
+            // 检查是否过期
+            const isValid = Date.now() < sessionData.expiry;
+            console.log('会话有效性检查:', isValid ? '有效' : '已过期');
+            return isValid;
+        },
+
+        // 清除所有保存的状态
+        clearAllStates: function() {
+            sessionStorage.removeItem(SESSION_STORAGE_KEY);
+            localStorage.removeItem(LOCAL_STORAGE_KEY);
+            console.log('所有登录状态已清除');
+        },
+
+        // 获取保存的用户名（用于自动填充）
+        getSavedUsername: function() {
+            const sessionData = this.getSavedLoginState();
+            return sessionData && sessionData.user ? sessionData.user.username : null;
+        },
+
+        // 检查是否选择了"记住我"
+        isRememberMeEnabled: function() {
+            return localStorage.getItem(LOCAL_STORAGE_KEY) !== null;
+        }
+    };
+
+    // ==================== 自动登录功能 ====================
+
+    // 检查自动登录状态
+    function checkAutoLogin() {
+        console.log('检查自动登录状态...');
+        const sessionData = SessionManager.getSavedLoginState();
+
+        if (sessionData && SessionManager.isSessionValid(sessionData)) {
+            // 会话有效，尝试自动登录
+            console.log('检测到有效会话，尝试自动登录');
+            currentUser = sessionData.user;
+            authToken = getCookie('session_id');
+
+            // 验证会话有效性
+            verifySessionValidity()
+                .then(isValid => {
+                    if (isValid) {
+                        console.log('自动登录成功');
+                        showMainContent();
+                        initApp();
+                    } else {
+                        // 会话无效，清除保存的状态
+                        console.log('会话无效，清除保存的状态');
+                        SessionManager.clearAllStates();
+                        showLogin();
+                    }
+                })
+                .catch(error => {
+                    console.error('验证会话失败:', error);
+                    showLogin();
+                });
+        } else {
+            // 没有有效会话或会话已过期
+            console.log('没有有效会话，显示登录页面');
+            if (sessionData) {
+                SessionManager.clearAllStates();
+            }
+            showLogin();
+        }
+    }
+
+    // 验证会话有效性
+    function verifySessionValidity() {
+        return secureFetch(`${baseUrl}/check-auth`)
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error('Authentication failed');
+                }
+            })
+            .then(data => {
+                return data.code === 200;
+            })
+            .catch(error => {
+                console.error('验证会话有效性失败:', error);
+                return false;
+            });
+    }
+
+    // ==================== 用户认证功能 ====================
+
+    // 检查登录状态
+    function checkAuthStatus() {
+        const sessionId = getCookie('session_id');
+        if (!sessionId) {
+            checkAutoLogin();
+            return;
+        }
+
+        // 验证会话状态
+        secureFetch(`${baseUrl}/check-auth`)
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error('Authentication failed');
+                }
+            })
+            .then(data => {
+                if (data.code === 200) {
+                    currentUser = data.user;
+                    authToken = sessionId;
+                    showMainContent();
+                    initApp();
+                } else {
+                    checkAutoLogin();
+                }
+            })
+            .catch(error => {
+                console.error('验证登录状态失败:', error);
+                checkAutoLogin();
+            });
+    }
+
+    // 登录处理
+    function handleLogin(event) {
+        event.preventDefault();
+
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const rememberMe = document.getElementById('rememberMe').checked;
+
+        if (!username || !password) {
+            showLoginError('请输入用户名和密码');
+            return;
+        }
+
+        showLoginLoading(true);
+
+        const loginData = {
+            username: username,
+            password: password
+        };
+
+        fetch(`${baseUrl}/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(loginData)
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Login failed');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.code === 200) {
+                    currentUser = data.user;
+                    authToken = getCookie('session_id'); // 从cookie获取session_id
+
+                    // 保存登录状态
+                    SessionManager.saveLoginState(currentUser, rememberMe);
+
+                    showMainContent();
+                    initApp();
+                } else {
+                    showLoginError(data.message || '登录失败');
+                }
+            })
+            .catch(error => {
+                console.error('登录错误:', error);
+                showLoginError('网络错误，请稍后重试');
+            })
+            .finally(() => {
+                showLoginLoading(false);
+            });
+    }
+
+    // 注册处理
+    function handleRegister(event) {
+        event.preventDefault();
+
+        const username = document.getElementById('regUsername').value;
+        const email = document.getElementById('regEmail').value;
+        const password = document.getElementById('regPassword').value;
+        const confirmPassword = document.getElementById('regConfirmPassword').value;
+        const rememberMe = document.getElementById('regRememberMe').checked;
+
+        // 客户端验证
+        if (!validateRegisterForm(username, email, password, confirmPassword)) {
+            return;
+        }
+
+        showRegisterLoading(true);
+
+        const registerData = {
+            username: username,
+            email: email,
+            password: password
+        };
+
+        fetch(`${baseUrl}/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(registerData)
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Registration failed');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.code === 200) {
+                    // 注册成功，显示成功消息并自动登录
+                    showRegisterSuccess('注册成功！正在自动登录...');
+
+                    // 自动登录
+                    setTimeout(() => {
+                        const loginData = {
+                            username: username,
+                            password: password
+                        };
+
+                        fetch(`${baseUrl}/login`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(loginData)
+                        })
+                            .then(response => {
+                                if (!response.ok) {
+                                    throw new Error('Auto-login failed');
+                                }
+                                return response.json();
+                            })
+                            .then(data => {
+                                if (data.code === 200) {
+                                    currentUser = data.user;
+                                    authToken = getCookie('session_id');
+
+                                    // 保存登录状态
+                                    SessionManager.saveLoginState(currentUser, rememberMe);
+
+                                    showMainContent();
+                                    initApp();
+                                } else {
+                                    showLogin();
+                                }
+                            })
+                            .catch(error => {
+                                console.error('自动登录失败:', error);
+                                showLogin();
+                            });
+                    }, 1500);
+                } else {
+                    showRegisterError(data.message || '注册失败');
+                }
+            })
+            .catch(error => {
+                console.error('注册错误:', error);
+                showRegisterError('网络错误，请稍后重试');
+            })
+            .finally(() => {
+                showRegisterLoading(false);
+            });
+    }
+
+    // 注册表单验证
+    function validateRegisterForm(username, email, password, confirmPassword) {
+        let isValid = true;
+
+        // 重置错误状态
+        clearRegisterErrors();
+
+        // 用户名验证
+        if (username.length < 3 || username.length > 20) {
+            document.getElementById('regUsernameError').textContent = '用户名长度应在3-20个字符之间';
+            document.getElementById('regUsername').classList.add('error');
+            isValid = false;
+        }
+
+        // 邮箱验证
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            document.getElementById('regEmailError').textContent = '请输入有效的邮箱地址';
+            document.getElementById('regEmail').classList.add('error');
+            isValid = false;
+        }
+
+        // 密码验证
+        const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+        if (!passwordRegex.test(password)) {
+            document.getElementById('regPasswordError').textContent = '密码长度至少8位，且必须包含字母和数字';
+            document.getElementById('regPassword').classList.add('error');
+            isValid = false;
+        }
+
+        // 确认密码验证
+        if (password !== confirmPassword) {
+            document.getElementById('regConfirmPasswordError').textContent = '两次输入的密码不一致';
+            document.getElementById('regConfirmPassword').classList.add('error');
+            isValid = false;
+        }
+
+        return isValid;
+    }
+
+    // 清除注册表单错误
+    function clearRegisterErrors() {
+        const errorElements = document.querySelectorAll('.form-error');
+        errorElements.forEach(el => {
+            el.textContent = '';
+        });
+
+        const inputElements = document.querySelectorAll('#registerForm .form-input');
+        inputElements.forEach(el => {
+            el.classList.remove('error');
+        });
+
+        document.getElementById('registerError').style.display = 'none';
+    }
+
+    // 显示/隐藏注册加载状态
+    function showRegisterLoading(show) {
+        const buttonText = document.getElementById('registerButtonText');
+        const loadingElement = document.getElementById('registerLoading');
+        const registerButton = document.getElementById('registerButton');
+
+        if (show) {
+            buttonText.style.display = 'none';
+            loadingElement.style.display = 'flex';
+            registerButton.disabled = true;
+        } else {
+            buttonText.style.display = 'block';
+            loadingElement.style.display = 'none';
+            registerButton.disabled = false;
+        }
+    }
+
+    // 显示注册错误
+    function showRegisterError(message) {
+        const errorElement = document.getElementById('registerError');
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+    }
+
+    // 显示注册成功
+    function showRegisterSuccess(message) {
+        const successElement = document.getElementById('registerSuccess');
+        successElement.textContent = message;
+        successElement.style.display = 'block';
+    }
+
+    // 退出登录
+    function logout() {
+        secureFetch(`${baseUrl}/logout`, {
+            method: 'POST'
+        })
+            .then(response => {
+                if (response.ok) {
+                    // 清除本地状态
+                    currentUser = null;
+                    authToken = null;
+                    SessionManager.clearAllStates();
+
+                    // 清除WebSocket连接
+                    if (ws) {
+                        ws.close();
+                        ws = null;
+                    }
+
+                    // 显示登录界面
+                    showLogin();
+                }
+            })
+            .catch(error => {
+                console.error('退出登录错误:', error);
+                // 即使出错也强制显示登录界面
+                currentUser = null;
+                authToken = null;
+                SessionManager.clearAllStates();
+                showLogin();
+            });
+    }
+
+    // 显示登录界面
+    function showLogin() {
+        document.getElementById('loginCard').style.display = 'block';
+        document.getElementById('registerCard').style.display = 'none';
+        document.getElementById('authContainer').style.display = 'flex';
+        document.getElementById('mainContent').style.display = 'none';
+
+        // 自动填充用户名（如果之前保存过）
+        const savedUsername = SessionManager.getSavedUsername();
+        if (savedUsername) {
+            document.getElementById('username').value = savedUsername;
+            document.getElementById('rememberMe').checked = SessionManager.isRememberMeEnabled();
+        }
+
+        // 清除表单错误
+        document.getElementById('loginForm').reset();
+        document.getElementById('loginError').style.display = 'none';
+    }
+
+    // 显示注册界面
+    function showRegister() {
+        document.getElementById('loginCard').style.display = 'none';
+        document.getElementById('registerCard').style.display = 'block';
+        document.getElementById('authContainer').style.display = 'flex';
+        document.getElementById('mainContent').style.display = 'none';
+
+        // 清除表单
+        document.getElementById('registerForm').reset();
+        document.getElementById('registerError').style.display = 'none';
+        document.getElementById('registerSuccess').style.display = 'none';
+        clearRegisterErrors();
+        updatePasswordStrength(0);
+    }
+
+    // 显示主内容
+    function showMainContent() {
+        document.getElementById('authContainer').style.display = 'none';
+        document.getElementById('mainContent').style.display = 'block';
+
+        // 更新用户信息显示
+        if (currentUser) {
+            document.getElementById('usernameDisplay').textContent = currentUser.username;
+            document.getElementById('userRole').textContent = currentUser.permissions && currentUser.permissions.includes('admin') ? '管理员' : '用户';
+            document.getElementById('userAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
+        }
+    }
+
+    // 显示登录错误
+    function showLoginError(message) {
+        const errorElement = document.getElementById('loginError');
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+    }
+
+    // 显示/隐藏登录加载状态
+    function showLoginLoading(show) {
+        const buttonText = document.getElementById('loginButtonText');
+        const loadingElement = document.getElementById('loginLoading');
+        const loginButton = document.getElementById('loginButton');
+
+        if (show) {
+            buttonText.style.display = 'none';
+            loadingElement.style.display = 'flex';
+            loginButton.disabled = true;
+        } else {
+            buttonText.style.display = 'block';
+            loadingElement.style.display = 'none';
+            loginButton.disabled = false;
+        }
+    }
+
+    // 密码强度检测
+    function updatePasswordStrength(password) {
+        const strengthBar = document.querySelector('.password-strength');
+        const strengthClasses = ['', 'weak', 'fair', 'good', 'strong'];
+
+        // 移除所有强度类
+        strengthClasses.forEach(cls => {
+            if (cls) strengthBar.classList.remove(cls);
+        });
+
+        // 计算密码强度
+        let strength = 0;
+
+        if (password.length > 0) {
+            strength = 1; // 有内容
+
+            if (password.length >= 8) {
+                strength = 2; // 长度达标
+
+                // 检查是否包含字母和数字
+                const hasLetter = /[A-Za-z]/.test(password);
+                const hasNumber = /\d/.test(password);
+
+                if (hasLetter && hasNumber) {
+                    strength = 3; // 包含字母和数字
+
+                    // 检查是否包含特殊字符
+                    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+                    if (hasSpecial) {
+                        strength = 4; // 包含特殊字符
+                    }
+                }
+            }
+        }
+
+        // 添加对应的强度类
+        if (strength > 0) {
+            strengthBar.classList.add(strengthClasses[strength]);
+        }
+    }
+
+    // 获取Cookie值
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    // ==================== 安全功能函数 ====================
+
+    // 生成HMAC签名
+    function generateHMACSignature(data) {
+        return CryptoJS.HmacSHA256(data, securityToken).toString(CryptoJS.enc.Hex);
+    }
+
+    // 生成请求签名
+    function generateRequestSignature(path) {
+        const timestamp = Math.floor(Date.now() / 1000).toString();
+        const nonce = CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);
+        const data = `${timestamp}|${nonce}|${path}|${securityToken}`;
+        const signature = generateHMACSignature(data);
+
+        return {
+            timestamp: timestamp,
+            nonce: nonce,
+            signature: signature
+        };
+    }
+
+    // 生成安全头部
+    function generateSecurityHeaders(path) {
+        const signatureData = generateRequestSignature(path);
+
+        return {
+            'X-Timestamp': signatureData.timestamp,
+            'X-Nonce': signatureData.nonce,
+            'X-Signature': signatureData.signature,
+            'Accept': 'application/json,text/html,*/*',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'User-Agent': navigator.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        };
+    }
+
+    // 安全fetch函数
+    function secureFetch(url, options = {}) {
+        const path = new URL(url).pathname;
+        const securityHeaders = generateSecurityHeaders(path);
+
+        console.log('安全头信息:', securityHeaders);
+
+        const defaultOptions = {
+            headers: {
+                'Content-Type': 'application/json',
+                ...securityHeaders
+            },
+            credentials: 'include' // 包含cookie
+        };
+
+        const finalOptions = {
+            ...defaultOptions,
+            ...options,
+            headers: {
+                ...defaultOptions.headers,
+                ...(options.headers || {})
+            }
+        };
+
+        console.log('最终请求头:', finalOptions.headers);
+
+        return fetch(url, finalOptions);
+    }
+    // 在主页面中添加下载页面跳转按钮
+    function addDownloadButton() {
+        // 在控制按钮区域添加下载按钮
+        const controls = document.querySelector('.controls');
+        const downloadBtn = document.createElement('button');
+        downloadBtn.innerHTML = '🔑 下载令牌';
+        downloadBtn.onclick = function() {
+            // 直接跳转到下载页面，让下载页面自己处理认证
+            window.location.href = 'download.html';
+        };
+        controls.appendChild(downloadBtn);
+    }
+
+    // 跳转前检查认证状态
+    function checkAuthBeforeRedirect(url) {
+        const sessionId = getCookie('session_id');
+        if (!sessionId) {
+            alert('请先登录');
+            return;
+        }
+
+        // 验证会话有效性
+        secureFetch(`${baseUrl}/check-auth`)
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error('Authentication failed');
+                }
+            })
+            .then(data => {
+                if (data.code === 200) {
+                    // 认证通过，跳转到目标页面
+                    window.location.href = url;
+                } else {
+                    alert('会话已过期，请重新登录');
+                }
+            })
+            .catch(error => {
+                console.error('验证会话失败:', error);
+                alert('认证检查失败，请重新登录');
+            });
+    }
+
+    // 在页面加载完成后调用
+    document.addEventListener('DOMContentLoaded', function() {
+        addDownloadButton();
+    });
+    // ==================== 原有功能函数（保持不变） ====================
 
     // 更新连接状态显示
     function updateConnectionStatus(status, text) {
@@ -875,8 +1951,8 @@
         }
     }
 
-    // 初始化函数
-    function init() {
+    // 初始化应用
+    function initApp() {
         // 首先检查并设置主题
         checkAndSetTheme();
 
@@ -1164,11 +2240,7 @@
 
     // 获取网卡列表
     function loadInterfaces() {
-        fetch(`${baseUrl}/status-ifaces`, {
-            headers: {
-                'Authorization': 'Basic ' + btoa(token)
-            }
-        })
+        secureFetch(`${baseUrl}/status-ifaces`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error('获取网卡列表失败: ' + response.status);
@@ -1225,8 +2297,11 @@
         try {
             updateConnectionStatus('connecting', '连接中...');
 
-            // 使用baseUrl构建WebSocket连接
-            const wsUrl = `wss://${baseUrl.split('//')[1]}/ws?token=${token}&iface=${iface}`;
+            // 生成WebSocket安全参数
+            const signatureData = generateRequestSignature('/ws');
+
+            // 使用baseUrl构建WebSocket连接，添加安全参数
+            const wsUrl = `wss://${baseUrl.split('//')[1]}/ws?iface=${iface}&timestamp=${signatureData.timestamp}&nonce=${signatureData.nonce}&signature=${signatureData.signature}`;
             ws = new WebSocket(wsUrl);
 
             ws.onopen = function() {
@@ -1534,11 +2609,7 @@
 
     // 获取访问统计数据并更新图表
     function refreshAccessStats() {
-        fetch(`${baseUrl}/access-stats`, {
-            headers: {
-                'Authorization': 'Basic ' + btoa(token)
-            }
-        })
+        secureFetch(`${baseUrl}/access-stats`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error('获取访问统计数据失败: ' + response.status);
@@ -1599,12 +2670,8 @@
                 video.currentTime = 0; // 确保显示第一帧
             }
         });
-        fetch(`${baseUrl}/random-media`, {
-            headers: {
-                'Authorization': 'Basic ' + btoa(token),
-                'Content-Type': 'application/json'
-            }
-        })
+
+        secureFetch(`${baseUrl}/random-media`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error('获取媒体失败: ' + response.status);
@@ -1649,15 +2716,15 @@
                             const playPromise = video.play();
                             if (playPromise !== undefined) {
                                 playPromise.then(() => {
-                                    toggleBtn.textContent = "暂停";
+                                    toggleBtn.textContent = '暂停';
                                 }).catch(e => {
                                     console.log('自动播放被阻止:', e);
-                                    toggleBtn.textContent = "播放";
+                                    toggleBtn.textContent = '播放';
                                 });
                             }
                         } else {
                             // 移动设备上显示提示
-                            toggleBtn.textContent = "播放";
+                            toggleBtn.textContent = '播放';
                         }
                     };
 
@@ -1691,7 +2758,25 @@
     }
 
     // 页面加载完成后初始化
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', function() {
+        // 绑定登录表单提交事件
+        document.getElementById('loginForm').addEventListener('submit', handleLogin);
+
+        // 绑定注册表单提交事件
+        document.getElementById('registerForm').addEventListener('submit', handleRegister);
+
+        // 绑定登录/注册切换事件
+        document.getElementById('showRegister').addEventListener('click', showRegister);
+        document.getElementById('showLogin').addEventListener('click', showLogin);
+
+        // 密码强度检测
+        document.getElementById('regPassword').addEventListener('input', function() {
+            updatePasswordStrength(this.value);
+        });
+
+        // 检查登录状态和自动登录
+        checkAuthStatus();
+    });
 
     // 每30秒刷新媒体
     setInterval(loadFixedMedia, 80000);
