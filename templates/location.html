@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实时位置共享与距离计算</title>
+    <!-- 引入高德地图API -->
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=您的高德地图API密钥"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        header {
+            background: #4a6cf7;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+        }
+
+        .description {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            display: flex;
+            flex-wrap: wrap;
+            padding: 20px;
+        }
+
+        .map-container {
+            flex: 2;
+            min-width: 300px;
+            padding: 10px;
+            position: relative;
+        }
+
+        #location-map {
+            width: 100%;
+            height: 500px;
+            background: #f0f4ff;
+            border-radius: 10px;
+            border: 2px solid #4a6cf7;
+        }
+
+        .info-panel {
+            flex: 1;
+            min-width: 300px;
+            padding: 20px;
+            background: #f8faff;
+            border-radius: 10px;
+            margin-left: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-selection {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+        }
+
+        .user-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+            border: 1px solid #e0e6ff;
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .user-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .user-item:hover {
+            background: #e0e6ff;
+        }
+
+        .user-item.active {
+            background: #4a6cf7;
+            color: white;
+        }
+
+        .user-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 50px;
+            background: #e0e6ff;
+            color: #4a6cf7;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+
+        .user-btn.active {
+            background: #4a6cf7;
+            color: white;
+            box-shadow: 0 4px 10px rgba(74, 108, 247, 0.4);
+        }
+
+        .location-data {
+            margin: 20px 0;
+        }
+
+        .data-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .distance {
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: #4a6cf7;
+            color: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(74, 108, 247, 0.3);
+        }
+
+        .distance-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 15px 0;
+            padding: 10px;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .status-connected {
+            background-color: #28a745;
+        }
+
+        .status-disconnected {
+            background-color: #dc3545;
+        }
+
+        .status-connecting {
+            background-color: #ffc107;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: auto;
+        }
+
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 50px;
+            background: #4a6cf7;
+            color: white;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: #3a5cd8;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: white;
+            opacity: 0.8;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            background: #4a6cf7;
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                flex-direction: column;
+            }
+
+            .info-panel {
+                margin-left: 0;
+                margin-top: 20px;
+            }
+        }
+
+        /* 高德地图信息窗口样式 */
+        .amap-info-content {
+            border-radius: 8px;
+            padding: 10px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .user-info-window {
+            font-weight: bold;
+            color: #4a6cf7;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>实时位置共享与距离计算</h1>
+        <p class="description">查看您与他人的实时位置及距离 - 使用高德地图</p>
+    </header>
+
+    <div class="content">
+        <div class="map-container">
+            <div id="location-map"></div>
+        </div>
+
+        <div class="info-panel">
+            <div class="connection-status">
+                <div class="status-indicator" id="connection-status"></div>
+                <span id="connection-text">连接状态: 正在连接...</span>
+            </div>
+
+            <div class="user-selection">
+                <h3>在线用户</h3>
+                <div class="user-list" id="user-list">
+                    <div class="user-item active" data-user="me">
+                        <span>我 (用户A)</span>
+                        <span class="user-status">在线</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="location-data">
+                <h3>位置信息</h3>
+                <div class="data-item">
+                    <span>纬度:</span>
+                    <span id="latitude">等待获取...</span>
+                </div>
+                <div class="data-item">
+                    <span>经度:</span>
+                    <span id="longitude">等待获取...</span>
+                </div>
+                <div class="data-item">
+                    <span>精度:</span>
+                    <span id="accuracy">等待获取...</span>
+                </div>
+                <div class="data-item">
+                    <span>最后更新:</span>
+                    <span id="last-update">--</span>
+                </div>
+            </div>
+
+            <div class="distance">
+                <h3>两人之间的距离</h3>
+                <div class="distance-value" id="distance">-- 米</div>
+            </div>
+
+            <div class="controls">
+                <button id="update-btn">更新位置</button>
+                <button id="share-btn" disabled>开始共享</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="footer">
+    <p>© 2023 实时位置共享应用 | 使用高德地图和WebSocket连接</p>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 获取DOM元素
+        const mapContainer = document.getElementById('location-map');
+        const latitudeElement = document.getElementById('latitude');
+        const longitudeElement = document.getElementById('longitude');
+        const accuracyElement = document.getElementById('accuracy');
+        const lastUpdateElement = document.getElementById('last-update');
+        const distanceElement = document.getElementById('distance');
+        const updateButton = document.getElementById('update-btn');
+        const shareButton = document.getElementById('share-btn');
+        const connectionStatus = document.getElementById('connection-status');
+        const connectionText = document.getElementById('connection-text');
+        const userListElement = document.getElementById('user-list');
+        const notificationElement = document.getElementById('notification');
+
+        // WebSocket连接
+        let ws = null;
+        let isSharing = false;
+        let watchId = null;
+        let userId = null;
+        let reconnectAttempts = 0;
+        let maxReconnectAttempts = 5;
+
+        // 用户位置数据
+        const users = {
+            // 当前用户（自己）
+            me: {
+                id: null,
+                lat: null,
+                lng: null,
+                accuracy: null,
+                color: '#4a6cf7',
+                name: '我 (用户A)',
+                lastSeen: null,
+                marker: null,
+                circle: null
+            },
+            // 其他用户
+            others: {}
+        };
+
+        // 当前查看的用户
+        let currentViewUser = 'me';
+
+        // 高德地图实例
+        let map = null;
+
+        // 初始化地图
+        function initMap() {
+            // 默认中心点（北京）
+            const center = new AMap.LngLat(116.397428, 39.90923);
+
+            // 初始化地图
+            map = new AMap.Map('location-map', {
+                viewMode: '2D',
+                zoom: 10,
+                center: center,
+                resizeEnable: true
+            });
+
+            // 添加缩放控件
+            map.addControl(new AMap.Zoom());
+
+            // 添加比例尺
+            map.addControl(new AMap.Scale());
+
+            // 添加工具栏
+            map.addControl(new AMap.ToolBar());
+        }
+
+        // 初始化地图
+        initMap();
+
+        // 显示通知
+        function showNotification(message, duration = 3000) {
+            notificationElement.textContent = message;
+            notificationElement.classList.add('show');
+
+            setTimeout(() => {
+                notificationElement.classList.remove('show');
+            }, duration);
+        }
+
+        // 更新界面显示的用户信息
+        function updateUserInfo() {
+            const user = currentViewUser === 'me' ? users.me : users.others[currentViewUser];
+
+            if (user && user.lat !== null) {
+                latitudeElement.textContent = user.lat.toFixed(6);
+                longitudeElement.textContent = user.lng.toFixed(6);
+                accuracyElement.textContent = user.accuracy !== null ? `${user.accuracy.toFixed(2)} 米` : '未知';
+
+                if (user.lastSeen) {
+                    lastUpdateElement.textContent = new Date(user.lastSeen).toLocaleTimeString();
+                } else {
+                    lastUpdateElement.textContent = '--';
+                }
+            } else {
+                latitudeElement.textContent = '等待获取...';
+                longitudeElement.textContent = '等待获取...';
+                accuracyElement.textContent = '等待获取...';
+                lastUpdateElement.textContent = '--';
+            }
+        }
+
+        // 更新用户列表
+        function updateUserList() {
+            // 清空用户列表（保留"我"）
+            userListElement.innerHTML = `
+                <div class="user-item active" data-user="me">
+                    <span>${users.me.name}</span>
+                    <span class="user-status">在线</span>
+                </div>
+            `;
+
+            // 添加其他用户
+            for (const id in users.others) {
+                const user = users.others[id];
+                const userItem = document.createElement('div');
+                userItem.className = 'user-item';
+                userItem.dataset.user = id;
+                userItem.innerHTML = `
+                    <span>${user.name || `用户 ${id.substring(0, 6)}`}</span>
+                    <span class="user-status">在线</span>
+                `;
+
+                userItem.addEventListener('click', () => {
+                    document.querySelectorAll('.user-item').forEach(item => {
+                        item.classList.remove('active');
+                    });
+                    userItem.classList.add('active');
+                    currentViewUser = id;
+                    updateUserInfo();
+                });
+
+                userListElement.appendChild(userItem);
+            }
+        }
+
+        // 计算两个用户之间的距离（ Haversine 公式）
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            if (!lat1 || !lat2) return 0;
+
+            const R = 6371000; // 地球半径（米）
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a =
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // 在地图上更新用户位置标记
+        function updateMapMarkers() {
+            // 更新自己的标记
+            if (users.me.lat !== null && users.me.lng !== null) {
+                const position = new AMap.LngLat(users.me.lng, users.me.lat);
+
+                if (!users.me.marker) {
+                    // 创建新标记
+                    users.me.marker = new AMap.Marker({
+                        position: position,
+                        icon: new AMap.Icon({
+                            size: new AMap.Size(25, 34),
+                            image: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_b.png',
+                            imageSize: new AMap.Size(25, 34)
+                        }),
+                        offset: new AMap.Pixel(-12, -34),
+                        title: users.me.name,
+                        map: map
+                    });
+
+                    // 添加信息窗口
+                    users.me.marker.content = `<div class="user-info-window">${users.me.name}</div>`;
+                    users.me.marker.on('click', function() {
+                        infoWindow.setContent(this.content);
+                        infoWindow.open(map, this.getPosition());
+                    });
+                } else {
+                    // 更新现有标记位置
+                    users.me.marker.setPosition(position);
+                }
+
+                // 更新精度圆圈
+                if (users.me.accuracy) {
+                    if (!users.me.circle) {
+                        users.me.circle = new AMap.Circle({
+                            center: position,
+                            radius: users.me.accuracy,
+                            strokeColor: users.me.color,
+                            strokeOpacity: 0.5,
+                            strokeWeight: 1,
+                            fillColor: users.me.color,
+                            fillOpacity: 0.2,
+                            map: map
+                        });
+                    } else {
+                        users.me.circle.setCenter(position);
+                        users.me.circle.setRadius(users.me.accuracy);
+                    }
+                }
+
+                // 将地图中心移动到当前位置
+                map.setCenter(position);
+            }
+
+            // 更新其他用户的标记
+            for (const id in users.others) {
+                const user = users.others[id];
+                if (user.lat !== null && user.lng !== null) {
+                    const position = new AMap.LngLat(user.lng, user.lat);
+
+                    if (!user.marker) {
+                        // 创建新标记
+                        user.marker = new AMap.Marker({
+                            position: position,
+                            icon: new AMap.Icon({
+                                size: new AMap.Size(25, 34),
+                                image: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_r.png',
+                                imageSize: new AMap.Size(25, 34)
+                            }),
+                            offset: new AMap.Pixel(-12, -34),
+                            title: user.name,
+                            map: map
+                        });
+
+                        // 添加信息窗口
+                        user.marker.content = `<div class="user-info-window">${user.name}</div>`;
+                        user.marker.on('click', function() {
+                            infoWindow.setContent(this.content);
+                            infoWindow.open(map, this.getPosition());
+                        });
+                    } else {
+                        // 更新现有标记位置
+                        user.marker.setPosition(position);
+                    }
+
+                    // 更新精度圆圈
+                    if (user.accuracy) {
+                        if (!user.circle) {
+                            user.circle = new AMap.Circle({
+                                center: position,
+                                radius: user.accuracy,
+                                strokeColor: user.color,
+                                strokeOpacity: 0.5,
+                                strokeWeight: 1,
+                                fillColor: user.color,
+                                fillOpacity: 0.2,
+                                map: map
+                            });
+                        } else {
+                            user.circle.setCenter(position);
+                            user.circle.setRadius(user.accuracy);
+                        }
+                    }
+                }
+            }
+
+            // 更新距离显示
+            const otherUserIds = Object.keys(users.others);
+            if (otherUserIds.length > 0) {
+                const firstOtherUser = users.others[otherUserIds[0]];
+                if (users.me.lat && firstOtherUser.lat) {
+                    const distance = calculateDistance(
+                        users.me.lat, users.me.lng,
+                        firstOtherUser.lat, firstOtherUser.lng
+                    );
+                    distanceElement.textContent = `${Math.round(distance)} 米`;
+                }
+            } else {
+                distanceElement.textContent = '-- 米';
+            }
+        }
+
+        // 获取用户当前位置
+        function updateLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        users.me.lat = position.coords.latitude;
+                        users.me.lng = position.coords.longitude;
+                        users.me.accuracy = position.coords.accuracy;
+                        users.me.lastSeen = new Date();
+
+                        updateUserInfo();
+                        updateMapMarkers();
+
+                        // 如果已连接WebSocket，发送位置更新
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({
+                                type: 'location_update',
+                                userId: userId,
+                                lat: users.me.lat,
+                                lng: users.me.lng,
+                                accuracy: users.me.accuracy
+                            }));
+                        }
+                    },
+                    function(error) {
+                        showNotification('获取位置失败: ' + error.message, 5000);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                showNotification('您的浏览器不支持地理位置功能', 5000);
+            }
+        }
+
+        // 开始共享位置
+        function startSharing() {
+            if (!navigator.geolocation) {
+                showNotification('您的浏览器不支持地理位置功能', 5000);
+                return;
+            }
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                showNotification('请先连接到服务器', 5000);
+                return;
+            }
+
+            if (isSharing) return;
+
+            isSharing = true;
+            shareButton.textContent = '停止共享';
+            shareButton.removeEventListener('click', startSharing);
+            shareButton.addEventListener('click', stopSharing);
+
+            // 开始监听位置变化
+            watchId = navigator.geolocation.watchPosition(
+                function(position) {
+                    users.me.lat = position.coords.latitude;
+                    users.me.lng = position.coords.longitude;
+                    users.me.accuracy = position.coords.accuracy;
+                    users.me.lastSeen = new Date();
+
+                    updateUserInfo();
+                    updateMapMarkers();
+
+                    // 发送位置更新到服务器
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'location_update',
+                            userId: userId,
+                            lat: users.me.lat,
+                            lng: users.me.lng,
+                            accuracy: users.me.accuracy
+                        }));
+                    }
+                },
+                function(error) {
+                    console.error('获取位置失败: ', error);
+                    showNotification('位置获取错误: ' + error.message, 5000);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+
+            showNotification('已开始共享您的位置', 3000);
+        }
+
+        // 停止共享位置
+        function stopSharing() {
+            if (!isSharing) return;
+
+            isSharing = false;
+            shareButton.textContent = '开始共享';
+            shareButton.removeEventListener('click', stopSharing);
+            shareButton.addEventListener('click', startSharing);
+
+            // 停止监听位置变化
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+
+            showNotification('已停止共享位置', 3000);
+        }
+
+        // 初始化WebSocket连接
+        function connectWebSocket() {
+            // 更新连接状态
+            connectionStatus.className = 'status-indicator status-connecting';
+            connectionText.textContent = '连接状态: 正在连接...';
+
+            // 生成随机用户ID
+            userId = 'user_' + Math.random().toString(36).substr(2, 9);
+            users.me.id = userId;
+            users.me.name = `我 (用户 ${userId.substring(5, 9)})`;
+
+            // 连接到WebSocket服务器
+            // 注意: 这里需要替换为您的实际WebSocket服务器地址
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const url="wustwu.cn:9000/location"
+            const wsUrl = `${protocol}//${url}`;
+
+            try {
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = function() {
+                    console.log('已连接到服务器');
+                    connectionStatus.className = 'status-indicator status-connected';
+                    connectionText.textContent = '连接状态: 已连接';
+                    reconnectAttempts = 0;
+
+                    // 发送用户注册消息
+                    ws.send(JSON.stringify({
+                        type: 'register',
+                        userId: userId
+                    }));
+
+                    // 启用共享按钮
+                    shareButton.disabled = false;
+
+                    showNotification('已成功连接到服务器', 3000);
+                };
+
+                ws.onclose = function(event) {
+                    console.log('连接已关闭', event.code, event.reason);
+                    connectionStatus.className = 'status-indicator status-disconnected';
+                    connectionText.textContent = '连接状态: 已断开';
+
+                    // 禁用共享按钮
+                    shareButton.disabled = true;
+
+                    // 如果正在共享，停止共享
+                    if (isSharing) {
+                        stopSharing();
+                    }
+
+                    // 尝试重新连接（使用指数退避策略）
+                    if (reconnectAttempts < maxReconnectAttempts) {
+                        const delay = Math.pow(2, reconnectAttempts) * 1000;
+                        console.log(`将在 ${delay/1000} 秒后尝试重新连接...`);
+
+                        setTimeout(() => {
+                            reconnectAttempts++;
+                            connectWebSocket();
+                        }, delay);
+                    } else {
+                        showNotification('无法连接到服务器，请刷新页面重试', 5000);
+                    }
+                };
+
+                ws.onerror = function(error) {
+                    console.log('WebSocket错误: ', error);
+                    connectionStatus.className = 'status-indicator status-disconnected';
+                    connectionText.textContent = '连接状态: 错误';
+                };
+
+                ws.onmessage = function(event) {
+                    try {
+                        const message = JSON.parse(event.data);
+                        console.log('收到消息:', message);
+
+                        switch (message.type) {
+                            case 'users_list':
+                                // 处理用户列表
+                                users.others = {};
+                                for (const id in message.users) {
+                                    if (id !== userId) {
+                                        users.others[id] = {
+                                            id: id,
+                                            lat: message.users[id].Latitude,
+                                            lng: message.users[id].Longitude,
+                                            accuracy: message.users[id].Accuracy,
+                                            lastSeen: new Date(message.users[id].LastSeen),
+                                            color: getColorFromId(id),
+                                            name: `用户 ${id.substring(5, 9)}`,
+                                            marker: null,
+                                            circle: null
+                                        };
+                                    }
+                                }
+                                updateUserList();
+                                updateMapMarkers();
+                                break;
+
+                            case 'location_update':
+                                // 更新其他用户的位置
+                                if (message.userId !== userId) {
+                                    if (!users.others[message.userId]) {
+                                        users.others[message.userId] = {
+                                            id: message.userId,
+                                            color: getColorFromId(message.userId),
+                                            name: `用户 ${message.userId.substring(5, 9)}`,
+                                            marker: null,
+                                            circle: null
+                                        };
+                                    }
+
+                                    users.others[message.userId].lat = message.lat;
+                                    users.others[message.userId].lng = message.lng;
+                                    users.others[message.userId].accuracy = message.accuracy;
+                                    users.others[message.userId].lastSeen = new Date();
+
+                                    updateUserList();
+                                    updateMapMarkers();
+                                }
+                                break;
+
+                            case 'user_left':
+                                // 处理用户离开
+                                if (users.others[message.userId]) {
+                                    // 从地图上移除标记
+                                    if (users.others[message.userId].marker) {
+                                        map.remove(users.others[message.userId].marker);
+                                    }
+                                    if (users.others[message.userId].circle) {
+                                        map.remove(users.others[message.userId].circle);
+                                    }
+
+                                    delete users.others[message.userId];
+                                    updateUserList();
+                                    updateMapMarkers();
+                                    showNotification(`用户 ${message.userId.substring(5, 9)} 已离开`, 3000);
+                                }
+                                break;
+                        }
+                    } catch (e) {
+                        console.error('解析消息失败: ', e);
+                    }
+                };
+            } catch (e) {
+                console.error('WebSocket连接异常: ', e);
+                connectionStatus.className = 'status-indicator status-disconnected';
+                connectionText.textContent = '连接状态: 错误';
+            }
+        }
+
+        // 根据用户ID生成颜色
+        function getColorFromId(id) {
+            const colors = [
+                '#ff6b6b', '#51cf66', '#fcc419', '#22b8cf',
+                '#845ef7', '#ff922b', '#20c997', '#e64980'
+            ];
+
+            let hash = 0;
+            for (let i = 0; i < id.length; i++) {
+                hash = id.charCodeAt(i) + ((hash << 5) - hash);
+            }
+
+            return colors[Math.abs(hash) % colors.length];
+        }
+
+        // 创建信息窗口
+        const infoWindow = new AMap.InfoWindow({
+            offset: new AMap.Pixel(0, -30)
+        });
+
+        // 添加事件监听器
+        updateButton.addEventListener('click', updateLocation);
+        shareButton.addEventListener('click', startSharing);
+
+        // 初始化
+        updateLocation();
+        connectWebSocket();
+    });
+</script>
+</body>
+</html>
