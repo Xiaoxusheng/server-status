@@ -16,10 +16,10 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -41,24 +41,26 @@ import (
 
 // 配置项
 const (
-	mediaDir          = "/root/file/static"
-	url               = "https://wustwu.cn:8081/static/"
+	mediaDir          = "/home/file/static"
+	indexPath         = "/home/os/templates" //index.html 文件所在目录
+	urls              = "https://wustwu.cn:8081/static/"
 	authToken         = "123456"
-	dataFile          = "/root/os/server_data.json"
+	dataFile          = "/home/os/server_data.json"             //服务器数据保存路径
 	rateLimit         = 10                                      // 每分钟最大请求数
 	rateLimitDuration = time.Minute                             // 速率限制时间窗口
-	logDir            = "/root/os/log"                          // 日志目录
+	logDir            = "/home/os/log"                          // 日志目录
 	securityToken     = "wustwu_anti_crawler_2024_security_key" // 反爬安全令牌
 	signatureTimeout  = 30 * time.Second                        // 签名超时时间
-	usersFile         = "/root/os/users.json"                   // 用户数据文件
+	usersFile         = "/home/os/users.json"                   // 用户数据文件
 	sessionTimeout    = 24 * time.Hour                          // 会话超时时间
 	encryptionKey     = "wustwu_user_data_encryption_key_2024"  // 用户数据加密密钥
 
+	dir = "/home/file/static" // EPUB 文件所在目录
 	// 新增下载密钥配置
 	downloadTokenExpiry = 30 * time.Minute                    // 下载令牌有效期
 	downloadLimitBytes  = 3 * 1024 * 1024 * 1024              // 2GB 下载限制
 	downloadTokenSecret = "wustwu_download_token_secret_2024" // 下载令牌密钥
-	downloadTokensFile  = "/root/os/download_tokens.json"     // 下载令牌存储文件
+	downloadTokensFile  = "/home/os/download_tokens.json"     // 下载令牌存储文件
 )
 
 // 用户相关结构体
@@ -327,7 +329,7 @@ type EpubInfo struct {
 	Title        string `json:"title"`
 	Author       string `json:"author"`
 	ChapterCount int    `json:"chapter_count"`
-	Url          string `json:"url"`
+	Url          string `json:"urls"`
 }
 
 // 字节计数器
@@ -709,8 +711,6 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 提取tokenID（简化实现：假设token就是tokenID）
-
 	// 验证令牌
 	downloadToken, err := validateDownloadToken(token, TokenValues, r)
 	if err != nil {
@@ -723,9 +723,43 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 处理文件路径：提取相对路径部分
+	var relativePath string
+
+	// 检查是否是完整的URL
+	if strings.HasPrefix(filePath, "http://") || strings.HasPrefix(filePath, "https://") {
+		// 解析URL
+		parsedURL, err := url.Parse(filePath)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"code":    http.StatusBadRequest,
+				"message": "无效的文件URL",
+			})
+			return
+		}
+
+		// 提取路径部分并移除/static/前缀
+		path := parsedURL.Path
+		if strings.HasPrefix(path, "/static/") {
+			relativePath = strings.TrimPrefix(path, "/static/")
+		} else {
+			// 如果不是以/static/开头，使用整个路径（去掉开头的/）
+			relativePath = strings.TrimPrefix(path, "/")
+		}
+	} else {
+		// 如果不是完整URL，直接处理路径
+		// 移除可能的/static/前缀
+		relativePath = strings.TrimPrefix(filePath, "/static/")
+		// 如果还有开头的/，也移除
+		relativePath = strings.TrimPrefix(relativePath, "/")
+	}
+
 	// 构建完整文件路径
-	fullPath := filepath.Join(mediaDir, path.Base(filePath))
-	log.Println("file_url:", fullPath)
+	fullPath := filepath.Join(mediaDir, relativePath)
+	log.Printf("下载文件 - 原始路径: %s, 相对路径: %s, 完整路径: %s", filePath, relativePath, fullPath)
+
 	// 安全检查：确保文件路径在允许的目录内
 	if !isSafeFilePath(fullPath, mediaDir) {
 		w.Header().Set("Content-Type", "application/json")
@@ -744,7 +778,18 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusNotFound,
-			"message": "文件不存在",
+			"message": "文件不存在: " + fullPath,
+		})
+		return
+	}
+
+	// 检查是否是目录
+	if fileInfo.IsDir() {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"code":    http.StatusBadRequest,
+			"message": "不能下载目录",
 		})
 		return
 	}
@@ -761,7 +806,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 设置下载头
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(filePath)))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(fullPath)))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", fileInfo.Size()))
 
@@ -796,7 +841,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	// 更新令牌使用量
 	updateTokenUsage(downloadToken.TokenID, bytesDownloaded)
 
-	log.Printf("✅ 用户 %s 下载文件 %s, 大小: %d bytes", downloadToken.Username, filePath, bytesDownloaded)
+	log.Printf("✅ 用户 %s 下载文件 %s, 大小: %d bytes", downloadToken.Username, relativePath, bytesDownloaded)
 }
 
 // 获取用户下载令牌列表
@@ -2144,28 +2189,45 @@ func cleanupAntiCrawlerData() {
 }
 
 func listEpubs(w http.ResponseWriter, r *http.Request) {
-	dir := "/root/file/static" // EPUB 文件所在目录
-	var urls []string
+
+	var epubURLs []string
+
+	// 检查目录是否存在
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		http.Error(w, "目录不存在: "+dir, http.StatusInternalServerError)
+		return
+	}
 
 	err := filepath.Walk(dir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
+			fmt.Printf("访问路径错误: %v\n", err) // 添加日志
 			return err
 		}
 
 		// 只处理 .epub 文件
 		if !info.IsDir() && strings.HasSuffix(strings.ToLower(info.Name()), ".epub") {
-			urls = append(urls, url+info.Name())
+			// 确保 URLs 有正确的路径分隔符
+			fullURL := urls
+			if !strings.HasSuffix(urls, "/") {
+				fullURL += "/"
+			}
+			fullURL += info.Name()
+			epubURLs = append(epubURLs, fullURL)
+			fmt.Printf("找到 EPUB 文件: %s\n", info.Name()) // 添加日志
 		}
 		return nil
 	})
 
 	if err != nil {
-		http.Error(w, "读取 EPUB 目录失败", http.StatusInternalServerError)
+		fmt.Printf("遍历目录错误: %v\n", err) // 添加日志
+		http.Error(w, "读取 EPUB 目录失败: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	fmt.Printf("总共找到 %d 个 EPUB 文件\n", len(epubURLs)) // 添加日志
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(urls)
+	json.NewEncoder(w).Encode(epubURLs) // 修正变量名
 }
 
 // ---------------- 在线用户处理 ----------------
@@ -2355,7 +2417,7 @@ func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 		key++
 		randIdx := rand.Intn(len(files))
 		s.Code = http.StatusOK
-		s.Src = url + files[randIdx]
+		s.Src = urls + files[randIdx]
 		json.NewEncoder(w).Encode(s)
 	} else {
 		key = 0
@@ -2392,7 +2454,7 @@ func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 
 		randIdx := rand.Intn(len(files))
 		s.Code = http.StatusOK
-		s.Src = url + files[randIdx]
+		s.Src = urls + files[randIdx]
 		json.NewEncoder(w).Encode(s)
 	}
 }
@@ -2401,7 +2463,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	updateOnlineUser(r, "video")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	htmlData, err := os.ReadFile("/root/os/templates/video.html")
+	htmlData, err := os.ReadFile("/home/os/templates/video.html")
 	if err != nil {
 		http.Error(w, fmt.Sprintf("无法读取 HTML 文件: %v", err), http.StatusInternalServerError)
 		log.Printf("读取 video.html 失败: %v", err)
@@ -2465,6 +2527,23 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 
+	done := make(chan struct{})
+
+	// 启动goroutine读取客户端消息（主要用于检测连接状态）
+	go func() {
+		defer close(done)
+		for {
+			_, _, err := conn.ReadMessage()
+			if err != nil {
+				// 检查是否是正常关闭
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+					log.Printf("WebSocket读取错误: %v", err)
+				}
+				break
+			}
+		}
+	}()
+
 	ticker := time.NewTicker(1 * time.Second)
 	pingTicker := time.NewTicker(30 * time.Second) // 每30秒发送一次ping
 	defer func() {
@@ -2504,7 +2583,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		case <-pingTicker.C:
 			// 发送ping消息检测连接状态
 			conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			if err = conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				log.Println("WebSocket Ping Error:", err)
 				return
 			}
@@ -2526,9 +2605,76 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 		return nil, err
 	}
 
-	diskInfo, err := disk.Usage("/")
-	if err != nil {
-		return nil, err
+	// 修改：获取所有物理磁盘的总使用情况
+	var totalDisk uint64
+	var usedDisk uint64
+	var freeDisk uint64
+
+	// 获取所有分区
+	partitions, err := disk.Partitions(false)
+	if err == nil {
+		// 过滤掉虚拟文件系统
+		excludedFsTypes := map[string]bool{
+			"tmpfs":      true,
+			"devtmpfs":   true,
+			"proc":       true,
+			"sysfs":      true,
+			"overlay":    true,
+			"cgroup":     true,
+			"devpts":     true,
+			"mqueue":     true,
+			"hugetlbfs":  true,
+			"autofs":     true,
+			"squashfs":   true,
+			"iso9660":    true,
+			"fuse":       true,
+			"fuse.sshfs": true,
+		}
+
+		// 用于去重，避免重复统计同一个设备
+		processedDevices := make(map[string]bool)
+
+		for _, partition := range partitions {
+			// 跳过虚拟文件系统
+			if excludedFsTypes[partition.Fstype] {
+				continue
+			}
+
+			// 跳过已经处理过的设备（避免重复统计）
+			if processedDevices[partition.Device] {
+				continue
+			}
+
+			usage, err := disk.Usage(partition.Mountpoint)
+			if err != nil {
+				// 记录错误但继续处理其他分区
+				log.Printf("获取分区 %s 使用情况失败: %v", partition.Mountpoint, err)
+				continue
+			}
+
+			// 标记设备已处理
+			processedDevices[partition.Device] = true
+
+			totalDisk += usage.Total
+			usedDisk += usage.Used
+			freeDisk += usage.Free
+		}
+	} else {
+		log.Printf("获取分区列表失败: %v", err)
+		// 如果失败，回退到只获取根分区
+		diskInfo, err := disk.Usage("/")
+		if err != nil {
+			return nil, err
+		}
+		totalDisk = diskInfo.Total
+		usedDisk = diskInfo.Used
+		freeDisk = diskInfo.Free
+	}
+
+	// 计算磁盘使用百分比
+	diskUsagePercent := 0.0
+	if totalDisk > 0 {
+		diskUsagePercent = float64(usedDisk) / float64(totalDisk) * 100
 	}
 
 	loadAvg, err := load.Avg()
@@ -2615,8 +2761,8 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 		CPUUsage:      cpuPercent[0],
 		MemoryUsage:   memInfo.UsedPercent,
 		MemoryTotal:   memInfo.Total / 1024 / 1024,
-		DiskUsage:     diskInfo.UsedPercent,
-		DiskTotal:     diskInfo.Total / 1024 / 1024 / 1024,
+		DiskUsage:     diskUsagePercent,               // 使用计算的总磁盘使用百分比
+		DiskTotal:     totalDisk / 1024 / 1024 / 1024, // 使用计算的总磁盘空间（GB）
 		UploadSpeed:   uploadSpeed,
 		DownloadSpeed: downloadSpeed,
 		TotalUpload:   formatBytes(totalUploadAccum),
@@ -2743,9 +2889,10 @@ func main() {
 
 	// 定时保存数据
 	go func() {
-		for {
-			time.Sleep(30 * time.Second)
+		t := time.NewTicker(time.Second * 30)
+		for range t.C {
 			saveData()
+
 		}
 	}()
 
@@ -2792,7 +2939,7 @@ func main() {
 	http.HandleFunc("/revoke-download-token", authMiddleware(securityMiddleware(revokeDownloadTokenHandler)))
 
 	// 使用认证中间件和安全中间件包装所有处理函数
-	http.Handle("/", http.FileServer(http.Dir("/root/os/templates")))
+	http.Handle("/", http.FileServer(http.Dir(indexPath)))
 	//http.HandleFunc("/location", authMiddleware(securityMiddleware(handleWebSocket)))
 	//http.HandleFunc("/health", authMiddleware(securityMiddleware(healthCheck)))
 	http.HandleFunc("/ws", authMiddleware(securityMiddleware(wsHandler)))
@@ -2805,5 +2952,5 @@ func main() {
 
 	fmt.Println("Server running at https://localhost:9000")
 	log.Printf("服务器启动时间: %s", serverStartTime.Format("2006-01-02 15:04:05"))
-	log.Fatal(http.ListenAndServeTLS(":9000", "/root/ssl/wustwu.cn.pem", "/root/ssl/wustwu.cn.key", nil))
+	log.Fatal(http.ListenAndServeTLS(":9000", "/home/ssl/wustwu.cn.pem", "/home/ssl/wustwu.cn.key", nil))
 }
