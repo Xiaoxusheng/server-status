@@ -471,7 +471,6 @@ func updateTokenUsage(tokenID string, bytes int64) {
 	downloadTokenManager.Lock()
 	if token, exists := downloadTokenManager.Tokens[tokenID]; exists {
 		token.UsedBytes += bytes
-
 		// 如果超过限制，停用令牌
 		if token.UsedBytes >= token.MaxBytes {
 			token.IsActive = false
@@ -1854,6 +1853,23 @@ func securityMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // ==================== 保存队列管理 ====================
+
+/*
+downloadTokenSaveChan 是一个带缓冲的通道，通常大小为 1
+
+向通道发送值相当于获取"锁"
+
+如果通道已满，说明有任务正在运行
+
+保存完后释放锁
+调用1: scheduleSaveDownloadTokens() → 启动保存任务
+调用2: scheduleSaveDownloadTokens() → 通道已满，跳过
+调用3: scheduleSaveDownloadTokens() → 通道已满，跳过
+    ↓
+保存任务完成 → 通道变空
+    ↓
+后续调用可以重新启动保存任务
+*/
 
 // 安排保存下载令牌（使用队列避免并发保存）
 func scheduleSaveDownloadTokens() {
