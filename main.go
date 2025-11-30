@@ -2574,6 +2574,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	for {
 		select {
+		case <-done:
+			return
 		case <-ticker.C:
 			// 更新在线用户时间
 			updateOnlineUser(r, "websocket")

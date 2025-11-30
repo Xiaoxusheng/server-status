@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chatroom Pro</title>
+    <style>
+        :root {
+            --primary-color: #007AFF; /* iOS 蓝 */
+            --bg-color: #eef2f5;
+            --glass-bg: rgba(255, 255, 255, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-color);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* 禁止整页滚动 */
+        }
+
+        /* --- 顶部导航栏 (毛玻璃) --- */
+        header {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--glass-border);
+            position: fixed;
+            top: 0; width: 100%; z-index: 100;
+            box-sizing: border-box;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .logo { font-weight: 800; font-size: 1.2rem; color: #333; letter-spacing: -0.5px; }
+        .status-badge {
+            background: #e8f5e9; color: #2e7d32;
+            padding: 5px 12px; border-radius: 20px;
+            font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px;
+        }
+        .dot { width: 8px; height: 8px; background: #4caf50; border-radius: 50%; box-shadow: 0 0 0 2px #a5d6a7; }
+
+        /* --- 聊天区域 --- */
+        #chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 80px 20px 90px; /* 给顶部和底部留空间 */
+            scroll-behavior: smooth;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* 消息气泡基础样式 */
+        .message-wrapper {
+            display: flex;
+            flex-direction: column;
+            max-width: 75%;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .bubble {
+            padding: 12px 16px;
+            border-radius: 18px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            position: relative;
+            word-wrap: break-word;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .meta { font-size: 0.7rem; margin-top: 4px; opacity: 0.6; }
+
+        /* 别人的消息 (左侧) */
+        .msg-left { align-self: flex-start; }
+        .msg-left .bubble {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+        }
+        .msg-left .meta { margin-left: 4px; }
+
+        /* 我的消息 (右侧) */
+        .msg-right { align-self: flex-end; align-items: flex-end; }
+        .msg-right .bubble {
+            background: var(--primary-color);
+            color: white;
+            border-bottom-right-radius: 4px;
+            box-shadow: 0 4px 15px rgba(0, 122, 255, 0.3);
+        }
+        .msg-right .meta { margin-right: 4px; }
+
+        /* --- 底部输入框 (悬浮式) --- */
+        #input-area {
+            position: fixed;
+            bottom: 20px; left: 0; right: 0;
+            margin: 0 auto;
+            width: 90%; max-width: 600px;
+            background: rgba(255,255,255,0.9);
+            backdrop-filter: blur(10px);
+            padding: 8px;
+            border-radius: 30px;
+            display: flex;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,0.5);
+            z-index: 100;
+        }
+
+        #input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            padding: 12px 20px;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        #send-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            width: 45px; height: 45px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: transform 0.2s;
+        }
+        #send-btn:active { transform: scale(0.9); }
+        #send-btn svg { width: 20px; height: 20px; fill: white; margin-left: 2px;}
+
+        /* --- 现代化全屏通知 --- */
+        #overlay {
+            position: fixed; inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px); /* 背景模糊 */
+            display: flex; justify-content: center; align-items: center;
+            z-index: 999;
+            opacity: 0; visibility: hidden;
+            transition: all 0.4s ease;
+        }
+
+        #overlay.active { opacity: 1; visibility: visible; }
+
+        .alert-box {
+            background: white;
+            padding: 40px 60px;
+            border-radius: 24px;
+            text-align: center;
+            transform: scale(0.8);
+            transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        #overlay.active .alert-box { transform: scale(1); }
+
+        .alert-title { font-size: 2rem; margin-bottom: 10px; }
+        .alert-text { font-size: 1.2rem; color: #666; font-weight: 500; }
+
+        /* 动画关键帧 */
+        @keyframes popIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">Chatroom Pro</div>
+    <div class="status-badge">
+        <div class="dot"></div>
+        <span id="online-count">1 人在线</span>
+    </div>
+</header>
+
+<div id="chat-container"></div>
+
+<form id="input-area">
+    <input id="input" type="text" autocomplete="off" placeholder="说点什么..." />
+    <button id="send-btn" type="submit">
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+    </button>
+</form>
+
+<div id="overlay">
+    <div class="alert-box">
+        <div class="alert-title">✨</div>
+        <div class="alert-text" id="alert-msg">通知内容</div>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+
+    const form = document.getElementById('input-area');
+    const input = document.getElementById('input');
+    const chatContainer = document.getElementById('chat-container');
+    const countSpan = document.getElementById('online-count');
+    const overlay = document.getElementById('overlay');
+    const alertMsg = document.getElementById('alert-msg');
+
+    // 1. 发送消息
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (input.value.trim()) {
+            socket.emit('chat_message', input.value);
+            input.value = '';
+            input.focus();
+        }
+    });
+
+    // 2. 接收消息（区分自己和他人）
+    socket.on('chat_message', (msgData) => {
+        const isMe = msgData.id === socket.id;
+
+        // 创建消息 HTML 结构
+        const wrapper = document.createElement('div');
+        wrapper.className = `message-wrapper ${isMe ? 'msg-right' : 'msg-left'}`;
+
+        wrapper.innerHTML = `
+                <div class="bubble">${escapeHtml(msgData.text)}</div>
+                <div class="meta">${msgData.time}</div>
+            `;
+
+        chatContainer.appendChild(wrapper);
+
+        // 自动滚动到底部
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    });
+
+    // 3. 更新人数
+    socket.on('update_count', (count) => {
+        countSpan.textContent = `${count} 人在线`;
+    });
+
+    // 4. 现代化全屏通知
+    socket.on('system_alert', (data) => {
+        alertMsg.textContent = data.text;
+        overlay.classList.add('active');
+
+        // 播放提示音（可选，浏览器可能限制自动播放）
+        // new Audio('notification.mp3').play().catch(()=>{});
+
+        setTimeout(() => {
+            overlay.classList.remove('active');
+        }, 3000);
+    });
+
+    // 防注入简单处理
+    function escapeHtml(text) {
+        const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+        return text.replace(/[&<>"']/g, (m) => map[m]);
+    }
+</script>
+</body>
+</html>
