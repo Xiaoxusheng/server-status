@@ -57,22 +57,22 @@
         .tr-stat .tr-ico { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; background: rgba(22,119,255,.12); color: var(--blue); }
         .tr-stat:nth-child(2) .tr-ico { background: rgba(19,194,194,.14); color: var(--teal); }
         .tr-stat:nth-child(n+3) .tr-ico { background: rgba(120,130,150,.14); color: var(--sub); }
-        .tr-stat > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+        .tr-stat > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; overflow: hidden; }
         .tr-stat .tr-label { font-size: 10.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tr-stat .tr-value { font-size: 16px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
         .tr-stat .tr-value.rx { color: var(--blue); }
         .tr-stat .tr-value.tx { color: var(--teal); }
         .tr-topo { position: absolute; left: 0; right: 0; top: 0; height: 760px; z-index: 2; }
         .tr-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
-        .tr-node { position: absolute; box-sizing: border-box; border-radius: 9px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 2px 7px rgba(20,34,58,.07); display: flex; align-items: center; gap: 8px; padding: 7px 9px; cursor: grab; touch-action: none; user-select: none; transition: box-shadow .15s, border-color .15s; }
+        .tr-node { position: absolute; box-sizing: border-box; overflow: hidden; border-radius: 9px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 2px 7px rgba(20,34,58,.07); display: flex; align-items: center; gap: 8px; padding: 7px 9px; cursor: grab; touch-action: none; user-select: none; transition: box-shadow .15s, border-color .15s; }
         .tr-node:hover { border-color: var(--blue); box-shadow: 0 4px 13px rgba(22,119,255,.18); }
         .tr-node:active { cursor: grabbing; }
         .tr-node.active { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(22,119,255,.18); }
         .tr-node .tr-ico { width: 29px; height: 29px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; background: rgba(22,119,255,.12); color: var(--blue); }
-        .tr-node .tr-body { flex: 1; min-width: 0; }
+        .tr-node .tr-body { flex: 1; min-width: 0; overflow: hidden; }
         .tr-node .tr-name { font-size: 11.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tr-node .tr-info { margin-top: 1px; font-size: 10px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .tr-node .tr-rates { margin-top: 3px; display: flex; flex-direction: column; gap: 1px; font-size: 10px; }
+        .tr-node .tr-rates { margin-top: 3px; display: flex; flex-direction: column; gap: 1px; font-size: 10px; min-width: 0; }
         .tr-rate { display: inline-flex; align-items: center; gap: 4px; }
         .tr-rate i { width: 12px; height: 12px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-style: normal; color: #fff; }
         .tr-rate.rx i { background: var(--green); }
@@ -107,6 +107,21 @@
         .tr-legend .lg-tx::before { background: var(--amber); }
         .tr-svg polyline { stroke-dasharray: 5 4; animation: traffic-flow 1.2s linear infinite; }
         @keyframes traffic-flow { to { stroke-dashoffset: -9; } }
+        @media (max-width: 768px) {
+            .traffic-wrap { height: auto !important; overflow: visible; }
+            .traffic-canvas { width: 100% !important; height: auto !important; transform: none !important; overflow: visible; background: transparent; }
+            .tr-svg { display: none; }
+            .tr-head { position: static; }
+            .tr-layout-btn { position: static; margin: 6px 0 0; }
+            .tr-stats { position: static; margin-bottom: 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+            .tr-topo { position: static; height: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+            .tr-node { position: static !important; width: calc(50% - 4px) !important; height: auto !important; min-height: 76px; transform: none !important; }
+            .tr-node.server { width: 100% !important; }
+            .tr-bottom { position: static; margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+            .tr-panel { position: static; width: 100% !important; height: auto; }
+            .tr-trend-chart { position: static; height: 180px; }
+            .tr-legend { position: static; margin-top: 8px; }
+        }
         .chart-meta { font-size: 12px; color: #999; text-align: right; margin-top: 6px; }
         .login-bg {
             min-height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -738,7 +753,7 @@
                                 services.forEach(s => rates.push(parseFloat(s.rx) || 0, parseFloat(s.tx) || 0));
                                 ifaces.forEach(f => rates.push(parseFloat(f.rx) || 0, parseFloat(f.tx) || 0));
                                 const maxRate = Math.max.apply(null, rates) || 1;
-                                const lineW = r => Math.max(1.2, Math.min(5, 1.2 + r / maxRate * 3.8));
+                                const lineW = r => Math.max(1, Math.min(2.2, 1 + r / maxRate * 1.6));
                                 return (
                                     <div className="traffic-wrap" ref={canvasWrapRef} style={{ height: Math.round(760 * canvasScale) }}>
                                         <div className={'traffic-canvas' + (isDark ? ' dark' : '')} style={{ transform: 'scale(' + canvasScale + ')' }}>
@@ -776,6 +791,7 @@
                                                               stroke={l.rx >= l.tx ? '#1677ff' : '#13c2c2'}
                                                               strokeWidth={lineW(Math.max(l.rx, l.tx))}
                                                               strokeOpacity={0.45}
+                                                              vectorEffect="non-scaling-stroke"
                                                               fill="none" strokeLinecap="round" strokeLinejoin="round" />
                                                 ))}
                                             </svg>
