@@ -7,6 +7,7 @@ import (
 	"crypto/hmac"
 	rand2 "crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,7 +45,7 @@ import (
 const (
 	mediaDir          = "/home/file/static"
 	indexPath         = "/home/os/templates" //index.html 文件所在目录
-	urls              = "https://wustwu.cn:8081/static/"
+	urls              = "https://xyx.homes:8081/static/"
 	authToken         = "123456"
 	dataFile          = "/home/os/server_data.json"             //服务器数据保存路径
 	rateLimit         = 10                                      // 每分钟最大请求数
@@ -68,10 +70,1495 @@ type Users struct {
 	Username    string    `json:"username"`
 	Password    string    `json:"password"` // bcrypt加密后的密码
 	Email       string    `json:"email"`
+	RoleID      string    `json:"role_id,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	LastLogin   time.Time `json:"last_login"`
 	IsActive    bool      `json:"is_active"`
 	Permissions []string  `json:"permissions"`
+}
+
+// PermissionDef 权限定义
+type PermissionDef struct {
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Group       string `json:"group"`
+	Description string `json:"description"`
+}
+
+// Role 角色定义
+type Role struct {
+	RoleID      string    `json:"role_id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Permissions []string  `json:"permissions"`
+	IsSystem    bool      `json:"is_system"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// RBACManager 角色权限管理器
+type RBACManager struct {
+	sync.RWMutex
+	Roles map[string]*Role `json:"roles"`
+}
+
+// ==================== RBAC 权限管理核心 ====================
+
+// allPermissions 系统支持的权限定义
+var allPermissions = []PermissionDef{
+	{Key: "system:view", Name: "查看服务器状态", Group: "系统", Description: "查看实时监控、网络接口、访问统计"},
+	{Key: "system:exec", Name: "执行系统命令", Group: "系统", Description: "执行白名单内的系统管理命令"},
+	{Key: "files:view", Name: "查看媒体文件", Group: "文件", Description: "查看视频、电子书、随机媒体等内容"},
+	{Key: "files:download", Name: "下载文件", Group: "文件", Description: "生成下载令牌并下载服务器文件"},
+	{Key: "files:manage", Name: "管理文件", Group: "文件", Description: "浏览、上传、删除服务器文件目录"},
+	{Key: "token:manage", Name: "管理下载令牌（查看/撤销）", Group: "文件", Description: "查看和撤销自己名下的下载令牌"},
+	{Key: "token:issue", Name: "下发下载令牌", Group: "文件", Description: "为指定用户签发下载令牌，并设置有效期和流量上限"},
+	{Key: "system:process", Name: "查看进程列表", Group: "系统", Description: "查看服务器进程占用情况（CPU/内存）"},
+	{Key: "ip:manage", Name: "管理IP封禁", Group: "系统", Description: "查看访问IP并封禁/解封异常IP"},
+	{Key: "user:view", Name: "查看用户", Group: "用户", Description: "查看系统用户列表"},
+	{Key: "user:manage", Name: "管理用户", Group: "用户", Description: "创建、编辑、禁用、删除用户"},
+	{Key: "role:manage", Name: "管理角色", Group: "用户", Description: "创建、编辑、删除角色及其权限"},
+}
+
+// defaultRoles 返回系统内置的默认角色
+func defaultRoles() map[string]*Role {
+	now := time.Now()
+	return map[string]*Role{
+		"admin": {
+			RoleID:      "admin",
+			Name:        "超级管理员",
+			Description: "拥有系统全部权限",
+			Permissions: []string{"*"},
+			IsSystem:    true,
+			CreatedAt:   now,
+		},
+		"operator": {
+			RoleID:      "operator",
+			Name:        "运维人员",
+			Description: "负责服务器日常运维，可查看状态并执行命令",
+			Permissions: []string{"system:view", "system:exec", "files:view", "files:download", "token:manage", "user:view"},
+			IsSystem:    true,
+			CreatedAt:   now,
+		},
+		"user": {
+			RoleID:      "user",
+			Name:        "普通用户",
+			Description: "可查看服务器状态及下载媒体文件",
+			Permissions: []string{"system:view", "files:view", "files:download", "token:manage"},
+			IsSystem:    true,
+			CreatedAt:   now,
+		},
+	}
+}
+
+// ensureDefaultRoles 确保系统内置角色始终存在
+func ensureDefaultRoles() {
+	rbacManager.Lock()
+	defer rbacManager.Unlock()
+
+	changed := false
+	for roleID, role := range defaultRoles() {
+		if _, exists := rbacManager.Roles[roleID]; !exists {
+			rbacManager.Roles[roleID] = role
+			changed = true
+		}
+	}
+	if changed {
+		go scheduleSaveRBAC()
+	}
+}
+
+// loadRBAC 从加密文件加载角色数据
+func loadRBAC() {
+	if _, err := os.Stat(rbacFile); os.IsNotExist(err) {
+		log.Println("角色数据文件不存在，创建默认角色")
+		ensureDefaultRoles()
+		return
+	}
+
+	file, err := os.Open(rbacFile)
+	if err != nil {
+		log.Printf("读取角色数据文件失败: %v", err)
+		return
+	}
+	defer file.Close()
+
+	encryptedData, err := io.ReadAll(file)
+	if err != nil {
+		log.Printf("读取加密角色数据失败: %v", err)
+		return
+	}
+
+	decryptedData, err := decryptData(encryptedData)
+	if err != nil {
+		log.Printf("解密角色数据失败: %v", err)
+		return
+	}
+
+	rbacManager.Lock()
+	if err := json.Unmarshal(decryptedData, rbacManager); err != nil {
+		rbacManager.Unlock()
+		log.Printf("解析角色数据失败: %v", err)
+		return
+	}
+	if rbacManager.Roles == nil {
+		rbacManager.Roles = make(map[string]*Role)
+	}
+	rbacManager.Unlock()
+
+	// 确保默认角色存在
+	ensureDefaultRoles()
+	log.Printf("角色数据加载完成，共 %d 个角色", len(rbacManager.Roles))
+}
+
+// saveRBAC 将角色数据加密写入本地文件
+func saveRBAC() error {
+	rbacManager.RLock()
+	data, err := json.Marshal(rbacManager)
+	rbacManager.RUnlock()
+
+	if err != nil {
+		return fmt.Errorf("序列化角色数据失败: %v", err)
+	}
+
+	encryptedData, err := encryptData(data)
+	if err != nil {
+		return fmt.Errorf("加密角色数据失败: %v", err)
+	}
+
+	dir := filepath.Dir(rbacFile)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("创建角色数据目录失败: %v", err)
+	}
+
+	tempFile := rbacFile + ".tmp"
+	file, err := os.OpenFile(tempFile, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0600)
+	if err != nil {
+		return fmt.Errorf("打开临时文件失败: %v", err)
+	}
+
+	if _, err := file.Write(encryptedData); err != nil {
+		file.Close()
+		os.Remove(tempFile)
+		return fmt.Errorf("写入临时文件失败: %v", err)
+	}
+
+	if err := file.Sync(); err != nil {
+		file.Close()
+		os.Remove(tempFile)
+		return fmt.Errorf("同步文件失败: %v", err)
+	}
+
+	if err := file.Close(); err != nil {
+		os.Remove(tempFile)
+		return fmt.Errorf("关闭文件失败: %v", err)
+	}
+
+	if err := os.Rename(tempFile, rbacFile); err != nil {
+		os.Remove(tempFile)
+		return fmt.Errorf("重命名文件失败: %v", err)
+	}
+
+	return nil
+}
+
+// scheduleSaveRBAC 异步保存角色数据，避免频繁磁盘写入
+func scheduleSaveRBAC() {
+	select {
+	case rbacSaveChan <- struct{}{}:
+		go func() {
+			defer func() {
+				<-rbacSaveChan
+			}()
+			if err := saveRBAC(); err != nil {
+				log.Printf("保存角色数据失败: %v", err)
+			}
+		}()
+	default:
+		// 已有保存任务在运行
+	}
+}
+
+// initRBAC 初始化角色系统
+func initRBAC() {
+	loadRBAC()
+}
+
+// isValidPermission 校验权限 key 是否合法
+func isValidPermission(perm string) bool {
+	if perm == "*" {
+		return true
+	}
+	for _, p := range allPermissions {
+		if p.Key == perm {
+			return true
+		}
+	}
+	return false
+}
+
+// getUserEffectivePermissions 计算用户实际拥有的权限（角色权限 + 用户附加权限）
+func getUserEffectivePermissions(username string) []string {
+	userManager.RLock()
+	user, exists := userManager.UserInfos[username]
+	var roleID string
+	var legacyPerms []string
+	if exists {
+		roleID = user.RoleID
+		legacyPerms = user.Permissions
+	}
+	userManager.RUnlock()
+
+	if !exists {
+		return nil
+	}
+
+	permSet := make(map[string]bool)
+	if roleID != "" {
+		rbacManager.RLock()
+		if role, ok := rbacManager.Roles[roleID]; ok {
+			for _, p := range role.Permissions {
+				permSet[p] = true
+			}
+		}
+		rbacManager.RUnlock()
+	}
+
+	// 兼容旧版本直接挂载在用户上的权限
+	for _, p := range legacyPerms {
+		permSet[p] = true
+	}
+
+	// 兜底：admin 用户即使角色缺失也拥有全部权限
+	if roleID == "" && username == "admin" {
+		permSet["*"] = true
+	}
+
+	perms := make([]string, 0, len(permSet))
+	for p := range permSet {
+		perms = append(perms, p)
+	}
+	sort.Strings(perms)
+	return perms
+}
+
+// hasPermission 判断用户是否拥有指定权限（支持 * 通配）
+func hasPermission(username, perm string) bool {
+	perms := getUserEffectivePermissions(username)
+	for _, p := range perms {
+		if p == "*" || p == perm {
+			return true
+		}
+	}
+	return false
+}
+
+// getRoleName 获取角色显示名称
+func getRoleName(roleID string) string {
+	if roleID == "" {
+		return ""
+	}
+	rbacManager.RLock()
+	defer rbacManager.RUnlock()
+	if role, ok := rbacManager.Roles[roleID]; ok {
+		return role.Name
+	}
+	return roleID
+}
+
+// requirePermission 基于 RBAC 的接口权限中间件
+func requirePermission(perm string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session, valid := getSessionFromRequest(r)
+		if !valid {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"code":    http.StatusUnauthorized,
+				"message": "请先登录",
+			})
+			return
+		}
+
+		if !hasPermission(session.Username, perm) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"code":    http.StatusForbidden,
+				"message": "没有权限执行此操作",
+				"require": perm,
+			})
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}
+}
+
+// requireAnyPermission 权限中间件：满足任意一个权限即可通过
+func requireAnyPermission(perms []string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		session, valid := getSessionFromRequest(r)
+		if !valid {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"code":    http.StatusUnauthorized,
+				"message": "请先登录",
+			})
+			return
+		}
+
+		for _, p := range perms {
+			if hasPermission(session.Username, p) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"code":    http.StatusForbidden,
+			"message": "没有权限执行此操作",
+		})
+	}
+}
+
+// ==================== RBAC API 接口 ====================
+
+// RoleListItem 角色列表项（含用户数）
+type RoleListItem struct {
+	RoleID      string    `json:"role_id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Permissions []string  `json:"permissions"`
+	IsSystem    bool      `json:"is_system"`
+	CreatedAt   time.Time `json:"created_at"`
+	UserCount   int       `json:"user_count"`
+}
+
+// UserListItem 用户列表项（含角色信息）
+type UserListItem struct {
+	Username    string    `json:"username"`
+	Email       string    `json:"email"`
+	RoleID      string    `json:"role_id"`
+	RoleName    string    `json:"role_name"`
+	Permissions []string  `json:"permissions"`
+	IsActive    bool      `json:"is_active"`
+	CreatedAt   time.Time `json:"created_at"`
+	LastLogin   time.Time `json:"last_login"`
+}
+
+// StringList 兼容权限字段同时支持 JSON 数组和逗号分隔字符串两种格式
+type StringList []string
+
+// UnmarshalJSON 兼容常见请求格式：数组 或 "a,b,c" 字符串
+func (s *StringList) UnmarshalJSON(b []byte) error {
+	if len(b) > 0 && b[0] == '"' {
+		var str string
+		if err := json.Unmarshal(b, &str); err != nil {
+			return err
+		}
+		parts := strings.Split(str, ",")
+		out := make([]string, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				out = append(out, p)
+			}
+		}
+		*s = out
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal(b, &arr); err != nil {
+		return err
+	}
+	*s = arr
+	return nil
+}
+
+// CreateRoleRequest 创建角色请求
+type CreateRoleRequest struct {
+	RoleID      string     `json:"role_id"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Permissions StringList `json:"permissions"`
+}
+
+// UpdateRoleRequest 更新角色请求
+type UpdateRoleRequest struct {
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Permissions StringList `json:"permissions"`
+}
+
+// CreateUserRequest 创建用户请求
+type CreateUserRequest struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	RoleID   string `json:"role_id"`
+}
+
+// UpdateUserRequest 更新用户请求
+type UpdateUserRequest struct {
+	Email    string `json:"email"`
+	RoleID   string `json:"role_id"`
+	Password string `json:"password"`
+	IsActive *bool  `json:"is_active"`
+}
+
+// listPermissionsHandler 返回系统全部权限定义
+func listPermissionsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"code":    http.StatusOK,
+		"message": "获取权限列表成功",
+		"data":    allPermissions,
+	})
+}
+
+// listRolesHandler 返回角色列表（含用户数）
+func listRolesHandler(w http.ResponseWriter, r *http.Request) {
+	rbacManager.RLock()
+	roleList := make([]RoleListItem, 0, len(rbacManager.Roles))
+	for _, role := range rbacManager.Roles {
+		roleList = append(roleList, RoleListItem{
+			RoleID:      role.RoleID,
+			Name:        role.Name,
+			Description: role.Description,
+			Permissions: append([]string(nil), role.Permissions...),
+			IsSystem:    role.IsSystem,
+			CreatedAt:   role.CreatedAt,
+		})
+	}
+	rbacManager.RUnlock()
+
+	// 统计每个角色下的用户数
+	userManager.RLock()
+	userCounts := make(map[string]int)
+	for _, user := range userManager.UserInfos {
+		if user.RoleID != "" {
+			userCounts[user.RoleID]++
+		}
+	}
+	userManager.RUnlock()
+
+	for i := range roleList {
+		roleList[i].UserCount = userCounts[roleList[i].RoleID]
+	}
+
+	sort.Slice(roleList, func(i, j int) bool {
+		return roleList[i].RoleID < roleList[j].RoleID
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"code":    http.StatusOK,
+		"message": "获取角色列表成功",
+		"data":    roleList,
+	})
+}
+
+// getRoleHandler 返回单个角色详情（含权限）
+func getRoleHandler(w http.ResponseWriter, r *http.Request) {
+	roleID := r.PathValue("role_id")
+	if roleID == "" {
+		writeJSONError(w, http.StatusBadRequest, "缺少角色ID")
+		return
+	}
+
+	rbacManager.RLock()
+	role, exists := rbacManager.Roles[roleID]
+	if !exists {
+		rbacManager.RUnlock()
+		writeJSONError(w, http.StatusNotFound, "角色不存在")
+		return
+	}
+	item := RoleListItem{
+		RoleID:      role.RoleID,
+		Name:        role.Name,
+		Description: role.Description,
+		Permissions: append([]string(nil), role.Permissions...),
+		IsSystem:    role.IsSystem,
+		CreatedAt:   role.CreatedAt,
+	}
+	rbacManager.RUnlock()
+
+	// 统计该角色下的用户数
+	userManager.RLock()
+	for _, user := range userManager.UserInfos {
+		if user.RoleID == roleID {
+			item.UserCount++
+		}
+	}
+	userManager.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"code":    http.StatusOK,
+		"message": "获取角色成功",
+		"data":    item,
+	})
+}
+
+// createRoleHandler 创建新角色
+func createRoleHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "只允许 POST 请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, _ := io.ReadAll(r.Body)
+	var req CreateRoleRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		log.Printf("⚠️ 创建角色请求体解析失败 err=%v body=%q", err, string(body))
+		writeJSONError(w, http.StatusBadRequest, "无效的请求数据")
+		return
+	}
+
+	req.RoleID = strings.TrimSpace(req.RoleID)
+	req.Name = strings.TrimSpace(req.Name)
+	if req.RoleID == "" || req.Name == "" {
+		writeJSONError(w, http.StatusBadRequest, "角色ID和角色名称不能为空")
+		return
+	}
+	if !regexp.MustCompile(`^[a-zA-Z0-9_-]{1,32}$`).MatchString(req.RoleID) {
+		writeJSONError(w, http.StatusBadRequest, "角色ID只能包含字母、数字、下划线和连字符（1-32位）")
+		return
+	}
+
+	for _, p := range req.Permissions {
+		if !isValidPermission(p) {
+			writeJSONError(w, http.StatusBadRequest, "包含未知权限: "+p)
+			return
+		}
+	}
+
+	rbacManager.Lock()
+	if _, exists := rbacManager.Roles[req.RoleID]; exists {
+		rbacManager.Unlock()
+		writeJSONError(w, http.StatusConflict, "角色ID已存在")
+		return
+	}
+	rbacManager.Roles[req.RoleID] = &Role{
+		RoleID:      req.RoleID,
+		Name:        req.Name,
+		Description: strings.TrimSpace(req.Description),
+		Permissions: []string(req.Permissions),
+		IsSystem:    false,
+		CreatedAt:   time.Now(),
+	}
+	rbacManager.Unlock()
+
+	go scheduleSaveRBAC()
+	log.Printf("创建角色成功: %s (%s)", req.Name, req.RoleID)
+
+	writeJSON(w, http.StatusOK, "角色创建成功", nil)
+}
+
+// updateRoleHandler 更新角色
+func updateRoleHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "只允许 PUT 请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	roleID := r.PathValue("role_id")
+	if roleID == "" {
+		writeJSONError(w, http.StatusBadRequest, "缺少角色ID")
+		return
+	}
+
+	body, _ := io.ReadAll(r.Body)
+	var req UpdateRoleRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		log.Printf("⚠️ 更新角色请求体解析失败 role_id=%s err=%v body=%q", roleID, err, string(body))
+		writeJSONError(w, http.StatusBadRequest, "无效的请求数据")
+		return
+	}
+
+	for _, p := range req.Permissions {
+		if !isValidPermission(p) {
+			writeJSONError(w, http.StatusBadRequest, "包含未知权限: "+p)
+			return
+		}
+	}
+
+	rbacManager.Lock()
+	role, exists := rbacManager.Roles[roleID]
+	if !exists {
+		rbacManager.Unlock()
+		writeJSONError(w, http.StatusNotFound, "角色不存在")
+		return
+	}
+
+	if strings.TrimSpace(req.Name) != "" {
+		role.Name = strings.TrimSpace(req.Name)
+	}
+	role.Description = strings.TrimSpace(req.Description)
+
+	// 内置 admin 角色强制保留全部权限，防止误操作锁死系统
+	if role.RoleID == "admin" && role.IsSystem {
+		role.Permissions = []string{"*"}
+	} else {
+		role.Permissions = []string(req.Permissions)
+	}
+	rbacManager.Unlock()
+
+	go scheduleSaveRBAC()
+	log.Printf("更新角色成功: %s", roleID)
+
+	writeJSON(w, http.StatusOK, "角色更新成功", nil)
+}
+
+// deleteRoleHandler 删除角色
+func deleteRoleHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "只允许 DELETE 请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	roleID := r.PathValue("role_id")
+	if roleID == "" {
+		writeJSONError(w, http.StatusBadRequest, "缺少角色ID")
+		return
+	}
+
+	rbacManager.Lock()
+	role, exists := rbacManager.Roles[roleID]
+	if !exists {
+		rbacManager.Unlock()
+		writeJSONError(w, http.StatusNotFound, "角色不存在")
+		return
+	}
+	if role.IsSystem {
+		rbacManager.Unlock()
+		writeJSONError(w, http.StatusForbidden, "系统内置角色不能删除")
+		return
+	}
+	delete(rbacManager.Roles, roleID)
+	rbacManager.Unlock()
+
+	// 将该角色下的用户迁移到普通用户角色
+	userManager.Lock()
+	for _, user := range userManager.UserInfos {
+		if user.RoleID == roleID {
+			user.RoleID = "user"
+		}
+	}
+	userManager.Unlock()
+
+	go scheduleSaveRBAC()
+	go scheduleSaveUsers()
+	log.Printf("删除角色成功: %s", roleID)
+
+	writeJSON(w, http.StatusOK, "角色删除成功", nil)
+}
+
+// listRbacUsersHandler 返回用户列表（含角色信息）
+func listRbacUsersHandler(w http.ResponseWriter, r *http.Request) {
+	userManager.RLock()
+	userList := make([]UserListItem, 0, len(userManager.UserInfos))
+	for _, user := range userManager.UserInfos {
+		userList = append(userList, UserListItem{
+			Username:  user.Username,
+			Email:     user.Email,
+			RoleID:    user.RoleID,
+			IsActive:  user.IsActive,
+			CreatedAt: user.CreatedAt,
+			LastLogin: user.LastLogin,
+		})
+	}
+	userManager.RUnlock()
+
+	for i := range userList {
+		userList[i].RoleName = getRoleName(userList[i].RoleID)
+		userList[i].Permissions = getUserEffectivePermissions(userList[i].Username)
+	}
+
+	sort.Slice(userList, func(i, j int) bool {
+		return userList[i].Username < userList[j].Username
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"code":    http.StatusOK,
+		"message": "获取用户列表成功",
+		"data":    userList,
+	})
+}
+
+// createRbacUserHandler 管理员创建用户
+func createRbacUserHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "只允许 POST 请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req CreateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "无效的请求数据", http.StatusBadRequest)
+		return
+	}
+
+	if err := validateRegistration(req.Username, req.Email, req.Password); err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	req.RoleID = strings.TrimSpace(req.RoleID)
+	if req.RoleID == "" {
+		req.RoleID = "user"
+	}
+
+	rbacManager.RLock()
+	_, roleExists := rbacManager.Roles[req.RoleID]
+	rbacManager.RUnlock()
+	if !roleExists {
+		writeJSONError(w, http.StatusBadRequest, "指定的角色不存在")
+		return
+	}
+
+	userManager.RLock()
+	_, userExists := userManager.UserInfos[strings.TrimSpace(req.Username)]
+	emailExists := false
+	for _, u := range userManager.UserInfos {
+		if strings.EqualFold(u.Email, strings.TrimSpace(req.Email)) {
+			emailExists = true
+			break
+		}
+	}
+	userManager.RUnlock()
+
+	if userExists {
+		writeJSONError(w, http.StatusConflict, "用户名已存在")
+		return
+	}
+	if emailExists {
+		writeJSONError(w, http.StatusConflict, "邮箱已被注册")
+		return
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("密码加密失败: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "系统错误，请稍后重试")
+		return
+	}
+
+	newUser := &Users{
+		Username:    strings.TrimSpace(req.Username),
+		Password:    string(hashedPassword),
+		Email:       strings.ToLower(strings.TrimSpace(req.Email)),
+		RoleID:      req.RoleID,
+		CreatedAt:   time.Now(),
+		LastLogin:   time.Now(),
+		IsActive:    true,
+		Permissions: nil,
+	}
+
+	userManager.Lock()
+	userManager.UserInfos[newUser.Username] = newUser
+	userManager.Unlock()
+	err = saveUsers()
+
+	if err != nil {
+		log.Printf("保存用户数据失败: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "系统错误，请稍后重试")
+		return
+	}
+
+	log.Printf("管理员创建用户成功: %s (%s)，角色: %s", newUser.Username, newUser.Email, req.RoleID)
+	writeJSON(w, http.StatusOK, "用户创建成功", nil)
+}
+
+// updateRbacUserHandler 更新用户（角色、邮箱、状态、密码）
+func updateRbacUserHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		http.Error(w, "只允许 PUT 请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	username := r.PathValue("username")
+	if username == "" {
+		writeJSONError(w, http.StatusBadRequest, "缺少用户名")
+		return
+	}
+
+	session, _ := getSessionFromRequest(r)
+
+	var req UpdateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "无效的请求数据", http.StatusBadRequest)
+		return
+	}
+
+	userManager.RLock()
+	user, exists := userManager.UserInfos[username]
+	userManager.RUnlock()
+	if !exists {
+		writeJSONError(w, http.StatusNotFound, "用户不存在")
+		return
+	}
+
+	// 校验新角色
+	if req.RoleID != "" && req.RoleID != user.RoleID {
+		rbacManager.RLock()
+		_, roleExists := rbacManager.Roles[req.RoleID]
+		rbacManager.RUnlock()
+		if !roleExists {
+			writeJSONError(w, http.StatusBadRequest, "指定的角色不存在")
+			return
+		}
+	}
+
+	// 校验邮箱
+	if req.Email != "" && strings.ToLower(strings.TrimSpace(req.Email)) != user.Email {
+		if !isValidEmail(req.Email) {
+			writeJSONError(w, http.StatusBadRequest, "请输入有效的邮箱地址")
+			return
+		}
+		userManager.RLock()
+		for _, u := range userManager.UserInfos {
+			if u.Username != username && strings.EqualFold(u.Email, strings.TrimSpace(req.Email)) {
+				userManager.RUnlock()
+				writeJSONError(w, http.StatusConflict, "邮箱已被其他用户使用")
+				return
+			}
+		}
+		userManager.RUnlock()
+	}
+
+	// 校验密码强度
+	if req.Password != "" {
+		if len(req.Password) < 8 {
+			writeJSONError(w, http.StatusBadRequest, "密码长度至少8位")
+			return
+		}
+		hasLetter, hasNumber := false, false
+		for _, ch := range req.Password {
+			if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') {
+				hasLetter = true
+			}
+			if ch >= '0' && ch <= '9' {
+				hasNumber = true
+			}
+		}
+		if !hasLetter || !hasNumber {
+			writeJSONError(w, http.StatusBadRequest, "密码必须包含字母和数字")
+			return
+		}
+	}
+
+	var hashedPassword string
+	if req.Password != "" {
+		hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "密码加密失败")
+			return
+		}
+		hashedPassword = string(hashed)
+	}
+
+	userManager.Lock()
+	if req.Email != "" {
+		user.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	}
+	if req.RoleID != "" {
+		user.RoleID = req.RoleID
+	}
+	if hashedPassword != "" {
+		user.Password = hashedPassword
+	}
+	if req.IsActive != nil {
+		// 不允许管理员禁用自己
+		if session != nil && session.Username == username && !*req.IsActive {
+			userManager.Unlock()
+			writeJSONError(w, http.StatusForbidden, "不能禁用当前登录的账号")
+			return
+		}
+		user.IsActive = *req.IsActive
+	}
+	userManager.Unlock()
+	err := saveUsers()
+
+	if err != nil {
+		log.Printf("保存用户数据失败: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "系统错误，请稍后重试")
+		return
+	}
+
+	log.Printf("更新用户成功: %s", username)
+	writeJSON(w, http.StatusOK, "用户更新成功", nil)
+}
+
+// deleteRbacUserHandler 删除用户
+func deleteRbacUserHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "只允许 DELETE 请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	username := r.PathValue("username")
+	if username == "" {
+		writeJSONError(w, http.StatusBadRequest, "缺少用户名")
+		return
+	}
+
+	session, valid := getSessionFromRequest(r)
+	if valid && session.Username == username {
+		writeJSONError(w, http.StatusForbidden, "不能删除当前登录的账号")
+		return
+	}
+	if username == "admin" {
+		writeJSONError(w, http.StatusForbidden, "不能删除内置管理员账号")
+		return
+	}
+
+	userManager.Lock()
+	if _, exists := userManager.UserInfos[username]; !exists {
+		userManager.Unlock()
+		writeJSONError(w, http.StatusNotFound, "用户不存在")
+		return
+	}
+	delete(userManager.UserInfos, username)
+	// 同时删除该用户的所有会话
+	for sessionID, session := range userManager.Sessions {
+		if session.Username == username {
+			delete(userManager.Sessions, sessionID)
+		}
+	}
+	userManager.Unlock()
+	err := saveUsers()
+
+	if err != nil {
+		log.Printf("保存用户数据失败: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "系统错误，请稍后重试")
+		return
+	}
+
+	log.Printf("删除用户成功: %s", username)
+	writeJSON(w, http.StatusOK, "用户删除成功", nil)
+}
+
+// writeJSON 统一 JSON 响应
+func writeJSON(w http.ResponseWriter, code int, message string, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"code":    code,
+		"message": message,
+		"data":    data,
+	})
+}
+
+// writeJSONError 统一 JSON 错误响应
+func writeJSONError(w http.ResponseWriter, code int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"code":    code,
+		"message": message,
+	})
+}
+
+// ==================== 文件管理功能 ====================
+
+// FileEntry 文件/目录条目
+type FileEntry struct {
+	Name    string    `json:"name"`
+	Path    string    `json:"path"`
+	IsDir   bool      `json:"is_dir"`
+	Size    int64     `json:"size"`
+	ModTime time.Time `json:"mod_time"`
+	Ext     string    `json:"ext"`
+}
+
+// listFilesHandler 列出媒体目录下的文件
+func listFilesHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "只允许GET请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	relPath := strings.Trim(r.URL.Query().Get("path"), "/")
+	fullPath := filepath.Join(mediaDir, relPath)
+
+	if !isSafeFilePath(fullPath, mediaDir) {
+		writeJSONError(w, http.StatusForbidden, "路径不合法")
+		return
+	}
+
+	entries, err := os.ReadDir(fullPath)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "读取目录失败: "+err.Error())
+		return
+	}
+
+	fileList := make([]FileEntry, 0, len(entries))
+	for _, e := range entries {
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		rel := relPath
+		if rel != "" {
+			rel += "/"
+		}
+		rel += e.Name()
+		fileList = append(fileList, FileEntry{
+			Name:    e.Name(),
+			Path:    rel,
+			IsDir:   e.IsDir(),
+			Size:    info.Size(),
+			ModTime: info.ModTime(),
+			Ext:     strings.ToLower(filepath.Ext(e.Name())),
+		})
+	}
+
+	// 目录在前，其余按名称排序
+	sort.Slice(fileList, func(i, j int) bool {
+		if fileList[i].IsDir != fileList[j].IsDir {
+			return fileList[i].IsDir
+		}
+		return fileList[i].Name < fileList[j].Name
+	})
+
+	writeJSON(w, http.StatusOK, "获取文件列表成功", map[string]interface{}{
+		"path":  relPath,
+		"files": fileList,
+	})
+}
+
+// uploadFileHandler 上传文件到指定目录
+func uploadFileHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "只允许POST请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 限制上传大小 1GB
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<30)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "解析上传数据失败: "+err.Error())
+		return
+	}
+
+	dirPath := strings.Trim(r.FormValue("path"), "/")
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "未找到上传文件")
+		return
+	}
+	defer file.Close()
+
+	filename := filepath.Base(header.Filename)
+	if filename == "" || filename == "." {
+		writeJSONError(w, http.StatusBadRequest, "文件名不合法")
+		return
+	}
+
+	// 阻止上传可在浏览器中执行的活跃内容，防止存储型XSS/钓鱼页面
+	blockedUploadExts := map[string]bool{
+		".html": true, ".htm": true, ".php": true, ".phtml": true,
+		".php3": true, ".php4": true, ".php5": true, ".phar": true,
+		".js": true, ".mjs": true, ".jsp": true, ".asp": true, ".aspx": true,
+		".sh": true, ".pl": true, ".py": true, ".rb": true,
+		".svg": true, ".xml": true, ".xhtml": true,
+	}
+	if blockedUploadExts[strings.ToLower(filepath.Ext(filename))] {
+		writeJSONError(w, http.StatusForbidden, "该文件类型禁止上传（可执行/脚本/网页文件）")
+		return
+	}
+
+	fullPath := filepath.Join(mediaDir, dirPath, filename)
+	if !isSafeFilePath(fullPath, mediaDir) {
+		writeJSONError(w, http.StatusForbidden, "路径不合法")
+		return
+	}
+
+	dst, err := os.Create(fullPath)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "创建文件失败: "+err.Error())
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "写入文件失败: "+err.Error())
+		return
+	}
+
+	log.Printf("上传文件成功: %s (%d bytes)", fullPath, header.Size)
+	writeJSON(w, http.StatusOK, "上传成功", map[string]string{"path": fullPath})
+}
+
+// MkdirRequest 新建目录请求
+type MkdirRequest struct {
+	Path string `json:"path"`
+}
+
+// mkdirFileHandler 新建目录
+func mkdirFileHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "只允许POST请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req MkdirRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "无效的请求数据", http.StatusBadRequest)
+		return
+	}
+
+	req.Path = strings.Trim(req.Path, "/")
+	if req.Path == "" {
+		writeJSONError(w, http.StatusBadRequest, "目录名不能为空")
+		return
+	}
+
+	fullPath := filepath.Join(mediaDir, req.Path)
+	if !isSafeFilePath(fullPath, mediaDir) {
+		writeJSONError(w, http.StatusForbidden, "路径不合法")
+		return
+	}
+
+	if err := os.MkdirAll(fullPath, 0755); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "创建目录失败: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, "目录创建成功", nil)
+}
+
+// deleteFileHandler 删除文件或空目录
+func deleteFileHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "只允许DELETE请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	relPath := strings.Trim(r.URL.Query().Get("path"), "/")
+	if relPath == "" {
+		writeJSONError(w, http.StatusBadRequest, "请指定要删除的文件路径")
+		return
+	}
+
+	fullPath := filepath.Join(mediaDir, relPath)
+	if !isSafeFilePath(fullPath, mediaDir) {
+		writeJSONError(w, http.StatusForbidden, "路径不合法")
+		return
+	}
+
+	info, err := os.Stat(fullPath)
+	if os.IsNotExist(err) {
+		writeJSONError(w, http.StatusNotFound, "文件不存在")
+		return
+	}
+
+	if info.IsDir() {
+		// 只允许删除空目录
+		entries, err := os.ReadDir(fullPath)
+		if err == nil && len(entries) > 0 {
+			writeJSONError(w, http.StatusBadRequest, "目录非空，不能删除")
+			return
+		}
+	}
+
+	if err := os.Remove(fullPath); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "删除失败: "+err.Error())
+		return
+	}
+
+	log.Printf("删除文件成功: %s", fullPath)
+	writeJSON(w, http.StatusOK, "删除成功", nil)
+}
+
+// ==================== 进程监控功能 ====================
+
+// ProcessInfo 进程信息
+type ProcessInfo struct {
+	User    string `json:"user"`
+	PID     string `json:"pid"`
+	CPU     string `json:"cpu"`
+	MemPct  string `json:"mem_pct"`
+	RSSMB   string `json:"rss_mb"`
+	VSZMB   string `json:"vsz_mb"`
+	Elapsed string `json:"elapsed"`
+	Command string `json:"command"`
+}
+
+// listProcessesHandler 返回按 CPU/内存排序的进程列表
+func listProcessesHandler(w http.ResponseWriter, r *http.Request) {
+	sortBy := r.URL.Query().Get("sort")
+	if sortBy != "mem" {
+		sortBy = "cpu"
+	}
+	psSort := "pcpu"
+	if sortBy == "mem" {
+		psSort = "pmem"
+	}
+	topStr := r.URL.Query().Get("top")
+	top := 50
+	if n, err := strconv.Atoi(topStr); err == nil && n > 0 && n <= 200 {
+		top = n
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 使用 ps 获取进程列表，LC_ALL=C 避免本地化输出差异
+	cmd := exec.CommandContext(ctx, "ps", "-eo", "user,pid,pcpu,pmem,rss,vsz,etime,comm,args", "--sort=-"+psSort)
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	output, err := cmd.Output()
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "获取进程列表失败: "+err.Error())
+		return
+	}
+
+	lines := strings.Split(string(output), "\n")
+	processes := make([]ProcessInfo, 0, top)
+	for i, line := range lines {
+		if i == 0 { // 跳过表头
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 8 {
+			continue
+		}
+		// 0 user 1 pid 2 pcpu 3 pmem 4 rss(KB) 5 vsz(KB) 6 etime 7 comm 8+ args
+		command := fields[7]
+		if len(fields) > 8 {
+			command = strings.Join(fields[8:], " ")
+		}
+		if command == "" {
+			command = fields[7]
+		}
+		if len(command) > 200 {
+			command = command[:200] + "..."
+		}
+		processes = append(processes, ProcessInfo{
+			User:    fields[0],
+			PID:     fields[1],
+			CPU:     fields[2],
+			MemPct:  fields[3],
+			RSSMB:   fmt.Sprintf("%.1f", parseKbToMb(fields[4])),
+			VSZMB:   fmt.Sprintf("%.1f", parseKbToMb(fields[5])),
+			Elapsed: fields[6],
+			Command: command,
+		})
+		if len(processes) >= top {
+			break
+		}
+	}
+
+	writeJSON(w, http.StatusOK, "获取进程列表成功", processes)
+}
+
+// parseKbToMb 将 KB 字符串转为 MB 数值
+func parseKbToMb(kb string) float64 {
+	v, err := strconv.ParseFloat(kb, 64)
+	if err != nil {
+		return 0
+	}
+	return v / 1024
+}
+
+// ipinfoProxyHandler 代理到 8081 端口的 ipinfo 服务，避免跨端口/跨域名在移动端不可达的问题
+func ipinfoProxyHandler(w http.ResponseWriter, r *http.Request) {
+	target := "https://127.0.0.1:8081/ipinfo"
+	// 仅透传经过校验的 ip 参数，避免向内部服务注入其他参数
+	if q := strings.TrimSpace(r.URL.Query().Get("ip")); q != "" && net.ParseIP(q) != nil {
+		target += "?ip=" + url.QueryEscape(q)
+	}
+
+	// 127.0.0.1 上证书 CN=xyx.homes 与主机名不匹配，需跳过证书校验
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	resp, err := client.Get(target)
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, "IP 数据服务暂不可用: "+err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadGateway, "读取 IP 数据失败")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(body)
+}
+
+// ==================== IP 封禁管理功能 ====================
+
+const blockedIPsFile = "/home/os/blocked_ips.json"
+
+// loadBlockedIPs 启动时加载手动封禁的 IP 列表
+func loadBlockedIPs() {
+	data, err := os.ReadFile(blockedIPsFile)
+	if os.IsNotExist(err) {
+		return
+	}
+	if err != nil {
+		log.Printf("读取封禁IP文件失败: %v", err)
+		return
+	}
+	var ips []string
+	if err := json.Unmarshal(data, &ips); err != nil {
+		log.Printf("解析封禁IP文件失败: %v", err)
+		return
+	}
+	now := time.Now()
+	antiCrawler.Lock()
+	for _, ip := range ips {
+		antiCrawler.blockedIPs[ip] = now.Add(365 * 24 * time.Hour)
+	}
+	antiCrawler.Unlock()
+	if len(ips) > 0 {
+		log.Printf("加载 %d 个手动封禁IP", len(ips))
+	}
+}
+
+// saveBlockedIPs 持久化手动封禁的 IP 列表
+func saveBlockedIPs() {
+	antiCrawler.RLock()
+	ips := make([]string, 0)
+	for ip, expiry := range antiCrawler.blockedIPs {
+		// 只持久化长期封禁（手动封禁标记为 365 天）
+		if time.Until(expiry) > 30*24*time.Hour {
+			ips = append(ips, ip)
+		}
+	}
+	antiCrawler.RUnlock()
+
+	data, err := json.Marshal(ips)
+	if err != nil {
+		return
+	}
+	if err := os.WriteFile(blockedIPsFile, data, 0600); err != nil {
+		log.Printf("保存封禁IP文件失败: %v", err)
+	}
+}
+
+// BlockIPRequest 封禁/解封请求
+type BlockIPRequest struct {
+	IP string `json:"ip"`
+}
+
+// blockIPHandler 手动封禁 IP
+func blockIPHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "只允许POST请求", http.StatusMethodNotAllowed)
+		return
+	}
+	var req BlockIPRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "无效的请求数据", http.StatusBadRequest)
+		return
+	}
+	ip := strings.TrimSpace(req.IP)
+	if net.ParseIP(ip) == nil {
+		writeJSONError(w, http.StatusBadRequest, "无效的IP地址")
+		return
+	}
+	antiCrawler.Lock()
+	antiCrawler.blockedIPs[ip] = time.Now().Add(365 * 24 * time.Hour)
+	antiCrawler.Unlock()
+	saveBlockedIPs()
+	log.Printf("手动封禁IP: %s", ip)
+	writeJSON(w, http.StatusOK, "IP 已封禁", nil)
+}
+
+// unblockIPHandler 解封 IP
+func unblockIPHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "只允许POST请求", http.StatusMethodNotAllowed)
+		return
+	}
+	var req BlockIPRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "无效的请求数据", http.StatusBadRequest)
+		return
+	}
+	ip := strings.TrimSpace(req.IP)
+	antiCrawler.Lock()
+	delete(antiCrawler.blockedIPs, ip)
+	antiCrawler.Unlock()
+	saveBlockedIPs()
+	log.Printf("解封IP: %s", ip)
+	writeJSON(w, http.StatusOK, "IP 已解封", nil)
+}
+
+// listBlockedIPsHandler 列出当前封禁的 IP
+func listBlockedIPsHandler(w http.ResponseWriter, r *http.Request) {
+	antiCrawler.RLock()
+	list := make([]map[string]interface{}, 0)
+	for ip, expiry := range antiCrawler.blockedIPs {
+		list = append(list, map[string]interface{}{
+			"ip":      ip,
+			"expires": expiry.Format("2006-01-02 15:04:05"),
+			"blocked": time.Now().Before(expiry),
+		})
+	}
+	antiCrawler.RUnlock()
+
+	sort.Slice(list, func(i, j int) bool {
+		return list[i]["ip"].(string) < list[j]["ip"].(string)
+	})
+
+	writeJSON(w, http.StatusOK, "获取封禁列表成功", list)
+}
+
+// ==================== 进程结束功能 ====================
+
+// KillProcessRequest 结束进程请求
+type KillProcessRequest struct {
+	PID int `json:"pid"`
+}
+
+// killProcessHandler 结束指定进程
+func killProcessHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "只允许POST请求", http.StatusMethodNotAllowed)
+		return
+	}
+	var req KillProcessRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "无效的请求数据", http.StatusBadRequest)
+		return
+	}
+	if req.PID <= 1 {
+		writeJSONError(w, http.StatusBadRequest, "无效的进程PID")
+		return
+	}
+	if req.PID == os.Getpid() {
+		writeJSONError(w, http.StatusBadRequest, "不能结束服务器自身进程")
+		return
+	}
+	// 检查进程是否存在（signal 0 仅探测）
+	proc, err := os.FindProcess(req.PID)
+	if err != nil {
+		writeJSONError(w, http.StatusNotFound, "进程不存在")
+		return
+	}
+	if err := proc.Signal(syscall.Signal(0)); err != nil {
+		writeJSONError(w, http.StatusNotFound, "进程不存在或无权操作")
+		return
+	}
+	if err := proc.Signal(syscall.SIGTERM); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "结束进程失败: "+err.Error())
+		return
+	}
+	log.Printf("已发送终止信号给进程 %d", req.PID)
+	writeJSON(w, http.StatusOK, "已发送终止信号", nil)
 }
 
 type LoginRequest struct {
@@ -95,7 +1582,7 @@ type UserManager struct {
 	Sessions  map[string]*Session `json:"sessions"`
 }
 
-// 新增：下载令牌结构体
+// 下载令牌结构体
 type DownloadToken struct {
 	TokenID     string    `json:"token_id"`
 	Token       string    `json:"token"`
@@ -119,6 +1606,9 @@ type DownloadTokenManager struct {
 // 生成下载令牌请求
 type GenerateDownloadTokenRequest struct {
 	Description string `json:"description"` // 可选：令牌描述
+	Username    string `json:"username"`    // 可选：签发给指定用户（管理员签发时使用）
+	ExpiresIn   int64  `json:"expires_in"`  // 可选：有效期（分钟），0 表示使用默认值 30 分钟
+	MaxBytes    int64  `json:"max_bytes"`   // 可选：流量上限（字节），0 表示使用默认值 3GB
 }
 
 // 下载令牌响应
@@ -182,12 +1672,11 @@ type ServerStatus struct {
 	OnlineCount   int              `json:"online_count"`
 	UniqueIPs     []string         `json:"unique_ips"`
 	OnlineUsers   []OnlineUserInfo `json:"online_users"`
-	// 新增主机信息字段
-	Hostname      string `json:"hostname"`
-	OS            string `json:"os"`
-	Platform      string `json:"platform"`
-	KernelVersion string `json:"kernel_version"`
-	Architecture  string `json:"architecture"`
+	Hostname      string           `json:"hostname"`
+	OS            string           `json:"os"`
+	Platform      string           `json:"platform"`
+	KernelVersion string           `json:"kernel_version"`
+	Architecture  string           `json:"architecture"`
 }
 
 // OnlineUserInfo 用于WebSocket传输的在线用户信息结构
@@ -211,12 +1700,13 @@ type AccessStatsSnapshot struct {
 	WeeklyVisits map[string]int `json:"weekly_visits"`
 }
 
-// OnlineUser 在线用户结构体
+// OnlineUser 在线用户结构体，增加了 ConnCount 防止多标签页假性下线
 type OnlineUser struct {
 	IP        string    `json:"ip"`
 	UserAgent string    `json:"user_agent"`
 	Since     time.Time `json:"since"`
 	Page      string    `json:"page"`
+	ConnCount int       `json:"-"` // WebSocket 连接计数器
 }
 
 type OnlineUsers struct {
@@ -260,12 +1750,18 @@ var (
 			return checkOrigin(r) && verifySecurityHeaders(r)
 		},
 	}
-	// 移除全局startTime，使用持久化的启动时间
+
+	// 优化：引入服务器状态读写锁和缓存，解决高并发性能瓶颈和 Data Race
+	serverStatsMutex sync.RWMutex
+	statusCache      = make(map[string]*ServerStatus)
+	statusCacheTime  = make(map[string]time.Time)
+
 	lastNetStats       = map[string]NetStat{}
 	lastDiskStats      = map[string]DiskStat{}
 	totalUploadAccum   uint64
 	totalDownloadAccum uint64
-	accessStats        = &AccessStats{
+
+	accessStats = &AccessStats{
 		DailyVisits:    make(map[string]int),
 		WeeklyVisits:   make(map[string]int),
 		UniqueVisitors: make(map[string]map[string]bool),
@@ -288,15 +1784,16 @@ var (
 		Sessions:  make(map[string]*Session),
 	}
 
-	// 新增：下载令牌管理器
+	// 下载令牌管理器
 	downloadTokenManager = &DownloadTokenManager{
 		Tokens: make(map[string]*DownloadToken),
 	}
 
-	//返回随机视频照片
-	num   = 0
-	key   = 0
-	files []string
+	// 优化：为媒体生成逻辑引入互斥锁，避免并发修改切片导致的崩溃
+	mediaMutex sync.Mutex
+	num        = 0
+	key        = 0
+	files      []string
 
 	// 主机信息缓存
 	hostInfo      *host.InfoStat
@@ -309,6 +1806,13 @@ var (
 	// 保存队列，避免并发保存导致的死锁
 	downloadTokenSaveChan = make(chan struct{}, 1)
 	userSaveChan          = make(chan struct{}, 1)
+
+	// RBAC 角色权限管理器
+	rbacManager = &RBACManager{
+		Roles: make(map[string]*Role),
+	}
+	rbacSaveChan = make(chan struct{}, 1)
+	rbacFile     = "/home/os/rbac.json"
 )
 
 type NetStat struct {
@@ -337,6 +1841,7 @@ type byteCounter struct {
 	total *int64
 }
 
+// Write 字节计数器写入方法，用于统计下载流量
 func (bc *byteCounter) Write(p []byte) (int, error) {
 	*bc.total += int64(len(p))
 	return len(p), nil
@@ -344,7 +1849,7 @@ func (bc *byteCounter) Write(p []byte) (int, error) {
 
 // ==================== 下载令牌功能 ====================
 
-// 生成随机字符串
+// generateRandomString 生成指定长度的随机字符串，采用高强度密码学随机生成器
 func generateRandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, length)
@@ -355,7 +1860,7 @@ func generateRandomString(length int) string {
 	return string(b)
 }
 
-// 加密下载令牌
+// encryptDownloadToken 将下载令牌数据通过 AES-GCM 加密，确保令牌安全不可篡改
 func encryptDownloadToken(token string, downloadToken *DownloadToken) (string, error) {
 	data := fmt.Sprintf("%s|%s|%s|%d", token, downloadToken.TokenID, downloadToken.Username, downloadToken.CreatedAt.Unix())
 
@@ -379,20 +1884,20 @@ func encryptDownloadToken(token string, downloadToken *DownloadToken) (string, e
 	return hex.EncodeToString(ciphertext), nil
 }
 
-// 验证下载令牌
+// verifyDownloadToken 验证下载令牌合法性
 func verifyDownloadToken(token string, downloadToken *DownloadToken) bool {
 	// 简化实现：在实际生产环境中应该使用完整的加密验证
 	// 这里为了简化，我们假设令牌是有效的
 	return true
 }
 
-// 生成下载令牌
-func generateDownloadToken(username string, r *http.Request, description string) (*DownloadTokenResponse, error) {
+// generateDownloadToken 生成新的下载令牌授权票据
+func generateDownloadToken(username string, r *http.Request, description string, expiresIn time.Duration, maxBytes int64) (*DownloadTokenResponse, error) {
 	tokenID := generateRandomString(16)
 	token := generateRandomString(32)
 
 	now := time.Now()
-	expiresAt := now.Add(downloadTokenExpiry)
+	expiresAt := now.Add(expiresIn)
 
 	downloadToken := &DownloadToken{
 		TokenID:     tokenID,
@@ -401,7 +1906,7 @@ func generateDownloadToken(username string, r *http.Request, description string)
 		CreatedAt:   now,
 		ExpiresAt:   expiresAt,
 		UsedBytes:   0,
-		MaxBytes:    downloadLimitBytes,
+		MaxBytes:    maxBytes,
 		IsActive:    true,
 		IP:          getClientIP(r),
 		UserAgent:   r.UserAgent(),
@@ -420,16 +1925,15 @@ func generateDownloadToken(username string, r *http.Request, description string)
 		TokenID:   tokenID,
 		Token:     token,
 		ExpiresAt: expiresAt.Format("2006-01-02 15:04:05"),
-		MaxBytes:  downloadLimitBytes,
+		MaxBytes:  maxBytes,
 		UsedBytes: 0,
 	}, nil
 }
 
-// 验证下载令牌
+// validateDownloadToken 验证下载令牌的可用性与额度状态
 func validateDownloadToken(tokenID, token string, r *http.Request) (*DownloadToken, error) {
 	downloadTokenManager.RLock()
 	downloadToken, exists := downloadTokenManager.Tokens[tokenID]
-	//log.Println("验证token",downloadTokenManager.Tokens)
 	downloadTokenManager.RUnlock()
 
 	if !exists {
@@ -466,7 +1970,7 @@ func validateDownloadToken(tokenID, token string, r *http.Request) (*DownloadTok
 	return downloadToken, nil
 }
 
-// 更新令牌使用量
+// updateTokenUsage 实时累加更新当前令牌的已使用流量
 func updateTokenUsage(tokenID string, bytes int64) {
 	downloadTokenManager.Lock()
 	if token, exists := downloadTokenManager.Tokens[tokenID]; exists {
@@ -482,7 +1986,7 @@ func updateTokenUsage(tokenID string, bytes int64) {
 	go scheduleSaveDownloadTokens()
 }
 
-// 清理过期下载令牌
+// cleanupExpiredDownloadTokens 周期性清理系统中已经过期的历史下载令牌
 func cleanupExpiredDownloadTokens() {
 	downloadTokenManager.Lock()
 
@@ -509,16 +2013,16 @@ func cleanupExpiredDownloadTokens() {
 	}
 }
 
-// 保存下载令牌到文件
+// saveDownloadTokens 将系统中的下载令牌安全加密序列化后写入文件系统
 func saveDownloadTokens() error {
 	// 先复制数据，尽快释放锁
 	downloadTokenManager.RLock()
 	data, err := json.Marshal(downloadTokenManager)
+	downloadTokenManager.RUnlock()
+
 	if err != nil {
-		downloadTokenManager.RUnlock()
 		return fmt.Errorf("序列化下载令牌数据失败: %v", err)
 	}
-	downloadTokenManager.RUnlock()
 
 	encryptedData, err := encryptData(data)
 	if err != nil {
@@ -564,7 +2068,7 @@ func saveDownloadTokens() error {
 	return nil
 }
 
-// 加载下载令牌
+// loadDownloadTokens 服务启动时从加密存储载入全部历史下载令牌
 func loadDownloadTokens() {
 	if _, err := os.Stat(downloadTokensFile); os.IsNotExist(err) {
 		log.Println("下载令牌文件不存在，将创建新文件")
@@ -601,7 +2105,7 @@ func loadDownloadTokens() {
 	log.Printf("✅ 下载令牌数据加载完成，共 %d 个令牌", len(downloadTokenManager.Tokens))
 }
 
-// 初始化下载令牌管理器
+// initDownloadTokenManager 初始化下载令牌生命周期管控机制（包含定时清理功能）
 func initDownloadTokenManager() {
 	loadDownloadTokens()
 
@@ -615,16 +2119,15 @@ func initDownloadTokenManager() {
 	}()
 }
 
-// 安全检查文件路径
+// isSafeFilePath 进行路径安全鉴定，防范目录穿越(Directory Traversal)风险
 func isSafeFilePath(filePath, baseDir string) bool {
-	// 解析文件路径
-	absPath, err := filepath.Abs(filePath)
+	// 优化：采用 filepath.Clean 全面清除潜在的穿越符号
+	absPath, err := filepath.Abs(filepath.Clean(filePath))
 	if err != nil {
 		return false
 	}
 
-	// 解析基础目录
-	absBase, err := filepath.Abs(baseDir)
+	absBase, err := filepath.Abs(filepath.Clean(baseDir))
 	if err != nil {
 		return false
 	}
@@ -645,7 +2148,7 @@ func isSafeFilePath(filePath, baseDir string) bool {
 
 // ==================== 下载相关HTTP处理函数 ====================
 
-// 生成下载令牌接口
+// generateDownloadTokenHandler HTTP 端点：响应并下发一个新的下载授权令牌
 func generateDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "只允许POST请求", http.StatusMethodNotAllowed)
@@ -669,7 +2172,47 @@ func generateDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenResponse, err := generateDownloadToken(session.Username, r, req.Description)
+	// 默认签发给当前登录用户；管理员可指定签发给其他用户
+	targetUsername := session.Username
+	if req.Username != "" && req.Username != session.Username {
+		userManager.RLock()
+		targetUser, exists := userManager.UserInfos[req.Username]
+		userManager.RUnlock()
+		if !exists {
+			writeJSONError(w, http.StatusBadRequest, "指定的用户不存在")
+			return
+		}
+		if !targetUser.IsActive {
+			writeJSONError(w, http.StatusBadRequest, "指定的用户已被禁用")
+			return
+		}
+		targetUsername = targetUser.Username
+	}
+
+	// 有效期：默认 30 分钟，最长 30 天
+	expiresIn := downloadTokenExpiry
+	if req.ExpiresIn > 0 {
+		maxMinutes := int64((30 * 24 * time.Hour) / time.Minute)
+		if req.ExpiresIn > maxMinutes {
+			writeJSONError(w, http.StatusBadRequest, "有效期不能超过30天")
+			return
+		}
+		expiresIn = time.Duration(req.ExpiresIn) * time.Minute
+	}
+
+	// 流量上限：默认 3GB，允许 1MB ~ 100GB
+	maxBytes := int64(downloadLimitBytes)
+	if req.MaxBytes > 0 {
+		const minLimit = int64(1) * 1024 * 1024
+		const maxLimit = int64(100) * 1024 * 1024 * 1024
+		if req.MaxBytes < minLimit || req.MaxBytes > maxLimit {
+			writeJSONError(w, http.StatusBadRequest, "流量上限需在1MB~100GB之间")
+			return
+		}
+		maxBytes = req.MaxBytes
+	}
+
+	tokenResponse, err := generateDownloadToken(targetUsername, r, req.Description, expiresIn, maxBytes)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -688,7 +2231,7 @@ func generateDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// 安全下载接口
+// secureDownloadHandler HTTP 端点：接收并验证令牌，建立文件安全下发通道
 func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "只允许GET请求", http.StatusMethodNotAllowed)
@@ -722,12 +2265,22 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// RBAC 授权校验：令牌所属账号必须仍拥有文件下载权限
+	if !hasPermission(downloadToken.Username, "files:download") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"code":    http.StatusForbidden,
+			"message": "该账号没有文件下载权限，请联系管理员授权",
+		})
+		return
+	}
+
 	// 处理文件路径：提取相对路径部分
 	var relativePath string
 
 	// 检查是否是完整的URL
 	if strings.HasPrefix(filePath, "http://") || strings.HasPrefix(filePath, "https://") {
-		// 解析URL
 		parsedURL, err := url.Parse(filePath)
 		if err != nil {
 			w.Header().Set("Content-Type", "application/json")
@@ -738,20 +2291,14 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-
-		// 提取路径部分并移除/static/前缀
 		path := parsedURL.Path
 		if strings.HasPrefix(path, "/static/") {
 			relativePath = strings.TrimPrefix(path, "/static/")
 		} else {
-			// 如果不是以/static/开头，使用整个路径（去掉开头的/）
 			relativePath = strings.TrimPrefix(path, "/")
 		}
 	} else {
-		// 如果不是完整URL，直接处理路径
-		// 移除可能的/static/前缀
 		relativePath = strings.TrimPrefix(filePath, "/static/")
-		// 如果还有开头的/，也移除
 		relativePath = strings.TrimPrefix(relativePath, "/")
 	}
 
@@ -804,8 +2351,9 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 设置下载头
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filepath.Base(fullPath)))
+	// 设置下载头（清洗文件名，防止响应头注入）
+	dlFilename := strings.NewReplacer("\"", "", "\r", "", "\n", "").Replace(filepath.Base(fullPath))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", dlFilename))
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", fileInfo.Size()))
 
@@ -843,7 +2391,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("✅ 用户 %s 下载文件 %s, 大小: %d bytes", downloadToken.Username, relativePath, bytesDownloaded)
 }
 
-// 获取用户下载令牌列表
+// listDownloadTokensHandler HTTP 端点：向用户返回其名下已创建的所有下载令牌
 func listDownloadTokensHandler(w http.ResponseWriter, r *http.Request) {
 	session, valid := getSessionFromRequest(r)
 	if !valid {
@@ -859,9 +2407,11 @@ func listDownloadTokensHandler(w http.ResponseWriter, r *http.Request) {
 	downloadTokenManager.RLock()
 	defer downloadTokenManager.RUnlock()
 
+	// 管理员可查看全部令牌，普通用户仅查看自己名下的令牌
+	canManageAll := hasPermission(session.Username, "token:issue")
 	userTokens := make([]*DownloadToken, 0)
 	for _, token := range downloadTokenManager.Tokens {
-		if token.Username == session.Username {
+		if canManageAll || token.Username == session.Username {
 			userTokens = append(userTokens, token)
 		}
 	}
@@ -874,7 +2424,7 @@ func listDownloadTokensHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// 撤销下载令牌
+// revokeDownloadTokenHandler HTTP 端点：接受用户指令主动撤销并吊销指定的令牌
 func revokeDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "只允许POST请求", http.StatusMethodNotAllowed)
@@ -917,7 +2467,7 @@ func revokeDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if token.Username != session.Username {
+	if !hasPermission(session.Username, "token:issue") && token.Username != session.Username {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -939,7 +2489,7 @@ func revokeDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 // ==================== 用户身份验证功能 ====================
 
-// 加密数据
+// encryptData 运用 AES-GCM 对称加密算法加密核心持久化数据
 func encryptData(data []byte) ([]byte, error) {
 	key := sha256.Sum256([]byte(encryptionKey))
 	block, err := aes.NewCipher(key[:])
@@ -961,7 +2511,7 @@ func encryptData(data []byte) ([]byte, error) {
 	return ciphertext, nil
 }
 
-// 解密数据
+// decryptData 负责对持久化系统读取出的加密块进行解密还原
 func decryptData(ciphertext []byte) ([]byte, error) {
 	key := sha256.Sum256([]byte(encryptionKey))
 	block, err := aes.NewCipher(key[:])
@@ -988,7 +2538,7 @@ func decryptData(ciphertext []byte) ([]byte, error) {
 	return plaintext, nil
 }
 
-// 加载用户数据
+// loadUsers 启动时解析并挂载全量系统账户与权限档案
 func loadUsers() {
 	// 确保目录存在
 	dir := filepath.Dir(usersFile)
@@ -1031,10 +2581,26 @@ func loadUsers() {
 		return
 	}
 
+	// 迁移旧版数据：为没有角色ID的账号补齐默认角色
+	migrated := false
+	for _, u := range userManager.UserInfos {
+		if u.RoleID == "" {
+			if u.Username == "admin" {
+				u.RoleID = "admin"
+			} else {
+				u.RoleID = "user"
+			}
+			migrated = true
+		}
+	}
+	if migrated {
+		go scheduleSaveUsers()
+	}
+
 	log.Printf("✅ 用户数据加载完成，共 %d 个用户", len(userManager.UserInfos))
 }
 
-// 保存用户数据
+// saveUsers 将驻留内存的用户数据经过原子操作与加密机制写入本地文件
 func saveUsers() error {
 	// 先复制数据，尽快释放锁
 	userManager.RLock()
@@ -1089,14 +2655,14 @@ func saveUsers() error {
 	return nil
 }
 
-// 创建默认管理员用户
+// createDefaultAdmin 当检测无用户档案存在时自动初始化最高权限管理员
 func createDefaultAdmin() {
 	userManager.Lock()
-	defer userManager.Unlock()
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("创建默认管理员用户时加密密码失败: %v", err)
+		userManager.Unlock()
 		return
 	}
 
@@ -1104,11 +2670,13 @@ func createDefaultAdmin() {
 		Username:    "admin",
 		Password:    string(hashedPassword),
 		Email:       "admin@example.com",
+		RoleID:      "admin",
 		CreatedAt:   time.Now(),
 		LastLogin:   time.Now(),
 		IsActive:    true,
 		Permissions: []string{"admin", "read", "write", "execute"},
 	}
+	userManager.Unlock()
 
 	if err := saveUsers(); err != nil {
 		log.Printf("保存默认管理员用户失败: %v", err)
@@ -1117,14 +2685,14 @@ func createDefaultAdmin() {
 	}
 }
 
-// 生成会话ID
+// generateSessionID 构造高度分散不可预测的全局唯一会话标示
 func generateSessionID() string {
 	b := make([]byte, 32)
 	rand2.Read(b)
 	return hex.EncodeToString(b)
 }
 
-// 验证会话
+// validateSession 匹配会话状态及刷新访问热度与时效生命周期
 func validateSession(sessionID string) (*Session, bool) {
 	userManager.RLock()
 	defer userManager.RUnlock()
@@ -1147,7 +2715,7 @@ func validateSession(sessionID string) (*Session, bool) {
 	return session, true
 }
 
-// 创建会话
+// createSession 签发一个具备防篡改特性的新会话并挂载至活跃序列
 func createSession(username string, r *http.Request) string {
 	sessionID := generateSessionID()
 	now := time.Now()
@@ -1175,7 +2743,7 @@ func createSession(username string, r *http.Request) string {
 	return sessionID
 }
 
-// 删除会话
+// deleteSession 强行销毁一个处于活动范围内的指定会话令牌
 func deleteSession(sessionID string) {
 	userManager.Lock()
 	defer userManager.Unlock()
@@ -1184,10 +2752,61 @@ func deleteSession(sessionID string) {
 	go scheduleSaveUsers()
 }
 
-// 登录处理
+// loginGuard 登录/注册频控：同一IP失败次数过多时临时拒绝，防暴力破解
+type loginGuard struct {
+	sync.Mutex
+	failures map[string][]time.Time
+}
+
+var loginLimiter = &loginGuard{failures: make(map[string][]time.Time)}
+
+const (
+	loginMaxFailures = 10
+	loginFailWindow  = 15 * time.Minute
+)
+
+// allowed 检查指定 key（IP 或 reg:IP）是否仍允许继续尝试
+func (g *loginGuard) allowed(key string) bool {
+	g.Lock()
+	defer g.Unlock()
+	now := time.Now()
+	valid := g.failures[key][:0]
+	for _, t := range g.failures[key] {
+		if now.Sub(t) <= loginFailWindow {
+			valid = append(valid, t)
+		}
+	}
+	g.failures[key] = valid
+	return len(valid) < loginMaxFailures
+}
+
+func (g *loginGuard) fail(key string) {
+	g.Lock()
+	defer g.Unlock()
+	g.failures[key] = append(g.failures[key], time.Now())
+}
+
+func (g *loginGuard) reset(key string) {
+	g.Lock()
+	defer g.Unlock()
+	delete(g.failures, key)
+}
+
+// loginHandler HTTP 端点：响应前端登录凭据并赋予访问 Token Cookie
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "只允许POST请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	clientIP := getClientIP(r)
+	if !loginLimiter.allowed(clientIP) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"code":    http.StatusTooManyRequests,
+			"message": "登录尝试过于频繁，请15分钟后再试",
+		})
 		return
 	}
 
@@ -1202,14 +2821,17 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	userManager.RUnlock()
 
 	if !exists || !user.IsActive {
+		loginLimiter.fail(clientIP)
 		http.Error(w, "用户名或密码错误", http.StatusUnauthorized)
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		loginLimiter.fail(clientIP)
 		http.Error(w, "用户名或密码错误", http.StatusUnauthorized)
 		return
 	}
+	loginLimiter.reset(clientIP)
 
 	// 创建会话
 	sessionID := createSession(req.Username, r)
@@ -1223,7 +2845,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		Secure:   true,                 // 仅在HTTPS下传输
 		SameSite: http.SameSiteLaxMode, // 或者 http.SameSiteNoneMode
 		Path:     "/",
-		Domain:   ".wustwu.cn", // 关键：添加顶级域名，注意前面的点
+		Domain:   ".xyx.homes", // 关键：添加顶级域名，注意前面的点
 	})
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1233,12 +2855,14 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		"user": map[string]interface{}{
 			"username":    user.Username,
 			"email":       user.Email,
-			"permissions": user.Permissions,
+			"role_id":     user.RoleID,
+			"role":        getRoleName(user.RoleID),
+			"permissions": getUserEffectivePermissions(user.Username),
 		},
 	})
 }
 
-// 登出处理
+// logoutHandler HTTP 端点：移除浏览器持有凭证，清退登录状态
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session_id")
 	if err == nil {
@@ -1263,7 +2887,7 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// 检查登录状态
+// checkAuthHandler HTTP 端点：供前端无感知校验本地缓存会话是否依旧合法有效
 func checkAuthHandler(w http.ResponseWriter, r *http.Request) {
 	session, valid := getSessionFromRequest(r)
 	if !valid {
@@ -1297,13 +2921,15 @@ func checkAuthHandler(w http.ResponseWriter, r *http.Request) {
 		"user": map[string]interface{}{
 			"username":    user.Username,
 			"email":       user.Email,
-			"permissions": user.Permissions,
+			"role_id":     user.RoleID,
+			"role":        getRoleName(user.RoleID),
+			"permissions": getUserEffectivePermissions(user.Username),
 			"last_login":  user.LastLogin.Format("2006-01-02 15:04:05"),
 		},
 	})
 }
 
-// 从请求中获取会话
+// getSessionFromRequest 提取位于请求头或 Cookie 区块内承载的令牌标识
 func getSessionFromRequest(r *http.Request) (*Session, bool) {
 	// 首先尝试从Cookie获取
 	cookie, err := r.Cookie("session_id")
@@ -1323,7 +2949,7 @@ func getSessionFromRequest(r *http.Request) (*Session, bool) {
 	return nil, false
 }
 
-// 认证中间件
+// authMiddleware 全局会话认证拦截中间件，提供接口级别越权防卫体系
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 允许登录和检查认证状态的请求通过
@@ -1351,17 +2977,27 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 // ==================== 注册功能 ====================
 
-// 注册请求结构体
+// RegisterRequest 定义注册接口期望的请求体结构
 type RegisterRequest struct {
 	Username string `json:"username"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-// 注册处理函数
+// registerHandler HTTP 端点：容纳用户提供的新参数并构建新的身份关联
 func registerHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "只允许POST请求", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !loginLimiter.allowed("reg:" + getClientIP(r)) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"code":    http.StatusTooManyRequests,
+			"message": "注册过于频繁，请稍后再试",
+		})
 		return
 	}
 
@@ -1426,17 +3062,18 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		Username:    strings.TrimSpace(req.Username),
 		Password:    string(hashedPassword),
 		Email:       strings.ToLower(strings.TrimSpace(req.Email)),
+		RoleID:      "user",
 		CreatedAt:   time.Now(),
 		LastLogin:   time.Now(),
 		IsActive:    true,
-		Permissions: []string{"read"}, // 默认权限
+		Permissions: nil,
 	}
 
 	// 保存用户
 	userManager.Lock()
 	userManager.UserInfos[newUser.Username] = newUser
-	err = saveUsers()
 	userManager.Unlock()
+	err = saveUsers()
 
 	if err != nil {
 		log.Printf("保存用户数据失败: %v", err)
@@ -1472,12 +3109,14 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		"user": map[string]interface{}{
 			"username":    newUser.Username,
 			"email":       newUser.Email,
-			"permissions": newUser.Permissions,
+			"role_id":     newUser.RoleID,
+			"role":        getRoleName(newUser.RoleID),
+			"permissions": getUserEffectivePermissions(newUser.Username),
 		},
 	})
 }
 
-// 验证注册信息
+// validateRegistration 核准新用户配置密码规范并检验长度规则
 func validateRegistration(username, email, password string) error {
 	// 验证用户名
 	username = strings.TrimSpace(username)
@@ -1519,13 +3158,13 @@ func validateRegistration(username, email, password string) error {
 	return nil
 }
 
-// 验证邮箱格式
+// isValidEmail 借助正则匹配评估给定字符流是否符合电邮标准规范
 func isValidEmail(email string) bool {
 	emailRegex := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 	return regexp.MustCompile(emailRegex).MatchString(email)
 }
 
-// 检查邮箱是否已存在
+// isEmailExists 防止同一电子邮箱恶意套现及重复登记
 func isEmailExists(email string) bool {
 	userManager.RLock()
 	defer userManager.RUnlock()
@@ -1541,7 +3180,7 @@ func isEmailExists(email string) bool {
 
 // ==================== 反爬核心功能 ====================
 
-// 生成客户端指纹
+// generateClientFingerprint 依据浏览器的环境特征进行散列求值获取独立软体指纹
 func generateClientFingerprint(r *http.Request) string {
 	ip := getClientIP(r)
 	userAgent := r.Header.Get("User-Agent")
@@ -1554,7 +3193,7 @@ func generateClientFingerprint(r *http.Request) string {
 	return hex.EncodeToString(hash[:16])
 }
 
-// 验证请求签名
+// verifyRequestSignature 防护跨站及非授信调用，验证通讯参数的 HMAC 正确度
 func verifyRequestSignature(r *http.Request) bool {
 	timestamp := r.Header.Get("X-Timestamp")
 	nonce := r.Header.Get("X-Nonce")
@@ -1582,14 +3221,14 @@ func verifyRequestSignature(r *http.Request) bool {
 	return hmac.Equal([]byte(signature), []byte(expectedSignature))
 }
 
-// 生成HMAC签名
+// generateHMACSignature 采用 SHA256 对参数块混淆产生一致性强检验体
 func generateHMACSignature(data string) string {
 	h := hmac.New(sha256.New, []byte(securityToken))
 	h.Write([]byte(data))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// 检查User-Agent
+// checkUserAgent 检测浏览器标识符以驳回显眼的恶意探查器与爬虫
 func checkUserAgent(r *http.Request) bool {
 	userAgent := strings.ToLower(r.Header.Get("User-Agent"))
 
@@ -1620,7 +3259,7 @@ func checkUserAgent(r *http.Request) bool {
 	return true
 }
 
-// 检查必要的请求头
+// checkRequiredHeaders 过滤残缺或非标准的 HTTP 操作头组合
 func checkRequiredHeaders(r *http.Request) bool {
 	userAgent := r.Header.Get("User-Agent")
 	accept := r.Header.Get("Accept")
@@ -1632,16 +3271,16 @@ func checkRequiredHeaders(r *http.Request) bool {
 	return true
 }
 
-// 检查IP是否被封锁
+// isIPBlocked 判断指定客户端是否受制于防火墙主动断流策略
 func isIPBlocked(ip string) bool {
 	antiCrawler.RLock()
 	defer antiCrawler.RUnlock()
 
 	if blockTime, exists := antiCrawler.blockedIPs[ip]; exists {
-		if time.Since(blockTime) < time.Hour {
+		if time.Now().Before(blockTime) {
 			return true
 		}
-		// 超过1小时，解除封锁
+		// 已过期，解除封锁
 		antiCrawler.RUnlock()
 		antiCrawler.Lock()
 		delete(antiCrawler.blockedIPs, ip)
@@ -1651,7 +3290,7 @@ func isIPBlocked(ip string) bool {
 	return false
 }
 
-// 检测代理
+// detectProxy 从报文中寻找跳板、CDN以及透传网络的代理暴露项
 func detectProxy(r *http.Request) bool {
 	// 检查代理相关头部
 	for _, header := range proxyHeaders {
@@ -1660,16 +3299,10 @@ func detectProxy(r *http.Request) bool {
 		}
 	}
 
-	// 检查IP是否为已知代理范围
-	ip := getClientIP(r)
-	if isKnownProxyIP(ip) {
-		return true
-	}
-
 	return false
 }
 
-// 已知代理IP检测（简化版）
+// isKnownProxyIP 判断流量网关是否由特殊集群及专用私有云转入
 func isKnownProxyIP(ip string) bool {
 	// 这里可以集成IP数据库或已知代理IP列表
 	// 简化实现：检查是否为内网IP或已知代理范围
@@ -1688,7 +3321,7 @@ func isKnownProxyIP(ip string) bool {
 	return false
 }
 
-// 行为分析
+// analyzeBehavior 统计高频访问的规律并针对性开展反机器人分析
 func analyzeBehavior(r *http.Request, fingerprint string) bool {
 	antiCrawler.Lock()
 	defer antiCrawler.Unlock()
@@ -1710,7 +3343,7 @@ func analyzeBehavior(r *http.Request, fingerprint string) bool {
 
 	// 检查请求频率（5分钟内超过100次请求视为异常）
 	if len(validRequests) > 100 {
-		antiCrawler.blockedIPs[ip] = now
+		antiCrawler.blockedIPs[ip] = now.Add(time.Hour)
 		log.Printf("🚫 IP %s 因高频请求被封锁", ip)
 		return false
 	}
@@ -1733,7 +3366,7 @@ func analyzeBehavior(r *http.Request, fingerprint string) bool {
 
 		if profile.Score > 50 {
 			profile.Blocked = true
-			antiCrawler.blockedIPs[ip] = now
+			antiCrawler.blockedIPs[ip] = now.Add(time.Hour)
 			log.Printf("🚫 客户端 %s 因行为异常被封锁，评分: %d", fingerprint, profile.Score)
 			return false
 		}
@@ -1754,7 +3387,7 @@ func analyzeBehavior(r *http.Request, fingerprint string) bool {
 	return true
 }
 
-// 安全头部验证
+// verifySecurityHeaders 全面贯通并拦截违背安全通讯条例的入站调用
 func verifySecurityHeaders(r *http.Request) bool {
 	// 允许登录相关请求通过
 	if r.URL.Path == "/login" || r.URL.Path == "/check-auth" || r.URL.Path == "/logout" {
@@ -1785,6 +3418,7 @@ func verifySecurityHeaders(r *http.Request) bool {
 
 	// 5. 行为分析
 	if !analyzeBehavior(r, fingerprint) {
+		log.Printf("🚫 行为异常: %s", ip)
 		return false
 	}
 
@@ -1803,32 +3437,45 @@ func verifySecurityHeaders(r *http.Request) bool {
 	return true
 }
 
-// 跨域检查
+// checkOrigin 抵御跨站伪造访问请求(CORS/CSRF)校验 Host 与 Origin
 func checkOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
 	if origin == "" {
 		return true // 允许没有Origin头的请求（可能是同源请求）
 	}
 
-	// 允许的域名列表
-	allowedDomains := []string{
-		"https://wustwu.cn",
-		"https://www.wustwu.cn",
-		"http://localhost:9000",
-		"http://127.0.0.1:9000",
-	}
-
-	for _, domain := range allowedDomains {
-		if strings.HasPrefix(origin, domain) {
-			return true
-		}
+	if isAllowedOrigin(origin) {
+		return true
 	}
 
 	log.Printf("🚫 阻止跨域请求: %s from %s", origin, getClientIP(r))
 	return false
 }
 
-// 安全中间件
+// allowedOrigins 跨域白名单（精确匹配，防止 xyx.homes.evil.com 之类的前缀绕过）
+var allowedOrigins = []string{
+	"https://xyx.homes",
+	"https://www.xyx.homes",
+	"https://xyx.homes:9000",
+	"https://xyx.homes:8081",
+	"http://xyx.homes:8081",
+	"https://192.168.5.14:9000",
+	"http://192.168.5.14:9000",
+	"http://localhost:9000",
+	"http://127.0.0.1:9000",
+}
+
+// isAllowedOrigin 精确校验 Origin 是否在白名单内
+func isAllowedOrigin(origin string) bool {
+	for _, domain := range allowedOrigins {
+		if origin == domain {
+			return true
+		}
+	}
+	return false
+}
+
+// securityMiddleware 配置全链路安全防护 Header 响应策略拦截
 func securityMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 安全验证
@@ -1847,6 +3494,8 @@ func securityMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("X-Permitted-Cross-Domain-Policies", "none")
 
 		next.ServeHTTP(w, r)
 	}
@@ -1854,24 +3503,7 @@ func securityMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 // ==================== 保存队列管理 ====================
 
-/*
-downloadTokenSaveChan 是一个带缓冲的通道，通常大小为 1
-
-向通道发送值相当于获取"锁"
-
-如果通道已满，说明有任务正在运行
-
-保存完后释放锁
-调用1: scheduleSaveDownloadTokens() → 启动保存任务
-调用2: scheduleSaveDownloadTokens() → 通道已满，跳过
-调用3: scheduleSaveDownloadTokens() → 通道已满，跳过
-    ↓
-保存任务完成 → 通道变空
-    ↓
-后续调用可以重新启动保存任务
-*/
-
-// 安排保存下载令牌（使用队列避免并发保存）
+// scheduleSaveDownloadTokens 将更新过的代号通过 Channel 缓冲投递给异步刷盘器
 func scheduleSaveDownloadTokens() {
 	select {
 	case downloadTokenSaveChan <- struct{}{}:
@@ -1889,7 +3521,7 @@ func scheduleSaveDownloadTokens() {
 	}
 }
 
-// 安排保存用户数据（使用队列避免并发保存）
+// scheduleSaveUsers 构建防死锁非阻塞式的用户表盘刷新动作
 func scheduleSaveUsers() {
 	select {
 	case userSaveChan <- struct{}{}:
@@ -1908,7 +3540,7 @@ func scheduleSaveUsers() {
 
 // ==================== 原有功能（增加认证中间件） ====================
 
-// 获取主机信息函数
+// getHostInfo 提供高速缓存特性的服务器静态主机属性拉取
 func getHostInfo() (*host.InfoStat, error) {
 	hostInfoMutex.Lock()
 	defer hostInfoMutex.Unlock()
@@ -1928,21 +3560,26 @@ func getHostInfo() (*host.InfoStat, error) {
 	return hostInfo, nil
 }
 
+// enableCORSh 解除部分需要提供静态及富媒体数据接口的沙盒跨域局限
 func enableCORSh(h http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		origin := r.Header.Get("Origin")
+		if origin != "" && isAllowedOrigin(origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+			w.Header().Set("Vary", "Origin")
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Timestamp, X-Nonce, X-Signature, Authorization")
 		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusNoContent)
+			w.WriteHeader(http.StatusOK)
 			return
 		}
 		h.ServeHTTP(w, r)
 	}
 }
 
-// 加载持久化数据
+// loadData 于程序初始化时尝试获取累加过往记录以对接长效服务器统计
 func loadData() {
 	if _, err := os.Stat(dataFile); os.IsNotExist(err) {
 		// 如果数据文件不存在，设置启动时间为当前时间
@@ -1969,10 +3606,16 @@ func loadData() {
 		return
 	}
 
+	// 修复：读取全局状态时赋予锁机制避免早期读取风险
+	serverStatsMutex.Lock()
 	totalUploadAccum = data.TotalUploadAccum
 	totalDownloadAccum = data.TotalDownloadAccum
+	serverStatsMutex.Unlock()
+
+	accessStats.Lock()
 	accessStats.DailyVisits = data.AccessStats.DailyVisits
 	accessStats.WeeklyVisits = data.AccessStats.WeeklyVisits
+	accessStats.Unlock()
 
 	// 解析启动时间
 	if data.StartTime != "" {
@@ -1991,12 +3634,17 @@ func loadData() {
 	log.Printf("✅ 数据加载完成，服务器启动时间: %s", serverStartTime.Format("2006-01-02 15:04:05"))
 }
 
-// 保存持久化数据
+// saveData 将承载与累加的实时计数与运行指标定格存入硬盘文件
 func saveData() {
+	serverStatsMutex.RLock()
+	upload := totalUploadAccum
+	download := totalDownloadAccum
+	serverStatsMutex.RUnlock()
+
 	accessStats.RLock()
 	data := PersistData{
-		TotalUploadAccum:   totalUploadAccum,
-		TotalDownloadAccum: totalDownloadAccum,
+		TotalUploadAccum:   upload,
+		TotalDownloadAccum: download,
 		AccessStats: AccessStatsSnapshot{
 			DailyVisits:  accessStats.DailyVisits,
 			WeeklyVisits: accessStats.WeeklyVisits,
@@ -2028,7 +3676,7 @@ type RateLimiter struct {
 	cleanupTick *time.Ticker
 }
 
-// 创建新的速率限制器
+// NewRateLimiter 生成提供滑动窗口能力的访问限流阀
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{
 		requests: make(map[string][]time.Time),
@@ -2043,7 +3691,7 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	return rl
 }
 
-// 检查是否允许请求
+// Allow 在当前时序下判定某用户的操作频次是否依然具备安全通融性
 func (rl *RateLimiter) Allow(ip string) bool {
 	rl.Lock()
 	defer rl.Unlock()
@@ -2069,7 +3717,7 @@ func (rl *RateLimiter) Allow(ip string) bool {
 	return true
 }
 
-// 定期清理过期记录
+// cleanupExpired 卸除失效或冗余的历史限流阀记忆提升性能
 func (rl *RateLimiter) cleanupExpired() {
 	for range rl.cleanupTick.C {
 		rl.Lock()
@@ -2091,7 +3739,7 @@ func (rl *RateLimiter) cleanupExpired() {
 	}
 }
 
-// 停止清理goroutine
+// Stop 用于安全解绑释放资源避免常驻内存挂起
 func (rl *RateLimiter) Stop() {
 	if rl.cleanupTick != nil {
 		rl.cleanupTick.Stop()
@@ -2104,11 +3752,13 @@ var globalRateLimiter = NewRateLimiter(rateLimit, rateLimitDuration)
 /*--------------------日志-------------------------*/
 var logFile *os.File
 
+// init 初始化运行环境变量并在背景铺设各类调度
 func init() {
 	setupLog()
 	go scheduleLogRotation()
 }
 
+// setupLog 打通操作台输出重定向至本地审计文档的管道链路
 func setupLog() {
 	// 创建日志目录（如果不存在）
 	if err := os.MkdirAll(logDir, 0755); err != nil {
@@ -2135,6 +3785,7 @@ func setupLog() {
 	log.SetOutput(io.MultiWriter(os.Stdout, logFile))
 }
 
+// scheduleLogRotation 执行不间断日志分割以免庞大文件致使操作迟滞
 func scheduleLogRotation() {
 	// 计算到下一个0点的时间
 	next := nextMidnight()
@@ -2150,6 +3801,7 @@ func scheduleLogRotation() {
 	}
 }
 
+// nextMidnight 换算距离跨日点差值
 func nextMidnight() time.Duration {
 	now := time.Now()
 	// 计算下一个0点时间
@@ -2158,7 +3810,7 @@ func nextMidnight() time.Duration {
 	return next.Sub(now)
 }
 
-// 清理过期会话
+// cleanupExpiredSessions 主动抹去无用户挂接或过久搁置的登录痕迹
 func cleanupExpiredSessions() {
 	userManager.Lock()
 	defer userManager.Unlock()
@@ -2172,7 +3824,7 @@ func cleanupExpiredSessions() {
 	log.Println("✅ 过期会话清理完成")
 }
 
-// 清理反爬数据
+// cleanupAntiCrawlerData 让防爬记录仪定期脱敏以维护可观查询速度
 func cleanupAntiCrawlerData() {
 	antiCrawler.Lock()
 	defer antiCrawler.Unlock()
@@ -2181,7 +3833,7 @@ func cleanupAntiCrawlerData() {
 
 	// 清理过期的封锁IP
 	for ip, blockTime := range antiCrawler.blockedIPs {
-		if now.Sub(blockTime) > 24*time.Hour {
+		if now.After(blockTime) {
 			delete(antiCrawler.blockedIPs, ip)
 		}
 	}
@@ -2204,6 +3856,7 @@ func cleanupAntiCrawlerData() {
 	log.Println("✅ 反爬数据清理完成")
 }
 
+// listEpubs 扫描预定文库区检索所有的 Epub 并反馈可取连接
 func listEpubs(w http.ResponseWriter, r *http.Request) {
 
 	var epubURLs []string
@@ -2247,6 +3900,43 @@ func listEpubs(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------- 在线用户处理 ----------------
+
+// wsConnect (优化)精准添加并递增多页面并发用户 WebSocket 生命挂件
+func wsConnect(userKey, ip, userAgent string) {
+	onlineUsers.Lock()
+	defer onlineUsers.Unlock()
+
+	user, exists := onlineUsers.Users[userKey]
+	if exists {
+		user.ConnCount++
+		user.Since = time.Now()
+		user.Page = "websocket"
+	} else {
+		onlineUsers.Users[userKey] = &OnlineUser{
+			IP:        ip,
+			UserAgent: userAgent,
+			Since:     time.Now(),
+			Page:      "websocket",
+			ConnCount: 1,
+		}
+	}
+}
+
+// wsDisconnect (优化)精准消减用户挂件引用，防范多开意外下线崩溃
+func wsDisconnect(userKey string) {
+	onlineUsers.Lock()
+	defer onlineUsers.Unlock()
+
+	user, exists := onlineUsers.Users[userKey]
+	if exists {
+		user.ConnCount--
+		if user.ConnCount <= 0 {
+			delete(onlineUsers.Users, userKey)
+		}
+	}
+}
+
+// updateOnlineUser 常规HTTP操作唤起时对特定页内用户的保活记录及位置指派
 func updateOnlineUser(r *http.Request, page string) {
 	ip := getClientIP(r)
 	userAgent := r.UserAgent()
@@ -2254,40 +3944,32 @@ func updateOnlineUser(r *http.Request, page string) {
 		userAgent = "Unknown"
 	}
 
-	// 创建唯一标识符：IP + UserAgent
 	userKey := fmt.Sprintf("%s|%s", ip, userAgent)
 
 	onlineUsers.Lock()
 	defer onlineUsers.Unlock()
 
-	// 更新或添加用户
-	onlineUsers.Users[userKey] = &OnlineUser{
-		IP:        ip,
-		UserAgent: userAgent,
-		Since:     time.Now(),
-		Page:      page,
+	user, exists := onlineUsers.Users[userKey]
+	if exists {
+		user.Since = time.Now()
+		user.Page = page
+	} else {
+		// HTTP请求不追踪ConnCount，主要交由 WebSocket 调度
+		onlineUsers.Users[userKey] = &OnlineUser{
+			IP:        ip,
+			UserAgent: userAgent,
+			Since:     time.Now(),
+			Page:      page,
+			ConnCount: 0,
+		}
 	}
 }
 
+// getClientIP 穿透各类内网跳板机追踪目标公网唯一位置锚定源
 func getClientIP(r *http.Request) string {
-	// 首先检查 X-Forwarded-For 头
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		// 取第一个 IP（可能有多个，用逗号分隔）
-		ips := strings.Split(forwarded, ",")
-		if len(ips) > 0 {
-			ip := strings.TrimSpace(ips[0])
-			// 如果是 IPv6 地址且被方括号包围（如 [::1]），去除方括号
-			if len(ip) >= 2 && ip[0] == '[' && ip[len(ip)-1] == ']' {
-				return ip[1 : len(ip)-1]
-			}
-			return ip
-		}
-	}
-
-	// 如果没有代理，直接从 RemoteAddr 获取
+	// 仅信任直连地址，不解析 X-Forwarded-For，防止伪造头绕过限流/封禁
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		// 如果分割失败，尝试直接使用（可能是没有端口的情况）
 		return r.RemoteAddr
 	}
 
@@ -2299,7 +3981,7 @@ func getClientIP(r *http.Request) string {
 	return host
 }
 
-// 获取在线用户统计信息和详细列表
+// getOnlineUsersStats 分析并组装呈现全局在线客户大厅分布阵列图谱
 func getOnlineUsersStats() (int, []string, []OnlineUserInfo) {
 	onlineUsers.RLock()
 	defer onlineUsers.RUnlock()
@@ -2329,6 +4011,8 @@ func getOnlineUsersStats() (int, []string, []OnlineUserInfo) {
 }
 
 // ---------------- 访问统计 ----------------
+
+// accessStatsHandler HTTP 端点：展示给客户端最近统计的报表大盘及流转状态
 func accessStatsHandler(w http.ResponseWriter, r *http.Request) {
 	accessStats.RLock()
 	defer accessStats.RUnlock()
@@ -2362,6 +4046,7 @@ func accessStatsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(stats)
 }
 
+// resetDailyStats 在夜幕隐蔽点将即日流量清算封卷开启次日记录新篇章
 func resetDailyStats() {
 	for {
 		now := time.Now()
@@ -2380,6 +4065,7 @@ func resetDailyStats() {
 	}
 }
 
+// recordAccess 累加访问指标用以支撑全局看板访问人数的核算
 func recordAccess(r *http.Request) {
 	ip := getClientIP(r)
 
@@ -2399,6 +4085,8 @@ func recordAccess(r *http.Request) {
 }
 
 // ---------------- 媒体文件 ----------------
+
+// randomMediaHandler HTTP 端点：分发流媒体挂载链接（含严密高并发处理防竞争）
 func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 	// 添加速率限制检查
 	clientIP := getClientIP(r)
@@ -2421,6 +4109,11 @@ func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 		Code int32  `json:"code"`
 	}
 	s := new(fileUrl)
+
+	// 优化：引入媒体互斥锁，彻底防范 files 重新切片时的严重内存报错
+	mediaMutex.Lock()
+	defer mediaMutex.Unlock()
+
 	rand.NewSource(time.Now().UnixNano())
 
 	if num != 0 && len(files) == 0 {
@@ -2475,6 +4168,7 @@ func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// homeHandler HTTP 端点：反馈特定视频承载框架以支撑定制页面展示
 func homeHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	updateOnlineUser(r, "video")
@@ -2492,6 +4186,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ifacesHandler HTTP 端点：反馈后端系统探测获取到的有效活跃网卡池
 func ifacesHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	updateOnlineUser(r, "status-ifaces")
@@ -2510,14 +4205,11 @@ func ifacesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------- WebSocket ----------------
+
+// wsHandler 升级请求报头至长接状态通道，推送机器运作监控信息并防阻内存泄漏
 func wsHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
-	updateOnlineUser(r, "websocket")
-	//token := r.URL.Query().Get("token")
-	//if token != authToken {
-	//	http.Error(w, "Unauthorized", http.StatusUnauthorized)
-	//	return
-	//}
+
 	iface := r.URL.Query().Get("iface")
 	if iface == "" {
 		http.Error(w, "iface required", http.StatusBadRequest)
@@ -2534,6 +4226,9 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	ip := getClientIP(r)
 	userAgent := r.UserAgent()
 	userKey := fmt.Sprintf("%s|%s", ip, userAgent)
+
+	// 优化：在此处调用 wsConnect ，利用连接计数避免单端掉线抹去同源其他连线数据
+	wsConnect(userKey, ip, userAgent)
 
 	// 设置连接参数
 	conn.SetReadLimit(512)                                 // 限制消息大小
@@ -2565,10 +4260,8 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		ticker.Stop()
 		pingTicker.Stop()
-		// 连接关闭时移除用户
-		onlineUsers.Lock()
-		delete(onlineUsers.Users, userKey)
-		onlineUsers.Unlock()
+		// 优化：利用 wsDisconnect 取消强制摧毁操作
+		wsDisconnect(userKey)
 		conn.Close()
 	}()
 
@@ -2577,9 +4270,6 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		case <-done:
 			return
 		case <-ticker.C:
-			// 更新在线用户时间
-			updateOnlineUser(r, "websocket")
-
 			status, err := getServerStatus(iface)
 			if err != nil {
 				log.Println("Error getting status:", err)
@@ -2610,7 +4300,31 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------- Server Status ----------------
+
+// getServerStatus 查询深层探针系统状态。现已引入O(1)级全局锁定防并发灾变与1秒时效高能缓存调度体系
 func getServerStatus(iface string) (*ServerStatus, error) {
+	// ====== 高能缓存命中逻辑开始 ======
+	serverStatsMutex.RLock()
+	cTime := statusCacheTime[iface]
+	cData := statusCache[iface]
+	serverStatsMutex.RUnlock()
+
+	// 若在 300ms TTL 之内存在高可用缓存数据，则避免执行底层开销极高的查询，直接折返
+	// 注意：TTL 必须小于 WebSocket 1 秒的推送间隔，否则会推送重复/过期数据
+	if time.Since(cTime) < 300*time.Millisecond && cData != nil {
+		return cData, nil
+	}
+	// ===================================
+
+	// ====== 硬件底层请求锁定 ======
+	serverStatsMutex.Lock()
+	defer serverStatsMutex.Unlock()
+
+	// 双检锁，可能其他 Goroutine 刚刚获取并填充满了
+	if time.Since(statusCacheTime[iface]) < 300*time.Millisecond && statusCache[iface] != nil {
+		return statusCache[iface], nil
+	}
+
 	now := time.Now()
 
 	cpuPercent, err := cpu.Percent(0, false)
@@ -2623,7 +4337,6 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 		return nil, err
 	}
 
-	// 修改：获取所有物理磁盘的总使用情况
 	var totalDisk uint64
 	var usedDisk uint64
 	var freeDisk uint64
@@ -2653,32 +4366,24 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 		processedDevices := make(map[string]bool)
 
 		for _, partition := range partitions {
-			// 跳过虚拟文件系统
 			if excludedFsTypes[partition.Fstype] {
 				continue
 			}
-
-			// 跳过已经处理过的设备（避免重复统计）
 			if processedDevices[partition.Device] {
 				continue
 			}
 
 			usage, err := disk.Usage(partition.Mountpoint)
 			if err != nil {
-				// 记录错误但继续处理其他分区
-				log.Printf("获取分区 %s 使用情况失败: %v", partition.Mountpoint, err)
 				continue
 			}
 
-			// 标记设备已处理
 			processedDevices[partition.Device] = true
-
 			totalDisk += usage.Total
 			usedDisk += usage.Used
 			freeDisk += usage.Free
 		}
 	} else {
-		log.Printf("获取分区列表失败: %v", err)
 		// 如果失败，回退到只获取根分区
 		diskInfo, err := disk.Usage("/")
 		if err != nil {
@@ -2715,6 +4420,8 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 			if secs > 0 {
 				uploadSpeed = float64(io.BytesSent-last.BytesSent) / 1024 / secs
 				downloadSpeed = float64(io.BytesRecv-last.BytesRecv) / 1024 / secs
+
+				// 在持有 serverStatsMutex 锁的环境下执行安全更新操作，消灭崩溃
 				totalUploadAccum += uint64(io.BytesSent-last.BytesSent) / 1024
 				totalDownloadAccum += uint64(io.BytesRecv-last.BytesRecv) / 1024
 			}
@@ -2775,12 +4482,13 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 		kernelVersion = "unknown"
 	}
 
-	return &ServerStatus{
+	// 拼装最终结果
+	result := &ServerStatus{
 		CPUUsage:      cpuPercent[0],
 		MemoryUsage:   memInfo.UsedPercent,
 		MemoryTotal:   memInfo.Total / 1024 / 1024,
-		DiskUsage:     diskUsagePercent,               // 使用计算的总磁盘使用百分比
-		DiskTotal:     totalDisk / 1024 / 1024 / 1024, // 使用计算的总磁盘空间（GB）
+		DiskUsage:     diskUsagePercent,
+		DiskTotal:     totalDisk / 1024 / 1024 / 1024,
 		UploadSpeed:   uploadSpeed,
 		DownloadSpeed: downloadSpeed,
 		TotalUpload:   formatBytes(totalUploadAccum),
@@ -2799,9 +4507,16 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 		Platform:      platform,
 		KernelVersion: kernelVersion,
 		Architecture:  runtime.GOARCH,
-	}, nil
+	}
+
+	// 填装入缓存并回写记录刻度
+	statusCache[iface] = result
+	statusCacheTime[iface] = time.Now()
+
+	return result, nil
 }
 
+// formatBytes 辅助呈现将系统内耗的极小字阶自动上浮易读体量区间
 func formatBytes(kb uint64) string {
 	const (
 		KB = 1
@@ -2828,6 +4543,7 @@ var allowedCommands = map[string][]string{
 	"ls":     {"-lh", "/"},
 }
 
+// execHandler HTTP 端点：约束外部特权在允许且极短的防僵死闭包环境代操作命令行
 func execHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	updateOnlineUser(r, "exec")
@@ -2882,6 +4598,8 @@ func execHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // ==================== 主函数 ====================
+
+// main 主宰整个程序的挂载，驱动所有路由装配及守望守护协程开启
 func main() {
 	// 初始化用户系统
 	loadUsers()
@@ -2891,6 +4609,12 @@ func main() {
 
 	// 初始化下载令牌系统
 	initDownloadTokenManager()
+
+	// 初始化 RBAC 角色权限系统
+	initRBAC()
+
+	// 加载手动封禁的 IP 列表
+	loadBlockedIPs()
 
 	// 确保在程序退出时停止速率限制器的清理goroutine
 	defer globalRateLimiter.Stop()
@@ -2951,24 +4675,61 @@ func main() {
 	http.HandleFunc("/check-auth", securityMiddleware(checkAuthHandler))
 
 	// 注册下载相关路由
-	http.HandleFunc("/generate-download-token", authMiddleware(securityMiddleware(generateDownloadTokenHandler)))
+	http.HandleFunc("/generate-download-token", authMiddleware(requirePermission("token:issue", securityMiddleware(generateDownloadTokenHandler))))
 	http.HandleFunc("/download", securityMiddleware(secureDownloadHandler))
-	http.HandleFunc("/list-download-tokens", authMiddleware(securityMiddleware(listDownloadTokensHandler)))
-	http.HandleFunc("/revoke-download-token", authMiddleware(securityMiddleware(revokeDownloadTokenHandler)))
+	http.HandleFunc("/list-download-tokens", authMiddleware(requirePermission("token:manage", securityMiddleware(listDownloadTokensHandler))))
+	http.HandleFunc("/revoke-download-token", authMiddleware(requirePermission("token:manage", securityMiddleware(revokeDownloadTokenHandler))))
 
 	// 使用认证中间件和安全中间件包装所有处理函数
-	http.Handle("/", http.FileServer(http.Dir(indexPath)))
-	//http.HandleFunc("/location", authMiddleware(securityMiddleware(handleWebSocket)))
-	//http.HandleFunc("/health", authMiddleware(securityMiddleware(healthCheck)))
-	http.HandleFunc("/ws", authMiddleware(securityMiddleware(wsHandler)))
-	http.HandleFunc("/video", authMiddleware(securityMiddleware(homeHandler)))
-	http.HandleFunc("/status-ifaces", enableCORSh(authMiddleware(securityMiddleware(ifacesHandler))))
-	http.HandleFunc("/random-media", enableCORSh(authMiddleware(securityMiddleware(randomMediaHandler))))
-	http.HandleFunc("/access-stats", authMiddleware(securityMiddleware(accessStatsHandler)))
-	http.HandleFunc("/exec", authMiddleware(securityMiddleware(execHandler)))
-	http.HandleFunc("/epubs", enableCORSh(authMiddleware(securityMiddleware(listEpubs))))
+	// 静态文件服务：拦截备份/配置/源码等敏感文件，防止泄露
+	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lower := strings.ToLower(r.URL.Path)
+		for _, pat := range []string{".bak", ".json", ".go", ".sh", ".key", ".pem", ".log", ".db", ".tmp", "~"} {
+			if strings.Contains(lower, pat) {
+				http.NotFound(w, r)
+				return
+			}
+		}
+		http.FileServer(http.Dir(indexPath)).ServeHTTP(w, r)
+	}))
+	http.HandleFunc("/ws", authMiddleware(requirePermission("system:view", securityMiddleware(wsHandler))))
+	http.HandleFunc("/video", authMiddleware(requirePermission("files:view", securityMiddleware(homeHandler))))
+	http.HandleFunc("/status-ifaces", authMiddleware(requirePermission("system:view", securityMiddleware(ifacesHandler))))
+	http.HandleFunc("/random-media", enableCORSh(authMiddleware(requirePermission("files:view", securityMiddleware(randomMediaHandler)))))
+	http.HandleFunc("/access-stats", authMiddleware(requirePermission("system:view", securityMiddleware(accessStatsHandler))))
+	http.HandleFunc("/exec", authMiddleware(requirePermission("system:exec", securityMiddleware(execHandler))))
+	http.HandleFunc("/epubs", enableCORSh(authMiddleware(requirePermission("files:view", securityMiddleware(listEpubs)))))
+
+	// RBAC 权限管理接口
+	http.HandleFunc("GET /api/rbac/permissions", authMiddleware(requirePermission("role:manage", securityMiddleware(listPermissionsHandler))))
+	http.HandleFunc("GET /api/rbac/roles", authMiddleware(requireAnyPermission([]string{"role:manage", "user:manage", "user:view"}, securityMiddleware(listRolesHandler))))
+	http.HandleFunc("GET /api/rbac/roles/{role_id}", authMiddleware(requireAnyPermission([]string{"role:manage", "user:manage", "user:view"}, securityMiddleware(getRoleHandler))))
+	http.HandleFunc("POST /api/rbac/roles", authMiddleware(requirePermission("role:manage", securityMiddleware(createRoleHandler))))
+	http.HandleFunc("PUT /api/rbac/roles/{role_id}", authMiddleware(requirePermission("role:manage", securityMiddleware(updateRoleHandler))))
+	http.HandleFunc("DELETE /api/rbac/roles/{role_id}", authMiddleware(requirePermission("role:manage", securityMiddleware(deleteRoleHandler))))
+	http.HandleFunc("GET /api/rbac/users", authMiddleware(requireAnyPermission([]string{"user:manage", "user:view"}, securityMiddleware(listRbacUsersHandler))))
+	http.HandleFunc("POST /api/rbac/users", authMiddleware(requirePermission("user:manage", securityMiddleware(createRbacUserHandler))))
+	http.HandleFunc("PUT /api/rbac/users/{username}", authMiddleware(requirePermission("user:manage", securityMiddleware(updateRbacUserHandler))))
+	http.HandleFunc("DELETE /api/rbac/users/{username}", authMiddleware(requirePermission("user:manage", securityMiddleware(deleteRbacUserHandler))))
+
+	// 文件管理与进程监控接口
+	http.HandleFunc("GET /api/files", authMiddleware(requirePermission("files:manage", securityMiddleware(listFilesHandler))))
+	http.HandleFunc("POST /api/files/upload", authMiddleware(requirePermission("files:manage", securityMiddleware(uploadFileHandler))))
+	http.HandleFunc("POST /api/files/mkdir", authMiddleware(requirePermission("files:manage", securityMiddleware(mkdirFileHandler))))
+	http.HandleFunc("DELETE /api/files", authMiddleware(requirePermission("files:manage", securityMiddleware(deleteFileHandler))))
+	http.HandleFunc("GET /api/processes", authMiddleware(requirePermission("system:process", securityMiddleware(listProcessesHandler))))
+	http.HandleFunc("POST /api/processes/kill", authMiddleware(requirePermission("system:process", securityMiddleware(killProcessHandler))))
+	http.HandleFunc("GET /api/ip/blocked", authMiddleware(requirePermission("ip:manage", securityMiddleware(listBlockedIPsHandler))))
+	http.HandleFunc("POST /api/ip/block", authMiddleware(requirePermission("ip:manage", securityMiddleware(blockIPHandler))))
+	http.HandleFunc("POST /api/ip/unblock", authMiddleware(requirePermission("ip:manage", securityMiddleware(unblockIPHandler))))
+	http.HandleFunc("GET /api/ipinfo", authMiddleware(securityMiddleware(ipinfoProxyHandler)))
 
 	fmt.Println("Server running at https://localhost:9000")
 	log.Printf("服务器启动时间: %s", serverStartTime.Format("2006-01-02 15:04:05"))
-	log.Fatal(http.ListenAndServeTLS(":9000", "/home/ssl/wustwu.cn.pem", "/home/ssl/wustwu.cn.key", nil))
+	// 启用 TLS 1.2+，禁用老旧弱协议
+	srv := &http.Server{
+		Addr:      ":9000",
+		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+	}
+	log.Fatal(srv.ListenAndServeTLS("/home/ssl/xyx.homes.pem", "/home/ssl/xyx.homes.key"))
 }

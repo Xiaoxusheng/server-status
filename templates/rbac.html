@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>权限管理 - Server Status</title>
+    <link rel="icon" href="data:,">
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <style>
+        body { margin: 0; background: #f5f5f5; }
+        #root { min-height: 100vh; }
+        .page-wrap { padding: 16px; }
+        .topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 56px; background: #fff;
+            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; color: #1677ff; }
+        .topbar.dark { background: #1f1f1f; border-bottom-color: #303030; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+        .topbar.dark .brand { color: #4096ff; }
+        .topbar .brand .logo {
+            width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #1677ff, #722ed1);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px;
+        }
+        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+        .toolbar .spacer { flex: 1; }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+        .user-card .ant-card-body { padding: 16px; }
+        .user-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+        .user-head .info { flex: 1; min-width: 0; }
+        .user-head .name { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+        .user-meta { color: #999; font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .user-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px dashed #f0f0f0; }
+        .role-card { transition: box-shadow .2s, transform .2s; }
+        .role-card:hover { box-shadow: 0 6px 18px rgba(22,119,255,.12); transform: translateY(-2px); }
+        .role-perms { min-height: 44px; }
+        .perm-group { margin-bottom: 10px; }
+        .perm-group .perm-label { font-weight: 600; margin-bottom: 4px; color: #888; font-size: 12px; }
+        .empty-tip { text-align: center; padding: 40px 0; color: #999; }
+        @media (max-width: 768px) {
+            .topbar { padding: 8px 12px; flex-wrap: wrap; gap: 6px 8px; }
+            .topbar .brand { font-size: 14px; gap: 6px; }
+            .topbar .brand .logo { width: 26px; height: 26px; font-size: 14px; border-radius: 6px; }
+            .topbar .ant-space { flex-wrap: wrap; gap: 6px !important; }
+            .topbar .ant-btn { padding: 4px 8px; font-size: 12px; height: 30px; }
+            .topbar .tb-sub { display: none; }
+            .topbar .tb-label { display: none; }
+            .page-wrap { padding: 10px; }
+            .card-grid { grid-template-columns: 1fr; }
+            .toolbar .btn { flex: 1; }
+            .toolbar input { min-width: 0 !important; }
+            .ant-card-head { padding: 0 12px !important; }
+            .ant-card-head-wrapper { flex-wrap: wrap; gap: 6px; }
+            .ant-card-body { padding: 12px !important; }
+        }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+    const { Card, Button, Input, Modal, message, Space, Tag, Switch, Select, Form, Tabs, Popconfirm, ConfigProvider, theme, Typography, Badge, Avatar, Alert, Tooltip, Empty } = window.antd;
+    const { useState, useEffect, useCallback } = React;
+    const { darkAlgorithm } = theme;
+
+    const baseUrl = window.location.origin;
+    const AVATAR_COLORS = ['#1677ff', '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16', '#52c41a', '#f5222d'];
+
+    function secureFetch(url, options = {}) {
+        return fetch(url, {
+            method: options.method || 'GET',
+            headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+            credentials: 'include',
+            body: options.body
+        });
+    }
+    async function api(path, method, body) {
+        const r = await secureFetch(baseUrl + path, { method: method || 'GET', body: body ? JSON.stringify(body) : undefined });
+        const d = await r.json();
+        if (!r.ok || d.code !== 200) throw new Error(d.message || ('请求失败 (' + r.status + ')'));
+        return d.data;
+    }
+
+    function App() {
+        const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+        const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+        const [tab, setTab] = useState('users');
+        const [users, setUsers] = useState([]);
+        const [roles, setRoles] = useState([]);
+        const [perms, setPerms] = useState([]);
+        const [loading, setLoading] = useState(false);
+        const [search, setSearch] = useState('');
+        const [userModal, setUserModal] = useState(null);
+        const [roleModal, setRoleModal] = useState(null);
+        const [uForm] = Form.useForm();
+        const [rForm] = Form.useForm();
+
+        const hasPerm = p => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+        const canViewUser = hasPerm('user:view') || hasPerm('user:manage');
+        const canManageUser = hasPerm('user:manage');
+        const canManageRole = hasPerm('role:manage');
+
+        useEffect(() => {
+            secureFetch(baseUrl + '/check-auth')
+                .then(r => r.json())
+                .then(d => {
+                    if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
+                    else window.location.href = 'index.html';
+                })
+                .catch(() => { window.location.href = 'index.html'; });
+        }, []);
+        useEffect(() => { localStorage.setItem('theme', isDark ? 'dark' : 'light'); }, [isDark]);
+
+        const loadRoles = useCallback(async () => {
+            try { setRoles(await api('/api/rbac/roles')); } catch (e) { message.error('加载角色失败: ' + e.message); }
+        }, []);
+        const loadUsers = useCallback(async () => {
+            setLoading(true);
+            try { setUsers(await api('/api/rbac/users')); } catch (e) { message.error('加载用户失败: ' + e.message); } finally { setLoading(false); }
+        }, []);
+
+        useEffect(() => {
+            if (!auth.ok) return;
+            if (canViewUser) loadUsers();
+            if (canManageRole) { loadRoles(); api('/api/rbac/permissions').then(setPerms).catch(() => {}); }
+        }, [auth.ok, canViewUser, canManageRole, loadUsers, loadRoles]);
+
+        if (auth.loading) {
+            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Card loading style={{ width: 320 }} /></div>;
+        }
+        if (!canViewUser && !canManageRole) {
+            return <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
+                <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
+                    <Card style={{ width: 380, textAlign: 'center' }}>
+                        <div style={{ fontSize: 48 }}>🚫</div>
+                        <Typography.Title level={4}>没有访问权限</Typography.Title>
+                        <Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>
+                    </Card>
+                </div>
+            </ConfigProvider>;
+        }
+
+        const permGroups = {};
+        perms.forEach(p => { (permGroups[p.group] = permGroups[p.group] || []).push(p); });
+        const permName = k => { const d = perms.find(x => x.key === k); return d ? d.name : k; };
+
+        const submitUser = async () => {
+            const v = await uForm.validateFields();
+            try {
+                if (userModal.mode === 'create') {
+                    await api('/api/rbac/users', 'POST', v);
+                    message.success('用户创建成功');
+                } else {
+                    const body = { email: v.email, role_id: v.role_id, is_active: v.is_active };
+                    if (v.password) body.password = v.password;
+                    await api('/api/rbac/users/' + encodeURIComponent(userModal.record.username), 'PUT', body);
+                    message.success('用户更新成功');
+                }
+                setUserModal(null);
+                loadUsers();
+            } catch (e) { message.error(e.message); }
+        };
+        const submitRole = async () => {
+            const v = await rForm.validateFields();
+            try {
+                if (roleModal.mode === 'create') {
+                    await api('/api/rbac/roles', 'POST', v);
+                    message.success('角色创建成功');
+                } else {
+                    await api('/api/rbac/roles/' + encodeURIComponent(roleModal.record.role_id), 'PUT', { name: v.name, description: v.description, permissions: v.permissions });
+                    message.success('角色更新成功');
+                }
+                setRoleModal(null);
+                loadRoles();
+                loadUsers();
+            } catch (e) { message.error(e.message); }
+        };
+
+        const filteredUsers = search.trim()
+            ? users.filter(u => (u.username || '').toLowerCase().includes(search.trim().toLowerCase()) || (u.email || '').toLowerCase().includes(search.trim().toLowerCase()))
+            : users;
+
+        const PermPicker = ({ value = [], onChange }) => (
+            <div>
+                {Object.keys(permGroups).map(g => (
+                    <div className="perm-group" key={g}>
+                        <div className="perm-label">{g}</div>
+                        <window.antd.Checkbox.Group
+                            value={(value || []).filter(p => permGroups[g].some(x => x.key === p))}
+                            options={permGroups[g].map(p => ({ label: p.name, value: p.key }))}
+                            onChange={vals => {
+                                const others = (value || []).filter(p => !permGroups[g].some(x => x.key === p));
+                                onChange([...new Set([...others, ...vals])]);
+                            }}
+                        />
+                    </div>
+                ))}
+            </div>
+        );
+
+        const renderPerms = () => (
+            <Form.Item name="permissions" label="权限">
+                <PermPicker />
+            </Form.Item>
+        );
+
+        return (
+            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
+                <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                    <div className={'topbar' + (isDark ? ' dark' : '')}>
+                        <div className="brand"><span className="logo">🛡️</span><span>Server Status<span className="tb-sub"> · 权限管理</span></span></div>
+                        <Space>
+                            <Button title="首页" onClick={() => window.location.href = 'index.html'}>🏠<span className="tb-label">首页</span></Button>
+                            <Button title={isDark ? '浅色模式' : '深色模式'} onClick={() => setIsDark(!isDark)}>{isDark ? '🌞' : '🌙'}<span className="tb-label">{isDark ? '浅色' : '深色'}</span></Button>
+                            <Button danger title="退出登录" onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}>🚪<span className="tb-label">退出</span></Button>
+                        </Space>
+                    </div>
+                    <div className="page-wrap">
+                        <Card style={{ marginBottom: 12 }}>
+                            <Tabs activeKey={tab} onChange={setTab} items={[
+                                ...(canViewUser ? [{
+                                    key: 'users', label: `👥 用户管理（${users.length}）`,
+                                    children: <div>
+                                        <div className="toolbar">
+                                            <Input.Search placeholder="搜索用户名 / 邮箱..." allowClear style={{ maxWidth: 320 }}
+                                                onChange={e => setSearch(e.target.value)} onSearch={v => setSearch(v)} />
+                                            <span className="spacer" />
+                                            {canManageUser && <Button type="primary" onClick={() => {
+                                                setUserModal({ mode: 'create' });
+                                                uForm.resetFields();
+                                                uForm.setFieldsValue({ is_active: true, role_id: 'user' });
+                                            }}>➕ 创建用户</Button>}
+                                        </div>
+                                        {loading ? <div style={{ textAlign: 'center', padding: 40 }}><window.antd.Spin /></div> : filteredUsers.length ? (
+                                            <div className="card-grid">
+                                                {filteredUsers.map(u => (
+                                                    <Card key={u.username} hoverable bordered className="user-card" size="small"
+                                                          actions={canManageUser ? [
+                                                              <Button size="small" key="edit" onClick={() => {
+                                                                  setUserModal({ mode: 'edit', record: u });
+                                                                  uForm.setFieldsValue({ username: u.username, email: u.email, role_id: u.role_id || 'user', is_active: u.is_active });
+                                                              }}>编辑</Button>,
+                                                              <Popconfirm key="del" title={`删除用户 ${u.username}？`} onConfirm={async () => {
+                                                                  try { await api('/api/rbac/users/' + encodeURIComponent(u.username), 'DELETE'); message.success('已删除'); loadUsers(); loadRoles(); } catch (e) { message.error(e.message); }
+                                                              }}><Button size="small" danger>删除</Button></Popconfirm>
+                                                          ] : undefined}>
+                                                        <div className="user-head">
+                                                            <Avatar size={44} style={{ background: AVATAR_COLORS[(u.username.charCodeAt(0) || 0) % AVATAR_COLORS.length], fontWeight: 600 }}>
+                                                                {(u.username || '?').charAt(0).toUpperCase()}
+                                                            </Avatar>
+                                                            <div className="info">
+                                                                <div className="name">{u.username} <Badge status={u.is_active ? 'success' : 'error'} /></div>
+                                                                <div className="user-meta">{u.role_name || '-'} · {u.email || '-'}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div style={{ fontSize: 12, color: '#999' }}>
+                                                            最近登录: {u.last_login ? new Date(u.last_login).toLocaleString('zh-CN', { hour12: false }) : '-'}
+                                                        </div>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        ) : <Empty description="暂无用户" style={{ padding: 30 }} />}
+                                    </div>
+                                }] : []),
+                                ...(canManageRole ? [{
+                                    key: 'roles', label: `🎭 角色管理（${roles.length}）`,
+                                    children: <div>
+                                        <div className="toolbar">
+                                            <span className="muted" style={{ color: '#999', fontSize: 13 }}>共 {roles.length} 个角色</span>
+                                            <span className="spacer" />
+                                            <Button type="primary" onClick={() => {
+                                                setRoleModal({ mode: 'create' });
+                                                rForm.resetFields();
+                                                rForm.setFieldsValue({ permissions: [] });
+                                            }}>➕ 创建角色</Button>
+                                        </div>
+                                        <div className="card-grid">
+                                            {roles.map(r => {
+                                                const isAdmin = r.role_id === 'admin' && r.is_system;
+                                                return <Card key={r.role_id} hoverable bordered className="role-card" size="small"
+                                                             actions={canManageRole ? [
+                                                                 <Button size="small" key="edit" onClick={() => {
+                                                                     setRoleModal({ mode: 'edit', record: r });
+                                                                     rForm.setFieldsValue({ role_id: r.role_id, name: r.name, description: r.description, permissions: r.permissions });
+                                                                 }}>编辑</Button>,
+                                                                 r.is_system
+                                                                     ? <Tooltip key="lock" title="系统内置角色不可删除"><Typography.Text type="secondary">不可删除</Typography.Text></Tooltip>
+                                                                     : <Popconfirm key="del" title={`删除角色「${r.name}」？该角色下的用户将变为普通用户。`} onConfirm={async () => {
+                                                                         try { await api('/api/rbac/roles/' + encodeURIComponent(r.role_id), 'DELETE'); message.success('已删除'); loadRoles(); loadUsers(); } catch (e) { message.error(e.message); }
+                                                                     }}><Button size="small" danger>删除</Button></Popconfirm>
+                                                             ] : undefined}>
+                                                    <div style={{ marginBottom: 8 }}>
+                                                        <Space size={6}>
+                                                            <Typography.Text strong style={{ fontSize: 15 }}>{r.name}</Typography.Text>
+                                                            {r.is_system && <Tag color="gold">内置</Tag>}
+                                                        </Space>
+                                                        <div style={{ color: '#999', fontSize: 12, fontFamily: 'monospace' }}>{r.role_id}</div>
+                                                    </div>
+                                                    <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }} style={{ marginBottom: 8, fontSize: 13 }}>
+                                                        {r.description || '暂无描述'}
+                                                    </Typography.Paragraph>
+                                                    <div className="role-perms">
+                                                        {r.permissions.includes('*')
+                                                            ? <Tag color="purple">★ 全部权限</Tag>
+                                                            : <Space size={4} wrap>{r.permissions.map(p => <Tag key={p}>{permName(p)}</Tag>)}</Space>}
+                                                    </div>
+                                                    <div style={{ marginTop: 10, fontSize: 12, color: '#999' }}>
+                                                        👥 {r.user_count} 个用户
+                                                    </div>
+                                                </Card>;
+                                            })}
+                                        </div>
+                                    </div>
+                                }] : [])
+                            ]} />
+                        </Card>
+                    </div>
+
+                    <Modal title={userModal?.mode === 'create' ? '创建用户' : '编辑用户'} open={!!userModal}
+                           onCancel={() => setUserModal(null)} onOk={submitUser} okText="保存" cancelText="取消" destroyOnClose>
+                        <Form form={uForm} layout="vertical">
+                            {userModal?.mode === 'create' ? (
+                                <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }, { pattern: /^[a-zA-Z0-9_-]{3,20}$/, message: '3-20位字母/数字/下划线' }]}>
+                                    <Input placeholder="用户名" />
+                                </Form.Item>
+                            ) : (
+                                <Form.Item name="username" label="用户名"><Input disabled /></Form.Item>
+                            )}
+                            <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}>
+                                <Input placeholder="user@example.com" />
+                            </Form.Item>
+                            {userModal?.mode === 'create' && (
+                                <Form.Item name="password" label="初始密码" rules={[{ required: true, min: 8, message: '至少8位' }]}>
+                                    <Input.Password placeholder="至少8位，包含字母和数字" />
+                                </Form.Item>
+                            )}
+                            {userModal?.mode === 'edit' && (
+                                <Form.Item name="password" label="重置密码（留空不修改）">
+                                    <Input.Password placeholder="至少8位" />
+                                </Form.Item>
+                            )}
+                            <Form.Item name="role_id" label="角色" rules={[{ required: true }]}>
+                                <Select options={roles.map(r => ({ label: r.name + (r.is_system ? '（内置）' : ''), value: r.role_id }))} />
+                            </Form.Item>
+                            <Form.Item name="is_active" label="账号启用" valuePropName="checked">
+                                <Switch />
+                            </Form.Item>
+                        </Form>
+                    </Modal>
+
+                    <Modal title={roleModal?.mode === 'create' ? '创建角色' : '编辑角色'} open={!!roleModal}
+                           onCancel={() => setRoleModal(null)} onOk={submitRole} okText="保存" cancelText="取消" destroyOnClose width={640}>
+                        <Form form={rForm} layout="vertical">
+                            <Form.Item name="role_id" label="角色ID" rules={[{ required: true, pattern: /^[a-zA-Z0-9_-]{1,32}$/, message: '字母/数字/下划线' }]}>
+                                <Input disabled={roleModal?.mode === 'edit'} placeholder="如 viewer" />
+                            </Form.Item>
+                            <Form.Item name="name" label="角色名称" rules={[{ required: true, message: '请输入角色名称' }]}>
+                                <Input placeholder="如 访客" disabled={roleModal?.record?.role_id === 'admin' && roleModal?.record?.is_system} />
+                            </Form.Item>
+                            <Form.Item name="description" label="描述">
+                                <Input placeholder="角色说明（可选）" disabled={roleModal?.record?.role_id === 'admin' && roleModal?.record?.is_system} />
+                            </Form.Item>
+                            {roleModal?.record?.role_id === 'admin' && roleModal?.record?.is_system
+                                ? <Alert type="warning" showIcon message="内置超级管理员角色权限固定为全部权限，不可修改。" />
+                                : renderPerms()}
+                        </Form>
+                    </Modal>
+                </div>
+            </ConfigProvider>
+        );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
