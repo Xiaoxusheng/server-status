@@ -45,12 +45,12 @@
             --text: #e8edf5; --sub: #9aa4b8; --muted: #7d8798;
         }
         .tr-head { position: absolute; left: 32px; top: 14px; right: 40px; }
-        .tr-title { display: inline-flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; color: var(--text); }
-        .tr-live { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: 999px; background: rgba(82,196,26,.13); color: #52c41a; font-size: 11px; font-weight: 600; }
+        .tr-title { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--text); }
+        .tr-live { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: 999px; background: rgba(82,196,26,.13); color: #52c41a; font-size: 10px; font-weight: 600; }
         .tr-live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #52c41a; box-shadow: 0 0 0 0 rgba(82,196,26,.45); animation: traffic-pulse 1.6s infinite; }
         @keyframes traffic-pulse { 70% { box-shadow: 0 0 0 6px rgba(82,196,26,0); } 100% { box-shadow: 0 0 0 0 rgba(82,196,26,0); } }
-        .tr-sub { margin-top: 3px; font-size: 11px; color: var(--sub); }
-        .tr-layout-btn { position: absolute; right: 32px; top: 16px; border: 1px solid rgba(22,119,255,.3); background: rgba(22,119,255,.07); color: var(--blue); font-size: 11px; line-height: 1; padding: 5px 12px; border-radius: 999px; cursor: pointer; transition: all .18s; }
+        .tr-sub { margin-top: 3px; font-size: 10px; color: var(--sub); }
+        .tr-layout-btn { position: absolute; right: 32px; top: 16px; border: 1px solid rgba(22,119,255,.3); background: rgba(22,119,255,.07); color: var(--blue); font-size: 10px; line-height: 1; padding: 5px 12px; border-radius: 999px; cursor: pointer; transition: all .18s; }
         .tr-layout-btn:hover { background: rgba(22,119,255,.14); }
         .tr-stats { position: absolute; left: 32px; right: 32px; top: 78px; display: flex; gap: 10px; }
         .tr-stat { flex: 1; box-sizing: border-box; display: flex; align-items: center; gap: 9px; min-width: 0; padding: 7px 11px; border-radius: 9px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(20,34,58,.05); }
@@ -58,8 +58,8 @@
         .tr-stat:nth-child(2) .tr-ico { background: rgba(19,194,194,.14); color: var(--teal); }
         .tr-stat:nth-child(n+3) .tr-ico { background: rgba(120,130,150,.14); color: var(--sub); }
         .tr-stat > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; overflow: hidden; }
-        .tr-stat .tr-label { font-size: 10.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .tr-stat .tr-value { font-size: 16px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
+        .tr-stat .tr-label { font-size: 9.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tr-stat .tr-value { font-size: 13.5px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
         .tr-stat .tr-value.rx { color: var(--blue); }
         .tr-stat .tr-value.tx { color: var(--teal); }
         .tr-topo { position: absolute; left: 0; right: 0; top: 0; height: 760px; z-index: 2; }
@@ -70,9 +70,9 @@
         .tr-node.active { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(22,119,255,.18); }
         .tr-node .tr-ico { width: 29px; height: 29px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; background: rgba(22,119,255,.12); color: var(--blue); }
         .tr-node .tr-body { flex: 1; min-width: 0; overflow: hidden; }
-        .tr-node .tr-name { font-size: 11.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .tr-node .tr-info { margin-top: 1px; font-size: 10px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .tr-node .tr-rates { margin-top: 3px; display: flex; flex-direction: column; gap: 1px; font-size: 10px; min-width: 0; }
+        .tr-node .tr-name { font-size: 10px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tr-node .tr-info { margin-top: 1px; font-size: 9px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tr-node .tr-rates { margin-top: 3px; display: flex; flex-direction: column; gap: 1px; font-size: 9px; min-width: 0; }
         .tr-rate { display: inline-flex; align-items: center; gap: 4px; }
         .tr-rate i { width: 12px; height: 12px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-style: normal; color: #fff; }
         .tr-rate.rx i { background: var(--green); }
@@ -84,23 +84,23 @@
         .tr-num { position: absolute; top: -6px; left: -6px; width: 17px; height: 17px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(22,119,255,.35); }
         .tr-node.server { border-color: rgba(82,196,26,.42); background: linear-gradient(180deg, var(--card), rgba(82,196,26,.06)); }
         .tr-node.server .tr-ico { background: rgba(82,196,26,.14); color: var(--green); }
-        .tr-badge { position: absolute; left: 9px; right: 9px; bottom: 5px; font-size: 9px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tr-badge { position: absolute; left: 9px; right: 9px; bottom: 5px; font-size: 8.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tr-bottom { position: absolute; left: 32px; right: 32px; top: 580px; bottom: 14px; z-index: 2; }
         .tr-panel { position: absolute; top: 0; bottom: 0; }
         .tr-panel.clients { left: 0; width: 360px; }
         .tr-panel.services { left: 392px; width: 330px; }
         .tr-panel.trend { left: 760px; right: 0; }
-        .tr-panel-title { font-size: 11px; font-weight: 600; color: var(--text); margin-bottom: 6px; display: flex; align-items: center; gap: 7px; }
-        .tr-panel-title .tr-count { padding: 1px 7px; border-radius: 999px; background: rgba(22,119,255,.12); color: var(--blue); font-size: 10px; font-weight: 600; }
-        .tr-row { box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 5px 9px; margin-bottom: 4px; border-radius: 7px; background: var(--card); border: 1px solid var(--border); font-size: 10.5px; }
+        .tr-panel-title { font-size: 10px; font-weight: 600; color: var(--text); margin-bottom: 6px; display: flex; align-items: center; gap: 7px; }
+        .tr-panel-title .tr-count { padding: 1px 7px; border-radius: 999px; background: rgba(22,119,255,.12); color: var(--blue); font-size: 9px; font-weight: 600; }
+        .tr-row { box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 5px 9px; margin-bottom: 4px; border-radius: 7px; background: var(--card); border: 1px solid var(--border); font-size: 9.5px; }
         .tr-row .tr-num { position: static; width: 16px; height: 16px; font-size: 9.5px; flex: 0 0 auto; }
         .tr-row-name { flex: 1; min-width: 0; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tr-row-rates { display: inline-flex; gap: 10px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
         .tr-row-rates .rx { color: var(--green); }
         .tr-row-rates .tx { color: var(--blue); }
-        .tr-empty { font-size: 10.5px; color: var(--muted); padding: 4px 0; }
+        .tr-empty { font-size: 9.5px; color: var(--muted); padding: 4px 0; }
         .tr-trend-chart { position: absolute; left: 0; right: 0; top: 24px; bottom: 0; }
-        .tr-legend { position: absolute; right: 32px; top: 506px; z-index: 2; display: flex; gap: 12px; font-size: 10px; color: var(--sub); }
+        .tr-legend { position: absolute; right: 32px; top: 506px; z-index: 2; display: flex; gap: 12px; font-size: 9px; color: var(--sub); }
         .tr-legend .lg { display: inline-flex; align-items: center; gap: 5px; }
         .tr-legend .lg::before { content: ''; width: 14px; height: 3px; border-radius: 2px; }
         .tr-legend .lg-rx::before { background: var(--blue); }
@@ -572,15 +572,15 @@
                     trigger: 'axis',
                     backgroundColor: 'rgba(22,30,48,0.9)',
                     borderWidth: 0,
-                    textStyle: { color: '#fff', fontSize: 12 },
+                    textStyle: { color: '#fff', fontSize: 11 },
                     formatter: ps => {
                         const rows = (ps || []).map(p => p.marker + ' ' + p.seriesName + ': ' + formatRate(p.value));
                         return ((ps && ps[0] && ps[0].axisValue) || '') + '<br/>' + rows.join('<br/>');
                     }
                 },
                 grid: { left: 8, right: 8, top: 16, bottom: 4, containLabel: true },
-                xAxis: { type: 'category', boundaryGap: false, data: D.trendLabels.slice(), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 10, interval: Math.max(0, Math.ceil(len / 6) - 1) } },
-                yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 10 }, splitLine: { lineStyle: { color: splitColor, type: 'dashed' } } },
+                xAxis: { type: 'category', boundaryGap: false, data: D.trendLabels.slice(), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 9, interval: Math.max(0, Math.ceil(len / 6) - 1) } },
+                yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 9 }, splitLine: { lineStyle: { color: splitColor, type: 'dashed' } } },
                 series: [
                     { name: '下载流量 (RX)', type: 'line', smooth: 0.35, symbol: 'none', lineStyle: { width: 2, color: '#1677ff' }, itemStyle: { color: '#1677ff' }, areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(22,119,255,0.28)' }, { offset: 1, color: 'rgba(22,119,255,0.02)' }]) }, data: D.trendRx.slice() },
                     { name: '上传流量 (TX)', type: 'line', smooth: 0.35, symbol: 'none', lineStyle: { width: 2, color: '#faad14' }, itemStyle: { color: '#faad14' }, areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(250,173,20,0.24)' }, { offset: 1, color: 'rgba(250,173,20,0.02)' }]) }, data: D.trendTx.slice() }
