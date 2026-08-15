@@ -53,7 +53,7 @@
         .tr-layout-btn { position: absolute; right: 32px; top: 16px; border: 1px solid rgba(22,119,255,.3); background: rgba(22,119,255,.07); color: var(--blue); font-size: 11px; line-height: 1; padding: 5px 12px; border-radius: 999px; cursor: pointer; transition: all .18s; }
         .tr-layout-btn:hover { background: rgba(22,119,255,.14); }
         .tr-stats { position: absolute; left: 32px; right: 32px; top: 78px; display: flex; gap: 10px; }
-        .tr-stat { flex: 1; display: flex; align-items: center; gap: 9px; min-width: 0; padding: 7px 11px; border-radius: 9px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(20,34,58,.05); }
+        .tr-stat { flex: 1; box-sizing: border-box; display: flex; align-items: center; gap: 9px; min-width: 0; padding: 7px 11px; border-radius: 9px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(20,34,58,.05); }
         .tr-stat .tr-ico { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; background: rgba(22,119,255,.12); color: var(--blue); }
         .tr-stat:nth-child(2) .tr-ico { background: rgba(19,194,194,.14); color: var(--teal); }
         .tr-stat:nth-child(n+3) .tr-ico { background: rgba(120,130,150,.14); color: var(--sub); }
@@ -64,7 +64,7 @@
         .tr-stat .tr-value.tx { color: var(--teal); }
         .tr-topo { position: absolute; left: 0; right: 0; top: 0; height: 760px; z-index: 2; }
         .tr-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
-        .tr-node { position: absolute; border-radius: 9px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 2px 7px rgba(20,34,58,.07); display: flex; align-items: center; gap: 8px; padding: 7px 9px; cursor: grab; touch-action: none; user-select: none; transition: box-shadow .15s, border-color .15s; }
+        .tr-node { position: absolute; box-sizing: border-box; border-radius: 9px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 2px 7px rgba(20,34,58,.07); display: flex; align-items: center; gap: 8px; padding: 7px 9px; cursor: grab; touch-action: none; user-select: none; transition: box-shadow .15s, border-color .15s; }
         .tr-node:hover { border-color: var(--blue); box-shadow: 0 4px 13px rgba(22,119,255,.18); }
         .tr-node:active { cursor: grabbing; }
         .tr-node.active { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(22,119,255,.18); }
@@ -92,7 +92,7 @@
         .tr-panel.trend { left: 760px; right: 0; }
         .tr-panel-title { font-size: 11px; font-weight: 600; color: var(--text); margin-bottom: 6px; display: flex; align-items: center; gap: 7px; }
         .tr-panel-title .tr-count { padding: 1px 7px; border-radius: 999px; background: rgba(22,119,255,.12); color: var(--blue); font-size: 10px; font-weight: 600; }
-        .tr-row { display: flex; align-items: center; gap: 8px; padding: 5px 9px; margin-bottom: 4px; border-radius: 7px; background: var(--card); border: 1px solid var(--border); font-size: 10.5px; }
+        .tr-row { box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 5px 9px; margin-bottom: 4px; border-radius: 7px; background: var(--card); border: 1px solid var(--border); font-size: 10.5px; }
         .tr-row .tr-num { position: static; width: 16px; height: 16px; font-size: 9.5px; flex: 0 0 auto; }
         .tr-row-name { flex: 1; min-width: 0; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tr-row-rates { display: inline-flex; gap: 10px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
@@ -105,7 +105,7 @@
         .tr-legend .lg::before { content: ''; width: 14px; height: 3px; border-radius: 2px; }
         .tr-legend .lg-rx::before { background: var(--blue); }
         .tr-legend .lg-tx::before { background: var(--amber); }
-        .tr-svg line { stroke-dasharray: 5 4; animation: traffic-flow 1.2s linear infinite; }
+        .tr-svg polyline { stroke-dasharray: 5 4; animation: traffic-flow 1.2s linear infinite; }
         @keyframes traffic-flow { to { stroke-dashoffset: -9; } }
         .chart-meta { font-size: 12px; color: #999; text-align: right; margin-top: 6px; }
         .login-bg {
@@ -228,16 +228,16 @@
 
     // 1200x760 设计画布内的节点卡片布局
     const CARD_LAYOUT = {
-        server: { left: 490, top: 155, w: 210, h: 80 },
-        eth0: { left: 270, top: 302, w: 115, h: 58 },
-        wlan0: { left: 430, top: 300, w: 115, h: 58 },
-        docker0: { left: 590, top: 302, w: 115, h: 58 },
+        server: { left: 490, top: 225, w: 210, h: 80 },
+        eth0: { left: 270, top: 130, w: 115, h: 58 },
+        wlan0: { left: 430, top: 128, w: 115, h: 58 },
+        docker0: { left: 590, top: 130, w: 115, h: 58 },
         c0: { left: 30, top: 395, w: 175, h: 82 },
         c1: { left: 220, top: 395, w: 175, h: 82 },
         c2: { left: 410, top: 395, w: 175, h: 82 },
-        s0: { left: 840, top: 395, w: 115, h: 82 },
-        s1: { left: 965, top: 395, w: 115, h: 82 },
-        s2: { left: 1090, top: 395, w: 115, h: 82 }
+        s0: { left: 830, top: 395, w: 115, h: 82 },
+        s1: { left: 955, top: 395, w: 115, h: 82 },
+        s2: { left: 1080, top: 395, w: 115, h: 82 }
     };
     const IFACE_SLOTS = ['eth0', 'wlan0', 'docker0'];
 
@@ -458,34 +458,36 @@
                 const d = dragPosRef.current[id] || { x: 0, y: 0 };
                 return { left: c.left + d.x, top: c.top + d.y, w: c.w, h: c.h };
             };
-            const center = (id) => {
-                const r = rectOf(id);
-                return { x: r.left + r.w / 2, y: r.top + r.h / 2 };
-            };
-            // 将线段端点裁剪到节点框边缘，使连线直接“接”在框上
-            const edgePoint = (from, rect) => {
-                const cx = rect.left + rect.w / 2;
-                const cy = rect.top + rect.h / 2;
-                const dx = from.x - cx;
-                const dy = from.y - cy;
-                const sx = (rect.w / 2) / Math.max(Math.abs(dx), 0.0001);
-                const sy = (rect.h / 2) / Math.max(Math.abs(dy), 0.0001);
-                const s = Math.min(sx, sy, 1);
-                return { x: cx + dx * s, y: cy + dy * s };
-            };
-            const addLine = (aId, bId, rx, tx, key) => {
-                const a = center(aId);
-                const b = center(bId);
-                const aEdge = edgePoint(b, rectOf(aId));
-                const bEdge = edgePoint(a, rectOf(bId));
-                out.push({ key, rx: parseFloat(rx) || 0, tx: parseFloat(tx) || 0, x1: aEdge.x, y1: aEdge.y, x2: bEdge.x, y2: bEdge.y });
+            const server = rectOf('server');
+            const sTop = server.top;
+            const sBottom = server.top + server.h;
+            // 正交折线：节点 → 垂直进入空档 → 水平到服务器边缘 → 挂接
+            const addLine = (nodeId, rx, tx, key) => {
+                const r = rectOf(nodeId);
+                const nx = r.left + r.w / 2;
+                const above = r.top + r.h / 2 < server.top + server.h / 2;
+                const nodeY = above ? r.top + r.h : r.top;
+                const edgeY = above ? sTop : sBottom;
+                const gapY = above ? sTop - 4 : sBottom + 4;
+                const ax = Math.max(server.left + 12, Math.min(server.left + server.w - 12, nx));
+                out.push({
+                    key,
+                    rx: parseFloat(rx) || 0,
+                    tx: parseFloat(tx) || 0,
+                    points: [
+                        { x: nx, y: nodeY },
+                        { x: nx, y: gapY },
+                        { x: ax, y: gapY },
+                        { x: ax, y: edgeY }
+                    ]
+                });
             };
             const clients = tv.clients.slice(0, 3);
             const services = tv.services.slice(0, 3);
             const ifaces = tv.ifaces.slice(0, 3);
-            clients.forEach((c, i) => addLine('c' + i, 'server', c.rx, c.tx, 'cl' + i));
-            services.forEach((s, i) => addLine('s' + i, 'server', s.rx, s.tx, 'sv' + i));
-            ifaces.forEach((f, i) => addLine(IFACE_SLOTS[i], 'server', f.rx, f.tx, 'if' + i));
+            clients.forEach((c, i) => addLine('c' + i, c.rx, c.tx, 'cl' + i));
+            services.forEach((s, i) => addLine('s' + i, s.rx, s.tx, 'sv' + i));
+            ifaces.forEach((f, i) => addLine(IFACE_SLOTS[i], f.rx, f.tx, 'if' + i));
             setLines(out);
         };
 
@@ -768,12 +770,13 @@
                                                 </div>
                                             </div>
 
-                                            <svg className="tr-svg" viewBox="0 0 1536 1024" preserveAspectRatio="none" aria-hidden="true">
+                                            <svg className="tr-svg" viewBox="0 0 1200 760" preserveAspectRatio="none" aria-hidden="true">
                                                 {lines.map(l => (
-                                                    <line key={l.key} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
-                                                          stroke={l.rx >= l.tx ? '#1677ff' : '#13c2c2'}
-                                                          strokeWidth={lineW(Math.max(l.rx, l.tx))}
-                                                          strokeOpacity={0.4} />
+                                                    <polyline key={l.key} points={l.points.map(p => p.x + ',' + p.y).join(' ')}
+                                                              stroke={l.rx >= l.tx ? '#1677ff' : '#13c2c2'}
+                                                              strokeWidth={lineW(Math.max(l.rx, l.tx))}
+                                                              strokeOpacity={0.45}
+                                                              fill="none" strokeLinecap="round" strokeLinejoin="round" />
                                                 ))}
                                             </svg>
 
