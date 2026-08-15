@@ -30,6 +30,7 @@
         }
         .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
         .chart-card .chart { height: 260px; width: 100%; }
+        .traffic-card { box-shadow: 0 4px 18px rgba(20,34,58,.08); }
         .traffic-card .ant-card-body { padding: 0 !important; }
         .traffic-wrap { width: 100%; overflow-x: auto; }
         .traffic-canvas {
@@ -452,15 +453,32 @@
             if (!status) return;
             const tv = buildTrafficView(status);
             const out = [];
-            const center = (id) => {
+            const rectOf = (id) => {
                 const c = CARD_LAYOUT[id];
                 const d = dragPosRef.current[id] || { x: 0, y: 0 };
-                return { x: c.left + c.w / 2 + d.x, y: c.top + c.h / 2 + d.y };
+                return { left: c.left + d.x, top: c.top + d.y, w: c.w, h: c.h };
+            };
+            const center = (id) => {
+                const r = rectOf(id);
+                return { x: r.left + r.w / 2, y: r.top + r.h / 2 };
+            };
+            // 将线段端点裁剪到节点框边缘，使连线直接“接”在框上
+            const edgePoint = (from, rect) => {
+                const cx = rect.left + rect.w / 2;
+                const cy = rect.top + rect.h / 2;
+                const dx = from.x - cx;
+                const dy = from.y - cy;
+                const sx = (rect.w / 2) / Math.max(Math.abs(dx), 0.0001);
+                const sy = (rect.h / 2) / Math.max(Math.abs(dy), 0.0001);
+                const s = Math.min(sx, sy, 1);
+                return { x: cx + dx * s, y: cy + dy * s };
             };
             const addLine = (aId, bId, rx, tx, key) => {
                 const a = center(aId);
                 const b = center(bId);
-                out.push({ key, rx: parseFloat(rx) || 0, tx: parseFloat(tx) || 0, x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+                const aEdge = edgePoint(b, rectOf(aId));
+                const bEdge = edgePoint(a, rectOf(bId));
+                out.push({ key, rx: parseFloat(rx) || 0, tx: parseFloat(tx) || 0, x1: aEdge.x, y1: aEdge.y, x2: bEdge.x, y2: bEdge.y });
             };
             const clients = tv.clients.slice(0, 3);
             const services = tv.services.slice(0, 3);
@@ -610,14 +628,14 @@
             measureTrafficLines();
             updateTrafficTrend();
             const w = canvasWrapRef.current && canvasWrapRef.current.clientWidth;
-            if (w > 0) setCanvasScale(Math.min(1, w / 1200));
+            if (w > 0) setCanvasScale(w / 1200);
         }, [status, isDark]);
 
         // 画布自适应缩放（1536x1024 设计稿等比缩放）
         useEffect(() => {
             const update = () => {
                 const w = canvasWrapRef.current && canvasWrapRef.current.clientWidth;
-                if (w > 0) setCanvasScale(Math.min(1, w / 1200));
+                if (w > 0) setCanvasScale(w / 1200);
             };
             update();
             window.addEventListener('resize', update);
@@ -720,8 +738,8 @@
                                 const maxRate = Math.max.apply(null, rates) || 1;
                                 const lineW = r => Math.max(1.2, Math.min(5, 1.2 + r / maxRate * 3.8));
                                 return (
-                                    <div className="traffic-wrap" ref={canvasWrapRef}>
-                                        <div className={'traffic-canvas' + (isDark ? ' dark' : '')} style={{ width: Math.round(1200 * canvasScale), height: Math.round(760 * canvasScale), transform: 'scale(' + canvasScale + ')' }}>
+                                    <div className="traffic-wrap" ref={canvasWrapRef} style={{ height: Math.round(760 * canvasScale) }}>
+                                        <div className={'traffic-canvas' + (isDark ? ' dark' : '')} style={{ transform: 'scale(' + canvasScale + ')' }}>
                                             <div className="tr-head">
                                                 <div className="tr-title">实时流量关系<span className="tr-live">实时</span></div>
                                                 <div className="tr-sub">当前服务器网络流量拓扑关系</div>
