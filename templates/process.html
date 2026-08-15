@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>进程监控 - Server Status</title>
+    <link rel="icon" href="data:,">
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <style>
+        body { margin: 0; background: #f5f5f5; }
+        #root { min-height: 100vh; }
+        .page-wrap { padding: 16px; }
+        .topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 56px; background: #fff;
+            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; color: #1677ff; }
+        .topbar.dark { background: #1f1f1f; border-bottom-color: #303030; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+        .topbar.dark .brand { color: #4096ff; }
+        .topbar .brand .logo {
+            width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #1677ff, #722ed1);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px;
+        }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
+        .chart-card .chart { height: 300px; width: 100%; }
+        .proc-card { margin-bottom: 10px; }
+        .proc-card .ant-card-body { padding: 12px 14px; }
+        .proc-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 13px; }
+        .proc-row .label { color: #999; font-size: 12px; }
+        @media (max-width: 768px) {
+            .topbar { padding: 8px 12px; flex-wrap: wrap; gap: 6px 8px; }
+            .topbar .brand { font-size: 14px; gap: 6px; }
+            .topbar .brand .logo { width: 26px; height: 26px; font-size: 14px; border-radius: 6px; }
+            .topbar .ant-space { flex-wrap: wrap; gap: 6px !important; }
+            .topbar .ant-btn { padding: 4px 8px; font-size: 12px; height: 30px; }
+            .topbar .tb-sub { display: none; }
+            .topbar .tb-label { display: none; }
+            .page-wrap { padding: 10px; }
+            .chart-card .chart { height: 240px; }
+            .ant-card-head { padding: 0 12px !important; }
+            .ant-card-head-wrapper { flex-wrap: wrap; gap: 6px; }
+            .ant-card-body { padding: 12px !important; }
+            .stat-grid { grid-template-columns: 1fr; gap: 8px; }
+            .stat-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+    const { Layout, Card, Table, Statistic, Button, Input, Segmented, Progress, Tag, Space, message, Modal, Row, Col, Typography, ConfigProvider, theme, Empty, Popconfirm } = window.antd;
+    const { useState, useEffect, useRef, useCallback } = React;
+    const { darkAlgorithm } = theme;
+
+    function useIsMobile() {
+        const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
+        useEffect(() => {
+            const q = window.matchMedia('(max-width: 768px)');
+            const h = e => setM(e.matches);
+            q.addListener(h);
+            return () => q.removeListener(h);
+        }, []);
+        return m;
+    }
+
+    const baseUrl = window.location.origin;
+
+    const hexToRgba = (hex, alpha) => {
+        const h = hex.replace('#', '');
+        const r = parseInt(h.substring(0, 2), 16);
+        const g = parseInt(h.substring(2, 4), 16);
+        const b = parseInt(h.substring(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
+    function secureFetch(url, options = {}) {
+        return fetch(url, {
+            method: options.method || 'GET',
+            headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+            credentials: 'include',
+            body: options.body
+        });
+    }
+
+    function App() {
+        const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+        const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+        const [procs, setProcs] = useState([]);
+        const [sortBy, setSortBy] = useState('cpu');
+        const [search, setSearch] = useState('');
+        const [loading, setLoading] = useState(false);
+        const chartRef = useRef(null);
+        const chartInst = useRef(null);
+        const isMobile = useIsMobile();
+        const [shown, setShown] = useState(50);
+
+        const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+
+        // 认证检查
+        useEffect(() => {
+            secureFetch(baseUrl + '/check-auth')
+                .then(r => r.json())
+                .then(d => {
+                    if (d.code === 200) {
+                        setAuth({ loading: false, ok: true, user: d.user });
+                    } else {
+                        window.location.href = 'index.html';
+                    }
+                })
+                .catch(() => { window.location.href = 'index.html'; });
+        }, []);
+
+        const load = useCallback(async () => {
+            setLoading(true);
+            try {
+                const r = await secureFetch(baseUrl + '/api/processes?sort=' + sortBy + '&top=100');
+                const d = await r.json();
+                if (d.code === 200) setProcs(d.data || []);
+                else message.error(d.message || '加载失败');
+            } catch (e) {
+                message.error('加载失败: ' + e.message);
+            } finally {
+                setLoading(false);
+            }
+        }, [sortBy]);
+
+        useEffect(() => {
+            if (!auth.ok) return;
+            load();
+            const t = setInterval(load, 3000);
+            return () => clearInterval(t);
+        }, [auth.ok, load]);
+        useEffect(() => { setShown(50); }, [sortBy]);
+
+        // 图表
+        useEffect(() => {
+            if (!auth.ok || !chartRef.current) return;
+            if (!chartInst.current) {
+                chartInst.current = echarts.init(chartRef.current);
+                const onResize = () => chartInst.current && chartInst.current.resize();
+                window.addEventListener('resize', onResize);
+                return () => window.removeEventListener('resize', onResize);
+            }
+            const list = procs.slice(0, 10).reverse();
+            const names = list.map(p => '#' + p.pid + ' ' + (p.command || '').slice(0, 18));
+            const values = list.map(p => sortBy === 'mem' ? parseFloat(p.mem_pct) || 0 : parseFloat(p.cpu) || 0);
+            const isMem = sortBy === 'mem';
+            chartInst.current.setOption({
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                grid: { left: 10, right: 34, top: 8, bottom: 4, containLabel: true },
+                xAxis: {
+                    type: 'value', axisLine: { show: false }, axisTick: { show: false },
+                    axisLabel: { color: '#8b93a5', fontSize: 11 },
+                    splitLine: { lineStyle: { color: 'rgba(120,130,150,0.16)', type: 'dashed' } }
+                },
+                yAxis: {
+                    type: 'category', data: names, axisLine: { show: false }, axisTick: { show: false },
+                    axisLabel: { color: '#8b93a5', fontSize: 11, width: 190, overflow: 'truncate' }
+                },
+                series: [{
+                    type: 'bar', data: values, barMaxWidth: 16,
+                    itemStyle: {
+                        borderRadius: [0, 6, 6, 0],
+                        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                            { offset: 0, color: isMem ? '#52c41a' : '#1677ff' },
+                            { offset: 1, color: isMem ? '#95de64' : '#69b1ff' }
+                        ])
+                    },
+                    label: { show: true, position: 'right', color: '#8b93a5', fontSize: 11, formatter: p => p.value.toFixed(1) + '%' }
+                }]
+            });
+        }, [auth.ok, procs, sortBy]);
+
+        // 主题
+        useEffect(() => {
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        }, [isDark]);
+
+        if (auth.loading) {
+            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Card loading style={{ width: 320 }} />
+            </div>;
+        }
+
+        if (!hasPerm('system:process')) {
+            return <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
+                <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
+                    <Card style={{ width: 380, textAlign: 'center' }}>
+                        <div style={{ fontSize: 48 }}>🚫</div>
+                        <Typography.Title level={4}>没有访问权限</Typography.Title>
+                        <Typography.Text type="secondary">当前账号没有「查看进程列表」权限，请联系管理员开通。</Typography.Text>
+                        <div style={{ marginTop: 16 }}>
+                            <Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>
+                        </div>
+                    </Card>
+                </div>
+            </ConfigProvider>;
+        }
+
+        const filtered = search.trim()
+            ? procs.filter(p =>
+                (p.pid || '').includes(search.trim()) ||
+                (p.user || '').toLowerCase().includes(search.trim().toLowerCase()) ||
+                (p.command || '').toLowerCase().includes(search.trim().toLowerCase()))
+            : procs;
+
+        const topCpu = [...procs].sort((a, b) => parseFloat(b.cpu) - parseFloat(a.cpu))[0];
+        const topMem = [...procs].sort((a, b) => parseFloat(b.mem_pct) - parseFloat(a.mem_pct))[0];
+        const maxCpu = Math.max.apply(null, procs.map(p => parseFloat(p.cpu) || 0)) || 1;
+        const maxMem = Math.max.apply(null, procs.map(p => parseFloat(p.mem_pct) || 0)) || 1;
+
+        const killProcess = async (record) => {
+            try {
+                const r = await secureFetch(baseUrl + '/api/processes/kill', { method: 'POST', body: JSON.stringify({ pid: parseInt(record.pid, 10) }) });
+                const d = await r.json();
+                if (d.code === 200) {
+                    message.success(`已向进程 ${record.pid} 发送终止信号`);
+                    setTimeout(load, 1500);
+                } else {
+                    message.error(d.message || '结束失败');
+                }
+            } catch (e) {
+                message.error('结束进程失败: ' + e.message);
+            }
+        };
+
+        const columns = [
+            { title: 'PID', dataIndex: 'pid', width: 80, render: v => <Typography.Text copyable code>{v}</Typography.Text> },
+            { title: '用户', dataIndex: 'user', width: 110, render: v => <Tag>{v}</Tag> },
+            {
+                title: 'CPU', dataIndex: 'cpu', width: 200,
+                render: v => {
+                    const n = parseFloat(v) || 0;
+                    return <Progress percent={Math.min(100, n / maxCpu * 100)} format={() => n.toFixed(1) + '%'} strokeColor={{ from: '#1677ff', to: '#722ed1' }} size="small" />;
+                }
+            },
+            {
+                title: '内存', dataIndex: 'mem_pct', width: 200,
+                render: v => {
+                    const n = parseFloat(v) || 0;
+                    return <Progress percent={Math.min(100, n / maxMem * 100)} format={() => n.toFixed(1) + '%'} strokeColor={{ from: '#52c41a', to: '#95de64' }} size="small" />;
+                }
+            },
+            { title: 'RSS', dataIndex: 'rss_mb', width: 100, render: v => v + ' MB' },
+            { title: '运行时长', dataIndex: 'elapsed', width: 110, render: v => <Typography.Text type="secondary">{v}</Typography.Text> },
+            { title: '命令', dataIndex: 'command', ellipsis: true, render: v => <Typography.Text code style={{ fontSize: 12 }}>{v}</Typography.Text> },
+            {
+                title: '操作', key: 'op', width: 90, fixed: 'right',
+                render: (_, rec) => parseInt(rec.pid, 10) > 1
+                    ? <Popconfirm title="结束进程" description={`确定结束 PID ${rec.pid} 吗？将发送终止信号。`}
+                                  okText="结束" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => killProcess(rec)}>
+                        <Button size="small" danger icon={<span>⏹</span>}>结束</Button>
+                      </Popconfirm>
+                    : <Typography.Text type="secondary">-</Typography.Text>
+            }
+        ];
+
+        return (
+            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
+                <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                    <div className={'topbar' + (isDark ? ' dark' : '')}>
+                        <div className="brand">
+                            <span className="logo">⚙️</span>
+                            <span>Server Status<span className="tb-sub"> · 进程监控</span></span>
+                        </div>
+                        <Space>
+                            <Button title="首页" onClick={() => window.location.href = 'index.html'}>🏠<span className="tb-label">首页</span></Button>
+                            <Button title="IP 流量" onClick={() => window.location.href = 'ip-panel.html'}>🌐<span className="tb-label">IP 流量</span></Button>
+                            <Button title={isDark ? '浅色模式' : '深色模式'} onClick={() => setIsDark(!isDark)}>{isDark ? '🌞' : '🌙'}<span className="tb-label">{isDark ? '浅色' : '深色'}</span></Button>
+                            <Button danger title="退出登录" onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}>🚪<span className="tb-label">退出</span></Button>
+                        </Space>
+                    </div>
+
+                    <div className="page-wrap">
+                        <div className="stat-grid stat-cards">
+                            <Card size="small" hoverable bordered><Statistic title="🧬 进程总数" value={procs.length} /></Card>
+                            <Card size="small" hoverable bordered>
+                                <Statistic title="🔥 CPU 最高" value={topCpu ? (parseFloat(topCpu.cpu) || 0).toFixed(1) : '-'} suffix="%" />
+                                <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>{topCpu ? (topCpu.command || '').slice(0, 28) : ''}</div>
+                            </Card>
+                            <Card size="small" hoverable bordered>
+                                <Statistic title="💾 内存最高" value={topMem ? (parseFloat(topMem.mem_pct) || 0).toFixed(1) : '-'} suffix="%" />
+                                <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>{topMem ? (topMem.command || '').slice(0, 28) : ''}</div>
+                            </Card>
+                            <Card size="small" hoverable bordered><Statistic title="🕒 最后刷新" value={new Date().toLocaleTimeString()} /></Card>
+                        </div>
+
+                        <Card hoverable bordered className="chart-card" title={sortBy === 'mem' ? '📊 TOP 10 进程（按内存）' : '📊 TOP 10 进程（按 CPU）'}
+                              extra={<Segmented options={[{ label: '🔥 CPU', value: 'cpu' }, { label: '💾 内存', value: 'mem' }]} value={sortBy} onChange={v => setSortBy(v)} />}
+                              style={{ marginBottom: 12 }}>
+                            <div ref={chartRef} className="chart"></div>
+                        </Card>
+
+                        <Card title={`🧬 进程列表（${filtered.length}）`}>
+                            <div style={{ marginBottom: 12 }}>
+                                <Input.Search
+                                    placeholder="搜索 PID / 用户 / 命令..."
+                                    allowClear
+                                    style={{ maxWidth: 360 }}
+                                    onSearch={v => setSearch(v)}
+                                    onChange={e => setSearch(e.target.value)}
+                                />
+                            </div>
+                            {isMobile ? (
+                                <div>
+                                    {filtered.slice(0, shown).map(p => {
+                                        const cpu = parseFloat(p.cpu) || 0;
+                                        const mem = parseFloat(p.mem_pct) || 0;
+                                        return <Card key={p.pid} size="small" hoverable bordered className="proc-card">
+                                            <div className="proc-row">
+                                                <span className="label">PID</span>
+                                                <Typography.Text code>{p.pid}</Typography.Text>
+                                            </div>
+                                            <div className="proc-row"><span className="label">用户</span><Tag>{p.user}</Tag></div>
+                                            <div className="proc-row"><span className="label">CPU</span>
+                                                <Progress percent={Math.min(100, cpu / (maxCpu || 1) * 100)} size="small" style={{ width: 140, margin: 0 }} format={() => cpu.toFixed(1) + '%'} strokeColor="#1677ff" />
+                                            </div>
+                                            <div className="proc-row"><span className="label">内存</span>
+                                                <Progress percent={Math.min(100, mem / (maxMem || 1) * 100)} size="small" style={{ width: 140, margin: 0 }} format={() => mem.toFixed(1) + '%'} strokeColor="#52c41a" />
+                                            </div>
+                                            <div className="proc-row"><span className="label">RSS</span><span>{p.rss_mb} MB</span></div>
+                                            <div className="proc-row"><span className="label">运行时长</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{p.elapsed}</Typography.Text></div>
+                                            <div className="proc-row" style={{ alignItems: 'flex-start' }}>
+                                                <span className="label" style={{ marginTop: 4 }}>命令</span>
+                                                <Typography.Text code style={{ fontSize: 11, wordBreak: 'break-all', textAlign: 'right' }}>{p.command}</Typography.Text>
+                                            </div>
+                                            <div style={{ textAlign: 'right', marginTop: 6 }}>
+                                                {parseInt(p.pid, 10) > 1 && <Popconfirm title="结束进程" description={`确定结束 PID ${p.pid} 吗？`}
+                                                    okText="结束" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => killProcess(p)}>
+                                                    <Button size="small" danger icon={<span>⏹</span>}>结束进程</Button>
+                                                </Popconfirm>}
+                                            </div>
+                                        </Card>;
+                                    })}
+                                    {!filtered.length && <Empty description="暂无进程数据" style={{ padding: 30 }} />}
+                                    {filtered.length > shown && (
+                                        <div style={{ textAlign: 'center', marginTop: 8 }}>
+                                            <Button block onClick={() => setShown(shown + 50)}>加载更多（{filtered.length - shown} 条）</Button>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <Table
+                                    rowKey="pid"
+                                    columns={columns}
+                                    dataSource={filtered}
+                                    loading={loading}
+                                    size="middle"
+                                    scroll={{ x: 960 }}
+                                    pagination={{ pageSize: 20, showSizeChanger: true, showTotal: t => `共 ${t} 条` }}
+                                />
+                            )}
+                        </Card>
+                    </div>
+                </div>
+            </ConfigProvider>
+        );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

@@ -600,6 +600,11 @@
     let currentBookId = null;
     let fontSize = 100; // 默认字体大小百分比
 
+    // HTML 转义，防止文件名/元数据注入 XSS
+    function esc(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
     // 获取书籍列表
     async function fetchBooks() {
         try {
@@ -647,7 +652,7 @@
                 <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
                     <i class="fas fa-exclamation-triangle" style="font-size: 3rem; color: var(--secondary-color); margin-bottom: 15px;"></i>
                     <h3 style="color: var(--secondary-color);">无法加载书籍</h3>
-                    <p>${err.message || '请检查网络或稍后重试'}</p>
+                    <p>${esc(err.message || '请检查网络或稍后重试')}</p>
                     <button class="btn" onclick="fetchBooks()">
                         <i class="fas fa-redo"></i> 重新加载
                     </button>
@@ -707,17 +712,17 @@
             const div = document.createElement('div');
             div.className = 'book-card';
             div.innerHTML = `
-                <img src="${book.cover}" alt="${book.title}" class="book-cover">
-                <div class="book-title">${book.title}</div>
-                <div class="book-desc">${book.desc}</div>
+                <img src="${esc(book.cover)}" alt="${esc(book.title)}" class="book-cover">
+                <div class="book-title">${esc(book.title)}</div>
+                <div class="book-desc">${esc(book.desc)}</div>
                 <div class="book-meta">
-                    <span><i class="fas fa-file"></i> ${book.pages}页</span>
-                    <span><i class="fas fa-tasks"></i> ${book.progress}%</span>
+                    <span><i class="fas fa-file"></i> ${esc(book.pages)}页</span>
+                    <span><i class="fas fa-tasks"></i> ${esc(book.progress)}%</span>
                 </div>
                 <div class="progress-container">
-                    <div class="progress-bar" style="width: ${book.progress}%"></div>
+                    <div class="progress-bar" style="width: ${esc(book.progress)}%"></div>
                 </div>
-                <button class="btn ${book.progress > 0 ? '' : 'btn-success'}" onclick="openBook('${book.file}', '${book.title}', '${book.id}')">
+                <button class="btn ${book.progress > 0 ? '' : 'btn-success'}" data-open data-file="${esc(book.file)}" data-title="${esc(book.title)}" data-id="${esc(book.id)}">
                     <i class="fas fa-book-open"></i> ${book.progress > 0 ? '继续阅读' : '开始阅读'}
                 </button>
             `;
@@ -736,6 +741,28 @@
         if (activeItem) {
             activeItem.classList.add('active');
         }
+    }
+
+    // 书籍列表点击委托：读取 data-* 安全属性，避免 onclick 字符串注入
+    const bookListEl = document.getElementById('bookList');
+    if (bookListEl && !bookListEl._openBound) {
+        bookListEl.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-open]');
+            if (!btn) return;
+            openBook(btn.dataset.file, btn.dataset.title, btn.dataset.id);
+        });
+        bookListEl._openBound = true;
+    }
+
+    // 阅读器重试按钮委托
+    const loadingEl = document.getElementById('loading');
+    if (loadingEl && !loadingEl._retryBound) {
+        loadingEl.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-retry]');
+            if (!btn) return;
+            openBook(btn.dataset.file, btn.dataset.title, btn.dataset.id);
+        });
+        loadingEl._retryBound = true;
     }
 
     // 打开电子书 - 使用EPUB.js直接处理远程文件
@@ -849,8 +876,8 @@
             document.getElementById('loading').innerHTML = `
                 <i class="fas fa-exclamation-triangle"></i>
                 <div>打开电子书失败</div>
-                <div>${error.message || '请检查网络连接'}</div>
-                <button class="btn" onclick="openBook('${fileUrl}', '${title}', '${bookId}')">
+                <div>${esc(error.message || '请检查网络连接')}</div>
+                <button class="btn" data-retry data-file="${esc(fileUrl)}" data-title="${esc(title)}" data-id="${esc(bookId)}">
                     <i class="fas fa-redo"></i> 重试
                 </button>
             `;
@@ -928,7 +955,7 @@
             // 检查这本书是否在当前的书籍列表中，避免undefined错误
             const book = books.find(b => b.id === bookId);
             if (book) {
-                li.innerHTML = `<i class="fas fa-bookmark"></i> ${bookInfo.title}`;
+                li.innerHTML = `<i class="fas fa-bookmark"></i> ${esc(bookInfo.title)}`;
                 li.onclick = () => {
                     openBook(book.file, book.title, book.id);
                 };

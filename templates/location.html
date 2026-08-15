@@ -453,12 +453,17 @@
             }
         }
 
+        // HTML 转义，防止用户昵称等数据注入 XSS
+        function esc(s) {
+            return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
         // 更新用户列表
         function updateUserList() {
             // 清空用户列表（保留"我"）
             userListElement.innerHTML = `
                 <div class="user-item active" data-user="me">
-                    <span>${users.me.name}</span>
+                    <span>${esc(users.me.name)}</span>
                     <span class="user-status">在线</span>
                 </div>
             `;
@@ -470,7 +475,7 @@
                 userItem.className = 'user-item';
                 userItem.dataset.user = id;
                 userItem.innerHTML = `
-                    <span>${user.name || `用户 ${id.substring(0, 6)}`}</span>
+                    <span>${esc(user.name || `用户 ${id.substring(0, 6)}`)}</span>
                     <span class="user-status">在线</span>
                 `;
 

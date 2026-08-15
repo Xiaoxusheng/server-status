@@ -3,2786 +3,497 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>服务器状态监控</title>
+    <title>服务器状态监控 - Server Status</title>
+    <link rel="icon" href="data:,">
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
-    <!-- 引入CryptoJS用于HMAC签名 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>
     <style>
-        /* 原有的CSS样式保持不变 */
-        :root {
-            --bg-color: #f8f9fa;
-            --text-color: #212529;
-            --card-bg: #ffffff;
-            --primary-color: #4a6ee0;
-            --secondary-color: #6c757d;
-            --success-color: #28a745;
-            --warning-color: #ffc107;
-            --danger-color: #dc3545;
-            --border-color: #dee2e6;
-            --table-header-bg: #e9ecef;
-            --table-row-even: #f8f9fa;
-            --table-row-hover: #ececec;
-        }
-
-        [data-theme="dark"] {
-            --bg-color: #121212;
-            --text-color: #e9ecef;
-            --card-bg: #1e1e1e;
-            --primary-color: #6c8dfa;
-            --secondary-color: #a0aec0;
-            --success-color: #48bb78;
-            --warning-color: #ecc94b;
-            --danger-color: #f56565;
-            --border-color: #2d3748;
-            --table-header-bg: #2d3748;
-            --table-row-even: #2a2a2a;
-            --table-row-hover: #2d2d2d;
-        }
-
-        * {
-            box-sizing: border-box;
-            transition: background-color 0.3s, color 0.3s, border-color 0.3s;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--bg-color);
-            color: var(--text-color);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-        }
-
-        /* 登录和注册界面样式 */
-        .auth-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .auth-card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-            padding: 40px;
-            width: 100%;
-            max-width: 450px;
-            border: 1px solid var(--border-color);
-        }
-
-        .auth-title {
-            text-align: center;
-            color: var(--primary-color);
-            margin-bottom: 30px;
-            font-size: 24px;
-            font-weight: 600;
-        }
-
-        .auth-form {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .form-label {
-            font-weight: 500;
-            color: var(--text-color);
-            font-size: 14px;
-        }
-
-        .form-input {
-            padding: 12px 16px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background: var(--card-bg);
-            color: var(--text-color);
-            font-size: 14px;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-
-        .form-input:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px rgba(74, 110, 224, 0.1);
-        }
-
-        .form-input.error {
-            border-color: var(--danger-color);
-        }
-
-        .form-input.success {
-            border-color: var(--success-color);
-        }
-
-        .form-hint {
-            font-size: 12px;
-            color: var(--secondary-color);
-            margin-top: 4px;
-        }
-
-        .form-error {
-            font-size: 12px;
-            color: var(--danger-color);
-            margin-top: 4px;
-        }
-
-        .password-strength {
-            margin-top: 5px;
-            height: 4px;
-            border-radius: 2px;
-            background-color: var(--border-color);
-            overflow: hidden;
-        }
-
-        .password-strength-bar {
-            height: 100%;
-            width: 0%;
-            transition: width 0.3s, background-color 0.3s;
-        }
-
-        .password-strength.weak .password-strength-bar {
-            width: 25%;
-            background-color: var(--danger-color);
-        }
-
-        .password-strength.fair .password-strength-bar {
-            width: 50%;
-            background-color: var(--warning-color);
-        }
-
-        .password-strength.good .password-strength-bar {
-            width: 75%;
-            background-color: #ffa500;
-        }
-
-        .password-strength.strong .password-strength-bar {
-            width: 100%;
-            background-color: var(--success-color);
-        }
-
-        .auth-button {
-            padding: 12px 16px;
-            border-radius: 8px;
-            border: none;
-            background: var(--primary-color);
-            color: white;
-            font-size: 16px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin-top: 10px;
-        }
-
-        .auth-button:hover {
-            filter: brightness(1.1);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(74, 110, 224, 0.3);
-        }
-
-        .auth-button:disabled {
-            background: var(--secondary-color);
-            cursor: not-allowed;
-            transform: none;
-            box-shadow: none;
-        }
-
-        .auth-error {
-            color: var(--danger-color);
-            text-align: center;
-            font-size: 14px;
-            margin-top: 10px;
-            padding: 10px;
-            background: rgba(220, 53, 69, 0.1);
-            border-radius: 6px;
-            display: none;
-        }
-
-        .auth-success {
-            color: var(--success-color);
-            text-align: center;
-            font-size: 14px;
-            margin-top: 10px;
-            padding: 10px;
-            background: rgba(40, 167, 69, 0.1);
-            border-radius: 6px;
-            display: none;
-        }
-
-        .auth-loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            color: var(--secondary-color);
-        }
-
-        .auth-loading .spinner {
-            width: 20px;
-            height: 20px;
-            border: 2px solid rgba(0, 0, 0, 0.1);
-            border-radius: 50%;
-            border-top: 2px solid var(--primary-color);
-            animation: spin 1s linear infinite;
-        }
-
-        .auth-switch {
-            text-align: center;
-            margin-top: 20px;
-            font-size: 14px;
-            color: var(--secondary-color);
-        }
-
-        .auth-switch a {
-            color: var(--primary-color);
-            text-decoration: none;
-            font-weight: 500;
-            cursor: pointer;
-        }
-
-        .auth-switch a:hover {
-            text-decoration: underline;
-        }
-
-        /* 用户信息样式 */
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 16px;
-            background: var(--card-bg);
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            margin-left: 10px;
-        }
-
-        .user-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--primary-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        .user-details {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .username {
-            font-weight: 500;
-            font-size: 14px;
-        }
-
-        .user-role {
-            font-size: 12px;
-            color: var(--secondary-color);
-        }
-
-        .logout-button {
-            background: var(--danger-color);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            padding: 6px 12px;
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .logout-button:hover {
-            filter: brightness(1.1);
-        }
-
-        /* 主内容容器 - 登录后显示 */
-        .main-content {
-            display: none;
-        }
-
-        /* 其余样式保持不变 */
-        h2 {
-            text-align: center;
-            margin-bottom: 20px;
-            padding-top: 20px;
-            color: var(--primary-color);
-        }
-
-        .container {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            padding: 20px;
-            margin-bottom: 240px;
-            gap: 20px;
-        }
-
-        .card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-            padding: 20px;
-            width: calc(50% - 20px);
-            border: 1px solid var(--border-color);
-        }
-
-        #info {
-            font-size: 14px;
-            line-height: 1.6;
-            padding: 15px;
-        }
-
-        .chart {
-            height: 300px;
-            width: 100%;
-        }
-
-        .controls {
-            text-align: center;
-            margin-bottom: 20px;
-            padding: 10px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            flex-wrap: wrap;
-        }
-
-        select, button {
-            padding: 10px 16px;
-            margin: 5px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background: var(--card-bg);
-            color: var(--text-color);
-            font-size: 14px;
-            cursor: pointer;
-            outline: none;
-        }
-
-        button {
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-
-        button:hover {
-            filter: brightness(1.1);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        /* 状态表格样式 */
-        .status-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            font-size: 14px;
-        }
-
-        .status-table th, .status-table td {
-            padding: 10px 12px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .status-table th {
-            background-color: var(--table-header-bg);
-            font-weight: 600;
-        }
-
-        .status-table tr:nth-child(even) {
-            background-color: var(--table-row-even);
-        }
-
-        .status-table tr:hover {
-            background-color: var(--table-row-hover);
-        }
-
-        .status-value {
-            font-weight: 500;
-            color: var(--primary-color);
-        }
-
-        /* 在线用户表格样式 */
-        .online-users-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            font-size: 13px;
-            table-layout: fixed;
-            word-wrap: break-word;
-        }
-
-        .online-users-table th, .online-users-table td {
-            padding: 8px 10px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .online-users-table th {
-            background-color: var(--table-header-bg);
-            font-weight: 600;
-            position: sticky;
-            top: 0;
-        }
-
-        .online-users-table tr:nth-child(even) {
-            background-color: var(--table-row-even);
-        }
-
-        .online-users-table tr:hover {
-            background-color: var(--table-row-hover);
-        }
-
-        .online-count {
-            font-weight: bold;
-            color: var(--primary-color);
-            margin-bottom: 10px;
-            text-align: center;
-            font-size: 16px;
-            padding: 8px;
-            background-color: rgba(74, 110, 224, 0.1);
-            border-radius: 6px;
-        }
-
-        /* 用户信息表格容器 */
-        .user-table-container {
-            width: 100%;
-            overflow-x: auto;
-            margin-top: 15px;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        /* 用户离开动画 */
-        .user-leaving {
-            animation: userLeave 0.5s ease-out forwards;
-            background-color: rgba(220, 53, 69, 0.1) !important;
-        }
-
-        @keyframes userLeave {
-            0% {
-                opacity: 1;
-                max-height: 100px;
-            }
-            100% {
-                opacity: 0;
-                max-height: 0;
-                padding-top: 0;
-                padding-bottom: 0;
-                border-bottom-width: 0;
-            }
-        }
-
-        /* 用户加入动画 */
-        .user-joining {
-            animation: userJoin 0.5s ease-out;
-            background-color: rgba(40, 167, 69, 0.1) !important;
-        }
-
-        @keyframes userJoin {
-            0% {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            100% {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* 刷新动画 */
-        .refreshing {
-            animation: refreshing 1s infinite;
-        }
-
-        @keyframes refreshing {
-            0% { opacity: 1; }
-            50% { opacity: 0.6; }
-            100% { opacity: 1; }
-        }
-
-        /* 固定右下角媒体模块 */
-        #fixedMediaContainer {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 380px;
-            height: 240px;
-            overflow: hidden;
-            border-radius: 12px;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-            background: var(--card-bg);
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            border: 1px solid var(--border-color);
-            transition: all 0.3s ease;
-        }
-
-        .media-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px 15px;
-            background: rgba(0, 0, 0, 0.03);
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .media-title {
-            font-weight: 600;
-            font-size: 14px;
-            color: var(--primary-color);
-        }
-
-        .media-controls {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .media-controls button {
-            padding: 6px 10px;
-            font-size: 12px;
-        }
-
-        .volume-control {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        #mediaVolume {
-            width: 80px;
-        }
-
-        .media-content {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            position: relative;
-        }
-
-        #fixedMediaImg,
-        #fixedMediaVideo {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-            transition: transform 0.3s ease;
-        }
-
-        .media-zoomed {
-            position: fixed !important;
-            bottom: 0 !important;
-            right: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            z-index: 10000;
-            border-radius: 0 !important;
-        }
-
-        .media-zoomed #fixedMediaImg,
-        .media-zoomed #fixedMediaVideo {
-            max-width: 90%;
-            max-height: 90%;
-            transform: none;
-            cursor: zoom-out;
-        }
-
-        .media-zoomed .media-header {
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-        }
-
-        .media-placeholder {
-            color: var(--secondary-color);
-            text-align: center;
-            padding: 20px;
-            font-size: 14px;
-        }
-
-        .media-loading {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: var(--secondary-color);
-        }
-
-        .spinner {
-            width: 30px;
-            height: 30px;
-            border: 3px solid rgba(0, 0, 0, 0.1);
-            border-radius: 50%;
-            border-top: 3px solid var(--primary-color);
-            animation: spin 1s linear infinite;
-            margin-bottom: 10px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .media-error {
-            color: var(--danger-color);
-            text-align: center;
-            padding: 20px;
-        }
-
-        /* 移动设备特殊样式 */
-        .mobile-warning {
-            display: none;
-            background: var(--warning-color);
-            color: #000;
-            padding: 10px;
-            text-align: center;
-            font-size: 14px;
-            margin-bottom: 10px;
-        }
-
-        /* 美观的连接状态指示器 */
-        .connection-status-container {
-            display: flex;
-            align-items: center;
-            margin-left: 10px;
-            position: relative;
-        }
-
-        .connection-indicator {
-            display: flex;
-            align-items: center;
-            padding: 6px 12px;
-            border-radius: 20px;
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .connection-indicator:hover {
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            transform: translateY(-2px);
-        }
-
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 8px;
-            position: relative;
-        }
-
-        .status-connected .status-dot {
-            background-color: var(--success-color);
-            box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
-            animation: pulse-green 2s infinite;
-        }
-
-        .status-connecting .status-dot {
-            background-color: var(--warning-color);
-            animation: pulse-orange 2s infinite;
-        }
-
-        .status-disconnected .status-dot {
-            background-color: var(--danger-color);
-        }
-
-        @keyframes pulse-green {
-            0% {
-                box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
-            }
-            70% {
-                box-shadow: 0 0 0 6px rgba(40, 167, 69, 0);
-            }
-            100% {
-                box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
-            }
-        }
-
-        @keyframes pulse-orange {
-            0% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.5;
-            }
-            100% {
-                opacity: 1;
-            }
-        }
-
-        .status-text {
-            font-size: 12px;
-            font-weight: 500;
-        }
-
-        .connection-details {
-            position: absolute;
-            top: 100%;
-            right: 0;
-            margin-top: 8px;
-            padding: 12px;
-            background: var(--card-bg);
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            z-index: 1000;
-            width: 200px;
-            display: none;
-            border: 1px solid var(--border-color);
-        }
-
-        .connection-indicator:hover .connection-details {
-            display: block;
-        }
-
-        .connection-details h4 {
-            margin: 0 0 8px 0;
-            font-size: 12px;
-            color: var(--primary-color);
-        }
-
-        .connection-details p {
-            margin: 4px 0;
-            font-size: 11px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .connection-details .label {
-            color: var(--secondary-color);
-        }
-
-        .connection-details .value {
-            font-weight: 500;
-        }
-
-        .signal-strength {
-            display: flex;
-            align-items: center;
-            margin-top: 8px;
-        }
-
-        .signal-bars {
-            display: flex;
-            align-items: flex-end;
-            height: 12px;
-            margin-right: 8px;
-        }
-
-        .signal-bar {
-            width: 3px;
-            margin-right: 2px;
-            background-color: var(--secondary-color);
-        }
-
-        .signal-bar.active {
-            background-color: var(--success-color);
-        }
-
-        /* 记住我选项样式 */
-        .remember-me {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 10px;
-        }
-
-
-        .signal-bar:nth-child(1) { height: 4px; }
-        .signal-bar:nth-child(2) { height: 6px; }
-        .signal-bar:nth-child(3) { height: 8px; }
-        .signal-bar:nth-child(4) { height: 10px; }
-
-        .signal-text {
-            font-size: 10px;
-            color: var(--secondary-color);
-        }
-
-        /* 响应式设计 */
-        @media (max-width: 1200px) {
-            .card {
-                width: 100%;
-            }
-
-            #fixedMediaContainer {
-                width: 320px;
-                height: 200px;
-            }
-        }
-
+        body { margin: 0; background: #f5f5f5; }
+        #root { min-height: 100vh; }
+        .page-wrap { padding: 16px; }
+        .topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 56px; background: #fff;
+            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; color: #1677ff; }
+        .topbar.dark { background: #1f1f1f; border-bottom-color: #303030; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+        .topbar.dark .brand { color: #4096ff; }
+        .topbar .brand .logo {
+            width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #1677ff, #722ed1);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px;
+        }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
+        .chart-card .chart { height: 260px; width: 100%; }
+        .chart-meta { font-size: 12px; color: #999; text-align: right; margin-top: 6px; }
+        .login-bg {
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, #1677ff22, #722ed122);
+        }
+        .media-window {
+            position: fixed; right: 20px; bottom: 20px; z-index: 999;
+            width: 380px; height: 260px; border-radius: 12px; overflow: hidden;
+            background: #fff; box-shadow: 0 8px 30px rgba(0,0,0,.16);
+            border: 1px solid rgba(22,119,255,.15); display: flex; flex-direction: column;
+            transition: all .3s;
+        }
+        .media-window.zoomed { right: 0 !important; bottom: 0 !important; width: 100% !important; height: 100% !important; border-radius: 0; }
+        .media-head {
+            display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+            background: #fff; color: #1677ff; font-size: 13px; font-weight: 600;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .media-head .m-title { flex: 1; }
+        .media-body { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
+        .media-body img, .media-body video { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .media-body .placeholder { color: #999; font-size: 13px; }
+        .media-body .empty-media { text-align: center; color: #666; }
         @media (max-width: 768px) {
-            .container {
-                padding: 10px;
-                margin-bottom: 200px;
-            }
-
-            #fixedMediaContainer {
-                width: calc(100% - 40px);
-                left: 20px;
-                right: 20px;
-                bottom: 10px;
-            }
-
-            .mobile-warning {
-                display: block;
-            }
-
-            .media-controls {
-                flex-wrap: wrap;
-                justify-content: center;
-            }
-
-            .volume-control {
-                order: 3;
-                width: 100%;
-                justify-content: center;
-                margin-top: 5px;
-            }
-
-            .connection-status-container {
-                margin-left: 0;
-                margin-top: 10px;
-                width: 100%;
-                justify-content: center;
-            }
-
-            /* 移动端表格优化 */
-            .online-users-table {
-                font-size: 12px;
-            }
-
-            .online-users-table th,
-            .online-users-table td {
-                padding: 6px 8px;
-            }
-
-            .status-table {
-                font-size: 12px;
-            }
-
-            .status-table th,
-            .status-table td {
-                padding: 8px 10px;
-            }
-
-            /* 登录表单响应式 */
-            .auth-card {
-                padding: 30px 20px;
-                margin: 10px;
-            }
-
-            .controls {
-                flex-direction: column;
-            }
-
-            .user-info {
-                margin-left: 0;
-                margin-top: 10px;
-                width: 100%;
-                justify-content: center;
-            }
+            .login-bg { padding: 16px; }
+            .topbar { padding: 8px 12px; flex-wrap: wrap; gap: 6px 8px; }
+            .topbar .brand { font-size: 14px; gap: 6px; }
+            .topbar .brand .logo { width: 26px; height: 26px; font-size: 14px; border-radius: 6px; }
+            .topbar .ant-space { flex-wrap: wrap; gap: 6px !important; }
+            .topbar .ant-btn { padding: 4px 8px; font-size: 12px; height: 30px; }
+            .topbar .tb-sub { display: none; }
+            .topbar .tb-status { display: none; }
+            .topbar .tb-label { display: none; }
+            .page-wrap { padding: 10px; }
+            .chart-card .chart { height: 220px; }
+            .stat-grid { grid-template-columns: 1fr; }
+            .stat-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+            .ant-card-head { padding: 0 12px !important; }
+            .ant-card-head-wrapper { flex-wrap: wrap; gap: 6px; }
+            .ant-card-body { padding: 12px !important; }
+            .media-window { display: none; }
         }
-
-        @media (max-width: 480px) {
-            .controls {
-                flex-direction: column;
-            }
-
-            select, button {
-                width: 100%;
-                margin: 5px 0;
-            }
-
-            #fixedMediaContainer {
-                height: 180px;
-            }
-
-            /* 超小屏幕表格优化 */
-            .online-users-table {
-                font-size: 11px;
-            }
-
-            .online-users-table th,
-            .online-users-table td {
-                padding: 4px 6px;
-            }
-
-            .status-table {
-                font-size: 11px;
-            }
-
-            .status-table th,
-            .status-table td {
-                padding: 6px 8px;
-            }
-
-            /* 在超小屏幕上隐藏不必要的列 */
-            .hide-on-mobile {
-                display: none;
-            }
-        }
-
     </style>
 </head>
-<body data-theme="light">
-<!-- 登录/注册界面 -->
-<div id="authContainer" class="auth-container">
-    <!-- 登录卡片 -->
-    <div id="loginCard" class="auth-card">
-        <div class="auth-title">服务器状态监控系统</div>
-        <form id="loginForm" class="auth-form">
-            <div class="form-group">
-                <label class="form-label" for="username">用户名</label>
-                <input type="text" id="username" class="form-input" placeholder="请输入用户名" required>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="password">密码</label>
-                <input type="password" id="password" class="form-input" placeholder="请输入密码" required>
-            </div>
-            <div class="remember-me">
-                <input type="checkbox" id="rememberMe">
-                <label for="rememberMe">记住我</label>
-            </div>
-            <button type="submit" class="auth-button" id="loginButton">
-                <span id="loginButtonText">登录</span>
-                <div id="loginLoading" class="auth-loading" style="display: none;">
-                    <div class="spinner"></div>
-                    <span>登录中...</span>
-                </div>
-            </button>
-            <div id="loginError" class="auth-error">
-                用户名或密码错误
-            </div>
-        </form>
-        <div class="auth-switch">
-            还没有账户？ <a id="showRegister">注册新账户</a>
-        </div>
-        <div style="margin-top: 20px; text-align: center; font-size: 12px; color: var(--secondary-color);">
-            默认账号: admin / admin123
-        </div>
-    </div>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+    const { Card, Table, Button, Input, Form, Tag, Space, Statistic, Typography, ConfigProvider, theme, message, Descriptions, Badge, Alert, Segmented, Select } = window.antd;
+    const { useState, useEffect, useRef, useCallback } = React;
+    const { darkAlgorithm } = theme;
 
-    <!-- 注册卡片 -->
-    <div id="registerCard" class="auth-card" style="display: none;">
-        <div class="auth-title">注册新账户</div>
-        <form id="registerForm" class="auth-form">
-            <div class="form-group">
-                <label class="form-label" for="regUsername">用户名</label>
-                <input type="text" id="regUsername" class="form-input" placeholder="请输入用户名" required>
-                <div class="form-hint">用户名长度应在3-20个字符之间</div>
-                <div class="form-error" id="regUsernameError"></div>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="regEmail">邮箱地址</label>
-                <input type="email" id="regEmail" class="form-input" placeholder="请输入邮箱地址" required>
-                <div class="form-hint">请输入有效的邮箱地址</div>
-                <div class="form-error" id="regEmailError"></div>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="regPassword">密码</label>
-                <input type="password" id="regPassword" class="form-input" placeholder="请输入密码" required>
-                <div class="form-hint">密码长度至少8位，包含字母和数字</div>
-                <div class="password-strength" id="passwordStrength">
-                    <div class="password-strength-bar"></div>
-                </div>
-                <div class="form-error" id="regPasswordError"></div>
-            </div>
-            <div class="form-group">
-                <label class="form-label" for="regConfirmPassword">确认密码</label>
-                <input type="password" id="regConfirmPassword" class="form-input" placeholder="请再次输入密码" required>
-                <div class="form-error" id="regConfirmPasswordError"></div>
-            </div>
-            <div class="remember-me">
-                <input type="checkbox" id="regRememberMe">
-                <label for="regRememberMe">记住我</label>
-            </div>
-            <button type="submit" class="auth-button" id="registerButton">
-                <span id="registerButtonText">注册</span>
-                <div id="registerLoading" class="auth-loading" style="display: none;">
-                    <div class="spinner"></div>
-                    <span>注册中...</span>
-                </div>
-            </button>
-            <div id="registerError" class="auth-error">
-                注册失败，请稍后重试
-            </div>
-            <div id="registerSuccess" class="auth-success">
-                注册成功！正在跳转...
-            </div>
-        </form>
-        <div class="auth-switch">
-            已有账户？ <a id="showLogin">返回登录</a>
-        </div>
-    </div>
-</div>
-
-<!-- 主内容界面 - 登录后显示 -->
-<div id="mainContent" class="main-content">
-    <!-- 其余内容保持不变 -->
-    <div class="mobile-warning">
-        提示：在移动设备上，视频可能需要手动点击播放按钮
-    </div>
-
-    <h2>实时服务器状态监控</h2>
-
-    <div class="controls">
-        <select id="ifaceSelect">
-            <option value="">选择网卡...</option>
-        </select>
-        <button class="btn btn-secondary" onclick="toggleTheme()">
-            🌙 切换主题
-        </button>
-        <button class="btn" onclick="reconnectWebSocket()" id="reconnectBtn">
-            🔄 重新连接
-        </button>
-        <button class="btn" onclick="refreshAccessStats()">
-            📈 刷新统计
-        </button>
-        <button class="btn" onclick="window.location.href='ebooks.html'">
-            📚 电子书
-        </button>
-        <!-- 用户信息 -->
-        <div class="user-info" id="userInfo">
-            <div class="user-avatar" id="userAvatar">A</div>
-            <div class="user-details">
-                <div class="username" id="usernameDisplay">管理员</div>
-                <div class="user-role" id="userRole">管理员</div>
-            </div>
-            <button class="logout-button" onclick="logout()">退出登录</button>
-        </div>
-
-
-        <!-- 美观的连接状态指示器 -->
-        <div class="connection-status-container">
-            <div class="connection-indicator status-disconnected" id="connectionIndicator">
-                <div class="status-dot"></div>
-                <span class="status-text" id="statusText">已断开</span>
-                <div class="connection-details">
-                    <h4>连接状态</h4>
-                    <p><span class="label">状态:</span> <span class="value" id="detailStatus">已断开</span></p>
-                    <p><span class="label">网卡:</span> <span class="value" id="detailIface">-</span></p>
-                    <p><span class="label">重连次数:</span> <span class="value" id="detailReconnect">0</span></p>
-                    <p><span class="label">持续时间:</span> <span class="value" id="detailDuration">-</span></p>
-                    <div class="signal-strength">
-                        <div class="signal-bars">
-                            <div class="signal-bar"></div>
-                            <div class="signal-bar"></div>
-                            <div class="signal-bar"></div>
-                            <div class="signal-bar"></div>
-                        </div>
-                        <span class="signal-text" id="signalText">信号强度</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="container">
-        <div class="card" id="info">
-            <div class="media-loading">
-                <div class="spinner"></div>
-                <div>等待数据连接...</div>
-            </div>
-        </div>
-        <!-- 增强的在线用户卡片 -->
-        <div class="card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <strong>在线用户信息</strong>
-                <span id="lastUpdated" style="font-size: 12px; color: var(--secondary-color);">上次更新: -</span>
-            </div>
-            <div id="onlineUsersInfo">
-                <div class="online-count">
-                    当前在线: <span id="onlineCount">0</span> 用户 | <span id="uniqueIpsCount">0</span> 个独立IP
-                </div>
-                <div class="user-table-container">
-                    <table id="onlineUsersTable" class="online-users-table">
-                        <thead>
-                        <tr>
-                            <th>IP地址</th>
-                            <th>访问页面</th>
-                            <th class="hide-on-mobile">连接时间</th>
-                            <th>用户标识</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <!-- 用户数据将通过JavaScript动态生成 -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        <div class="card"><div id="memChart" class="chart"></div></div>
-        <div class="card"><div id="cpuChart" class="chart"></div></div>
-        <div class="card"><div id="netChart" class="chart"></div></div>
-        <div class="card"><div id="diskChart" class="chart"></div></div>
-        <div class="card"><div id="accessChart" class="chart"></div></div>
-    </div>
-
-    <!-- 右下角固定位置媒体模块 -->
-    <div id="fixedMediaContainer">
-        <div class="media-header">
-            <div class="media-title">媒体展示</div>
-            <div class="media-controls">
-                <div class="volume-control">
-                    <span>音量:</span>
-                    <input type="range" id="mediaVolume" min="0" max="1" step="0.1" value="0.5">
-                </div>
-                <button id="refreshMedia">刷新</button>
-                <button id="togglePlayPause" style="display:none;">暂停</button>
-                <button id="zoomMedia">放大</button>
-            </div>
-        </div>
-        <div class="media-content">
-            <img id="fixedMediaImg" style="display:none;" alt="媒体图片">
-            <video id="fixedMediaVideo" style="display:none;" loop muted playsinline preload="metadata" alt="媒体视频"></video>
-            <div class="media-placeholder" id="mediaPlaceholder">
-                媒体加载中...
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-    // 全局变量
-    let theme = 'light';
-    let ws = null;
-    const baseUrl = "https://example.com:9000";
-
-    // 用户认证相关变量
-    let currentUser = null;
-    let authToken = null;
-
-    // 会话管理配置
-    const SESSION_STORAGE_KEY = 'server_monitor_session';
-    const LOCAL_STORAGE_KEY = 'server_monitor_remember';
-    const SESSION_EXPIRY_DAYS = 30;
-    // 安全配置 - 与服务器端保持一致
+    const baseUrl = window.location.origin;
     const securityToken = "redacted_anti_crawler_2024_security_key";
-    const signatureTimeout = 30000; // 30秒
+    const SESSION_KEY = 'server_monitor_session';
+    const LOCAL_KEY = 'server_monitor_remember';
 
-    // 在线用户相关变量
-    let onlineUsersInterval = null;
-    let lastOnlineUsers = [];
-
-    // WebSocket重连相关变量
-    let reconnectAttempts = 0;
-    const maxReconnectAttempts = 5;
-    let reconnectTimeout = null;
-    let isManualReconnect = false;
-    let connectionStartTime = null;
-    let currentIface = '';
-
-    // 检测移动设备
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-    // 页面可见性API
-    let hidden, visibilityChange;
-    if (typeof document.hidden !== "undefined") {
-        hidden = "hidden";
-        visibilityChange = "visibilitychange";
-    } else if (typeof document.msHidden !== "undefined") {
-        hidden = "msHidden";
-        visibilityChange = "msvisibilitychange";
-    } else if (typeof document.webkitHidden !== "undefined") {
-        hidden = "webkitHidden";
-        visibilityChange = "webkitvisibilitychange";
-    }
-    // ==================== 会话管理功能 ====================
-
-    // 会话存储管理
-    const SessionManager = {
-        // 保存登录状态
-        saveLoginState: function(user, rememberMe = false) {
-            const sessionData = {
-                user: user,
-                timestamp: Date.now(),
-                expiry: Date.now() + (SESSION_EXPIRY_DAYS * 24 * 60 * 60 * 1000) // 30天后过期
-            };
-
-            if (rememberMe) {
-                // 长期保存到localStorage
-                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(sessionData));
-                console.log('登录状态已保存到localStorage');
-            } else {
-                // 临时保存到sessionStorage
-                sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
-                console.log('登录状态已保存到sessionStorage');
-            }
-        },
-
-        // 获取保存的登录状态
-        getSavedLoginState: function() {
-            // 首先检查sessionStorage（会话期间）
-            let sessionData = sessionStorage.getItem(SESSION_STORAGE_KEY);
-            if (sessionData) {
-                console.log('从sessionStorage获取登录状态');
-                return JSON.parse(sessionData);
-            }
-
-            // 然后检查localStorage（长期保存）
-            sessionData = localStorage.getItem(LOCAL_STORAGE_KEY);
-            if (sessionData) {
-                console.log('从localStorage获取登录状态');
-                return JSON.parse(sessionData);
-            }
-
-            return null;
-        },
-
-        // 检查会话是否有效
-        isSessionValid: function(sessionData) {
-            if (!sessionData || !sessionData.expiry) {
-                return false;
-            }
-
-            // 检查是否过期
-            const isValid = Date.now() < sessionData.expiry;
-            console.log('会话有效性检查:', isValid ? '有效' : '已过期');
-            return isValid;
-        },
-
-        // 清除所有保存的状态
-        clearAllStates: function() {
-            sessionStorage.removeItem(SESSION_STORAGE_KEY);
-            localStorage.removeItem(LOCAL_STORAGE_KEY);
-            console.log('所有登录状态已清除');
-        },
-
-        // 获取保存的用户名（用于自动填充）
-        getSavedUsername: function() {
-            const sessionData = this.getSavedLoginState();
-            return sessionData && sessionData.user ? sessionData.user.username : null;
-        },
-
-        // 检查是否选择了"记住我"
-        isRememberMeEnabled: function() {
-            return localStorage.getItem(LOCAL_STORAGE_KEY) !== null;
-        }
-    };
-
-    // ==================== 自动登录功能 ====================
-
-    // 检查自动登录状态
-    function checkAutoLogin() {
-        console.log('检查自动登录状态...');
-        const sessionData = SessionManager.getSavedLoginState();
-
-        if (sessionData && SessionManager.isSessionValid(sessionData)) {
-            // 会话有效，尝试自动登录
-            console.log('检测到有效会话，尝试自动登录');
-            currentUser = sessionData.user;
-            authToken = getCookie('session_id');
-
-            // 验证会话有效性
-            verifySessionValidity()
-                .then(isValid => {
-                    if (isValid) {
-                        console.log('自动登录成功');
-                        showMainContent();
-                        initApp();
-                    } else {
-                        // 会话无效，清除保存的状态
-                        console.log('会话无效，清除保存的状态');
-                        SessionManager.clearAllStates();
-                        showLogin();
-                    }
-                })
-                .catch(error => {
-                    console.error('验证会话失败:', error);
-                    showLogin();
-                });
-        } else {
-            // 没有有效会话或会话已过期
-            console.log('没有有效会话，显示登录页面');
-            if (sessionData) {
-                SessionManager.clearAllStates();
-            }
-            showLogin();
-        }
-    }
-
-    // 验证会话有效性
-    function verifySessionValidity() {
-        return secureFetch(`${baseUrl}/check-auth`)
-            .then(response => {
-                if (response.ok) {
-                    return response.json();
-                } else {
-                    throw new Error('Authentication failed');
-                }
-            })
-            .then(data => {
-                return data.code === 200;
-            })
-            .catch(error => {
-                console.error('验证会话有效性失败:', error);
-                return false;
-            });
-    }
-
-    // ==================== 用户认证功能 ====================
-
-    // 检查登录状态
-    function checkAuthStatus() {
-        const sessionId = getCookie('session_id');
-        if (!sessionId) {
-            checkAutoLogin();
-            return;
-        }
-
-        // 验证会话状态
-        secureFetch(`${baseUrl}/check-auth`)
-            .then(response => {
-                if (response.ok) {
-                    return response.json();
-                } else {
-                    throw new Error('Authentication failed');
-                }
-            })
-            .then(data => {
-                if (data.code === 200) {
-                    currentUser = data.user;
-                    authToken = sessionId;
-                    showMainContent();
-                    initApp();
-                } else {
-                    checkAutoLogin();
-                }
-            })
-            .catch(error => {
-                console.error('验证登录状态失败:', error);
-                checkAutoLogin();
-            });
-    }
-
-    // 登录处理
-    function handleLogin(event) {
-        event.preventDefault();
-
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        const rememberMe = document.getElementById('rememberMe').checked;
-
-        if (!username || !password) {
-            showLoginError('请输入用户名和密码');
-            return;
-        }
-
-        showLoginLoading(true);
-
-        const loginData = {
-            username: username,
-            password: password
-        };
-
-        fetch(`${baseUrl}/login`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(loginData)
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Login failed');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.code === 200) {
-                    currentUser = data.user;
-                    authToken = getCookie('session_id'); // 从cookie获取session_id
-
-                    // 保存登录状态
-                    SessionManager.saveLoginState(currentUser, rememberMe);
-
-                    showMainContent();
-                    initApp();
-                } else {
-                    showLoginError(data.message || '登录失败');
-                }
-            })
-            .catch(error => {
-                console.error('登录错误:', error);
-                showLoginError('网络错误，请稍后重试');
-            })
-            .finally(() => {
-                showLoginLoading(false);
-            });
-    }
-
-    // 注册处理
-    function handleRegister(event) {
-        event.preventDefault();
-
-        const username = document.getElementById('regUsername').value;
-        const email = document.getElementById('regEmail').value;
-        const password = document.getElementById('regPassword').value;
-        const confirmPassword = document.getElementById('regConfirmPassword').value;
-        const rememberMe = document.getElementById('regRememberMe').checked;
-
-        // 客户端验证
-        if (!validateRegisterForm(username, email, password, confirmPassword)) {
-            return;
-        }
-
-        showRegisterLoading(true);
-
-        const registerData = {
-            username: username,
-            email: email,
-            password: password
-        };
-
-        fetch(`${baseUrl}/register`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(registerData)
-        })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Registration failed');
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.code === 200) {
-                    // 注册成功，显示成功消息并自动登录
-                    showRegisterSuccess('注册成功！正在自动登录...');
-
-                    // 自动登录
-                    setTimeout(() => {
-                        const loginData = {
-                            username: username,
-                            password: password
-                        };
-
-                        fetch(`${baseUrl}/login`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify(loginData)
-                        })
-                            .then(response => {
-                                if (!response.ok) {
-                                    throw new Error('Auto-login failed');
-                                }
-                                return response.json();
-                            })
-                            .then(data => {
-                                if (data.code === 200) {
-                                    currentUser = data.user;
-                                    authToken = getCookie('session_id');
-
-                                    // 保存登录状态
-                                    SessionManager.saveLoginState(currentUser, rememberMe);
-
-                                    showMainContent();
-                                    initApp();
-                                } else {
-                                    showLogin();
-                                }
-                            })
-                            .catch(error => {
-                                console.error('自动登录失败:', error);
-                                showLogin();
-                            });
-                    }, 1500);
-                } else {
-                    showRegisterError(data.message || '注册失败');
-                }
-            })
-            .catch(error => {
-                console.error('注册错误:', error);
-                showRegisterError('网络错误，请稍后重试');
-            })
-            .finally(() => {
-                showRegisterLoading(false);
-            });
-    }
-
-    // 注册表单验证
-    function validateRegisterForm(username, email, password, confirmPassword) {
-        let isValid = true;
-
-        // 重置错误状态
-        clearRegisterErrors();
-
-        // 用户名验证
-        if (username.length < 3 || username.length > 20) {
-            document.getElementById('regUsernameError').textContent = '用户名长度应在3-20个字符之间';
-            document.getElementById('regUsername').classList.add('error');
-            isValid = false;
-        }
-
-        // 邮箱验证
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            document.getElementById('regEmailError').textContent = '请输入有效的邮箱地址';
-            document.getElementById('regEmail').classList.add('error');
-            isValid = false;
-        }
-
-        // 密码验证
-        const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
-        if (!passwordRegex.test(password)) {
-            document.getElementById('regPasswordError').textContent = '密码长度至少8位，且必须包含字母和数字';
-            document.getElementById('regPassword').classList.add('error');
-            isValid = false;
-        }
-
-        // 确认密码验证
-        if (password !== confirmPassword) {
-            document.getElementById('regConfirmPasswordError').textContent = '两次输入的密码不一致';
-            document.getElementById('regConfirmPassword').classList.add('error');
-            isValid = false;
-        }
-
-        return isValid;
-    }
-
-    // 清除注册表单错误
-    function clearRegisterErrors() {
-        const errorElements = document.querySelectorAll('.form-error');
-        errorElements.forEach(el => {
-            el.textContent = '';
-        });
-
-        const inputElements = document.querySelectorAll('#registerForm .form-input');
-        inputElements.forEach(el => {
-            el.classList.remove('error');
-        });
-
-        document.getElementById('registerError').style.display = 'none';
-    }
-
-    // 显示/隐藏注册加载状态
-    function showRegisterLoading(show) {
-        const buttonText = document.getElementById('registerButtonText');
-        const loadingElement = document.getElementById('registerLoading');
-        const registerButton = document.getElementById('registerButton');
-
-        if (show) {
-            buttonText.style.display = 'none';
-            loadingElement.style.display = 'flex';
-            registerButton.disabled = true;
-        } else {
-            buttonText.style.display = 'block';
-            loadingElement.style.display = 'none';
-            registerButton.disabled = false;
-        }
-    }
-
-    // 显示注册错误
-    function showRegisterError(message) {
-        const errorElement = document.getElementById('registerError');
-        errorElement.textContent = message;
-        errorElement.style.display = 'block';
-    }
-
-    // 显示注册成功
-    function showRegisterSuccess(message) {
-        const successElement = document.getElementById('registerSuccess');
-        successElement.textContent = message;
-        successElement.style.display = 'block';
-    }
-
-    // 退出登录
-    function logout() {
-        secureFetch(`${baseUrl}/logout`, {
-            method: 'POST'
-        })
-            .then(response => {
-                if (response.ok) {
-                    // 清除本地状态
-                    currentUser = null;
-                    authToken = null;
-                    SessionManager.clearAllStates();
-
-                    // 清除WebSocket连接
-                    if (ws) {
-                        ws.close();
-                        ws = null;
-                    }
-
-                    // 显示登录界面
-                    showLogin();
-                }
-            })
-            .catch(error => {
-                console.error('退出登录错误:', error);
-                // 即使出错也强制显示登录界面
-                currentUser = null;
-                authToken = null;
-                SessionManager.clearAllStates();
-                showLogin();
-            });
-    }
-
-    // 显示登录界面
-    function showLogin() {
-        document.getElementById('loginCard').style.display = 'block';
-        document.getElementById('registerCard').style.display = 'none';
-        document.getElementById('authContainer').style.display = 'flex';
-        document.getElementById('mainContent').style.display = 'none';
-
-        // 自动填充用户名（如果之前保存过）
-        const savedUsername = SessionManager.getSavedUsername();
-        if (savedUsername) {
-            document.getElementById('username').value = savedUsername;
-            document.getElementById('rememberMe').checked = SessionManager.isRememberMeEnabled();
-        }
-
-        // 清除表单错误
-        document.getElementById('loginForm').reset();
-        document.getElementById('loginError').style.display = 'none';
-    }
-
-    // 显示注册界面
-    function showRegister() {
-        document.getElementById('loginCard').style.display = 'none';
-        document.getElementById('registerCard').style.display = 'block';
-        document.getElementById('authContainer').style.display = 'flex';
-        document.getElementById('mainContent').style.display = 'none';
-
-        // 清除表单
-        document.getElementById('registerForm').reset();
-        document.getElementById('registerError').style.display = 'none';
-        document.getElementById('registerSuccess').style.display = 'none';
-        clearRegisterErrors();
-        updatePasswordStrength(0);
-    }
-
-    // 显示主内容
-    function showMainContent() {
-        document.getElementById('authContainer').style.display = 'none';
-        document.getElementById('mainContent').style.display = 'block';
-
-        // 更新用户信息显示
-        if (currentUser) {
-            document.getElementById('usernameDisplay').textContent = currentUser.username;
-            document.getElementById('userRole').textContent = currentUser.permissions && currentUser.permissions.includes('admin') ? '管理员' : '用户';
-            document.getElementById('userAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
-        }
-    }
-
-    // 显示登录错误
-    function showLoginError(message) {
-        const errorElement = document.getElementById('loginError');
-        errorElement.textContent = message;
-        errorElement.style.display = 'block';
-    }
-
-    // 显示/隐藏登录加载状态
-    function showLoginLoading(show) {
-        const buttonText = document.getElementById('loginButtonText');
-        const loadingElement = document.getElementById('loginLoading');
-        const loginButton = document.getElementById('loginButton');
-
-        if (show) {
-            buttonText.style.display = 'none';
-            loadingElement.style.display = 'flex';
-            loginButton.disabled = true;
-        } else {
-            buttonText.style.display = 'block';
-            loadingElement.style.display = 'none';
-            loginButton.disabled = false;
-        }
-    }
-
-    // 密码强度检测
-    function updatePasswordStrength(password) {
-        const strengthBar = document.querySelector('.password-strength');
-        const strengthClasses = ['', 'weak', 'fair', 'good', 'strong'];
-
-        // 移除所有强度类
-        strengthClasses.forEach(cls => {
-            if (cls) strengthBar.classList.remove(cls);
-        });
-
-        // 计算密码强度
-        let strength = 0;
-
-        if (password.length > 0) {
-            strength = 1; // 有内容
-
-            if (password.length >= 8) {
-                strength = 2; // 长度达标
-
-                // 检查是否包含字母和数字
-                const hasLetter = /[A-Za-z]/.test(password);
-                const hasNumber = /\d/.test(password);
-
-                if (hasLetter && hasNumber) {
-                    strength = 3; // 包含字母和数字
-
-                    // 检查是否包含特殊字符
-                    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-                    if (hasSpecial) {
-                        strength = 4; // 包含特殊字符
-                    }
-                }
-            }
-        }
-
-        // 添加对应的强度类
-        if (strength > 0) {
-            strengthBar.classList.add(strengthClasses[strength]);
-        }
-    }
-
-    // 获取Cookie值
-    function getCookie(name) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
-    }
-
-    // ==================== 安全功能函数 ====================
-
-    // 生成HMAC签名
-    function generateHMACSignature(data) {
-        return CryptoJS.HmacSHA256(data, securityToken).toString(CryptoJS.enc.Hex);
-    }
-
-    // 生成请求签名
-    function generateRequestSignature(path) {
+    const generateSignature = (path) => {
         const timestamp = Math.floor(Date.now() / 1000).toString();
         const nonce = CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);
-        const data = `${timestamp}|${nonce}|${path}|${securityToken}`;
-        const signature = generateHMACSignature(data);
+        const sig = CryptoJS.HmacSHA256(timestamp + '|' + nonce + '|' + path + '|' + securityToken, securityToken).toString(CryptoJS.enc.Hex);
+        return { timestamp, nonce, signature: sig };
+    };
 
-        return {
-            timestamp: timestamp,
-            nonce: nonce,
-            signature: signature
-        };
-    }
-
-    // 生成安全头部
-    function generateSecurityHeaders(path) {
-        const signatureData = generateRequestSignature(path);
-
-        return {
-            'X-Timestamp': signatureData.timestamp,
-            'X-Nonce': signatureData.nonce,
-            'X-Signature': signatureData.signature,
-            'Accept': 'application/json,text/html,*/*',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
-            'User-Agent': navigator.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        };
-    }
-
-    // 安全fetch函数
-    function secureFetch(url, options = {}) {
+    const secureFetch = (url, options = {}) => {
         const path = new URL(url).pathname;
-        const securityHeaders = generateSecurityHeaders(path);
-
-        console.log('安全头信息:', securityHeaders);
-
-        const defaultOptions = {
+        const sig = generateSignature(path);
+        return fetch(url, {
+            method: options.method || 'GET',
             headers: {
                 'Content-Type': 'application/json',
-                ...securityHeaders
-            },
-            credentials: 'include' // 包含cookie
-        };
-
-        const finalOptions = {
-            ...defaultOptions,
-            ...options,
-            headers: {
-                ...defaultOptions.headers,
+                'X-Timestamp': sig.timestamp,
+                'X-Nonce': sig.nonce,
+                'X-Signature': sig.signature,
                 ...(options.headers || {})
+            },
+            credentials: 'include',
+            body: options.body
+        });
+    };
+
+    const SessionManager = {
+        save: (user, remember) => {
+            const data = { user, timestamp: Date.now(), expiry: Date.now() + 30 * 24 * 3600 * 1000 };
+            (remember ? localStorage : sessionStorage).setItem(remember ? LOCAL_KEY : SESSION_KEY, JSON.stringify(data));
+        },
+        get: () => {
+            try {
+                const s = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(LOCAL_KEY);
+                return s ? JSON.parse(s) : null;
+            } catch (e) { return null; }
+        },
+        clear: () => { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(LOCAL_KEY); }
+    };
+
+    const hexToRgba = (hex, a) => {
+        const h = hex.replace('#', '');
+        return 'rgba(' + parseInt(h.substring(0, 2), 16) + ',' + parseInt(h.substring(2, 4), 16) + ',' + parseInt(h.substring(4, 6), 16) + ',' + a + ')';
+    };
+
+    function Login({ onLogin }) {
+        const [mode, setMode] = useState('login');
+        const [loading, setLoading] = useState(false);
+        const [form] = Form.useForm();
+        const submit = async () => {
+            const v = await form.validateFields();
+            setLoading(true);
+            try {
+                const r = await fetch(baseUrl + '/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(mode === 'login' ? { username: v.username, password: v.password } : { username: v.username, email: v.email, password: v.password })
+                });
+                const d = await r.json();
+                if (d.code === 200) {
+                    SessionManager.save(d.user, !!v.remember);
+                    message.success('登录成功');
+                    onLogin(d.user);
+                } else {
+                    message.error(d.message || '登录失败');
+                }
+            } catch (e) {
+                message.error('网络错误: ' + e.message);
+            } finally {
+                setLoading(false);
             }
         };
-
-        console.log('最终请求头:', finalOptions.headers);
-
-        return fetch(url, finalOptions);
-    }
-    // 在主页面中添加下载页面跳转按钮
-    function addDownloadButton() {
-        // 在控制按钮区域添加下载按钮
-        const controls = document.querySelector('.controls');
-        const downloadBtn = document.createElement('button');
-        downloadBtn.innerHTML = '🔑 下载令牌';
-        downloadBtn.onclick = function() {
-            // 直接跳转到下载页面，让下载页面自己处理认证
-            window.location.href = 'download.html';
-        };
-        controls.appendChild(downloadBtn);
-    }
-
-    // 跳转前检查认证状态
-    function checkAuthBeforeRedirect(url) {
-        const sessionId = getCookie('session_id');
-        if (!sessionId) {
-            alert('请先登录');
-            return;
-        }
-
-        // 验证会话有效性
-        secureFetch(`${baseUrl}/check-auth`)
-            .then(response => {
-                if (response.ok) {
-                    return response.json();
-                } else {
-                    throw new Error('Authentication failed');
-                }
-            })
-            .then(data => {
-                if (data.code === 200) {
-                    // 认证通过，跳转到目标页面
-                    window.location.href = url;
-                } else {
-                    alert('会话已过期，请重新登录');
-                }
-            })
-            .catch(error => {
-                console.error('验证会话失败:', error);
-                alert('认证检查失败，请重新登录');
-            });
-    }
-
-    // 在页面加载完成后调用
-    document.addEventListener('DOMContentLoaded', function() {
-        addDownloadButton();
-    });
-    // ==================== 原有功能函数（保持不变） ====================
-
-    // 更新连接状态显示
-    function updateConnectionStatus(status, text) {
-        const indicator = document.getElementById('connectionIndicator');
-        const statusText = document.getElementById('statusText');
-        const detailStatus = document.getElementById('detailStatus');
-
-        // 移除所有状态类
-        indicator.classList.remove('status-connected', 'status-connecting', 'status-disconnected');
-
-        // 添加新状态类
-        indicator.classList.add(`status-${status}`);
-        statusText.textContent = text;
-        detailStatus.textContent = text;
-
-        // 更新信号强度显示
-        updateSignalStrength(status);
-
-        // 更新连接持续时间
-        if (status === 'connected') {
-            connectionStartTime = new Date();
-            startConnectionTimer();
-        } else {
-            stopConnectionTimer();
-        }
-
-        // 更新详细信息
-        document.getElementById('detailIface').textContent = currentIface || '-';
-        document.getElementById('detailReconnect').textContent = reconnectAttempts;
-    }
-
-    // 更新信号强度显示
-    function updateSignalStrength(status) {
-        const bars = document.querySelectorAll('.signal-bar');
-        const signalText = document.getElementById('signalText');
-
-        bars.forEach(bar => bar.classList.remove('active'));
-
-        if (status === 'connected') {
-            // 模拟信号强度（随机值）
-            const strength = Math.floor(Math.random() * 4) + 1;
-            for (let i = 0; i < strength; i++) {
-                bars[i].classList.add('active');
-            }
-
-            // 设置信号文本
-            const strengths = ['弱', '一般', '良好', '优秀'];
-            signalText.textContent = `信号: ${strengths[strength - 1]}`;
-        } else {
-            signalText.textContent = '信号: 无';
-        }
-    }
-
-    // 启动连接计时器
-    function startConnectionTimer() {
-        stopConnectionTimer(); // 确保没有其他计时器运行
-
-        // 每秒更新连接持续时间
-        onlineUsersInterval = setInterval(() => {
-            if (connectionStartTime) {
-                const duration = Math.floor((new Date() - connectionStartTime) / 1000);
-                const minutes = Math.floor(duration / 60);
-                const seconds = duration % 60;
-                document.getElementById('detailDuration').textContent =
-                    `${minutes}分${seconds}秒`;
-            }
-        }, 1000);
-    }
-
-    // 停止连接计时器
-    function stopConnectionTimer() {
-        if (onlineUsersInterval) {
-            clearInterval(onlineUsersInterval);
-            onlineUsersInterval = null;
-        }
-    }
-
-    // 初始化应用
-    function initApp() {
-        // 首先检查并设置主题
-        checkAndSetTheme();
-
-        initCharts();
-        loadInterfaces();
-        setupMediaControls();
-        loadFixedMedia();
-        refreshAccessStats();
-
-        // 添加页面可见性变化监听
-        document.addEventListener(visibilityChange, handleVisibilityChange, false);
-
-        // 如果是移动设备，添加特殊处理
-        if (isMobile) {
-            console.log("移动设备检测，启用特殊处理");
-        }
-
-        // 设置定时检查主题（每5分钟检查一次）
-        setInterval(checkAndSetTheme, 5 * 60 * 1000);
-    }
-
-    // 检查并设置主题
-    function checkAndSetTheme() {
-        // 检查是否有手动设置的主题偏好
-        const manualTheme = localStorage.getItem('manualTheme');
-
-        if (manualTheme) {
-            // 如果用户手动设置过主题，使用手动设置
-            setTheme(manualTheme, false); // false表示这是手动设置，不需要保存
-        } else {
-            // 根据时间自动设置主题（晚上18点到早上6点为暗黑模式）
-            const hour = new Date().getHours();
-            const isNightTime = hour >= 18 || hour < 6;
-            setTheme(isNightTime ? 'dark' : 'light', false);
-        }
-    }
-
-    // 设置主题
-    function setTheme(newTheme, isManual = true) {
-        theme = newTheme;
-        document.body.setAttribute('data-theme', theme);
-
-        // 如果是手动设置，保存到本地存储
-        if (isManual) {
-            localStorage.setItem('manualTheme', theme);
-        }
-
-        // 重新渲染图表以适应主题变化
-        setTimeout(() => {
-            if (cpuChart && memChart && netChart && diskChart && accessChart) {
-                cpuChart.resize();
-                memChart.resize();
-                netChart.resize();
-                diskChart.resize();
-                accessChart.resize();
-            }
-        }, 300);
-    }
-
-    // 切换主题
-    function toggleTheme() {
-        const newTheme = theme === 'light' ? 'dark' : 'light';
-        setTheme(newTheme);
-    }
-
-    // 处理页面可见性变化
-    function handleVisibilityChange() {
-        if (!document[hidden]) {
-            // 页面变为可见状态
-            console.log("页面变为可见，刷新图表和数据");
-
-            // 重新调整图表大小
-            setTimeout(() => {
-                if (cpuChart && memChart && netChart && diskChart && accessChart) {
-                    cpuChart.resize();
-                    memChart.resize();
-                    netChart.resize();
-                    diskChart.resize();
-                    accessChart.resize();
-                }
-            }, 100);
-
-            // 检查WebSocket连接状态
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                console.log("WebSocket连接已断开，尝试重新连接");
-                reconnectWebSocket();
-            }
-
-            // 刷新访问统计数据
-            refreshAccessStats();
-
-            // 刷新媒体
-            loadFixedMedia();
-
-            // 检查是否需要更新主题（例如从白天进入夜晚）
-            checkAndSetTheme();
-        }
-    }
-
-    // 更新在线用户显示
-    function updateOnlineUsersDisplay(data) {
-        if (!data || typeof data !== 'object') {
-            document.getElementById('onlineUsersInfo').innerHTML = `
-                    <div class="media-error">
-                        无效的在线用户数据
+        return (
+            <div className="login-bg">
+                <Card style={{ width: '100%', maxWidth: 420 }}>
+                    <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                        <div style={{ fontSize: 40 }}>🖥️</div>
+                        <Typography.Title level={3} style={{ marginBottom: 4 }}>Server Status</Typography.Title>
+                        <Typography.Text type="secondary">服务器状态监控系统</Typography.Text>
                     </div>
-                `;
-            return;
-        }
-
-        const onlineCount = data.online_count || 0;
-        const uniqueIps = data.unique_ips || [];
-        const onlineUsers = data.online_users || [];
-
-        // 更新计数显示
-        document.getElementById('onlineCount').textContent = onlineCount;
-        document.getElementById('uniqueIpsCount').textContent = uniqueIps.length;
-
-        // 更新表格
-        updateOnlineUsersTable(onlineUsers);
-
-        document.getElementById('lastUpdated').textContent = `上次更新: ${new Date().toLocaleTimeString()}`;
+                    <Form form={form} layout="vertical" onFinish={submit}>
+                        <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
+                            <Input placeholder="用户名" size="large" />
+                        </Form.Item>
+                        {mode === 'register' && (
+                            <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}>
+                                <Input placeholder="user@example.com" size="large" />
+                            </Form.Item>
+                        )}
+                        <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
+                            <Input.Password placeholder="密码" size="large" />
+                        </Form.Item>
+                        {mode === 'login' && (
+                            <Form.Item name="remember" valuePropName="checked">
+                                <antdCheckbox>记住我</antdCheckbox>
+                            </Form.Item>
+                        )}
+                        <Button type="primary" htmlType="submit" block size="large" loading={loading}>
+                            {mode === 'login' ? '登 录' : '注 册'}
+                        </Button>
+                        <div style={{ textAlign: 'center', marginTop: 12 }}>
+                            <Typography.Link onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); form.resetFields(); }}>
+                                {mode === 'login' ? '没有账户？注册新账户' : '已有账户？返回登录'}
+                            </Typography.Link>
+                        </div>
+                    </Form>
+                </Card>
+            </div>
+        );
     }
+    const antdCheckbox = window.antd.Checkbox;
 
-    // 更新在线用户表格
-    function updateOnlineUsersTable(users) {
-        const tableBody = document.querySelector('#onlineUsersTable tbody');
-        const currentUsers = Array.from(tableBody.querySelectorAll('tr')).map(row => row.getAttribute('data-ip'));
-        const newUsers = users.map(user => user.ip);
+    function Dashboard({ user, onLogout }) {
+        const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+        const [status, setStatus] = useState(null);
+        const [online, setOnline] = useState([]);
+        const [onlineCount, setOnlineCount] = useState(0);
+        const [conn, setConn] = useState('disconnected');
+        const [ifaces, setIfaces] = useState([]);
+        const [iface, setIface] = useState('');
+        const wsRef = useRef(null);
+        const reconnectTimer = useRef(null);
+        const reconnectAttempts = useRef(0);
+        const chartRefs = useRef({});
+        const chartInsts = useRef({});
+        const dataRef = useRef({ labels: [], cpu: [], mem: [], up: [], down: [], r: [], w: [] });
 
-        // 找出离开的用户
-        currentUsers.forEach(ip => {
-            if (!newUsers.includes(ip)) {
-                const row = tableBody.querySelector(`tr[data-ip="${ip}"]`);
-                if (row) {
-                    row.classList.add('user-leaving');
-                    // 动画结束后移除行
-                    setTimeout(() => {
-                        if (row.parentNode) {
-                            row.parentNode.removeChild(row);
-                        }
-                    }, 500);
-                }
-            }
-        });
+        const hasPerm = p => (user.permissions || []).some(x => x === '*' || x === p);
 
-        // 找出新加入的用户并更新现有用户
-        users.forEach(user => {
-            const existingRow = tableBody.querySelector(`tr[data-ip="${user.ip}"]`);
+        useEffect(() => { localStorage.setItem('theme', isDark ? 'dark' : 'light'); }, [isDark]);
 
-            if (existingRow) {
-                // 更新现有用户信息
-                updateUserRow(existingRow, user);
-            } else {
-                // 添加新用户行
-                const newRow = createUserRow(user);
-                newRow.classList.add('user-joining');
-                tableBody.appendChild(newRow);
+        const push = (arr, v) => { arr.push(v); if (arr.length > 20) arr.shift(); };
 
-                // 动画结束后移除加入动画类
-                setTimeout(() => {
-                    newRow.classList.remove('user-joining');
-                }, 500);
-            }
-        });
-    }
-
-    // 创建用户行
-    function createUserRow(user) {
-        const row = document.createElement('tr');
-        row.setAttribute('data-ip', user.ip);
-
-        row.innerHTML = `
-                <td>${user.ip || 'N/A'}</td>
-                <td>${user.page || 'N/A'}</td>
-                <td class="hide-on-mobile">${user.since || 'N/A'}</td>
-                <td>${user.user_agent || 'N/A'}</td>
-            `;
-
-        return row;
-    }
-
-    // 更新用户行
-    function updateUserRow(row, user) {
-        const cells = row.cells;
-        if (cells.length >= 5) {
-            cells[0].textContent = user.ip || 'N/A';
-            cells[1].textContent = user.page || 'N/A';
-            cells[2].textContent = user.since || 'N/A';
-            cells[3].textContent = user.user_agent || 'N/A';
-        }
-    }
-
-    // 设置媒体控制
-    function setupMediaControls() {
-        // 音量控制
-        const volumeControl = document.getElementById('mediaVolume');
-        volumeControl.addEventListener('input', function() {
-            const video = document.getElementById('fixedMediaVideo');
-            if (video) {
-                video.volume = this.value;
-            }
-        });
-
-        // 刷新媒体按钮
-        document.getElementById('refreshMedia').addEventListener('click', loadFixedMedia);
-
-        // 播放/暂停按钮
-        document.getElementById('togglePlayPause').addEventListener('click', function() {
-            const video = document.getElementById('fixedMediaVideo');
-            if (video && video.style.display === 'block') {
-                if (video.paused) {
-                    // 在移动设备上，必须通过用户手势触发播放
-                    const playPromise = video.play();
-                    if (playPromise !== undefined) {
-                        playPromise.then(() => {
-                            this.textContent = '暂停';
-                        }).catch(error => {
-                            console.log('播放被阻止:', error);
-                            // 显示提示，需要用户交互
-                            alert('请在视频上点击以开始播放');
-                        });
-                    }
-                } else {
-                    video.pause();
-                    this.textContent = '播放';
-                }
-            }
-        });
-
-        // 放大/缩小按钮
-        document.getElementById('zoomMedia').addEventListener('click', function() {
-            const mediaContainer = document.getElementById('fixedMediaContainer');
-            if (mediaContainer.classList.contains('media-zoomed')) {
-                mediaContainer.classList.remove('media-zoomed');
-                this.textContent = '放大';
-            } else {
-                mediaContainer.classList.add('media-zoomed');
-                this.textContent = '缩小';
-            }
-        });
-
-        // 双击媒体放大/缩小
-        const mediaContainer = document.getElementById('fixedMediaContainer');
-        mediaContainer.addEventListener('dblclick', function() {
-            const zoomBtn = document.getElementById('zoomMedia');
-            if (this.classList.contains('media-zoomed')) {
-                this.classList.remove('media-zoomed');
-                zoomBtn.textContent = '放大';
-            } else {
-                this.classList.add('media-zoomed');
-                zoomBtn.textContent = '缩小';
-            }
-        });
-
-        // 视频元素的事件监听
-        const video = document.getElementById('fixedMediaVideo');
-        if (video) {
-            video.addEventListener('play', function() {
-                document.getElementById('togglePlayPause').textContent = '暂停';
-            });
-
-            video.addEventListener('pause', function() {
-                document.getElementById('togglePlayPause').textContent = '播放';
-            });
-
-            video.addEventListener('ended', function() {
-                document.getElementById('togglePlayPause').textContent = '播放';
-            });
-
-            // 移动设备上添加点击播放支持
-            if (isMobile) {
-                video.addEventListener('click', function() {
-                    if (video.paused) {
-                        video.play().then(() => {
-                            console.log("视频开始播放");
-                        }).catch(e => {
-                            console.log("播放失败，需要用户交互", e);
-                        });
-                    }
-                });
-            }
-        }
-    }
-
-    // 获取网卡列表
-    function loadInterfaces() {
-        secureFetch(`${baseUrl}/status-ifaces`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('获取网卡列表失败: ' + response.status);
-                }
-                return response.json();
-            })
-            .then(ifaces => {
-                const sel = document.getElementById('ifaceSelect');
-                sel.innerHTML = '<option value="">选择网卡...</option>';
-
-                ifaces.forEach(i => {
-                    const opt = document.createElement('option');
-                    opt.value = i;
-                    opt.textContent = i;
-                    sel.appendChild(opt);
-                });
-
-                if (ifaces.length > 0) {
-                    currentIface = ifaces[1];
-                    startWebSocket(ifaces[1]);
-                    sel.value = ifaces[1];
-                }
-            })
-            .catch(error => {
-                console.error('获取网卡列表错误:', error);
-                // 尝试使用默认网卡
-                currentIface = 'eth4';
-                startWebSocket('eth4');
-            });
-
-        // 网卡选择变化事件
-        document.getElementById('ifaceSelect').addEventListener('change', function() {
-            if (this.value) {
-                currentIface = this.value;
-                startWebSocket(this.value);
-            }
-        });
-    }
-
-    // 启动WebSocket连接
-    function startWebSocket(iface) {
-        // 清除之前的重连定时器
-        if (reconnectTimeout) {
-            clearTimeout(reconnectTimeout);
-            reconnectTimeout = null;
-        }
-
-        if (ws) {
-            // 如果已有连接，先关闭它
-            ws.onclose = null; // 避免触发重连逻辑
-            ws.close();
-        }
-
-        try {
-            updateConnectionStatus('connecting', '连接中...');
-
-            // 生成WebSocket安全参数
-            const signatureData = generateRequestSignature('/ws');
-
-            // 使用baseUrl构建WebSocket连接，添加安全参数
-            const wsUrl = `wss://${baseUrl.split('//')[1]}/ws?iface=${iface}&timestamp=${signatureData.timestamp}&nonce=${signatureData.nonce}&signature=${signatureData.signature}`;
-            ws = new WebSocket(wsUrl);
-
-            ws.onopen = function() {
-                console.log('WebSocket连接已建立');
-                updateConnectionStatus('connected', '已连接');
-                reconnectAttempts = 0; // 重置重连尝试次数
-                isManualReconnect = false;
-            };
-
-            ws.onmessage = function(e) {
-                try {
-                    const data = JSON.parse(e.data);
-                    updateCharts(data);
-                    updateStatusTable(data);
-                    // 更新在线用户信息
-                    updateOnlineUsersDisplay(data);
-                } catch (error) {
-                    console.error('解析WebSocket数据错误:', error, e.data);
-                }
-            };
-
-            ws.onerror = function(error) {
-                console.error('WebSocket错误:', error);
-                updateConnectionStatus('disconnected', '连接错误');
-            };
-
-            ws.onclose = function(e) {
-                console.log('WebSocket连接关闭:', e.code, e.reason);
-                updateConnectionStatus('disconnected', '已断开');
-
-                // 如果不是手动重连，并且页面可见，尝试自动重连
-                if (!isManualReconnect && !document[hidden] && reconnectAttempts < maxReconnectAttempts) {
-                    reconnectAttempts++;
-                    const delay = Math.min(3000 * reconnectAttempts, 15000); // 指数退避策略，最多15秒
-                    console.log(`将在 ${delay/1000} 秒后尝试第 ${reconnectAttempts} 次重连`);
-
-                    reconnectTimeout = setTimeout(() => {
-                        startWebSocket(iface);
-                    }, delay);
-                }
-            };
-        } catch (error) {
-            console.error('创建WebSocket错误:', error);
-            updateConnectionStatus('disconnected', '连接失败');
-        }
-    }
-
-    // 重新连接WebSocket
-    function reconnectWebSocket() {
-        const iface = document.getElementById('ifaceSelect').value;
-        if (iface) {
-            isManualReconnect = true;
-            reconnectAttempts = 0; // 重置重连计数
-            startWebSocket(iface);
-        } else {
-            // 如果没有选择网卡，尝试重新加载网卡列表
-            loadInterfaces();
-        }
-    }
-
-    // 初始化ECharts图表
-    let cpuChart, memChart, netChart, diskChart, accessChart;
-
-    function initCharts() {
-        cpuChart = echarts.init(document.getElementById('cpuChart'));
-        memChart = echarts.init(document.getElementById('memChart'));
-        netChart = echarts.init(document.getElementById('netChart'));
-        diskChart = echarts.init(document.getElementById('diskChart'));
-        accessChart = echarts.init(document.getElementById('accessChart'));
-
-        const chartOption = (title, names, colors) => ({
-            title: {
-                text: title,
-                left: 'center',
-            },
-            tooltip: {
-                trigger: 'axis',
-                axisPointer: { type: 'shadow' }
-            },
-            grid: {
-                left: '3%',
-                right: '4%',
-                bottom: '3%',
-                containLabel: true
-            },
-            xAxis: {
-                type: 'category',
-                boundaryGap: false,
-                data: [],
-                axisLine: { lineStyle: { color: 'var(--text-color)' } }
-            },
-            yAxis: {
-                type: 'value',
-                axisLine: { lineStyle: { color: 'var(--text-color)' } }
-            },
-            series: names.map((name, index) => ({
-                name: name,
-                type: 'line',
-                smooth: true,
-                itemStyle: {
-                    color: colors ? colors[index] : undefined
-                },
-                lineStyle: {
-                    width: 2
-                },
-                data: []
-            })),
-            textStyle: { color: 'var(--text-color)' }
-        });
-
-        const cpuOpt = chartOption('CPU 使用率 (%)', ['CPU使用率'], ['#5470c6']);
-        const memOpt = chartOption('内存使用率 (%)', ['内存使用率'], ['#91cc75']);
-        const netOpt = chartOption('网络速率 (KB/s)', ['上传', '下载'], ['#fac858', '#ee6666']);
-        const diskOpt = chartOption('磁盘 I/O (KB/s)', ['读取', '写入'], ['#73c0de', '#3ba272']);
-
-        // 访问统计图表使用柱状图
-        const accessOpt = {
-            title: {
-                text: '访问统计',
-                left: 'center'
-            },
-            tooltip: {
-                trigger: 'axis',
-                axisPointer: { type: 'shadow' }
-            },
-            grid: {
-                left: '3%',
-                right: '4%',
-                bottom: '3%',
-                containLabel: true
-            },
-            xAxis: {
-                type: 'category',
-                data: [],
-                axisLine: { lineStyle: { color: 'var(--text-color)' } }
-            },
-            yAxis: {
-                type: 'value',
-                axisLine: { lineStyle: { color: 'var(--text-color)' } }
-            },
-            series: [{
-                name: '访问量',
-                type: 'bar',
-                itemStyle: {
-                    color: '#5470c6'
-                },
-                data: []
-            }],
-            textStyle: { color: 'var(--text-color)' }
+        const updateCharts = (d) => {
+            const t = new Date().toLocaleTimeString();
+            const D = dataRef.current;
+            D.labels.push(t); if (D.labels.length > 20) D.labels.shift();
+            push(D.cpu, (parseFloat(d.cpu_usage) || 0).toFixed(2));
+            push(D.mem, (parseFloat(d.memory_usage) || 0).toFixed(2));
+            push(D.up, (parseFloat(d.upload_speed) || 0).toFixed(2));
+            push(D.down, (parseFloat(d.download_speed) || 0).toFixed(2));
+            push(D.r, (parseFloat(d.read_speed) || 0).toFixed(2));
+            push(D.w, (parseFloat(d.write_speed) || 0).toFixed(2));
+            setOption('cpu', ['#1677ff'], D.labels, D.cpu, 'CPU 使用率 (%)');
+            setOption('mem', ['#52c41a'], D.labels, D.mem, '内存使用率 (%)');
+            setOption('net', ['#faad14', '#ff4d4f'], D.labels, [D.up, D.down], '网络速率 (KB/s)');
+            setOption('disk', ['#13c2c2', '#722ed1'], D.labels, [D.r, D.w], '磁盘 I/O (KB/s)');
         };
 
-        cpuChart.setOption(cpuOpt);
-        memChart.setOption(memOpt);
-        netChart.setOption(netOpt);
-        diskChart.setOption(diskOpt);
-        accessChart.setOption(accessOpt);
-
-        // 监听窗口大小变化，重新调整图表大小
-        window.addEventListener('resize', function() {
-            cpuChart.resize();
-            memChart.resize();
-            netChart.resize();
-            diskChart.resize();
-            accessChart.resize();
-        });
-    }
-
-    // 更新图表数据
-    const labels = [];
-    const maxDataPoints = 20;
-
-    function updateCharts(data) {
-        if (!data || typeof data !== 'object') {
-            console.error('无效的数据格式:', data);
-            return;
-        }
-
-        const time = new Date().toLocaleTimeString();
-
-        // 限制数据点数量
-        if (labels.length >= maxDataPoints) {
-            labels.shift();
-            cpuChart.getOption().series[0].data.shift();
-            memChart.getOption().series[0].data.shift();
-            netChart.getOption().series[0].data.shift();
-            netChart.getOption().series[1].data.shift();
-            diskChart.getOption().series[0].data.shift();
-            diskChart.getOption().series[1].data.shift();
-        }
-
-        labels.push(time);
-
-        // 更新CPU图表
-        const cpuUsage = parseFloat(data.cpu_usage || 0);
-        cpuChart.setOption({
-            xAxis: { data: labels },
-            series: [{ data: [...cpuChart.getOption().series[0].data, cpuUsage.toFixed(2)] }]
-        });
-
-        // 更新内存图表
-        const memUsage = parseFloat(data.memory_usage || 0);
-        memChart.setOption({
-            xAxis: { data: labels },
-            series: [{ data: [...memChart.getOption().series[0].data, memUsage.toFixed(2)] }]
-        });
-
-        // 更新网络图表
-        const uploadSpeed = parseFloat(data.upload_speed || 0);
-        const downloadSpeed = parseFloat(data.download_speed || 0);
-        netChart.setOption({
-            xAxis: { data: labels },
-            series: [
-                { data: [...netChart.getOption().series[0].data, uploadSpeed.toFixed(2)] },
-                { data: [...netChart.getOption().series[1].data, downloadSpeed.toFixed(2)] }
-            ]
-        });
-
-        // 更新磁盘图表
-        const readSpeed = parseFloat(data.read_speed || 0);
-        const writeSpeed = parseFloat(data.write_speed || 0);
-        diskChart.setOption({
-            xAxis: { data: labels },
-            series: [
-                { data: [...diskChart.getOption().series[0].data, readSpeed.toFixed(2)] },
-                { data: [...diskChart.getOption().series[1].data, writeSpeed.toFixed(2)] }
-            ]
-        });
-    }
-
-    // 更新状态表格
-    function updateStatusTable(data) {
-        const cpuUsage = parseFloat(data.cpu_usage || 0);
-        const memUsage = parseFloat(data.memory_usage || 0);
-        const uploadSpeed = parseFloat(data.upload_speed || 0);
-        const downloadSpeed = parseFloat(data.download_speed || 0);
-        const readSpeed = parseFloat(data.read_speed || 0);
-        const writeSpeed = parseFloat(data.write_speed || 0);
-
-        document.getElementById('info').innerHTML = `
-                   <strong>服务器状态信息</strong>
-                <table class="status-table">
-                    <tr>
-                        <th>指标</th>
-                        <th>值</th>
-                        <th>指标</th>
-                        <th>值</th>
-                    </tr>
-                    <tr>
-                        <td>主机名</td>
-                        <td class="status-value">${data.hostname || 'N/A'}</td>
-                        <td>操作系统</td>
-                        <td class="status-value">${data.os || 'N/A'}</td>
-                    </tr>
-                    <tr>
-                        <td>平台</td>
-                        <td class="status-value">${data.platform || 'N/A'}</td>
-                        <td>内核版本</td>
-                        <td class="status-value">${data.kernel_version || 'N/A'}</td>
-                    </tr>
-                    <tr>
-                        <td>系统架构</td>
-                        <td class="status-value">${data.architecture || 'N/A'}</td>
-                        <td>运行时间</td>
-                        <td class="status-value">${data.uptime || 'N/A'}</td>
-                    </tr>
-                    <tr>
-                        <td>CPU使用率</td>
-                        <td class="status-value">${cpuUsage.toFixed(2)}%</td>
-                        <td>内存使用率</td>
-                        <td class="status-value">${memUsage.toFixed(2)}%</td>
-                    </tr>
-                    <tr>
-                        <td>内存总量</td>
-                        <td class="status-value">${data.memory_total || 'N/A'} MB</td>
-                        <td>磁盘使用率</td>
-                        <td class="status-value">${data.disk_usage ? parseFloat(data.disk_usage).toFixed(2) : 'N/A'}%</td>
-                    </tr>
-                    <tr>
-                        <td>磁盘总量</td>
-                        <td class="status-value">${data.disk_total || 'N/A'} GB</td>
-                        <td>上传速度</td>
-                        <td class="status-value">${uploadSpeed.toFixed(2)} KB/s</td>
-                    </tr>
-                    <tr>
-                        <td>下载速度</td>
-                        <td class="status-value">${downloadSpeed.toFixed(2)} KB/s</td>
-                        <td>磁盘读取</td>
-                        <td class="status-value">${readSpeed.toFixed(2)} KB/s</td>
-                    </tr>
-                    <tr>
-                        <td>磁盘写入</td>
-                        <td class="status-value">${writeSpeed.toFixed(2)} KB/s</td>
-                        <td>系统负载</td>
-                        <td class="status-value">${data.load1 || 'N/A'}, ${data.load5 || 'N/A'}, ${data.load15 || 'N/A'}</td>
-                    </tr>
-                    <tr>
-                        <td>下载总流量</td>
-                        <td class="status-value">${data.total_download || 'N/A'}</td>
-                        <td>上传总流量</td>
-                        <td class="status-value">${data.total_upload || 'N/A'}</td>
-                    </tr>
-                </table>
-            `;
-    }
-
-    // 获取访问统计数据并更新图表
-    function refreshAccessStats() {
-        secureFetch(`${baseUrl}/access-stats`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('获取访问统计数据失败: ' + response.status);
-                }
-                return response.json();
-            })
-            .then(data => {
-                updateAccessChart(data);
-            })
-            .catch(error => {
-                console.error('获取访问统计数据错误:', error);
+        const setOption = (key, colors, labels, series, title) => {
+            const inst = chartInsts.current[key];
+            if (!inst) return;
+            const s = Array.isArray(series[0]) ? series : [series];
+            inst.setOption({
+                title: { text: title, left: 'center', textStyle: { fontSize: 13, color: '#999' } },
+                tooltip: { trigger: 'axis', backgroundColor: 'rgba(22,30,48,0.9)', borderWidth: 0, textStyle: { color: '#fff' } },
+                grid: { left: 10, right: 14, top: 36, bottom: 4, containLabel: true },
+                xAxis: { type: 'category', boundaryGap: false, data: labels.slice(), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#8b93a5', fontSize: 11 } },
+                yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#8b93a5', fontSize: 11 }, splitLine: { lineStyle: { color: 'rgba(120,130,150,0.16)', type: 'dashed' } } },
+                series: s.map((arr, i) => ({
+                    name: arr === series[0] && key === 'net' ? '上传' : arr === series[1] && key === 'net' ? '下载' : arr === series[0] && key === 'disk' ? '读取' : arr === series[1] && key === 'disk' ? '写入' : (key === 'cpu' ? 'CPU' : key === 'mem' ? '内存' : ''),
+                    type: 'line', smooth: 0.35, symbol: 'none',
+                    lineStyle: { width: 2.5, color: colors[i] }, itemStyle: { color: colors[i] },
+                    areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: hexToRgba(colors[i], 0.3) }, { offset: 1, color: hexToRgba(colors[i], 0.02) }]) },
+                    data: arr.slice()
+                }))
             });
+        };
+
+        const connect = useCallback((i) => {
+            if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
+            if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
+            setConn('connecting');
+            const sig = generateSignature('/ws');
+            const url = baseUrl.replace(/^http/, 'ws') + '/ws?iface=' + encodeURIComponent(i) +
+                '&timestamp=' + sig.timestamp + '&nonce=' + sig.nonce + '&signature=' + sig.signature;
+            const ws = new WebSocket(url);
+            wsRef.current = ws;
+            ws.onopen = () => { setConn('connected'); reconnectAttempts.current = 0; };
+            ws.onmessage = (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    setStatus(d);
+                    setOnline(d.online_users || []);
+                    setOnlineCount(d.online_count || 0);
+                    updateCharts(d);
+                } catch (err) { /* 忽略 */ }
+            };
+            ws.onerror = () => setConn('disconnected');
+            ws.onclose = () => {
+                setConn('disconnected');
+                if (reconnectAttempts.current < 10) {
+                    reconnectAttempts.current++;
+                    const delay = Math.min(3000 * reconnectAttempts.current, 15000);
+                    reconnectTimer.current = setTimeout(() => connect(i), delay);
+                }
+            };
+        }, []);
+
+        // 初始化图表
+        useEffect(() => {
+            ['cpu', 'mem', 'net', 'disk'].forEach(k => {
+                if (chartRefs.current[k] && !chartInsts.current[k]) {
+                    chartInsts.current[k] = echarts.init(chartRefs.current[k]);
+                }
+            });
+            const onR = () => Object.values(chartInsts.current).forEach(c => c.resize());
+            window.addEventListener('resize', onR);
+            return () => window.removeEventListener('resize', onR);
+        }, []);
+
+        // 加载网卡并连接
+        useEffect(() => {
+            secureFetch(baseUrl + '/status-ifaces')
+                .then(r => r.json())
+                .then(list => {
+                    setIfaces(Array.isArray(list) ? list : []);
+                    const pick = list && list.length > 1 ? list[1] : (list && list[0]);
+                    if (pick) { setIface(pick); connect(pick); }
+                })
+                .catch(() => { setIface('eth4'); connect('eth4'); });
+            return () => { if (wsRef.current) wsRef.current.close(); if (reconnectTimer.current) clearTimeout(reconnectTimer.current); };
+        }, [connect]);
+
+        const navBtns = [];
+        navBtns.push(<Button key="ebooks" onClick={() => window.location.href = 'ebooks.html'}>📚 电子书</Button>);
+        navBtns.push(<Button key="ip" onClick={() => window.location.href = 'ip-panel.html'}>🌐 IP 流量</Button>);
+        if (hasPerm('files:manage')) navBtns.push(<Button key="files" onClick={() => window.location.href = 'files.html'}>📁 文件管理</Button>);
+        if (hasPerm('system:process')) navBtns.push(<Button key="proc" onClick={() => window.location.href = 'process.html'}>⚙️ 进程</Button>);
+        if (hasPerm('files:download')) navBtns.push(<Button key="dl" onClick={() => window.location.href = 'download.html'}>📥 安全下载</Button>);
+        if (hasPerm('user:manage') || hasPerm('role:manage')) navBtns.push(<Button key="rbac" onClick={() => window.location.href = 'rbac.html'}>🛡️ 权限管理</Button>);
+
+        const onlineCols = [
+            { title: 'IP 地址', dataIndex: 'ip' },
+            { title: '访问页面', dataIndex: 'page' },
+            { title: '连接时间', dataIndex: 'since' },
+            { title: '用户标识', dataIndex: 'user_agent', ellipsis: true }
+        ];
+
+        return (
+            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
+                <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                    <div className={'topbar' + (isDark ? ' dark' : '')}>
+                        <div className="brand"><span className="logo">🖥️</span><span>Server Status<span className="tb-sub"> · 实时监控</span></span></div>
+                        <Space wrap>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <Badge status={conn === 'connected' ? 'success' : conn === 'connecting' ? 'processing' : 'error'} />
+                                <Typography.Text className="tb-status" type="secondary">{conn === 'connected' ? '已连接' : conn === 'connecting' ? '连接中...' : '已断开'}</Typography.Text>
+                            </span>
+                            <Button title={isDark ? '浅色模式' : '深色模式'} onClick={() => setIsDark(!isDark)}>{isDark ? '🌞' : '🌙'}<span className="tb-label">{isDark ? '浅色' : '深色'}</span></Button>
+                            <Button danger title="退出登录" onClick={onLogout}>🚪<span className="tb-label">退出</span></Button>
+                        </Space>
+                    </div>
+                    <div className="page-wrap">
+                        <Space wrap style={{ marginBottom: 12 }}>
+                            {navBtns}
+                        </Space>
+
+                        <div className="stat-grid stat-cards">
+                            <Card size="small" hoverable bordered><Statistic title="CPU 使用率" value={status ? (parseFloat(status.cpu_usage) || 0).toFixed(1) : '-'} suffix="%" valueStyle={{ color: '#1677ff' }} /></Card>
+                            <Card size="small" hoverable bordered><Statistic title="内存使用率" value={status ? (parseFloat(status.memory_usage) || 0).toFixed(1) : '-'} suffix="%" valueStyle={{ color: '#52c41a' }} /></Card>
+                            <Card size="small" hoverable bordered><Statistic title="磁盘使用率" value={status ? (parseFloat(status.disk_usage) || 0).toFixed(1) : '-'} suffix="%" valueStyle={{ color: '#faad14' }} /></Card>
+                            <Card size="small" hoverable bordered><Statistic title="在线用户" value={onlineCount} suffix="人" valueStyle={{ color: '#722ed1' }} /></Card>
+                            <Card size="small" hoverable bordered><Statistic title="运行时间" value={status ? status.uptime : '-'} valueStyle={{ fontSize: 14 }} /></Card>
+                        </div>
+
+                        <Card size="small" style={{ marginBottom: 12 }}>
+                            <Descriptions size="small" column={{ xs: 1, sm: 2, md: 4 }} items={[
+                                { key: 'host', label: '主机名', children: status?.hostname || '-' },
+                                { key: 'os', label: '操作系统', children: status?.os || '-' },
+                                { key: 'kernel', label: '内核', children: status?.kernel_version || '-' },
+                                { key: 'arch', label: '架构', children: status?.architecture || '-' },
+                                { key: 'up', label: '上传总流量', children: status?.total_upload || '-' },
+                                { key: 'down', label: '下载总流量', children: status?.total_download || '-' },
+                                { key: 'load', label: '系统负载', children: status ? (status.load1 + ' / ' + status.load5 + ' / ' + status.load15) : '-' },
+                                { key: 'net', label: '网络', children: status ? '↑' + (parseFloat(status.upload_speed) || 0).toFixed(1) + ' / ↓' + (parseFloat(status.download_speed) || 0).toFixed(1) + ' KB/s' : '-' }
+                            ]} />
+                        </Card>
+
+                        <div className="stat-grid">
+                            <Card size="small" hoverable bordered className="chart-card" title="📈 网络速率">
+                                <div ref={el => chartRefs.current.net = el} className="chart"></div>
+                            </Card>
+                            <Card size="small" hoverable bordered className="chart-card" title="💿 磁盘 I/O">
+                                <div ref={el => chartRefs.current.disk = el} className="chart"></div>
+                            </Card>
+                            <Card size="small" hoverable bordered className="chart-card" title="🔋 CPU 使用率">
+                                <div ref={el => chartRefs.current.cpu = el} className="chart"></div>
+                            </Card>
+                            <Card size="small" hoverable bordered className="chart-card" title="🧠 内存使用率">
+                                <div ref={el => chartRefs.current.mem = el} className="chart"></div>
+                            </Card>
+                        </div>
+
+                        <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+                            <Card size="small" hoverable bordered title={`👥 在线用户（${onlineCount}）`}>
+                                <Table size="small" rowKey={(_, i) => i} dataSource={online} columns={onlineCols}
+                                       pagination={false} scroll={{ y: 240, x: 'max-content' }} />
+                            </Card>
+                        </div>
+
+                        <Alert type="info" showIcon style={{ marginTop: 12 }}
+                               message={conn !== 'connected' ? '⚠️ WebSocket 连接已断开，正在自动重连，图表暂停更新' : '✅ 实时数据推送中，每 1 秒更新一次'} />
+                    </div>
+                    <MediaWindow />
+                </div>
+            </ConfigProvider>
+        );
     }
 
-    // 更新访问统计图表
-    function updateAccessChart(data) {
-        if (!data || !data.daily_visits) {
-            console.error('无效的访问统计数据:', data);
-            return;
-        }
-
-        // 准备数据
-        const dates = Object.keys(data.daily_visits).reverse();
-        const visits = dates.map(date => data.daily_visits[date]);
-
-        // 更新图表
-        accessChart.setOption({
-            xAxis: {
-                data: dates
-            },
-            series: [{
-                data: visits
-            }]
+    function MediaWindow() {
+        const [src, setSrc] = useState(null);
+        const [playing, setPlaying] = useState(true);
+        const [zoomed, setZoomed] = useState(false);
+        const [volume, setVolume] = useState(() => {
+            const v = parseFloat(localStorage.getItem('media_volume'));
+            return isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
         });
-    }
+        const [muted, setMuted] = useState(() => localStorage.getItem('media_sound') !== 'on');
+        const videoRef = useRef(null);
+        const isVideo = src && /\.(mp4|webm|mov)(\?|$)/i.test(src);
+        const fixSrc = (u) => {
+            try {
+                const p = new URL(u);
+                p.hostname = window.location.hostname;
+                return p.toString();
+            } catch (e) { return u; }
+        };
 
-    // 固定位置媒体模块
-    function loadFixedMedia() {
-        const img = document.getElementById("fixedMediaImg");
-        const video = document.getElementById("fixedMediaVideo");
-        const placeholder = document.getElementById("mediaPlaceholder");
-        const toggleBtn = document.getElementById("togglePlayPause");
-        if (!video.paused) {
-            video.pause();
-        }
+        const load = useCallback(() => {
+            secureFetch(baseUrl + '/random-media')
+                .then(r => r.json())
+                .then(d => { if (d && d.src) { setSrc(fixSrc(d.src)); setPlaying(true); setMuted(localStorage.getItem('media_sound') !== 'on'); } })
+                .catch(() => {});
+        }, []);
+        useEffect(() => {
+            load();
+            const t = setInterval(load, 80000);
+            return () => clearInterval(t);
+        }, [load]);
+        useEffect(() => {
+            const v = videoRef.current;
+            if (!v) return;
+            v.muted = muted;
+            v.volume = volume;
+            if (playing) v.play().catch(() => {});
+            else v.pause();
+        }, [src, playing, volume, muted]);
+        useEffect(() => { localStorage.setItem('media_sound', muted ? 'off' : 'on'); }, [muted]);
+        useEffect(() => { localStorage.setItem('media_volume', String(volume)); }, [volume]);
 
-        video.removeAttribute('src');  // 清空视频地址
-        video.load();  // 重置视频
-
-        img.style.display = "none";
-        video.style.display = "none";
-        toggleBtn.style.display = "none";
-        placeholder.style.display = "block";
-        placeholder.className = "media-loading";
-        placeholder.innerHTML = '<div class="spinner"></div><div>加载媒体中...</div>';
-        video.addEventListener('loadeddata', function() {
-            if (video.paused) {
-                video.currentTime = 0; // 确保显示第一帧
-            }
-        });
-
-        secureFetch(`${baseUrl}/random-media`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('获取媒体失败: ' + response.status);
-                }
-                return response.json();
-            })
-            .then(data => {
-                const src = data.src;
-
-                if (!src) {
-                    placeholder.className = "media-placeholder";
-                    placeholder.textContent = "无可用媒体";
-                    return;
-                }
-
-                const ext = src.split('.').pop().toLowerCase();
-
-                if (ext === "mp4" || ext === "webm" || ext === "mov") {
-                    img.style.display = "none";
-                    video.src = src;
-                    video.style.display = "block";
-                    video.volume = document.getElementById('mediaVolume').value;
-
-                    // 移动设备上默认静音，以避免自动播放问题
-                    if (isMobile) {
-                        video.muted = true;
-                        video.setAttribute('muted', '');
-                        video.setAttribute('playsinline', '');
-                        video.setAttribute('webkit-playsinline', '');
-                    } else {
-                        video.muted = false;
-                    }
-
-                    // 设置视频事件
-                    video.onloadeddata = function() {
-                        placeholder.style.display = "none";
-                        toggleBtn.style.display = "block";
-                        toggleBtn.textContent = video.paused ? "播放" : "暂停";
-
-                        // 非移动设备尝试自动播放
-                        if (!isMobile) {
-                            const playPromise = video.play();
-                            if (playPromise !== undefined) {
-                                playPromise.then(() => {
-                                    toggleBtn.textContent = '暂停';
-                                }).catch(e => {
-                                    console.log('自动播放被阻止:', e);
-                                    toggleBtn.textContent = '播放';
-                                });
+        return (
+            <div className={'media-window' + (zoomed ? ' zoomed' : '')}>
+                <div className="media-head">
+                    <span className="m-title">🎬 媒体展示</span>
+                    {isVideo && <window.antd.Slider min={0} max={1} step={0.05} value={volume}
+                        onChange={v => { setVolume(v); setMuted(v === 0); }}
+                        style={{ width: 70, margin: 0 }} tooltip={{ open: false }} />}
+                    {isVideo && <window.antd.Button size="small" type="text"
+                        onClick={() => {
+                            const nextMuted = !muted;
+                            const v = videoRef.current;
+                            if (!nextMuted && v) {
+                                const vol = volume > 0 ? volume : 0.5;
+                                setVolume(vol);
+                                v.muted = false;
+                                v.volume = vol;
+                                v.play().catch(() => {});
+                            } else if (nextMuted && v) {
+                                v.muted = true;
                             }
-                        } else {
-                            // 移动设备上显示提示
-                            toggleBtn.textContent = '播放';
-                        }
-                    };
-
-                    video.onerror = function(e){
-                        console.error("视频加载错误:", e, src);
-                        placeholder.className='media-error';
-                        placeholder.textContent='视频加载失败';
-                        video.style.display='none';
-                        toggleBtn.style.display='none';
-                    };
-                } else {
-                    video.style.display = "none";
-                    toggleBtn.style.display = "none";
-                    img.src = src;
-                    img.style.display = "block";
-                    placeholder.style.display = "none";
-
-                    img.onerror = function() {
-                        img.style.display = "none";
-                        placeholder.className = "media-error";
-                        placeholder.textContent = "图片加载失败";
-                        placeholder.style.display = "block";
-                    };
-                }
-            })
-            .catch(error => {
-                console.error("加载随机媒体失败:", error);
-                placeholder.className = "media-error";
-                placeholder.textContent = "媒体加载失败";
-            });
+                            setMuted(nextMuted);
+                        }}
+                        title={muted ? '取消静音' : '静音'}>{muted ? '🔇' : '🔊'}</window.antd.Button>}
+                    <window.antd.Button size="small" type="text" onClick={load} title="刷新">🔄</window.antd.Button>
+                    {isVideo && <window.antd.Button size="small" type="text"
+                        onClick={() => setPlaying(!playing)} title={playing ? '暂停' : '播放'}>{playing ? '⏸' : '▶'}</window.antd.Button>}
+                    <window.antd.Button size="small" type="text" onClick={() => setZoomed(!zoomed)}
+                        title={zoomed ? '还原' : '放大'}>{zoomed ? '🗕' : '⛶'}</window.antd.Button>
+                </div>
+                <div className="media-body" onClick={() => isVideo && setPlaying(!playing)}>
+                    {!src ? <span className="placeholder">加载媒体中...</span>
+                        : isVideo
+                            ? <video ref={videoRef} src={src} muted={muted} playsInline loop autoPlay />
+                            : <img src={src} alt="media" />}
+                </div>
+            </div>
+        );
     }
 
-    // 页面加载完成后初始化
-    document.addEventListener('DOMContentLoaded', function() {
-        // 绑定登录表单提交事件
-        document.getElementById('loginForm').addEventListener('submit', handleLogin);
+    function App() {
+        const [user, setUser] = useState(null);
+        const [checking, setChecking] = useState(true);
+        useEffect(() => {
+            secureFetch(baseUrl + '/check-auth')
+                .then(r => r.json())
+                .then(d => { setUser(d.code === 200 ? d.user : null); setChecking(false); })
+                .catch(() => setChecking(false));
+        }, []);
+        if (checking) {
+            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Card loading style={{ width: 320 }} /></div>;
+        }
+        if (!user) return <Login onLogin={setUser} />;
+        return <Dashboard key={user.username} user={user} onLogout={() => {
+            secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => { SessionManager.clear(); setUser(null); });
+        }} />;
+    }
 
-        // 绑定注册表单提交事件
-        document.getElementById('registerForm').addEventListener('submit', handleRegister);
-
-        // 绑定登录/注册切换事件
-        document.getElementById('showRegister').addEventListener('click', showRegister);
-        document.getElementById('showLogin').addEventListener('click', showLogin);
-
-        // 密码强度检测
-        document.getElementById('regPassword').addEventListener('input', function() {
-            updatePasswordStrength(this.value);
-        });
-
-        // 检查登录状态和自动登录
-        checkAuthStatus();
-    });
-
-    // 每30秒刷新媒体
-    setInterval(loadFixedMedia, 80000);
-
-    // 每5分钟刷新访问统计数据
-    setInterval(refreshAccessStats, 5 * 60 * 1000);
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>

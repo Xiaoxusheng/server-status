@@ -1,0 +1,22 @@
+# 构建产物
+server-status
+server-status.exe
+dist/
+
+# 运行时数据（含加密的用户/角色/令牌数据，不应入库）
+server_data.json
+users.json
+rbac.json
+download_tokens.json
+blocked_ips.json
+*.db
+
+# 日志与临时文件
+log/
+.upload-tmp/
+*.bak.*
+*.bak.upload-*
+
+# 系统文件
+.DS_Store
+Thumbs.db

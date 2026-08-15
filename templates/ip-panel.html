@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP 流量监控 - Server Status</title>
+    <link rel="icon" href="data:,">
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <style>
+        body { margin: 0; background: #f5f5f5; }
+        #root { min-height: 100vh; }
+        .page-wrap { padding: 16px; }
+        .topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 56px; background: #fff;
+            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+        .topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; color: #1677ff; }
+        .topbar.dark { background: #1f1f1f; border-bottom-color: #303030; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+        .topbar.dark .brand { color: #4096ff; }
+        .topbar .brand .logo {
+            width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #1677ff, #722ed1);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px;
+        }
+        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 12px; }
+        .chart-wrap { width: 100%; height: 260px; }
+        .ip-card { margin-bottom: 10px; }
+        .ip-card .ant-card-body { padding: 12px 14px; }
+        .ip-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 13px; }
+        .ip-row .label { color: #999; font-size: 12px; }
+        @media (max-width: 768px) {
+            .topbar { padding: 8px 12px; flex-wrap: wrap; gap: 6px 8px; }
+            .topbar .brand { font-size: 14px; gap: 6px; }
+            .topbar .brand .logo { width: 26px; height: 26px; font-size: 14px; border-radius: 6px; }
+            .topbar .ant-space { flex-wrap: wrap; gap: 6px !important; }
+            .topbar .ant-btn { padding: 4px 8px; font-size: 12px; height: 30px; }
+            .topbar .tb-sub { display: none; }
+            .topbar .tb-label { display: none; }
+            .page-wrap { padding: 10px; }
+            .chart-wrap { height: 220px; }
+            .ant-card-head { padding: 0 12px !important; }
+            .ant-card-head-wrapper { flex-wrap: wrap; gap: 6px; }
+            .ant-card-body { padding: 12px !important; }
+            .stat-grid { grid-template-columns: 1fr; gap: 8px; }
+            .stat-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+    const { Card, Table, Button, Input, Modal, message, Space, Tag, Statistic, Typography, ConfigProvider, theme, Badge, Drawer, Alert, Segmented, Empty } = window.antd;
+    const { useState, useEffect, useCallback, useRef } = React;
+    const { darkAlgorithm } = theme;
+
+    function useIsMobile() {
+        const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
+        useEffect(() => {
+            const q = window.matchMedia('(max-width: 768px)');
+            const h = e => setM(e.matches);
+            q.addListener(h);
+            return () => q.removeListener(h);
+        }, []);
+        return m;
+    }
+
+    const baseUrl = window.location.origin;
+    const API_URL = baseUrl + '/api/ipinfo';
+
+    function secureFetch(url, options = {}) {
+        return fetch(url, {
+            method: options.method || 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: options.body
+        });
+    }
+
+    const statusColor = code => {
+        if (code >= 200 && code < 300) return '#52c41a';
+        if (code >= 300 && code < 400) return '#1677ff';
+        if (code >= 400 && code < 500) return '#faad14';
+        if (code >= 500) return '#ff4d4f';
+        return '#8c8c8c';
+    };
+    const badgeClass = code => {
+        if (code >= 200 && code < 300) return 'success';
+        if (code >= 300 && code < 400) return 'processing';
+        if (code >= 400 && code < 500) return 'warning';
+        return 'error';
+    };
+
+    function App() {
+        const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+        const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+        const [ips, setIps] = useState([]);
+        const [loading, setLoading] = useState(false);
+        const [search, setSearch] = useState('');
+        const [blocked, setBlocked] = useState({});
+        const [blockPanel, setBlockPanel] = useState(false);
+        const [detail, setDetail] = useState(null);
+        const [detailData, setDetailData] = useState(null);
+        const [detailLoading, setDetailLoading] = useState(false);
+        const freqChartRef = useRef(null);
+        const freqInst = useRef(null);
+        const isMobile = useIsMobile();
+
+        const hasPerm = p => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+        const canManage = hasPerm('ip:manage');
+
+        useEffect(() => {
+            secureFetch(baseUrl + '/check-auth')
+                .then(r => r.json())
+                .then(d => {
+                    if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
+                    else window.location.href = 'index.html';
+                })
+                .catch(() => { window.location.href = 'index.html'; });
+        }, []);
+
+        const fetchIps = useCallback(async () => {
+            setLoading(true);
+            try {
+                const r = await fetch(API_URL, { headers: { 'User-Agent': navigator.userAgent || 'Mozilla/5.0' } });
+                if (!r.ok) throw new Error('数据服务请求失败 (' + r.status + ')');
+                const d = await r.json();
+                setIps(Array.isArray(d) ? d : []);
+            } catch (e) {
+                message.error('加载 IP 数据失败: ' + e.message);
+            } finally {
+                setLoading(false);
+            }
+        }, []);
+
+        const loadBlocked = useCallback(async () => {
+            try {
+                const r = await secureFetch(baseUrl + '/api/ip/blocked');
+                const d = await r.json();
+                if (d.code === 200) {
+                    const m = {};
+                    (d.data || []).forEach(b => { m[b.ip] = b; });
+                    setBlocked(m);
+                }
+            } catch (e) { /* 忽略 */ }
+        }, []);
+
+        useEffect(() => {
+            if (!auth.ok) return;
+            fetchIps();
+            if (canManage) loadBlocked();
+            const t = setInterval(fetchIps, 30000);
+            return () => clearInterval(t);
+        }, [auth.ok, canManage, fetchIps, loadBlocked]);
+
+        useEffect(() => { localStorage.setItem('theme', isDark ? 'dark' : 'light'); }, [isDark]);
+
+        const doBlock = async (ip) => {
+            try {
+                const r = await secureFetch(baseUrl + '/api/ip/block', { method: 'POST', body: JSON.stringify({ ip }) });
+                const d = await r.json();
+                if (d.code === 200) { message.success('IP ' + ip + ' 已封禁'); await loadBlocked(); }
+                else message.error(d.message || '封禁失败');
+            } catch (e) { message.error('封禁失败: ' + e.message); }
+        };
+        const doUnblock = async (ip) => {
+            try {
+                const r = await secureFetch(baseUrl + '/api/ip/unblock', { method: 'POST', body: JSON.stringify({ ip }) });
+                const d = await r.json();
+                if (d.code === 200) { message.success('IP ' + ip + ' 已解封'); await loadBlocked(); }
+                else message.error(d.message || '解封失败');
+            } catch (e) { message.error('解封失败: ' + e.message); }
+        };
+
+        const openDetail = async (ip, pre) => {
+            setDetail(ip);
+            setDetailData(pre || null);
+            setDetailLoading(!pre);
+            if (!pre) {
+                try {
+                    const r = await fetch(API_URL + '?ip=' + encodeURIComponent(ip), { headers: { 'User-Agent': navigator.userAgent || 'Mozilla/5.0' } });
+                    if (!r.ok) throw new Error('查询失败 (' + r.status + ')');
+                    setDetailData(await r.json());
+                } catch (e) {
+                    message.error('加载详情失败: ' + e.message);
+                } finally {
+                    setDetailLoading(false);
+                }
+            }
+        };
+
+        // 频率图
+        useEffect(() => {
+            if (!detailData || !freqChartRef.current) return;
+            if (!freqInst.current) {
+                freqInst.current = echarts.init(freqChartRef.current);
+                const onR = () => freqInst.current && freqInst.current.resize();
+                window.addEventListener('resize', onR);
+                return () => window.removeEventListener('resize', onR);
+            }
+            const recs = detailData.records || [];
+            const times = recs.map(r => new Date(r.timestamp).getTime()).filter(t => !isNaN(t));
+            if (!times.length) { freqInst.current.clear(); return; }
+            const mn = Math.min.apply(null, times), mx = Math.max.apply(null, times);
+            const span = mx - mn;
+            const bucket = span > 6 * 3600 * 1000 ? 3600 * 1000 : 10 * 60 * 1000;
+            const buckets = {};
+            times.forEach(t => { const k = Math.floor(t / bucket) * bucket; buckets[k] = (buckets[k] || 0) + 1; });
+            const sorted = Object.keys(buckets).map(Number).sort((a, b) => a - b);
+            const labels = sorted.map(t => {
+                const d = new Date(t);
+                return bucket >= 3600 * 1000
+                    ? (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':00'
+                    : String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            });
+            freqInst.current.setOption({
+                tooltip: { trigger: 'axis', backgroundColor: 'rgba(22,30,48,0.9)', borderWidth: 0, textStyle: { color: '#fff' } },
+                grid: { left: 10, right: 16, top: 14, bottom: 6, containLabel: true },
+                xAxis: { type: 'category', data: labels, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#8b93a5', fontSize: 11 } },
+                yAxis: { type: 'value', minInterval: 1, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#8b93a5', fontSize: 11 }, splitLine: { lineStyle: { color: 'rgba(120,130,150,0.16)', type: 'dashed' } } },
+                series: [{
+                    type: 'line', smooth: true, symbol: 'circle', symbolSize: 6, data: sorted.map(t => buckets[t]),
+                    lineStyle: { width: 2.5, color: '#1677ff' }, itemStyle: { color: '#1677ff' },
+                    areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(22,119,255,0.3)' }, { offset: 1, color: 'rgba(22,119,255,0.02)' }]) }
+                }]
+            });
+        }, [detailData]);
+
+        if (auth.loading) {
+            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Card loading style={{ width: 320 }} /></div>;
+        }
+
+        const filtered = search.trim() ? ips.filter(i => i.ip.toLowerCase().includes(search.trim().toLowerCase())) : ips;
+        const totalReq = ips.reduce((a, b) => a + (b.total_access || 0), 0);
+        const top = [...ips].sort((a, b) => b.total_access - a.total_access)[0];
+
+        const columns = [
+            {
+                title: 'IP 地址', dataIndex: 'ip', width: 260,
+                render: (v) => <a onClick={() => openDetail(v)} style={{ fontFamily: 'monospace' }}>{v}</a>
+            },
+            { title: '总请求', dataIndex: 'total_access', width: 90, render: v => <Typography.Text strong>{v}</Typography.Text> },
+            { title: '最后访问', dataIndex: 'last_access', width: 170, render: v => <Typography.Text type="secondary">{v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text> },
+            {
+                title: '状态码分布', dataIndex: 'status_counts', width: 260,
+                render: (counts, rec) => {
+                    const total = rec.total_access || 0;
+                    return <div>
+                        <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: '#f0f0f0' }}>
+                            {Object.entries(counts || {}).map(([code, n]) => (
+                                <div key={code} style={{ width: (n / total * 100) + '%', background: statusColor(parseInt(code)) }} />
+                            ))}
+                        </div>
+                        <Space size={4} style={{ marginTop: 4 }}>
+                            {Object.entries(counts || {}).map(([code, n]) => (
+                                <Badge key={code} status={badgeClass(parseInt(code))} text={<span style={{ fontSize: 12 }}>{code}×{n}</span>} />
+                            ))}
+                        </Space>
+                    </div>;
+                }
+            },
+            {
+                title: '操作', key: 'op', width: 180, fixed: 'right',
+                render: (_, rec) => {
+                    const isBlocked = blocked[rec.ip];
+                    return <Space>
+                        <Button size="small" onClick={() => openDetail(rec.ip)}>详情</Button>
+                        {canManage && (isBlocked
+                            ? <Button size="small" type="primary" ghost onClick={() => doUnblock(rec.ip)}>解封</Button>
+                            : <Button size="small" danger onClick={() => Modal.confirm({ title: '封禁 IP', content: `确定封禁 ${rec.ip} 吗？默认 365 天。`, okText: '封禁', okButtonProps: { danger: true }, onOk: () => doBlock(rec.ip) })}>封禁</Button>)}
+                    </Space>;
+                }
+            }
+        ];
+
+        return (
+            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
+                <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                    <div className={'topbar' + (isDark ? ' dark' : '')}>
+                        <div className="brand"><span className="logo">🌐</span><span>Server Status<span className="tb-sub"> · IP 流量监控</span></span></div>
+                        <Space>
+                            <Button title="首页" onClick={() => window.location.href = 'index.html'}>🏠<span className="tb-label">首页</span></Button>
+                            <Button title="进程" onClick={() => window.location.href = 'process.html'}>⚙️<span className="tb-label">进程</span></Button>
+                            <Button title={isDark ? '浅色模式' : '深色模式'} onClick={() => setIsDark(!isDark)}>{isDark ? '🌞' : '🌙'}<span className="tb-label">{isDark ? '浅色' : '深色'}</span></Button>
+                            <Button danger title="退出登录" onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}>🚪<span className="tb-label">退出</span></Button>
+                        </Space>
+                    </div>
+                    <div className="page-wrap">
+                        <div className="stat-grid stat-cards">
+                            <Card size="small" hoverable bordered><Statistic title="🌍 访问 IP 总数" value={ips.length} /></Card>
+                            <Card size="small" hoverable bordered><Statistic title="📈 总请求数" value={totalReq} /></Card>
+                            <Card size="small" hoverable bordered><Statistic title="🔥 最高访问 IP" value={top ? top.ip : '-'} valueStyle={{ fontSize: 15 }} /></Card>
+                            <Card size="small" hoverable bordered><Statistic title="🚫 封禁中 IP" value={Object.keys(blocked).length} /></Card>
+                        </div>
+                        <Card hoverable bordered
+                            title={`📋 访问 IP 列表（${filtered.length}）`}
+                            extra={<Space>
+                                <Button onClick={fetchIps} loading={loading}>🔄 刷新</Button>
+                                {canManage && <Button danger onClick={() => setBlockPanel(true)}>🚫 封禁管理</Button>}
+                            </Space>}
+                        >
+                            <div style={{ marginBottom: 12 }}>
+                                <Input.Search placeholder="搜索或输入 IP 精确查询..." allowClear style={{ maxWidth: 360 }}
+                                    onChange={e => setSearch(e.target.value)}
+                                    onSearch={async v => {
+                                        if (!v.trim()) return;
+                                        try {
+                                            const r = await fetch(API_URL + '?ip=' + encodeURIComponent(v.trim()), { headers: { 'User-Agent': navigator.userAgent || 'Mozilla/5.0' } });
+                                            if (r.status === 404) { message.warning('未找到该 IP 的访问记录'); return; }
+                                            const d = await r.json();
+                                            if (d && d.stats) openDetail(v.trim(), d);
+                                        } catch (e) { message.error('查询失败: ' + e.message); }
+                                    }} />
+                            </div>
+                            {isMobile ? (
+                                <div>
+                                    {filtered.map(rec => {
+                                        const counts = rec.status_counts || {};
+                                        const total = rec.total_access || 0;
+                                        const isBlocked = blocked[rec.ip];
+                                        return <Card key={rec.ip} size="small" hoverable bordered className="ip-card">
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                <a onClick={() => openDetail(rec.ip)} style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{rec.ip}</a>
+                                                {isBlocked && <Tag color="red">已封禁</Tag>}
+                                            </div>
+                                            <div className="ip-row"><span className="label">总请求</span><Typography.Text strong>{total}</Typography.Text></div>
+                                            <div className="ip-row"><span className="label">最后访问</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{rec.last_access ? new Date(rec.last_access).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text></div>
+                                            <div className="ip-row"><span className="label">状态码</span>
+                                                <span>
+                                                    {Object.entries(counts).map(([code, n]) => (
+                                                        <Badge key={code} status={badgeClass(parseInt(code))} text={<span style={{ fontSize: 12 }}>{code}×{n}</span>} />
+                                                    ))}
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                                                <Button size="small" onClick={() => openDetail(rec.ip)}>详情</Button>
+                                                {canManage && (isBlocked
+                                                    ? <Button size="small" type="primary" ghost onClick={() => doUnblock(rec.ip)}>解封</Button>
+                                                    : <Button size="small" danger onClick={() => Modal.confirm({ title: '封禁 IP', content: `确定封禁 ${rec.ip} 吗？默认 365 天。`, okText: '封禁', okButtonProps: { danger: true }, onOk: () => doBlock(rec.ip) })}>封禁</Button>)}
+                                            </div>
+                                        </Card>;
+                                    })}
+                                    {!filtered.length && <Empty description={ips.length ? '没有匹配的 IP' : '暂无访问数据'} style={{ padding: 30 }} />}
+                                </div>
+                            ) : (
+                                <Table rowKey="ip" columns={columns} dataSource={filtered} loading={loading} size="middle"
+                                       scroll={{ x: 900 }} pagination={{ pageSize: 20, showSizeChanger: true, showTotal: t => `共 ${t} 条` }} />
+                            )}
+                        </Card>
+                    </div>
+
+                    <Drawer
+                        title={detail ? 'IP 访问详情：' + detail : ''}
+                        open={!!detail}
+                        onClose={() => { setDetail(null); setDetailData(null); }}
+                        width={640}
+                    >
+                        {detailLoading ? <Card loading /> : detailData ? (() => {
+                            const st = detailData.stats || {};
+                            const counts = st.status_counts || {};
+                            const recs = detailData.records || [];
+                            return <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                                <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+                                    <Card size="small" hoverable bordered><Statistic title="总请求" value={st.total_access || 0} /></Card>
+                                    <Card size="small" hoverable bordered><Statistic title="首次访问" value={st.first_access ? new Date(st.first_access).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'} valueStyle={{ fontSize: 13 }} /></Card>
+                                    <Card size="small" hoverable bordered><Statistic title="最后访问" value={st.last_access ? new Date(st.last_access).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'} valueStyle={{ fontSize: 13 }} /></Card>
+                                </div>
+                                {canManage && <Alert
+                                    type="info" showIcon
+                                    message={blocked[detail]
+                                        ? <span>该 IP 当前已封禁 <Button size="small" type="primary" style={{ marginLeft: 8 }} onClick={() => doUnblock(detail)}>解封</Button></span>
+                                        : <span>该 IP 当前未封禁 <Button size="small" danger style={{ marginLeft: 8 }} onClick={() => doBlock(detail)}>封禁该 IP</Button></span>}
+                                />}
+                                <Card size="small" title="📈 访问频率">
+                                    <div ref={freqChartRef} className="chart-wrap"></div>
+                                </Card>
+                                <Card size="small" title="🔢 状态码统计">
+                                    <Space wrap>
+                                        {Object.entries(counts).map(([code, n]) => (
+                                            <Tag key={code} color={statusColor(parseInt(code))}>{code}: {n}</Tag>
+                                        ))}
+                                    </Space>
+                                </Card>
+                                <Card size="small" title={`🕘 最近访问记录（${recs.length} 条）`}>
+                                    <Table size="small" rowKey={(_, i) => i} dataSource={recs} pagination={false} scroll={{ y: 320 }}
+                                           columns={[
+                                               { title: '时间', dataIndex: 'timestamp', width: 160, render: v => <Typography.Text type="secondary">{v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text> },
+                                               { title: '方法/状态', key: 'ms', width: 110, render: (_, r) => <span><Typography.Text code>{r.method}</Typography.Text> <Tag color={statusColor(r.status)}>{r.status}</Tag></span> },
+                                               { title: 'URL', dataIndex: 'url', ellipsis: true, render: v => <Typography.Text code style={{ fontSize: 12 }}>{v}</Typography.Text> }
+                                           ]} />
+                                </Card>
+                            </Space>;
+                        })() : null}
+                    </Drawer>
+
+                    <Drawer title="🚫 封禁管理" open={blockPanel} onClose={() => setBlockPanel(false)} width={520}>
+                        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                            <Space.Compact style={{ width: '100%' }}>
+                                <Input id="blockInput" placeholder="输入要封禁的 IP 地址..." />
+                                <Button type="primary" danger onClick={() => {
+                                    const v = document.getElementById('blockInput').value.trim();
+                                    if (!v) { message.warning('请输入 IP'); return; }
+                                    doBlock(v);
+                                    document.getElementById('blockInput').value = '';
+                                }}>封禁</Button>
+                            </Space.Compact>
+                            <Alert type="info" showIcon message="手动封禁默认有效 365 天，重启服务后依然生效" />
+                            <Table rowKey="ip" size="small" dataSource={Object.values(blocked)} pagination={false}
+                                   locale={{ emptyText: '暂无封禁 IP' }}
+                                   columns={[
+                                       { title: 'IP', dataIndex: 'ip', render: v => <Typography.Text code>{v}</Typography.Text> },
+                                       { title: '到期时间', dataIndex: 'expires', width: 170, render: v => <Typography.Text type="secondary">{v}</Typography.Text> },
+                                       {
+                                           title: '操作', key: 'op', width: 90,
+                                           render: (_, b) => <Button size="small" type="primary" ghost onClick={() => doUnblock(b.ip)}>解封</Button>
+                                       }
+                                   ]} />
+                        </Space>
+                    </Drawer>
+                </div>
+            </ConfigProvider>
+        );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
