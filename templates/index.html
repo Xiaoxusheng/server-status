@@ -30,104 +30,71 @@
         }
         .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
         .chart-card .chart { height: 260px; width: 100%; }
-        .traffic-card .ant-card-body { padding: 14px !important; }
-        .traffic-shell { display: grid; grid-template-columns: minmax(0, 1fr) 216px; gap: 10px; min-height: 300px; }
-        .traffic-stage { position: relative; min-height: 300px; overflow: hidden; border-radius: 8px; background: linear-gradient(180deg, rgba(22,119,255,.035), rgba(82,196,26,.025)); }
-        .traffic-stage.dark { background: linear-gradient(180deg, rgba(64,150,255,.08), rgba(19,194,194,.05)); }
-        .traffic-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-        .traffic-row { position: relative; z-index: 2; display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; padding: 8px 12px; }
-        .traffic-row.middle { margin-top: 10px; }
-        .traffic-row.bottom { justify-content: space-around; gap: 10px; margin-top: 24px; flex-wrap: wrap; }
-        .traffic-node {
-            position: relative; min-width: 118px; max-width: 150px; padding: 8px 10px; border-radius: 8px;
-            background: rgba(255,255,255,.92); border: 1px solid rgba(22,119,255,.12); box-shadow: 0 6px 18px rgba(20,34,58,.08);
-            cursor: pointer; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
-            display: flex; align-items: center; gap: 10px;
-            touch-action: none; user-select: none;
-        }
-        .traffic-node:active { cursor: grabbing; }
-        .traffic-stage.dark .traffic-node { background: rgba(31,31,31,.92); border-color: rgba(64,150,255,.18); box-shadow: 0 6px 20px rgba(0,0,0,.25); }
-        .traffic-node:hover, .traffic-node.active { transform: translateY(-2px); border-color: #1677ff; box-shadow: 0 10px 24px rgba(22,119,255,.18); }
-        .traffic-node.server { min-width: 176px; display: flex; align-items: center; gap: 10px; }
-        .traffic-node.interface { min-width: 128px; }
-        .traffic-node.leaf { min-width: 118px; }
-        .traffic-node.leaf .traffic-icon { width: 26px; height: 26px; font-size: 14px; border-radius: 6px; }
-        .traffic-num { position: absolute; top: -6px; left: -6px; width: 17px; height: 17px; border-radius: 50%; background: #1677ff; color: #fff; font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(22,119,255,.35); }
-        .traffic-icon {
-            width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center;
-            background: rgba(22,119,255,.08); color: #1677ff; font-size: 14px; flex: 0 0 auto;
-        }
-        .traffic-stage.dark .traffic-icon { background: rgba(64,150,255,.15); color: #69b1ff; }
-        .traffic-title { font-size: 12px; font-weight: 600; color: #1f2a44; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .traffic-stage.dark .traffic-title { color: #f0f5ff; }
-        .traffic-sub { margin-top: 2px; color: #667085; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .traffic-stage.dark .traffic-sub { color: #a3adc2; }
-        .traffic-rate { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
-        .rate-row { display: inline-flex; align-items: center; gap: 5px; }
-        .rate-ico { width: 14px; height: 14px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-style: normal; color: #fff; flex: 0 0 auto; }
-        .rate-ico.rx { background: #2aaa3f; }
-        .rate-ico.tx { background: #1677ff; }
-        .traffic-rx { color: #2aaa3f; }
-        .traffic-tx { color: #1677ff; }
-        .traffic-dot { position: absolute; right: 9px; top: 9px; width: 7px; height: 7px; border-radius: 50%; background: #52c41a; box-shadow: 0 0 0 3px rgba(82,196,26,.12); }
-        .traffic-dot.offline { background: #a8b0bd; box-shadow: none; }
-        .traffic-detail { border: 1px solid rgba(120,130,150,.18); border-radius: 8px; padding: 10px; background: rgba(255,255,255,.75); }
-        .traffic-detail.dark { background: rgba(31,31,31,.7); border-color: rgba(255,255,255,.1); }
-        .traffic-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-        .traffic-detail-title { font-size: 13px; font-weight: 600; color: #1f2a44; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .traffic-detail.dark .traffic-detail-title { color: #f0f5ff; }
-        .traffic-detail-section { padding-top: 10px; margin-top: 10px; border-top: 1px solid rgba(120,130,150,.18); }
-        .traffic-kv { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0; font-size: 11.5px; color: #667085; }
-        .traffic-detail.dark .traffic-kv { color: #a3adc2; }
-        .traffic-kv b { color: #1f2a44; font-weight: 600; text-align: right; }
-        .traffic-detail.dark .traffic-kv b { color: #f0f5ff; }
-        .traffic-empty { height: 260px; display: flex; align-items: center; justify-content: center; color: #8b93a5; }
-        .traffic-detail-subtitle { font-size: 11px; font-weight: 600; color: #8b93a5; margin-bottom: 4px; letter-spacing: .5px; }
-        .traffic-link-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 5px 0; font-size: 11px; color: #667085; }
-        .traffic-detail.dark .traffic-link-row { color: #a3adc2; }
-        .traffic-link-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .traffic-link-rates { display: inline-flex; gap: 6px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
-        .traffic-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; padding: 2px 2px 10px; }
-        .traffic-total { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 10px; border-radius: 8px; background: rgba(255,255,255,.85); border: 1px solid rgba(22,119,255,.12); }
-        .traffic-stage.dark .traffic-total { background: rgba(31,31,31,.72); border-color: rgba(64,150,255,.16); }
-        .tt-ico { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; flex: 0 0 auto; background: rgba(120,130,150,.1); }
-        .tt-ico.rx { background: rgba(22,119,255,.1); color: #1677ff; }
-        .tt-ico.tx { background: rgba(19,194,194,.12); color: #13c2c2; }
-        .traffic-stage.dark .tt-ico { background: rgba(255,255,255,.08); }
-        .traffic-total > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-        .tt-label { font-size: 11px; color: #667085; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .traffic-stage.dark .tt-label { color: #a3adc2; }
-        .tt-value { font-size: 16px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; color: #1f2a44; white-space: nowrap; }
-        .traffic-stage.dark .tt-value { color: #f0f5ff; }
-        .tt-value.rx { color: #1677ff; }
-        .tt-value.tx { color: #13c2c2; }
-        .traffic-topo { position: relative; display: grid; grid-template-columns: minmax(150px, 1fr) minmax(240px, 1.35fr) minmax(150px, 1fr); gap: 10px; min-height: 220px; }
-        .traffic-col { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; }
-        .traffic-col.center { align-items: center; justify-content: flex-start; }
-        .traffic-col-title { display: flex; align-items: center; font-size: 11px; font-weight: 600; color: #8b93a5; letter-spacing: .5px; margin-bottom: 2px; }
-        .traffic-stage.dark .traffic-col-title { color: #a3adc2; }
-        .traffic-count { display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: rgba(22,119,255,.1); color: #1677ff; font-size: 10px; font-weight: 600; letter-spacing: 0; }
-        .traffic-head { display: inline-flex; align-items: center; gap: 8px; }
-        .traffic-live-tag { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 999px; background: rgba(82,196,26,.12); color: #52c41a; font-size: 11px; font-weight: 600; }
-        .traffic-live-tag::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #52c41a; box-shadow: 0 0 0 0 rgba(82,196,26,.45); animation: traffic-pulse 1.6s infinite; }
+        .traffic-card .ant-card-body { padding: 0 !important; }
+        .traffic-wrap { width: 100%; overflow-x: auto; }
+        .traffic-canvas { position: relative; width: 1536px; height: 1024px; transform-origin: top left; background: #f5f7fa; border-radius: 8px; overflow: hidden; }
+        .tr-head { position: absolute; left: 74px; top: 22px; right: 40px; }
+        .tr-title { display: inline-flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 600; color: #1f2a44; }
+        .tr-live { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; background: rgba(82,196,26,.12); color: #52c41a; font-size: 13px; font-weight: 600; }
+        .tr-live::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #52c41a; box-shadow: 0 0 0 0 rgba(82,196,26,.45); animation: traffic-pulse 1.6s infinite; }
         @keyframes traffic-pulse { 70% { box-shadow: 0 0 0 6px rgba(82,196,26,0); } 100% { box-shadow: 0 0 0 0 rgba(82,196,26,0); } }
-        .traffic-subtitle { color: #8b93a5; font-size: 11px; }
-        .traffic-trend { position: relative; z-index: 2; margin-top: 10px; border: 1px solid rgba(120,130,150,.16); border-radius: 8px; padding: 8px 10px 2px; background: rgba(255,255,255,.6); }
-        .traffic-stage.dark .traffic-trend { background: rgba(31,31,31,.55); border-color: rgba(255,255,255,.1); }
-        .traffic-trend-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 2px; }
-        .traffic-trend-title { font-size: 11px; font-weight: 600; color: #1f2a44; }
-        .traffic-stage.dark .traffic-trend-title { color: #f0f5ff; }
-        .traffic-legend { display: flex; gap: 8px; margin-left: auto; font-size: 10px; color: #667085; }
-        .traffic-stage.dark .traffic-legend { color: #a3adc2; }
-        .traffic-legend .lg { display: inline-flex; align-items: center; gap: 5px; }
-        .traffic-legend .lg::before { content: ''; width: 14px; height: 3px; border-radius: 2px; }
-        .traffic-legend .lg-rx::before { background: #1677ff; }
-        .traffic-legend .lg-tx::before { background: #faad14; }
-        .traffic-layout-btn { border: 1px solid rgba(22,119,255,.28); background: rgba(22,119,255,.06); color: #1677ff; font-size: 10px; line-height: 1; padding: 3px 10px; border-radius: 999px; cursor: pointer; transition: all .18s; }
-        .traffic-layout-btn:hover { background: rgba(22,119,255,.14); }
-        .traffic-trend-chart { height: 84px; width: 100%; }
-        .traffic-svg line { stroke-dasharray: 5 4; animation: traffic-flow 1.1s linear infinite; }
-        @keyframes traffic-flow { to { stroke-dashoffset: -9; } }
+        .tr-sub { margin-top: 5px; font-size: 13px; color: #8b93a5; }
+        .tr-layout-btn { position: absolute; right: 150px; top: 24px; border: 1px solid rgba(22,119,255,.28); background: rgba(22,119,255,.06); color: #1677ff; font-size: 12px; line-height: 1; padding: 6px 14px; border-radius: 999px; cursor: pointer; transition: all .18s; }
+        .tr-layout-btn:hover { background: rgba(22,119,255,.14); }
+        .tr-stats { position: absolute; left: 40px; right: 40px; top: 110px; display: flex; gap: 16px; }
+        .tr-stat { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 14px; border-radius: 10px; background: #fff; border: 1px solid rgba(120,130,150,.16); box-shadow: 0 2px 8px rgba(20,34,58,.05); }
+        .tr-stat .tr-ico { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; background: rgba(22,119,255,.1); color: #1677ff; }
+        .tr-stat:nth-child(2) .tr-ico { background: rgba(19,194,194,.12); color: #13c2c2; }
+        .tr-stat:nth-child(n+3) .tr-ico { background: rgba(120,130,150,.1); color: #667085; }
+        .tr-stat > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .tr-stat .tr-label { font-size: 12px; color: #667085; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tr-stat .tr-value { font-size: 20px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; color: #1f2a44; white-space: nowrap; }
+        .tr-stat .tr-value.rx { color: #1677ff; }
+        .tr-stat .tr-value.tx { color: #13c2c2; }
+        .tr-topo { position: absolute; left: 0; right: 0; top: 0; height: 1024px; z-index: 2; }
+        .tr-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+        .tr-node { position: absolute; border-radius: 10px; background: #fff; border: 1px solid rgba(120,130,150,.2); box-shadow: 0 3px 10px rgba(20,34,58,.07); display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: grab; touch-action: none; user-select: none; transition: box-shadow .15s; }
+        .tr-node:hover { box-shadow: 0 6px 16px rgba(22,119,255,.16); border-color: rgba(22,119,255,.4); }
+        .tr-node:active { cursor: grabbing; }
+        .tr-node.active { border-color: #1677ff; box-shadow: 0 0 0 2px rgba(22,119,255,.15), 0 6px 16px rgba(22,119,255,.16); }
+        .tr-node .tr-ico { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; background: rgba(22,119,255,.1); color: #1677ff; }
+        .tr-node .tr-body { flex: 1; min-width: 0; }
+        .tr-node .tr-name { font-size: 13px; font-weight: 600; color: #1f2a44; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tr-node .tr-info { margin-top: 2px; font-size: 11px; color: #667085; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tr-node .tr-rates { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; font-size: 11px; }
+        .tr-rate { display: inline-flex; align-items: center; gap: 5px; }
+        .tr-rate i { width: 14px; height: 14px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-style: normal; color: #fff; }
+        .tr-rate.rx i { background: #2aaa3f; }
+        .tr-rate.tx i { background: #1677ff; }
+        .tr-rate.rx b { color: #2aaa3f; font-weight: 500; }
+        .tr-rate.tx b { color: #1677ff; font-weight: 500; }
+        .tr-dot { position: absolute; right: 8px; top: 8px; width: 8px; height: 8px; border-radius: 50%; background: #52c41a; box-shadow: 0 0 0 3px rgba(82,196,26,.14); }
+        .tr-dot.off { background: #a8b0bd; box-shadow: none; }
+        .tr-num { position: absolute; top: -7px; left: -7px; width: 20px; height: 20px; border-radius: 50%; background: #1677ff; color: #fff; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(22,119,255,.35); }
+        .tr-node.server { border-color: rgba(82,196,26,.45); background: linear-gradient(180deg, #ffffff, #f7fbf4); }
+        .tr-node.server .tr-ico { background: rgba(82,196,26,.12); color: #52c41a; }
+        .tr-badge { position: absolute; left: 12px; right: 12px; bottom: 6px; font-size: 10px; color: #8b93a5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tr-bottom { position: absolute; left: 40px; right: 40px; top: 800px; bottom: 18px; z-index: 2; }
+        .tr-panel { position: absolute; top: 0; bottom: 0; }
+        .tr-panel.clients { left: 0; width: 470px; }
+        .tr-panel.services { left: 510px; width: 390px; }
+        .tr-panel.trend { left: 940px; right: 0; }
+        .tr-panel-title { font-size: 13px; font-weight: 600; color: #1f2a44; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .tr-panel-title .tr-count { padding: 1px 8px; border-radius: 999px; background: rgba(22,119,255,.1); color: #1677ff; font-size: 11px; font-weight: 600; }
+        .tr-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; margin-bottom: 6px; border-radius: 8px; background: #fff; border: 1px solid rgba(120,130,150,.14); font-size: 12px; }
+        .tr-row .tr-num { position: static; width: 18px; height: 18px; font-size: 10px; flex: 0 0 auto; }
+        .tr-row-name { flex: 1; min-width: 0; color: #1f2a44; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tr-row-rates { display: inline-flex; gap: 12px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+        .tr-row-rates .rx { color: #2aaa3f; }
+        .tr-row-rates .tx { color: #1677ff; }
+        .tr-trend-chart { position: absolute; left: 0; right: 0; top: 30px; bottom: 0; }
+        .tr-legend { position: absolute; right: 44px; top: 662px; z-index: 2; display: flex; gap: 14px; font-size: 11px; color: #667085; }
+        .tr-legend .lg { display: inline-flex; align-items: center; gap: 5px; }
+        .tr-legend .lg::before { content: ''; width: 16px; height: 3px; border-radius: 2px; }
+        .tr-legend .lg-rx::before { background: #1677ff; }
+        .tr-legend .lg-tx::before { background: #faad14; }
+        .tr-svg line { stroke-dasharray: 6 4; animation: traffic-flow 1.2s linear infinite; }
+        @keyframes traffic-flow { to { stroke-dashoffset: -10; } }
         .chart-meta { font-size: 12px; color: #999; text-align: right; margin-top: 6px; }
         .login-bg {
             min-height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -163,12 +130,7 @@
             .topbar .tb-label { display: none; }
             .page-wrap { padding: 10px; }
             .chart-card .chart { height: 220px; }
-            .traffic-shell { grid-template-columns: 1fr; min-height: 0; }
-            .traffic-stage { min-height: 460px; overflow-x: auto; }
-            .traffic-row { min-width: 640px; }
-            .traffic-detail { min-height: 0; }
-            .traffic-topo { grid-template-columns: 1fr; min-width: 640px; }
-            .traffic-summary, .traffic-trend { min-width: 640px; }
+            .traffic-wrap { -webkit-overflow-scrolling: touch; }
             .stat-grid { grid-template-columns: 1fr; }
             .stat-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
             .ant-card-head { padding: 0 12px !important; }
@@ -251,6 +213,23 @@
         link: <><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></>
     };
     const iconEl = (name, size) => <Icon size={size}>{Ico[name] || Ico.box}</Icon>;
+
+    // 1536x1024 设计画布内的节点卡片布局（与参考截图一致）
+    const CARD_LAYOUT = {
+        server: { left: 690, top: 225, w: 240, h: 100 },
+        eth0: { left: 240, top: 428, w: 150, h: 78 },
+        wlan0: { left: 555, top: 425, w: 150, h: 78 },
+        docker0: { left: 930, top: 425, w: 150, h: 78 },
+        other: { left: 1290, top: 450, w: 150, h: 78 },
+        c0: { left: 40, top: 588, w: 210, h: 105 },
+        c1: { left: 220, top: 588, w: 210, h: 105 },
+        c2: { left: 575, top: 588, w: 210, h: 105 },
+        ext: { left: 395, top: 615, w: 150, h: 85 },
+        s0: { left: 785, top: 588, w: 130, h: 105 },
+        s1: { left: 940, top: 588, w: 140, h: 105 },
+        s2: { left: 1120, top: 588, w: 140, h: 105 }
+    };
+    const IFACE_SLOTS = ['eth0', 'wlan0', 'docker0'];
 
     function Login({ onLogin }) {
         const [mode, setMode] = useState('login');
@@ -336,12 +315,8 @@
         const dataRef = useRef({ labels: [], cpu: [], mem: [], up: [], down: [], r: [], w: [], trendLabels: [], trendRx: [], trendTx: [] });
         const [detailKey, setDetailKey] = useState({ type: 'server' });
         const [lines, setLines] = useState([]);
-        const topoRef = useRef(null);
-        const serverRef = useRef(null);
-        const externalRef = useRef(null);
-        const clientRefs = useRef({});
-        const svcRefs = useRef({});
-        const ifaceRefs = useRef({});
+        const [canvasScale, setCanvasScale] = useState(1);
+        const canvasWrapRef = useRef(null);
         const dragPosRef = useRef({});
         const dragSession = useRef(null);
         const movedRef = useRef(false);
@@ -481,85 +456,46 @@
             return 'box';
         };
 
-        const getTrafficDetail = (tv, key) => {
-            if (!tv || !key) return null;
-            if (key.type === 'server') {
-                return { name: '本机 / Server', typeLabel: '服务器', ip: tv.serverIP, hostname: tv.hostname, rx: tv.download, tx: tv.upload, connections: tv.onlineCount, totalUpload: tv.totalUpload, totalDownload: tv.totalDownload };
-            }
-            if (key.type === 'client') {
-                const c = tv.clients.find(x => x.ip === key.ip);
-                return c ? {
-                    name: c.ip, typeLabel: '客户端', ip: c.ip, rx: c.rx, tx: c.tx,
-                    connections: c.connections, aggregated: c.aggregated,
-                    links: tv.links.filter(l => l.client_ip === key.ip).map(l => ({
-                        label: (l.service || '服务') + ':' + l.port,
-                        rx: l.rx, tx: l.tx, connections: l.connections
-                    }))
-                } : null;
-            }
-            if (key.type === 'service') {
-                const s = tv.services.find(x => x.port === key.port);
-                return s ? {
-                    name: s.label, typeLabel: '应用服务', port: s.port, protocol: s.protocol, rx: s.rx, tx: s.tx, connections: s.connections,
-                    links: tv.links.filter(l => l.port === key.port).map(l => ({
-                        label: l.client_ip,
-                        rx: l.rx, tx: l.tx, connections: l.connections
-                    }))
-                } : null;
-            }
-            if (key.type === 'iface') {
-                const f = tv.ifaces.find(x => x.name === key.name);
-                return f ? { name: f.name, typeLabel: '网络接口', ip: f.ip, rx: f.rx, tx: f.tx, status: f.up ? '在线' : '离线' } : null;
-            }
-            if (key.type === 'external') {
-                return { name: '互联网', typeLabel: '外部网络', rx: tv.external.rx, tx: tv.external.tx };
-            }
-            return null;
-        };
-
         const measureTrafficLines = () => {
-            const topo = topoRef.current;
-            if (!topo || !serverRef.current) return;
-            const rect = topo.getBoundingClientRect();
-            const sr = serverRef.current.getBoundingClientRect();
-            const cx = sr.left + sr.width / 2 - rect.left;
-            const cy = sr.top + sr.height / 2 - rect.top;
-            const out = [];
-            const pos = (ref) => {
-                const el = ref && ref.current;
-                if (!el) return null;
-                const r = el.getBoundingClientRect();
-                return { x: r.left + r.width / 2 - rect.left, y: r.top + r.height / 2 - rect.top };
-            };
-            const addLine = (a, b, rx, tx, key) => {
-                if (!a || !b) return;
-                out.push({ key, rx: parseFloat(rx) || 0, tx: parseFloat(tx) || 0, x1: a.x, y1: a.y, x2: b.x, y2: b.y });
-            };
             if (!status) return;
             const tv = buildTrafficView(status);
+            const out = [];
+            const center = (id) => {
+                const c = CARD_LAYOUT[id];
+                const d = dragPosRef.current[id] || { x: 0, y: 0 };
+                return { x: c.left + c.w / 2 + d.x, y: c.top + c.h / 2 + d.y };
+            };
+            const addLine = (aId, bId, rx, tx, key) => {
+                const a = center(aId);
+                const b = center(bId);
+                out.push({ key, rx: parseFloat(rx) || 0, tx: parseFloat(tx) || 0, x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+            };
+            const clients = tv.clients.slice(0, 3);
+            const services = tv.services.slice(0, 3);
+            const ifaces = tv.ifaces.slice(0, 3);
             const clientIdx = {};
             const svcIdx = {};
-            tv.clients.forEach((c, i) => clientIdx[c.ip] = i);
-            tv.services.forEach((s, i) => svcIdx[s.port] = i);
+            clients.forEach((c, i) => clientIdx[c.ip] = i);
+            services.forEach((s, i) => svcIdx[s.port] = i);
             const linkedClients = {};
             const linkedSvcs = {};
-            const serverPos = { x: cx, y: cy };
             tv.links.forEach((lk, i) => {
                 const ci = clientIdx[lk.client_ip];
                 const si = svcIdx[lk.port];
                 if (ci === undefined || si === undefined) return;
                 linkedClients[ci] = true;
                 linkedSvcs[si] = true;
-                addLine(pos(clientRefs.current[ci]), pos(svcRefs.current[si]), lk.rx, lk.tx, 'lk' + i);
+                addLine('c' + ci, 's' + si, lk.rx, lk.tx, 'lk' + i);
             });
-            tv.clients.forEach((c, i) => {
-                if (!linkedClients[i]) addLine(pos(clientRefs.current[i]), serverPos, c.rx, c.tx, 'cl' + i);
+            clients.forEach((c, i) => {
+                if (!linkedClients[i]) addLine('c' + i, 'server', c.rx, c.tx, 'cl' + i);
             });
-            tv.services.forEach((s, i) => {
-                if (!linkedSvcs[i]) addLine(pos(svcRefs.current[i]), serverPos, s.rx, s.tx, 'sv' + i);
+            services.forEach((s, i) => {
+                if (!linkedSvcs[i]) addLine('s' + i, 'server', s.rx, s.tx, 'sv' + i);
             });
-            tv.ifaces.forEach((f, i) => addLine(pos(ifaceRefs.current[i]), serverPos, f.rx, f.tx, 'if' + i));
-            addLine(pos(externalRef), serverPos, tv.external.rx, tv.external.tx, 'ext');
+            ifaces.forEach((f, i) => addLine(IFACE_SLOTS[i], 'server', f.rx, f.tx, 'if' + i));
+            if (tv.clients.length > 3) addLine('other', 'server', 0, 0, 'oth');
+            addLine('ext', 'server', tv.external.rx, tv.external.tx, 'ext');
             setLines(out);
         };
 
@@ -590,8 +526,22 @@
         };
 
         const nodeStyle = (id) => {
+            const c = CARD_LAYOUT[id];
             const p = dragPosRef.current[id];
-            return p ? { transform: 'translate(' + p.x + 'px,' + p.y + 'px)', transition: 'none', zIndex: 3 } : undefined;
+            return {
+                left: c.left,
+                top: c.top,
+                width: c.w,
+                height: c.h,
+                transform: p ? 'translate(' + p.x + 'px,' + p.y + 'px)' : undefined,
+                zIndex: p ? 3 : undefined
+            };
+        };
+
+        const resetLayout = () => {
+            dragPosRef.current = {};
+            setDragTick(t => t + 1);
+            measureTrafficLines();
         };
 
         const nodeClick = (fn) => (e) => {
@@ -685,7 +635,20 @@
             }
             measureTrafficLines();
             updateTrafficTrend();
+            const w = canvasWrapRef.current && canvasWrapRef.current.clientWidth;
+            if (w > 0) setCanvasScale(Math.min(1, w / 1536));
         }, [status, isDark]);
+
+        // 画布自适应缩放（1536x1024 设计稿等比缩放）
+        useEffect(() => {
+            const update = () => {
+                const w = canvasWrapRef.current && canvasWrapRef.current.clientWidth;
+                if (w > 0) setCanvasScale(Math.min(1, w / 1536));
+            };
+            update();
+            window.addEventListener('resize', update);
+            return () => window.removeEventListener('resize', update);
+        }, []);
 
         // 加载网卡并连接
         useEffect(() => {
@@ -770,216 +733,212 @@
                             </Card>
                         </div>
 
-                        <Card size="small" hoverable bordered className="traffic-card"
-                              title={<span className="traffic-head"><span>实时流量关系</span><span className="traffic-live-tag">实时</span></span>}
-                              extra={<span className="traffic-subtitle">当前服务器网络流量拓扑关系</span>}
-                              style={{ marginBottom: 12 }}>
+                        <Card size="small" bordered className="traffic-card" style={{ marginBottom: 12 }}>
                             {status ? (() => {
                                 const tv = buildTrafficView(status);
-                                const detail = getTrafficDetail(tv, detailKey);
-                                const rates = [tv.download, tv.upload];
-                                tv.clients.forEach(c => rates.push(c.rx, c.tx));
-                                tv.services.forEach(s => rates.push(parseFloat(s.rx) || 0, parseFloat(s.tx) || 0));
-                                tv.ifaces.forEach(f => rates.push(parseFloat(f.rx) || 0, parseFloat(f.tx) || 0));
+                                const clients = tv.clients.slice(0, 3);
+                                const services = tv.services.slice(0, 3);
+                                const ifaces = tv.ifaces.slice(0, 3);
+                                const hasOther = tv.clients.length > 3;
+                                const extraRx = hasOther ? tv.clients.slice(3).reduce((s, c) => s + c.rx, 0) : 0;
+                                const extraTx = hasOther ? tv.clients.slice(3).reduce((s, c) => s + c.tx, 0) : 0;
+                                const rates = [tv.download, tv.upload, tv.external.rx, tv.external.tx];
+                                clients.forEach(c => rates.push(c.rx, c.tx));
+                                services.forEach(s => rates.push(parseFloat(s.rx) || 0, parseFloat(s.tx) || 0));
+                                ifaces.forEach(f => rates.push(parseFloat(f.rx) || 0, parseFloat(f.tx) || 0));
                                 const maxRate = Math.max.apply(null, rates) || 1;
+                                const lineW = r => Math.max(1.2, Math.min(5, 1.2 + r / maxRate * 3.8));
                                 return (
-                                    <div className="traffic-shell">
-                                        <div className={'traffic-stage' + (isDark ? ' dark' : '')}>
-                                            <div className="traffic-summary">
-                                                <div className="traffic-total">
-                                                    <span className="tt-ico rx">{iconEl('down', 15)}</span>
-                                                    <div>
-                                                        <span className="tt-label">总下载速度</span>
-                                                        <span className="tt-value rx">{formatRate(tv.download)}</span>
-                                                    </div>
+                                    <div className="traffic-wrap" ref={canvasWrapRef}>
+                                        <div className="traffic-canvas" style={{ width: Math.round(1536 * canvasScale), height: Math.round(1024 * canvasScale), transform: 'scale(' + canvasScale + ')' }}>
+                                            <div className="tr-head">
+                                                <div className="tr-title">实时流量关系<span className="tr-live">实时</span></div>
+                                                <div className="tr-sub">当前服务器网络流量拓扑关系</div>
+                                            </div>
+                                            <button type="button" className="tr-layout-btn" onClick={resetLayout} title="恢复自动布局">自动布局</button>
+                                            <div className="tr-stats">
+                                                <div className="tr-stat">
+                                                    <span className="tr-ico">{iconEl('down', 17)}</span>
+                                                    <div><span className="tr-label">总下载速度</span><span className="tr-value rx">{formatRate(tv.download)}</span></div>
                                                 </div>
-                                                <div className="traffic-total">
-                                                    <span className="tt-ico tx">{iconEl('up', 15)}</span>
-                                                    <div>
-                                                        <span className="tt-label">总上传速度</span>
-                                                        <span className="tt-value tx">{formatRate(tv.upload)}</span>
-                                                    </div>
+                                                <div className="tr-stat">
+                                                    <span className="tr-ico">{iconEl('up', 17)}</span>
+                                                    <div><span className="tr-label">总上传速度</span><span className="tr-value tx">{formatRate(tv.upload)}</span></div>
                                                 </div>
-                                                <div className="traffic-total">
-                                                    <span className="tt-ico">{iconEl('link', 15)}</span>
-                                                    <div>
-                                                        <span className="tt-label">活跃连接</span>
-                                                        <span className="tt-value">{tv.activeConns}</span>
-                                                    </div>
+                                                <div className="tr-stat">
+                                                    <span className="tr-ico">{iconEl('link', 16)}</span>
+                                                    <div><span className="tr-label">活跃连接</span><span className="tr-value">{tv.activeConns}</span></div>
                                                 </div>
-                                                <div className="traffic-total">
-                                                    <span className="tt-ico">{iconEl('users', 15)}</span>
-                                                    <div>
-                                                        <span className="tt-label">活跃客户端</span>
-                                                        <span className="tt-value">{tv.activeClients}</span>
-                                                    </div>
+                                                <div className="tr-stat">
+                                                    <span className="tr-ico">{iconEl('users', 16)}</span>
+                                                    <div><span className="tr-label">活跃客户端</span><span className="tr-value">{tv.activeClients}</span></div>
+                                                </div>
+                                                <div className="tr-stat">
+                                                    <span className="tr-ico">{iconEl('box', 16)}</span>
+                                                    <div><span className="tr-label">应用服务</span><span className="tr-value">{tv.serviceTotal}</span></div>
                                                 </div>
                                             </div>
 
-                                            <div className="traffic-topo" ref={topoRef}>
-                                                <svg className="traffic-svg" aria-hidden="true">
-                                                    {lines.map(l => (
-                                                        <line key={l.key} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
-                                                              stroke={l.rx >= l.tx ? '#1677ff' : '#13c2c2'}
-                                                              strokeWidth={Math.max(1.2, Math.min(4, 1.2 + Math.max(l.rx, l.tx) / maxRate * 2.8))}
-                                                              strokeOpacity={0.42} />
+                                            <svg className="tr-svg" viewBox="0 0 1536 1024" preserveAspectRatio="none" aria-hidden="true">
+                                                {lines.map(l => (
+                                                    <line key={l.key} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
+                                                          stroke={l.rx >= l.tx ? '#1677ff' : '#13c2c2'}
+                                                          strokeWidth={lineW(Math.max(l.rx, l.tx))}
+                                                          strokeOpacity={0.4} />
+                                                ))}
+                                            </svg>
+
+                                            <div className="tr-topo">
+
+                                                <div className={'tr-node server' + (detailKey && detailKey.type === 'server' ? ' active' : '')}
+                                                     style={nodeStyle('server')}
+                                                     onPointerDown={e => startDrag(e, 'server')}
+                                                     onClick={nodeClick(() => setDetailKey({ type: 'server' }))}>
+                                                    <span className="tr-ico">{iconEl('server', 17)}</span>
+                                                    <div className="tr-body">
+                                                        <div className="tr-name">本机 / Server</div>
+                                                        <div className="tr-info">{tv.serverIP}</div>
+                                                        <div className="tr-rates">
+                                                            <span className="tr-rate rx"><i>{iconEl('down', 9)}</i><b>{formatRate(tv.download)}</b></span>
+                                                            <span className="tr-rate tx"><i>{iconEl('up', 9)}</i><b>{formatRate(tv.upload)}</b></span>
+                                                        </div>
+                                                    </div>
+                                                    <span className="tr-dot" />
+                                                </div>
+
+                                                {ifaces.map((f, i) => (
+                                                    <div key={f.name}
+                                                         className={'tr-node' + (detailKey && detailKey.type === 'iface' && detailKey.name === f.name ? ' active' : '')}
+                                                         style={nodeStyle(IFACE_SLOTS[i])}
+                                                         onPointerDown={e => startDrag(e, IFACE_SLOTS[i])}
+                                                         onClick={nodeClick(() => setDetailKey({ type: 'iface', name: f.name }))}>
+                                                        <span className="tr-ico">{iconEl('plug', 15)}</span>
+                                                        <div className="tr-body">
+                                                            <div className="tr-name">{f.name}</div>
+                                                            <div className="tr-info">{f.ip || (f.up ? '已连接' : '未连接')}</div>
+                                                            <div className="tr-rates">
+                                                                <span className="tr-rate rx"><i>{iconEl('down', 9)}</i><b>{formatRate(f.rx)}</b></span>
+                                                                <span className="tr-rate tx"><i>{iconEl('up', 9)}</i><b>{formatRate(f.tx)}</b></span>
+                                                            </div>
+                                                        </div>
+                                                        <span className={'tr-dot' + (f.up ? '' : ' off')} />
+                                                    </div>
+                                                ))}
+
+                                                {hasOther && (
+                                                    <div className="tr-node"
+                                                         style={nodeStyle('other')}
+                                                         onPointerDown={e => startDrag(e, 'other')}
+                                                         onClick={nodeClick(() => setDetailKey({ type: 'other' }))}>
+                                                        <span className="tr-ico">{iconEl('users', 15)}</span>
+                                                        <div className="tr-body">
+                                                            <div className="tr-name">其他主机</div>
+                                                            <div className="tr-info">{tv.clients.length - 3} 个主机</div>
+                                                            <div className="tr-rates">
+                                                                <span className="tr-rate rx"><i>{iconEl('down', 9)}</i><b>{formatRate(extraRx)}</b></span>
+                                                                <span className="tr-rate tx"><i>{iconEl('up', 9)}</i><b>{formatRate(extraTx)}</b></span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                <div className={'tr-node' + (detailKey && detailKey.type === 'external' ? ' active' : '')}
+                                                     style={nodeStyle('ext')}
+                                                     onPointerDown={e => startDrag(e, 'ext')}
+                                                     onClick={nodeClick(() => setDetailKey({ type: 'external' }))}>
+                                                    <span className="tr-ico">{iconEl('globe', 15)}</span>
+                                                    <div className="tr-body">
+                                                        <div className="tr-name">互联网</div>
+                                                        <div className="tr-info">外部网络</div>
+                                                        <div className="tr-rates">
+                                                            <span className="tr-rate rx"><i>{iconEl('down', 9)}</i><b>{formatRate(tv.external.rx)}</b></span>
+                                                            <span className="tr-rate tx"><i>{iconEl('up', 9)}</i><b>{formatRate(tv.external.tx)}</b></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {clients.map((c, i) => (
+                                                    <div key={c.ip}
+                                                         className={'tr-node' + (detailKey && detailKey.type === 'client' && detailKey.ip === c.ip ? ' active' : '')}
+                                                         style={nodeStyle('c' + i)}
+                                                         onPointerDown={e => startDrag(e, 'c' + i)}
+                                                         onClick={nodeClick(() => setDetailKey({ type: 'client', ip: c.ip }))}>
+                                                        <span className="tr-ico">{iconEl(c.aggregated ? 'users' : 'laptop', 15)}</span>
+                                                        <div className="tr-body">
+                                                            <div className="tr-name">{c.ip}</div>
+                                                            <div className="tr-rates">
+                                                                <span className="tr-rate rx"><i>{iconEl('down', 9)}</i><b>{formatRate(c.rx)}</b></span>
+                                                                <span className="tr-rate tx"><i>{iconEl('up', 9)}</i><b>{formatRate(c.tx)}</b></span>
+                                                            </div>
+                                                        </div>
+                                                        <span className="tr-num">{i + 1}</span>
+                                                        <span className="tr-badge">Clients ({c.connections})</span>
+                                                    </div>
+                                                ))}
+
+                                                {services.map((s, i) => (
+                                                    <div key={s.port}
+                                                         className={'tr-node' + (detailKey && detailKey.type === 'service' && detailKey.port === s.port ? ' active' : '')}
+                                                         style={nodeStyle('s' + i)}
+                                                         onPointerDown={e => startDrag(e, 's' + i)}
+                                                         onClick={nodeClick(() => setDetailKey({ type: 'service', port: s.port }))}>
+                                                        <span className="tr-ico">{iconEl(serviceIconName(s), 15)}</span>
+                                                        <div className="tr-body">
+                                                            <div className="tr-name">{s.label}</div>
+                                                            <div className="tr-info">{(s.protocol || 'tcp').toUpperCase()}</div>
+                                                            <div className="tr-rates">
+                                                                <span className="tr-rate rx"><i>{iconEl('down', 9)}</i><b>{formatRate(s.rx)}</b></span>
+                                                                <span className="tr-rate tx"><i>{iconEl('up', 9)}</i><b>{formatRate(s.tx)}</b></span>
+                                                            </div>
+                                                        </div>
+                                                        <span className="tr-num">{i + 1}</span>
+                                                    </div>
+                                                ))}
+
+                                            </div>
+                                            <div className="tr-bottom">
+                                                <div className="tr-panel clients">
+                                                    <div className="tr-panel-title">TOP 客户端</div>
+                                                    {clients.map((c, i) => (
+                                                        <div key={c.ip} className="tr-row">
+                                                            <span className="tr-num">{i + 1}</span>
+                                                            <span className="tr-row-name">{c.ip}</span>
+                                                            <span className="tr-row-rates">
+                                                                <span className="rx">↓ {formatRate(c.rx)}</span>
+                                                                <span className="tx">↑ {formatRate(c.tx)}</span>
+                                                            </span>
+                                                        </div>
                                                     ))}
-                                                </svg>
-
-                                                <div className="traffic-col">
-                                                    <div className="traffic-col-title">TOP 客户端</div>
-                                                    {tv.clients.length ? tv.clients.map((c, i) => (
-                                                        <div key={c.ip} ref={el => clientRefs.current[i] = el}
-                                                             className={'traffic-node leaf' + (detailKey && detailKey.type === 'client' && detailKey.ip === c.ip ? ' active' : '')}
-                                                             style={nodeStyle('cl' + i)}
-                                                             onPointerDown={e => startDrag(e, 'cl' + i)}
-                                                             onClick={nodeClick(() => setDetailKey({ type: 'client', ip: c.ip }))}>
-                                                            <span className="traffic-icon">{iconEl(c.aggregated ? 'users' : 'laptop', 14)}</span>
-                                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                                <div className="traffic-title">{c.ip}</div>
-                                                                <div className="traffic-sub">Clients ({c.connections})</div>
-                                                                <div className="traffic-rate">
-                                                                    <span className="rate-row"><i className="rate-ico rx">{iconEl('down', 9)}</i><span className="traffic-rx">{formatRate(c.rx)}</span></span>
-                                                                    <span className="rate-row"><i className="rate-ico tx">{iconEl('up', 9)}</i><span className="traffic-tx">{formatRate(c.tx)}</span></span>
-                                                                </div>
-                                                            </div>
-                                                            <span className="traffic-num">{i + 1}</span>
-                                                        </div>
-                                                    )) : <div className="traffic-empty" style={{ height: 90, minHeight: 90 }}>暂无客户端</div>}
                                                 </div>
-
-                                                <div className="traffic-col center">
-                                                    <div className={'traffic-node server' + (detailKey && detailKey.type === 'server' ? ' active' : '')}
-                                                         ref={serverRef}
-                                                         style={nodeStyle('server')}
-                                                         onPointerDown={e => startDrag(e, 'server')}
-                                                         onClick={nodeClick(() => setDetailKey({ type: 'server' }))}>
-                                                        <span className="traffic-icon">{iconEl('server', 15)}</span>
-                                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                                            <div className="traffic-title">本机 / Server</div>
-                                                            <div className="traffic-sub">{tv.serverIP}</div>
-                                                            <div className="traffic-rate">
-                                                                <span className="rate-row"><i className="rate-ico rx">{iconEl('down', 9)}</i><span className="traffic-rx">{formatRate(tv.download)}</span></span>
-                                                                <span className="rate-row"><i className="rate-ico tx">{iconEl('up', 9)}</i><span className="traffic-tx">{formatRate(tv.upload)}</span></span>
-                                                            </div>
-                                                        </div>
-                                                        <span className="traffic-dot" />
-                                                    </div>
-                                                    {tv.ifaces.length > 0 && (
-                                                        <div className="traffic-row">
-                                                            {tv.ifaces.map((f, i) => (
-                                                                <div key={f.name} ref={el => ifaceRefs.current[i] = el}
-                                                                     className={'traffic-node interface' + (detailKey && detailKey.type === 'iface' && detailKey.name === f.name ? ' active' : '')}
-                                                                     style={nodeStyle('if' + i)}
-                                                                     onPointerDown={e => startDrag(e, 'if' + i)}
-                                                                     onClick={nodeClick(() => setDetailKey({ type: 'iface', name: f.name }))}>
-                                                                    <span className="traffic-icon">{iconEl('plug', 13)}</span>
-                                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                                        <div className="traffic-title">{f.name}</div>
-                                                                        <div className="traffic-sub">{f.ip || (f.up ? '已连接' : '未连接')}</div>
-                                                                        <div className="traffic-rate">
-                                                                            <span className="rate-row"><i className="rate-ico rx">{iconEl('down', 9)}</i><span className="traffic-rx">{formatRate(f.rx)}</span></span>
-                                                                            <span className="rate-row"><i className="rate-ico tx">{iconEl('up', 9)}</i><span className="traffic-tx">{formatRate(f.tx)}</span></span>
-                                                                        </div>
-                                                                    </div>
-                                                                    <span className={'traffic-dot' + (f.up ? '' : ' offline')} />
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="traffic-col">
-                                                    <div className="traffic-col-title">TOP 应用服务<span className="traffic-count">Services ({tv.serviceTotal})</span></div>
-                                                    {tv.services.map((s, i) => (
-                                                        <div key={s.port} ref={el => svcRefs.current[i] = el}
-                                                             className={'traffic-node leaf' + (detailKey && detailKey.type === 'service' && detailKey.port === s.port ? ' active' : '')}
-                                                             style={nodeStyle('sv' + i)}
-                                                             onPointerDown={e => startDrag(e, 'sv' + i)}
-                                                             onClick={nodeClick(() => setDetailKey({ type: 'service', port: s.port }))}>
-                                                            <span className="traffic-icon">{iconEl(serviceIconName(s), 14)}</span>
-                                                            <div style={{ flex: 1, minWidth: 0 }}>
-                                                                <div className="traffic-title">{s.label}</div>
-                                                                <div className="traffic-sub">{(s.protocol || 'tcp').toUpperCase()}</div>
-                                                                <div className="traffic-rate">
-                                                                    <span className="rate-row"><i className="rate-ico rx">{iconEl('down', 9)}</i><span className="traffic-rx">{formatRate(s.rx)}</span></span>
-                                                                    <span className="rate-row"><i className="rate-ico tx">{iconEl('up', 9)}</i><span className="traffic-tx">{formatRate(s.tx)}</span></span>
-                                                                </div>
-                                                            </div>
-                                                            <span className="traffic-num">{i + 1}</span>
+                                                <div className="tr-panel services">
+                                                    <div className="tr-panel-title">TOP 应用服务<span className="tr-count">Services ({tv.serviceTotal})</span></div>
+                                                    {services.map((s, i) => (
+                                                        <div key={s.port} className="tr-row">
+                                                            <span className="tr-num">{i + 1}</span>
+                                                            <span className="tr-row-name">{s.label}</span>
+                                                            <span className="tr-row-rates">
+                                                                <span className="rx">↓ {formatRate(s.rx)}</span>
+                                                                <span className="tx">↑ {formatRate(s.tx)}</span>
+                                                            </span>
                                                         </div>
                                                     ))}
-                                                    <div key="internet" ref={externalRef}
-                                                         className={'traffic-node leaf' + (detailKey && detailKey.type === 'external' ? ' active' : '')}
-                                                         style={nodeStyle('ext')}
-                                                         onPointerDown={e => startDrag(e, 'ext')}
-                                                         onClick={nodeClick(() => setDetailKey({ type: 'external' }))}>
-                                                        <span className="traffic-icon">{iconEl('globe', 14)}</span>
-                                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                                            <div className="traffic-title">互联网</div>
-                                                            <div className="traffic-sub">外部网络</div>
-                                                            <div className="traffic-rate">
-                                                                <span className="rate-row"><i className="rate-ico rx">{iconEl('down', 9)}</i><span className="traffic-rx">{formatRate(tv.external.rx)}</span></span>
-                                                                <span className="rate-row"><i className="rate-ico tx">{iconEl('up', 9)}</i><span className="traffic-tx">{formatRate(tv.external.tx)}</span></span>
-                                                            </div>
-                                                        </div>
-                                                        <span className="traffic-num">{tv.services.length + 1}</span>
+                                                </div>
+                                                <div className="tr-panel trend">
+                                                    <div className="tr-panel-title">流量趋势（1 分钟）</div>
+                                                    <div className="tr-trend-chart">
+                                                        <div ref={el => chartRefs.current.trend = el} style={{ width: '100%', height: '100%' }}></div>
                                                     </div>
                                                 </div>
                                             </div>
 
-                                            <div className="traffic-trend">
-                                                <div className="traffic-trend-head">
-                                                    <span className="traffic-trend-title">流量趋势（1 分钟）</span>
-                                                    <span className="traffic-legend">
-                                                        <span className="lg lg-rx">下载流量 (RX)</span>
-                                                        <span className="lg lg-tx">上传流量 (TX)</span>
-                                                    </span>
-                                                    <button type="button" className="traffic-layout-btn" onClick={measureTrafficLines} title="重新计算连线布局">自动布局</button>
-                                                </div>
-                                                <div ref={el => chartRefs.current.trend = el} className="traffic-trend-chart"></div>
+                                            <div className="tr-legend">
+                                                <span className="lg lg-rx">下载流量 (RX)</span>
+                                                <span className="lg lg-tx">上传流量 (TX)</span>
                                             </div>
-                                        </div>
-
-                                        <div className={'traffic-detail' + (isDark ? ' dark' : '')}>
-                                            {detail ? (
-                                                <>
-                                                    <div className="traffic-detail-head">
-                                                        <span className="traffic-detail-title">{detail.name}</span>
-                                                        <Tag color={detail.typeLabel === '服务器' ? 'green' : detail.typeLabel === '客户端' ? 'blue' : detail.typeLabel === '应用服务' ? 'cyan' : 'gold'}>{detail.typeLabel}</Tag>
-                                                    </div>
-                                                    <div className="traffic-detail-section">
-                                                        <div className="traffic-kv"><span>下载速度</span><b>{formatRate(detail.rx)}</b></div>
-                                                        <div className="traffic-kv"><span>上传速度</span><b>{formatRate(detail.tx)}</b></div>
-                                                        {detail.ip && <div className="traffic-kv"><span>IP 地址</span><b>{detail.ip}</b></div>}
-                                                        {detail.hostname && <div className="traffic-kv"><span>主机名</span><b>{detail.hostname}</b></div>}
-                                                        {detail.port && <div className="traffic-kv"><span>端口</span><b>{detail.port}</b></div>}
-                                                        {detail.protocol && <div className="traffic-kv"><span>协议</span><b>{detail.protocol}</b></div>}
-                                                        {typeof detail.connections === 'number' && <div className="traffic-kv"><span>连接数</span><b>{detail.connections}</b></div>}
-                                                        {detail.status && <div className="traffic-kv"><span>状态</span><b>{detail.status}</b></div>}
-                                                        {detail.totalUpload && <div className="traffic-kv"><span>累计上传</span><b>{detail.totalUpload}</b></div>}
-                                                        {detail.totalDownload && <div className="traffic-kv"><span>累计下载</span><b>{detail.totalDownload}</b></div>}
-                                                    </div>
-                                                    {detail.links && detail.links.length > 0 && (
-                                                        <div className="traffic-detail-section">
-                                                            <div className="traffic-detail-subtitle">主机连接（{detail.links.length}）</div>
-                                                            {detail.links.map((lk, i) => (
-                                                                <div key={i} className="traffic-link-row">
-                                                                    <span className="traffic-link-name">{lk.label}{lk.connections ? ' · ' + lk.connections + ' 连接' : ''}</span>
-                                                                    <span className="traffic-link-rates">
-                                                                        <span className="traffic-rx">{formatRate(lk.rx)}</span>
-                                                                        <span className="traffic-tx">{formatRate(lk.tx)}</span>
-                                                                    </span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </>
-                                            ) : <div className="traffic-empty">暂无数据</div>}
                                         </div>
                                     </div>
                                 );
-                            })() : <div className="traffic-empty">等待流量数据...</div>}
+                            })() : <div style={{ padding: 40, textAlign: 'center', color: '#8b93a5' }}>等待流量数据...</div>}
                         </Card>
 
                         <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
