@@ -234,9 +234,9 @@
         c0: { left: 30, top: 395, w: 175, h: 82 },
         c1: { left: 220, top: 395, w: 175, h: 82 },
         c2: { left: 410, top: 395, w: 175, h: 82 },
-        s0: { left: 640, top: 395, w: 115, h: 82 },
-        s1: { left: 770, top: 395, w: 115, h: 82 },
-        s2: { left: 900, top: 395, w: 115, h: 82 }
+        s0: { left: 840, top: 395, w: 115, h: 82 },
+        s1: { left: 965, top: 395, w: 115, h: 82 },
+        s2: { left: 1090, top: 395, w: 115, h: 82 }
     };
     const IFACE_SLOTS = ['eth0', 'wlan0', 'docker0'];
 
@@ -465,26 +465,8 @@
             const clients = tv.clients.slice(0, 3);
             const services = tv.services.slice(0, 3);
             const ifaces = tv.ifaces.slice(0, 3);
-            const clientIdx = {};
-            const svcIdx = {};
-            clients.forEach((c, i) => clientIdx[c.ip] = i);
-            services.forEach((s, i) => svcIdx[s.port] = i);
-            const linkedClients = {};
-            const linkedSvcs = {};
-            tv.links.forEach((lk, i) => {
-                const ci = clientIdx[lk.client_ip];
-                const si = svcIdx[lk.port];
-                if (ci === undefined || si === undefined) return;
-                linkedClients[ci] = true;
-                linkedSvcs[si] = true;
-                addLine('c' + ci, 's' + si, lk.rx, lk.tx, 'lk' + i);
-            });
-            clients.forEach((c, i) => {
-                if (!linkedClients[i]) addLine('c' + i, 'server', c.rx, c.tx, 'cl' + i);
-            });
-            services.forEach((s, i) => {
-                if (!linkedSvcs[i]) addLine('s' + i, 'server', s.rx, s.tx, 'sv' + i);
-            });
+            clients.forEach((c, i) => addLine('c' + i, 'server', c.rx, c.tx, 'cl' + i));
+            services.forEach((s, i) => addLine('s' + i, 'server', s.rx, s.tx, 'sv' + i));
             ifaces.forEach((f, i) => addLine(IFACE_SLOTS[i], 'server', f.rx, f.tx, 'if' + i));
             setLines(out);
         };
