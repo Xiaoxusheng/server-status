@@ -1654,29 +1654,49 @@ var (
 )
 
 type ServerStatus struct {
-	CPUUsage      float64          `json:"cpu_usage"`
-	MemoryUsage   float64          `json:"memory_usage"`
-	MemoryTotal   uint64           `json:"memory_total"`
-	DiskUsage     float64          `json:"disk_usage"`
-	DiskTotal     uint64           `json:"disk_total"`
-	UploadSpeed   float64          `json:"upload_speed"`
-	DownloadSpeed float64          `json:"download_speed"`
-	TotalUpload   string           `json:"total_upload"`
-	TotalDownload string           `json:"total_download"`
-	ReadSpeed     float64          `json:"read_speed"`
-	WriteSpeed    float64          `json:"write_speed"`
-	Load1         float64          `json:"load1"`
-	Load5         float64          `json:"load5"`
-	Load15        float64          `json:"load15"`
-	Uptime        string           `json:"uptime"`
-	OnlineCount   int              `json:"online_count"`
-	UniqueIPs     []string         `json:"unique_ips"`
-	OnlineUsers   []OnlineUserInfo `json:"online_users"`
-	Hostname      string           `json:"hostname"`
-	OS            string           `json:"os"`
-	Platform      string           `json:"platform"`
-	KernelVersion string           `json:"kernel_version"`
-	Architecture  string           `json:"architecture"`
+	CPUUsage        float64          `json:"cpu_usage"`
+	MemoryUsage     float64          `json:"memory_usage"`
+	MemoryTotal     uint64           `json:"memory_total"`
+	DiskUsage       float64          `json:"disk_usage"`
+	DiskTotal       uint64           `json:"disk_total"`
+	UploadSpeed     float64          `json:"upload_speed"`
+	DownloadSpeed   float64          `json:"download_speed"`
+	TotalUpload     string           `json:"total_upload"`
+	TotalDownload   string           `json:"total_download"`
+	ReadSpeed       float64          `json:"read_speed"`
+	WriteSpeed      float64          `json:"write_speed"`
+	Load1           float64          `json:"load1"`
+	Load5           float64          `json:"load5"`
+	Load15          float64          `json:"load15"`
+	Uptime          string           `json:"uptime"`
+	OnlineCount     int              `json:"online_count"`
+	UniqueIPs       []string         `json:"unique_ips"`
+	OnlineUsers     []OnlineUserInfo `json:"online_users"`
+	Hostname        string           `json:"hostname"`
+	OS              string           `json:"os"`
+	Platform        string           `json:"platform"`
+	KernelVersion   string           `json:"kernel_version"`
+	Architecture    string           `json:"architecture"`
+	ServerIP        string           `json:"server_ip"`
+	TrafficServices []TrafficService `json:"traffic_services"`
+	TrafficInterfaces []TrafficInterface `json:"traffic_interfaces"`
+}
+
+type TrafficService struct {
+	Name        string  `json:"name"`
+	Port        uint32  `json:"port"`
+	Protocol    string  `json:"protocol"`
+	RX          float64 `json:"rx"`
+	TX          float64 `json:"tx"`
+	Connections int     `json:"connections"`
+}
+
+type TrafficInterface struct {
+	Name string  `json:"name"`
+	RX   float64 `json:"rx"`
+	TX   float64 `json:"tx"`
+	IP   string  `json:"ip"`
+	Up   bool    `json:"up"`
 }
 
 // OnlineUserInfo 用于WebSocket传输的在线用户信息结构
@@ -1756,10 +1776,13 @@ var (
 	statusCache      = make(map[string]*ServerStatus)
 	statusCacheTime  = make(map[string]time.Time)
 
-	lastNetStats       = map[string]NetStat{}
-	lastDiskStats      = map[string]DiskStat{}
-	totalUploadAccum   uint64
-	totalDownloadAccum uint64
+	lastNetStats            = map[string]NetStat{}
+	lastTrafficIfaceStats   = map[string]NetStat{}
+	lastDiskStats           = map[string]DiskStat{}
+	totalUploadAccum        uint64
+	totalDownloadAccum      uint64
+	trafficServiceCache     []TrafficService
+	trafficServiceCacheTime time.Time
 
 	accessStats = &AccessStats{
 		DailyVisits:    make(map[string]int),
@@ -4301,6 +4324,235 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 // ---------------- Server Status ----------------
 
+func getInterfaceIP(iface string) string {
+	netIface, err := net.InterfaceByName(iface)
+	if err != nil {
+		return ""
+	}
+	addrs, err := netIface.Addrs()
+	if err != nil {
+		return ""
+	}
+	for _, addr := range addrs {
+		var ip net.IP
+		switch v := addr.(type) {
+		case *net.IPNet:
+			ip = v.IP
+		case *net.IPAddr:
+			ip = v.IP
+		}
+		if ip == nil || ip.IsLoopback() {
+			continue
+		}
+		if ipv4 := ip.To4(); ipv4 != nil {
+			return ipv4.String()
+		}
+	}
+	return ""
+}
+
+func getTrafficInterfaces(now time.Time) []TrafficInterface {
+	netIOs, err := psnet.IOCounters(true)
+	if err != nil {
+		return nil
+	}
+
+	ifaceMap := map[string]psnet.InterfaceStat{}
+	ifaces, err := psnet.Interfaces()
+	if err == nil {
+		for _, iface := range ifaces {
+			ifaceMap[iface.Name] = iface
+		}
+	}
+
+	list := make([]TrafficInterface, 0, len(netIOs))
+	for _, io := range netIOs {
+		if io.Name == "" {
+			continue
+		}
+		last := lastTrafficIfaceStats[io.Name]
+		var rx, tx float64
+		if !last.Time.IsZero() {
+			secs := now.Sub(last.Time).Seconds()
+			if secs > 0 {
+				tx = float64(io.BytesSent-last.BytesSent) / 1024 / secs
+				rx = float64(io.BytesRecv-last.BytesRecv) / 1024 / secs
+			}
+		}
+		lastTrafficIfaceStats[io.Name] = NetStat{
+			BytesSent: io.BytesSent,
+			BytesRecv: io.BytesRecv,
+			Time:      now,
+		}
+
+		iface := ifaceMap[io.Name]
+		ip := ""
+		for _, addr := range iface.Addrs {
+			addrIP, _, err := net.ParseCIDR(addr.Addr)
+			if err == nil && addrIP != nil && addrIP.To4() != nil {
+				ip = addrIP.String()
+				break
+			}
+		}
+		up := false
+		for _, flag := range iface.Flags {
+			if strings.EqualFold(flag, "up") {
+				up = true
+				break
+			}
+		}
+		if io.Name != "lo" && len(iface.HardwareAddr) == 0 && rx == 0 && tx == 0 {
+			continue
+		}
+
+		list = append(list, TrafficInterface{Name: io.Name, RX: rx, TX: tx, IP: ip, Up: up})
+	}
+
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].RX+list[i].TX > list[j].RX+list[j].TX
+	})
+	if len(list) > 6 {
+		list = list[:6]
+	}
+	return list
+}
+
+func getTrafficServices(uploadSpeed, downloadSpeed float64) []TrafficService {
+	if time.Since(trafficServiceCacheTime) < 5*time.Second && trafficServiceCache != nil {
+		return trafficServiceCache
+	}
+
+	conns, err := psnet.Connections("inet")
+	if err != nil {
+		return trafficServiceCache
+	}
+
+	type svcAgg struct {
+		port        uint32
+		protocol    string
+		name        string
+		connections int
+		pid         int32
+	}
+
+	services := map[string]*svcAgg{}
+	for _, conn := range conns {
+		if conn.Laddr.Port == 0 {
+			continue
+		}
+		status := strings.ToUpper(conn.Status)
+		if status != "LISTEN" {
+			continue
+		}
+		protocol := "tcp"
+		if conn.Type == syscall.SOCK_DGRAM {
+			protocol = "udp"
+		}
+		key := fmt.Sprintf("%s:%d", protocol, conn.Laddr.Port)
+		svc, exists := services[key]
+		if !exists {
+			svc = &svcAgg{port: conn.Laddr.Port, protocol: protocol, name: serviceNameForPort(conn.Laddr.Port), pid: conn.Pid}
+			services[key] = svc
+		}
+		if svc.name == "" && conn.Pid > 0 {
+			svc.name = processNameByPID(conn.Pid)
+		}
+	}
+	for _, conn := range conns {
+		if strings.ToUpper(conn.Status) != "ESTABLISHED" || conn.Laddr.Port == 0 {
+			continue
+		}
+		protocol := "tcp"
+		if conn.Type == syscall.SOCK_DGRAM {
+			protocol = "udp"
+		}
+		key := fmt.Sprintf("%s:%d", protocol, conn.Laddr.Port)
+		if svc, exists := services[key]; exists {
+			svc.connections++
+		}
+	}
+
+	list := make([]TrafficService, 0, len(services))
+	for _, svc := range services {
+		name := svc.name
+		if name == "" {
+			name = fmt.Sprintf("%s:%d", svc.protocol, svc.port)
+		}
+		list = append(list, TrafficService{
+			Name:        name,
+			Port:        svc.port,
+			Protocol:    svc.protocol,
+			Connections: svc.connections,
+		})
+	}
+
+	sort.Slice(list, func(i, j int) bool {
+		if list[i].Connections == list[j].Connections {
+			return list[i].Port < list[j].Port
+		}
+		return list[i].Connections > list[j].Connections
+	})
+	if len(list) > 8 {
+		list = list[:8]
+	}
+
+	totalWeight := 0
+	for _, svc := range list {
+		if svc.Connections > 0 {
+			totalWeight += svc.Connections
+		} else {
+			totalWeight++
+		}
+	}
+	if totalWeight == 0 {
+		totalWeight = len(list)
+	}
+	for i := range list {
+		weight := list[i].Connections
+		if weight <= 0 {
+			weight = 1
+		}
+		list[i].RX = downloadSpeed * float64(weight) / float64(totalWeight)
+		list[i].TX = uploadSpeed * float64(weight) / float64(totalWeight)
+	}
+
+	trafficServiceCache = list
+	trafficServiceCacheTime = time.Now()
+	return list
+}
+
+func serviceNameForPort(port uint32) string {
+	switch port {
+	case 80:
+		return "http"
+	case 443, 8443, 8081:
+		return "nginx"
+	case 22:
+		return "ssh"
+	case 3306:
+		return "mysql"
+	case 5432:
+		return "postgres"
+	case 6379:
+		return "redis"
+	case 8080, 3000, 5173:
+		return "app"
+	default:
+		return ""
+	}
+}
+
+func processNameByPID(pid int32) string {
+	if pid <= 0 {
+		return ""
+	}
+	cmd, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(cmd))
+}
+
 // getServerStatus 查询深层探针系统状态。现已引入O(1)级全局锁定防并发灾变与1秒时效高能缓存调度体系
 func getServerStatus(iface string) (*ServerStatus, error) {
 	// ====== 高能缓存命中逻辑开始 ======
@@ -4464,6 +4716,9 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 
 	// 获取在线用户统计信息和详细列表
 	onlineCount, uniqueIPs, onlineUsersList := getOnlineUsersStats()
+	serverIP := getInterfaceIP(iface)
+	trafficServices := getTrafficServices(uploadSpeed, downloadSpeed)
+	trafficInterfaces := getTrafficInterfaces(now)
 
 	// 获取主机信息
 	hostInfo, err := getHostInfo()
@@ -4484,29 +4739,32 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 
 	// 拼装最终结果
 	result := &ServerStatus{
-		CPUUsage:      cpuPercent[0],
-		MemoryUsage:   memInfo.UsedPercent,
-		MemoryTotal:   memInfo.Total / 1024 / 1024,
-		DiskUsage:     diskUsagePercent,
-		DiskTotal:     totalDisk / 1024 / 1024 / 1024,
-		UploadSpeed:   uploadSpeed,
-		DownloadSpeed: downloadSpeed,
-		TotalUpload:   formatBytes(totalUploadAccum),
-		TotalDownload: formatBytes(totalDownloadAccum),
-		ReadSpeed:     readSpeed,
-		WriteSpeed:    writeSpeed,
-		Load1:         loadAvg.Load1,
-		Load5:         loadAvg.Load5,
-		Load15:        loadAvg.Load15,
-		Uptime:        uptimeStr,
-		OnlineCount:   onlineCount,
-		UniqueIPs:     uniqueIPs,
-		OnlineUsers:   onlineUsersList,
-		Hostname:      hostname,
-		OS:            osName,
-		Platform:      platform,
-		KernelVersion: kernelVersion,
-		Architecture:  runtime.GOARCH,
+		CPUUsage:        cpuPercent[0],
+		MemoryUsage:     memInfo.UsedPercent,
+		MemoryTotal:     memInfo.Total / 1024 / 1024,
+		DiskUsage:       diskUsagePercent,
+		DiskTotal:       totalDisk / 1024 / 1024 / 1024,
+		UploadSpeed:     uploadSpeed,
+		DownloadSpeed:   downloadSpeed,
+		TotalUpload:     formatBytes(totalUploadAccum),
+		TotalDownload:   formatBytes(totalDownloadAccum),
+		ReadSpeed:       readSpeed,
+		WriteSpeed:      writeSpeed,
+		Load1:           loadAvg.Load1,
+		Load5:           loadAvg.Load5,
+		Load15:          loadAvg.Load15,
+		Uptime:          uptimeStr,
+		OnlineCount:     onlineCount,
+		UniqueIPs:       uniqueIPs,
+		OnlineUsers:     onlineUsersList,
+		Hostname:        hostname,
+		OS:              osName,
+		Platform:        platform,
+		KernelVersion:   kernelVersion,
+		Architecture:    runtime.GOARCH,
+		ServerIP:        serverIP,
+		TrafficServices: trafficServices,
+		TrafficInterfaces: trafficInterfaces,
 	}
 
 	// 填装入缓存并回写记录刻度
