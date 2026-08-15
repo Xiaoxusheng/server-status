@@ -31,94 +31,101 @@
         .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
         .chart-card .chart { height: 260px; width: 100%; }
         .traffic-card .ant-card-body { padding: 14px !important; }
-        .traffic-shell { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 14px; min-height: 430px; }
-        .traffic-stage { position: relative; min-height: 430px; overflow: hidden; border-radius: 8px; background: linear-gradient(180deg, rgba(22,119,255,.035), rgba(82,196,26,.025)); }
+        .traffic-shell { display: grid; grid-template-columns: minmax(0, 1fr) 216px; gap: 10px; min-height: 300px; }
+        .traffic-stage { position: relative; min-height: 300px; overflow: hidden; border-radius: 8px; background: linear-gradient(180deg, rgba(22,119,255,.035), rgba(82,196,26,.025)); }
         .traffic-stage.dark { background: linear-gradient(180deg, rgba(64,150,255,.08), rgba(19,194,194,.05)); }
         .traffic-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-        .traffic-row { position: relative; z-index: 2; display: flex; justify-content: center; flex-wrap: wrap; gap: 26px; padding: 12px 18px; }
-        .traffic-row.middle { margin-top: 18px; }
-        .traffic-row.bottom { justify-content: space-around; gap: 18px; margin-top: 42px; flex-wrap: wrap; }
+        .traffic-row { position: relative; z-index: 2; display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; padding: 8px 12px; }
+        .traffic-row.middle { margin-top: 10px; }
+        .traffic-row.bottom { justify-content: space-around; gap: 10px; margin-top: 24px; flex-wrap: wrap; }
         .traffic-node {
-            position: relative; min-width: 132px; max-width: 170px; padding: 12px 14px; border-radius: 8px;
+            position: relative; min-width: 118px; max-width: 150px; padding: 8px 10px; border-radius: 8px;
             background: rgba(255,255,255,.92); border: 1px solid rgba(22,119,255,.12); box-shadow: 0 6px 18px rgba(20,34,58,.08);
             cursor: pointer; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
             display: flex; align-items: center; gap: 10px;
+            touch-action: none; user-select: none;
         }
+        .traffic-node:active { cursor: grabbing; }
         .traffic-stage.dark .traffic-node { background: rgba(31,31,31,.92); border-color: rgba(64,150,255,.18); box-shadow: 0 6px 20px rgba(0,0,0,.25); }
         .traffic-node:hover, .traffic-node.active { transform: translateY(-2px); border-color: #1677ff; box-shadow: 0 10px 24px rgba(22,119,255,.18); }
-        .traffic-node.server { min-width: 210px; display: flex; align-items: center; gap: 12px; }
-        .traffic-node.interface { min-width: 150px; }
-        .traffic-node.leaf { min-width: 136px; }
-        .traffic-node.leaf .traffic-icon { width: 32px; height: 32px; font-size: 17px; border-radius: 7px; }
-        .traffic-num { position: absolute; top: -7px; left: -7px; width: 19px; height: 19px; border-radius: 50%; background: #1677ff; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(22,119,255,.35); }
+        .traffic-node.server { min-width: 176px; display: flex; align-items: center; gap: 10px; }
+        .traffic-node.interface { min-width: 128px; }
+        .traffic-node.leaf { min-width: 118px; }
+        .traffic-node.leaf .traffic-icon { width: 26px; height: 26px; font-size: 14px; border-radius: 6px; }
+        .traffic-num { position: absolute; top: -6px; left: -6px; width: 17px; height: 17px; border-radius: 50%; background: #1677ff; color: #fff; font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(22,119,255,.35); }
         .traffic-icon {
-            width: 38px; height: 38px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
-            background: rgba(22,119,255,.08); color: #1677ff; font-size: 21px; flex: 0 0 auto;
+            width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center;
+            background: rgba(22,119,255,.08); color: #1677ff; font-size: 14px; flex: 0 0 auto;
         }
         .traffic-stage.dark .traffic-icon { background: rgba(64,150,255,.15); color: #69b1ff; }
-        .traffic-title { font-weight: 700; color: #1f2a44; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .traffic-title { font-size: 12px; font-weight: 600; color: #1f2a44; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .traffic-stage.dark .traffic-title { color: #f0f5ff; }
-        .traffic-sub { margin-top: 3px; color: #667085; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .traffic-sub { margin-top: 2px; color: #667085; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .traffic-stage.dark .traffic-sub { color: #a3adc2; }
-        .traffic-rate { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
-        .rate-row { display: inline-flex; align-items: center; gap: 6px; }
-        .rate-ico { width: 15px; height: 15px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-style: normal; color: #fff; flex: 0 0 auto; }
+        .traffic-rate { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+        .rate-row { display: inline-flex; align-items: center; gap: 5px; }
+        .rate-ico { width: 14px; height: 14px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-style: normal; color: #fff; flex: 0 0 auto; }
         .rate-ico.rx { background: #2aaa3f; }
         .rate-ico.tx { background: #1677ff; }
         .traffic-rx { color: #2aaa3f; }
         .traffic-tx { color: #1677ff; }
-        .traffic-dot { position: absolute; right: 12px; top: 12px; width: 8px; height: 8px; border-radius: 50%; background: #52c41a; box-shadow: 0 0 0 4px rgba(82,196,26,.12); }
+        .traffic-dot { position: absolute; right: 9px; top: 9px; width: 7px; height: 7px; border-radius: 50%; background: #52c41a; box-shadow: 0 0 0 3px rgba(82,196,26,.12); }
         .traffic-dot.offline { background: #a8b0bd; box-shadow: none; }
-        .traffic-detail { border: 1px solid rgba(120,130,150,.18); border-radius: 8px; padding: 14px; background: rgba(255,255,255,.75); }
+        .traffic-detail { border: 1px solid rgba(120,130,150,.18); border-radius: 8px; padding: 10px; background: rgba(255,255,255,.75); }
         .traffic-detail.dark { background: rgba(31,31,31,.7); border-color: rgba(255,255,255,.1); }
-        .traffic-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
-        .traffic-detail-title { font-size: 15px; font-weight: 700; color: #1f2a44; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .traffic-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+        .traffic-detail-title { font-size: 13px; font-weight: 600; color: #1f2a44; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .traffic-detail.dark .traffic-detail-title { color: #f0f5ff; }
-        .traffic-detail-section { padding-top: 12px; margin-top: 12px; border-top: 1px solid rgba(120,130,150,.18); }
-        .traffic-kv { display: flex; justify-content: space-between; gap: 12px; margin: 8px 0; font-size: 12px; color: #667085; }
+        .traffic-detail-section { padding-top: 10px; margin-top: 10px; border-top: 1px solid rgba(120,130,150,.18); }
+        .traffic-kv { display: flex; justify-content: space-between; gap: 12px; margin: 6px 0; font-size: 11.5px; color: #667085; }
         .traffic-detail.dark .traffic-kv { color: #a3adc2; }
         .traffic-kv b { color: #1f2a44; font-weight: 600; text-align: right; }
         .traffic-detail.dark .traffic-kv b { color: #f0f5ff; }
-        .traffic-empty { height: 390px; display: flex; align-items: center; justify-content: center; color: #8b93a5; }
-        .traffic-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding: 2px 2px 14px; }
-        .traffic-total { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 10px 14px; border-radius: 8px; background: rgba(255,255,255,.85); border: 1px solid rgba(22,119,255,.12); }
+        .traffic-empty { height: 260px; display: flex; align-items: center; justify-content: center; color: #8b93a5; }
+        .traffic-detail-subtitle { font-size: 11px; font-weight: 600; color: #8b93a5; margin-bottom: 4px; letter-spacing: .5px; }
+        .traffic-link-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 5px 0; font-size: 11px; color: #667085; }
+        .traffic-detail.dark .traffic-link-row { color: #a3adc2; }
+        .traffic-link-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .traffic-link-rates { display: inline-flex; gap: 6px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+        .traffic-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; padding: 2px 2px 10px; }
+        .traffic-total { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 10px; border-radius: 8px; background: rgba(255,255,255,.85); border: 1px solid rgba(22,119,255,.12); }
         .traffic-stage.dark .traffic-total { background: rgba(31,31,31,.72); border-color: rgba(64,150,255,.16); }
-        .tt-ico { width: 42px; height: 42px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-size: 20px; flex: 0 0 auto; background: rgba(120,130,150,.1); }
+        .tt-ico { width: 28px; height: 28px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; flex: 0 0 auto; background: rgba(120,130,150,.1); }
         .tt-ico.rx { background: rgba(22,119,255,.1); color: #1677ff; }
         .tt-ico.tx { background: rgba(19,194,194,.12); color: #13c2c2; }
         .traffic-stage.dark .tt-ico { background: rgba(255,255,255,.08); }
         .traffic-total > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-        .tt-label { font-size: 12px; color: #667085; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tt-label { font-size: 11px; color: #667085; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .traffic-stage.dark .tt-label { color: #a3adc2; }
-        .tt-value { font-size: 21px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; color: #1f2a44; white-space: nowrap; }
+        .tt-value { font-size: 16px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; color: #1f2a44; white-space: nowrap; }
         .traffic-stage.dark .tt-value { color: #f0f5ff; }
         .tt-value.rx { color: #1677ff; }
         .tt-value.tx { color: #13c2c2; }
-        .traffic-topo { position: relative; display: grid; grid-template-columns: minmax(170px, 1fr) minmax(280px, 1.35fr) minmax(170px, 1fr); gap: 18px; min-height: 300px; }
-        .traffic-col { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: stretch; gap: 12px; min-width: 0; }
+        .traffic-topo { position: relative; display: grid; grid-template-columns: minmax(150px, 1fr) minmax(240px, 1.35fr) minmax(150px, 1fr); gap: 10px; min-height: 220px; }
+        .traffic-col { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; }
         .traffic-col.center { align-items: center; justify-content: flex-start; }
-        .traffic-col-title { display: flex; align-items: center; font-size: 12px; font-weight: 700; color: #8b93a5; letter-spacing: 1px; margin-bottom: 2px; }
+        .traffic-col-title { display: flex; align-items: center; font-size: 11px; font-weight: 600; color: #8b93a5; letter-spacing: .5px; margin-bottom: 2px; }
         .traffic-stage.dark .traffic-col-title { color: #a3adc2; }
-        .traffic-count { display: inline-flex; align-items: center; margin-left: 8px; padding: 2px 9px; border-radius: 999px; background: rgba(22,119,255,.1); color: #1677ff; font-size: 11px; font-weight: 600; letter-spacing: 0; }
+        .traffic-count { display: inline-flex; align-items: center; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: rgba(22,119,255,.1); color: #1677ff; font-size: 10px; font-weight: 600; letter-spacing: 0; }
         .traffic-head { display: inline-flex; align-items: center; gap: 8px; }
-        .traffic-live-tag { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; background: rgba(82,196,26,.12); color: #52c41a; font-size: 12px; font-weight: 600; }
+        .traffic-live-tag { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 999px; background: rgba(82,196,26,.12); color: #52c41a; font-size: 11px; font-weight: 600; }
         .traffic-live-tag::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #52c41a; box-shadow: 0 0 0 0 rgba(82,196,26,.45); animation: traffic-pulse 1.6s infinite; }
         @keyframes traffic-pulse { 70% { box-shadow: 0 0 0 6px rgba(82,196,26,0); } 100% { box-shadow: 0 0 0 0 rgba(82,196,26,0); } }
-        .traffic-subtitle { color: #8b93a5; font-size: 12px; }
-        .traffic-trend { position: relative; z-index: 2; margin-top: 16px; border: 1px solid rgba(120,130,150,.16); border-radius: 8px; padding: 10px 12px 4px; background: rgba(255,255,255,.6); }
+        .traffic-subtitle { color: #8b93a5; font-size: 11px; }
+        .traffic-trend { position: relative; z-index: 2; margin-top: 10px; border: 1px solid rgba(120,130,150,.16); border-radius: 8px; padding: 8px 10px 2px; background: rgba(255,255,255,.6); }
         .traffic-stage.dark .traffic-trend { background: rgba(31,31,31,.55); border-color: rgba(255,255,255,.1); }
         .traffic-trend-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 2px; }
-        .traffic-trend-title { font-size: 12px; font-weight: 600; color: #1f2a44; }
+        .traffic-trend-title { font-size: 11px; font-weight: 600; color: #1f2a44; }
         .traffic-stage.dark .traffic-trend-title { color: #f0f5ff; }
-        .traffic-legend { display: flex; gap: 10px; margin-left: auto; font-size: 11px; color: #667085; }
+        .traffic-legend { display: flex; gap: 8px; margin-left: auto; font-size: 10px; color: #667085; }
         .traffic-stage.dark .traffic-legend { color: #a3adc2; }
         .traffic-legend .lg { display: inline-flex; align-items: center; gap: 5px; }
         .traffic-legend .lg::before { content: ''; width: 14px; height: 3px; border-radius: 2px; }
         .traffic-legend .lg-rx::before { background: #1677ff; }
         .traffic-legend .lg-tx::before { background: #faad14; }
-        .traffic-layout-btn { border: 1px solid rgba(22,119,255,.28); background: rgba(22,119,255,.06); color: #1677ff; font-size: 11px; line-height: 1; padding: 5px 12px; border-radius: 999px; cursor: pointer; transition: all .18s; }
+        .traffic-layout-btn { border: 1px solid rgba(22,119,255,.28); background: rgba(22,119,255,.06); color: #1677ff; font-size: 10px; line-height: 1; padding: 3px 10px; border-radius: 999px; cursor: pointer; transition: all .18s; }
         .traffic-layout-btn:hover { background: rgba(22,119,255,.14); }
-        .traffic-trend-chart { height: 128px; width: 100%; }
+        .traffic-trend-chart { height: 84px; width: 100%; }
         .traffic-svg line { stroke-dasharray: 5 4; animation: traffic-flow 1.1s linear infinite; }
         @keyframes traffic-flow { to { stroke-dashoffset: -9; } }
         .chart-meta { font-size: 12px; color: #999; text-align: right; margin-top: 6px; }
@@ -157,11 +164,11 @@
             .page-wrap { padding: 10px; }
             .chart-card .chart { height: 220px; }
             .traffic-shell { grid-template-columns: 1fr; min-height: 0; }
-            .traffic-stage { min-height: 560px; overflow-x: auto; }
-            .traffic-row { min-width: 720px; }
+            .traffic-stage { min-height: 460px; overflow-x: auto; }
+            .traffic-row { min-width: 640px; }
             .traffic-detail { min-height: 0; }
-            .traffic-topo { grid-template-columns: 1fr; min-width: 720px; }
-            .traffic-summary, .traffic-trend { min-width: 720px; }
+            .traffic-topo { grid-template-columns: 1fr; min-width: 640px; }
+            .traffic-summary, .traffic-trend { min-width: 640px; }
             .stat-grid { grid-template-columns: 1fr; }
             .stat-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
             .ant-card-head { padding: 0 12px !important; }
@@ -225,6 +232,25 @@
         const h = hex.replace('#', '');
         return 'rgba(' + parseInt(h.substring(0, 2), 16) + ',' + parseInt(h.substring(2, 4), 16) + ',' + parseInt(h.substring(4, 6), 16) + ',' + a + ')';
     };
+
+    const Icon = ({ children, size = 14, ...rest }) => (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...rest}>{children}</svg>
+    );
+    const Ico = {
+        down: <><path d="M12 5v14" /><path d="M19 12l-7 7-7-7" /></>,
+        up: <><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></>,
+        server: <><rect x="2" y="3" width="20" height="7" rx="2" /><rect x="2" y="14" width="20" height="7" rx="2" /><path d="M6.5 6.5h.01M6.5 17.5h.01" /></>,
+        laptop: <><path d="M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9H3z" /><path d="M2 19h20" /></>,
+        globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a13.5 13.5 0 0 1 0 18 13.5 13.5 0 0 1 0-18z" /></>,
+        plug: <><path d="M12 22v-4" /><path d="M9 8V2" /><path d="M15 8V2" /><path d="M5 8h14v5a7 7 0 0 1-14 0z" /></>,
+        box: <><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" /><path d="M3 8l9 5 9-5" /><path d="M12 13v8" /></>,
+        db: <><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5" /><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" /></>,
+        ssh: <><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M6 9l3 3-3 3" /><path d="M13 15h5" /></>,
+        folder: <><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></>,
+        users: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
+        link: <><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></>
+    };
+    const iconEl = (name, size) => <Icon size={size}>{Ico[name] || Ico.box}</Icon>;
 
     function Login({ onLogin }) {
         const [mode, setMode] = useState('login');
@@ -316,6 +342,10 @@
         const clientRefs = useRef({});
         const svcRefs = useRef({});
         const ifaceRefs = useRef({});
+        const dragPosRef = useRef({});
+        const dragSession = useRef(null);
+        const movedRef = useRef(false);
+        const [dragTick, setDragTick] = useState(0);
 
         const hasPerm = p => (user.permissions || []).some(x => x === '*' || x === p);
 
@@ -393,19 +423,32 @@
         const buildTrafficView = (d) => {
             const upload = parseFloat(d.upload_speed) || 0;
             const download = parseFloat(d.download_speed) || 0;
-            const clients = pickTopClients(d.online_users || [], 4);
-            const totalWeight = clients.reduce((s, c) => s + Math.max(c.connections, 1), 0) || 1;
-            clients.forEach(c => {
-                const w = Math.max(c.connections, 1) / totalWeight;
-                c.rx = download * w;
-                c.tx = upload * w;
-            });
+            const realHosts = (d.traffic_hosts || []).filter(h => h && h.ip);
+            let clients;
+            if (realHosts.length) {
+                clients = realHosts.slice(0, 5).map(h => ({
+                    ip: h.ip,
+                    connections: h.connections || 0,
+                    rx: parseFloat(h.rx) || 0,
+                    tx: parseFloat(h.tx) || 0,
+                    real: true
+                }));
+            } else {
+                clients = pickTopClients(d.online_users || [], 4);
+                const totalWeight = clients.reduce((s, c) => s + Math.max(c.connections, 1), 0) || 1;
+                clients.forEach(c => {
+                    const w = Math.max(c.connections, 1) / totalWeight;
+                    c.rx = download * w;
+                    c.tx = upload * w;
+                });
+            }
             const servicesRaw = (d.traffic_services || []).filter(s => s && s.port);
             let services = servicesRaw.slice(0, 4);
             if (!services.length) {
                 services = [{ name: '当前端口', port: window.location.port || (location.protocol === 'https:' ? 443 : 80), protocol: 'tcp', rx: download, tx: upload, connections: d.online_count || 1 }];
             }
             const ifaces = (d.traffic_interfaces || []).slice(0, 4);
+            const links = (d.traffic_links || []).filter(l => l && l.client_ip && ((parseFloat(l.rx) || 0) + (parseFloat(l.tx) || 0) > 0.1)).slice(0, 12);
             const connTotal = services.reduce((s, x) => s + (x.connections || 0), 0);
             const clientRx = clients.reduce((s, c) => s + c.rx, 0);
             const clientTx = clients.reduce((s, c) => s + c.tx, 0);
@@ -414,6 +457,7 @@
                 download,
                 clients,
                 services: services.map(s => ({ ...s, label: (s.name || '服务') + ':' + s.port })),
+                links,
                 serviceTotal: servicesRaw.length || services.length,
                 ifaces,
                 serverIP: d.server_ip || d.hostname || 'Server',
@@ -427,14 +471,14 @@
             };
         };
 
-        const serviceIcon = (s) => {
+        const serviceIconName = (s) => {
             const n = (s.name || '').toLowerCase();
             const p = s.port;
-            if (n === 'http' || n === 'nginx' || p === 80 || p === 443 || p === 8443 || p === 8081) return '🌐';
-            if (n === 'redis' || n === 'mysql' || n === 'postgres' || p === 6379 || p === 3306 || p === 5432) return '🗄️';
-            if (n === 'ssh' || p === 22) return '🔑';
-            if (n === 'openlist') return '📁';
-            return '⚙️';
+            if (n === 'http' || n === 'nginx' || p === 80 || p === 443 || p === 8443 || p === 8081) return 'globe';
+            if (n === 'redis' || n === 'mysql' || n === 'postgres' || p === 6379 || p === 3306 || p === 5432) return 'db';
+            if (n === 'ssh' || p === 22) return 'ssh';
+            if (n === 'openlist') return 'folder';
+            return 'box';
         };
 
         const getTrafficDetail = (tv, key) => {
@@ -444,11 +488,24 @@
             }
             if (key.type === 'client') {
                 const c = tv.clients.find(x => x.ip === key.ip);
-                return c ? { name: c.ip, typeLabel: '客户端', ip: c.ip, rx: c.rx, tx: c.tx, connections: c.connections, aggregated: c.aggregated } : null;
+                return c ? {
+                    name: c.ip, typeLabel: '客户端', ip: c.ip, rx: c.rx, tx: c.tx,
+                    connections: c.connections, aggregated: c.aggregated,
+                    links: tv.links.filter(l => l.client_ip === key.ip).map(l => ({
+                        label: (l.service || '服务') + ':' + l.port,
+                        rx: l.rx, tx: l.tx, connections: l.connections
+                    }))
+                } : null;
             }
             if (key.type === 'service') {
                 const s = tv.services.find(x => x.port === key.port);
-                return s ? { name: s.label, typeLabel: '应用服务', port: s.port, protocol: s.protocol, rx: s.rx, tx: s.tx, connections: s.connections } : null;
+                return s ? {
+                    name: s.label, typeLabel: '应用服务', port: s.port, protocol: s.protocol, rx: s.rx, tx: s.tx, connections: s.connections,
+                    links: tv.links.filter(l => l.port === key.port).map(l => ({
+                        label: l.client_ip,
+                        rx: l.rx, tx: l.tx, connections: l.connections
+                    }))
+                } : null;
             }
             if (key.type === 'iface') {
                 const f = tv.ifaces.find(x => x.name === key.name);
@@ -468,27 +525,78 @@
             const cx = sr.left + sr.width / 2 - rect.left;
             const cy = sr.top + sr.height / 2 - rect.top;
             const out = [];
-            const addNode = (ref, rx, tx, key) => {
+            const pos = (ref) => {
                 const el = ref && ref.current;
-                if (!el) return;
+                if (!el) return null;
                 const r = el.getBoundingClientRect();
-                out.push({
-                    key,
-                    rx: parseFloat(rx) || 0,
-                    tx: parseFloat(tx) || 0,
-                    x1: r.left + r.width / 2 - rect.left,
-                    y1: r.top + r.height / 2 - rect.top,
-                    x2: cx,
-                    y2: cy
-                });
+                return { x: r.left + r.width / 2 - rect.left, y: r.top + r.height / 2 - rect.top };
+            };
+            const addLine = (a, b, rx, tx, key) => {
+                if (!a || !b) return;
+                out.push({ key, rx: parseFloat(rx) || 0, tx: parseFloat(tx) || 0, x1: a.x, y1: a.y, x2: b.x, y2: b.y });
             };
             if (!status) return;
             const tv = buildTrafficView(status);
-            tv.clients.forEach((c, i) => addNode(clientRefs.current[i], c.rx, c.tx, 'cl' + i));
-            tv.services.forEach((s, i) => addNode(svcRefs.current[i], s.rx, s.tx, 'sv' + i));
-            tv.ifaces.forEach((f, i) => addNode(ifaceRefs.current[i], f.rx, f.tx, 'if' + i));
-            addNode(externalRef, tv.external.rx, tv.external.tx, 'ext');
+            const clientIdx = {};
+            const svcIdx = {};
+            tv.clients.forEach((c, i) => clientIdx[c.ip] = i);
+            tv.services.forEach((s, i) => svcIdx[s.port] = i);
+            const linkedClients = {};
+            const linkedSvcs = {};
+            const serverPos = { x: cx, y: cy };
+            tv.links.forEach((lk, i) => {
+                const ci = clientIdx[lk.client_ip];
+                const si = svcIdx[lk.port];
+                if (ci === undefined || si === undefined) return;
+                linkedClients[ci] = true;
+                linkedSvcs[si] = true;
+                addLine(pos(clientRefs.current[ci]), pos(svcRefs.current[si]), lk.rx, lk.tx, 'lk' + i);
+            });
+            tv.clients.forEach((c, i) => {
+                if (!linkedClients[i]) addLine(pos(clientRefs.current[i]), serverPos, c.rx, c.tx, 'cl' + i);
+            });
+            tv.services.forEach((s, i) => {
+                if (!linkedSvcs[i]) addLine(pos(svcRefs.current[i]), serverPos, s.rx, s.tx, 'sv' + i);
+            });
+            tv.ifaces.forEach((f, i) => addLine(pos(ifaceRefs.current[i]), serverPos, f.rx, f.tx, 'if' + i));
+            addLine(pos(externalRef), serverPos, tv.external.rx, tv.external.tx, 'ext');
             setLines(out);
+        };
+
+        const startDrag = (e, id) => {
+            if (e.button !== 0 && e.pointerType === 'mouse') return;
+            e.preventDefault();
+            const cur = dragPosRef.current[id] || { x: 0, y: 0 };
+            dragSession.current = { id, sx: e.clientX, sy: e.clientY, ox: cur.x, oy: cur.y, moved: false };
+            const move = (ev) => {
+                const s = dragSession.current;
+                if (!s) return;
+                const nx = s.ox + ev.clientX - s.sx;
+                const ny = s.oy + ev.clientY - s.sy;
+                if (Math.abs(nx - s.ox) + Math.abs(ny - s.oy) > 4) s.moved = true;
+                dragPosRef.current[s.id] = { x: nx, y: ny };
+                setDragTick(t => t + 1);
+                measureTrafficLines();
+            };
+            const up = () => {
+                if (dragSession.current) movedRef.current = dragSession.current.moved;
+                window.removeEventListener('pointermove', move);
+                window.removeEventListener('pointerup', up);
+                dragSession.current = null;
+                measureTrafficLines();
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+        };
+
+        const nodeStyle = (id) => {
+            const p = dragPosRef.current[id];
+            return p ? { transform: 'translate(' + p.x + 'px,' + p.y + 'px)', transition: 'none', zIndex: 3 } : undefined;
+        };
+
+        const nodeClick = (fn) => (e) => {
+            if (movedRef.current) { movedRef.current = false; return; }
+            fn(e);
         };
 
         const updateTrafficTrend = () => {
@@ -679,28 +787,28 @@
                                         <div className={'traffic-stage' + (isDark ? ' dark' : '')}>
                                             <div className="traffic-summary">
                                                 <div className="traffic-total">
-                                                    <span className="tt-ico rx">⬇</span>
+                                                    <span className="tt-ico rx">{iconEl('down', 15)}</span>
                                                     <div>
                                                         <span className="tt-label">总下载速度</span>
                                                         <span className="tt-value rx">{formatRate(tv.download)}</span>
                                                     </div>
                                                 </div>
                                                 <div className="traffic-total">
-                                                    <span className="tt-ico tx">⬆</span>
+                                                    <span className="tt-ico tx">{iconEl('up', 15)}</span>
                                                     <div>
                                                         <span className="tt-label">总上传速度</span>
                                                         <span className="tt-value tx">{formatRate(tv.upload)}</span>
                                                     </div>
                                                 </div>
                                                 <div className="traffic-total">
-                                                    <span className="tt-ico">🔗</span>
+                                                    <span className="tt-ico">{iconEl('link', 15)}</span>
                                                     <div>
                                                         <span className="tt-label">活跃连接</span>
                                                         <span className="tt-value">{tv.activeConns}</span>
                                                     </div>
                                                 </div>
                                                 <div className="traffic-total">
-                                                    <span className="tt-ico">👥</span>
+                                                    <span className="tt-ico">{iconEl('users', 15)}</span>
                                                     <div>
                                                         <span className="tt-label">活跃客户端</span>
                                                         <span className="tt-value">{tv.activeClients}</span>
@@ -723,14 +831,16 @@
                                                     {tv.clients.length ? tv.clients.map((c, i) => (
                                                         <div key={c.ip} ref={el => clientRefs.current[i] = el}
                                                              className={'traffic-node leaf' + (detailKey && detailKey.type === 'client' && detailKey.ip === c.ip ? ' active' : '')}
-                                                             onClick={() => setDetailKey({ type: 'client', ip: c.ip })}>
-                                                            <span className="traffic-icon">{c.aggregated ? '👥' : '💻'}</span>
+                                                             style={nodeStyle('cl' + i)}
+                                                             onPointerDown={e => startDrag(e, 'cl' + i)}
+                                                             onClick={nodeClick(() => setDetailKey({ type: 'client', ip: c.ip }))}>
+                                                            <span className="traffic-icon">{iconEl(c.aggregated ? 'users' : 'laptop', 14)}</span>
                                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                                 <div className="traffic-title">{c.ip}</div>
                                                                 <div className="traffic-sub">Clients ({c.connections})</div>
                                                                 <div className="traffic-rate">
-                                                                    <span className="rate-row"><i className="rate-ico rx">↓</i><span className="traffic-rx">{formatRate(c.rx)}</span></span>
-                                                                    <span className="rate-row"><i className="rate-ico tx">↑</i><span className="traffic-tx">{formatRate(c.tx)}</span></span>
+                                                                    <span className="rate-row"><i className="rate-ico rx">{iconEl('down', 9)}</i><span className="traffic-rx">{formatRate(c.rx)}</span></span>
+                                                                    <span className="rate-row"><i className="rate-ico tx">{iconEl('up', 9)}</i><span className="traffic-tx">{formatRate(c.tx)}</span></span>
                                                                 </div>
                                                             </div>
                                                             <span className="traffic-num">{i + 1}</span>
@@ -741,14 +851,16 @@
                                                 <div className="traffic-col center">
                                                     <div className={'traffic-node server' + (detailKey && detailKey.type === 'server' ? ' active' : '')}
                                                          ref={serverRef}
-                                                         onClick={() => setDetailKey({ type: 'server' })}>
-                                                        <span className="traffic-icon">🖥️</span>
+                                                         style={nodeStyle('server')}
+                                                         onPointerDown={e => startDrag(e, 'server')}
+                                                         onClick={nodeClick(() => setDetailKey({ type: 'server' }))}>
+                                                        <span className="traffic-icon">{iconEl('server', 15)}</span>
                                                         <div style={{ flex: 1, minWidth: 0 }}>
                                                             <div className="traffic-title">本机 / Server</div>
                                                             <div className="traffic-sub">{tv.serverIP}</div>
                                                             <div className="traffic-rate">
-                                                                <span className="rate-row"><i className="rate-ico rx">↓</i><span className="traffic-rx">{formatRate(tv.download)}</span></span>
-                                                                <span className="rate-row"><i className="rate-ico tx">↑</i><span className="traffic-tx">{formatRate(tv.upload)}</span></span>
+                                                                <span className="rate-row"><i className="rate-ico rx">{iconEl('down', 9)}</i><span className="traffic-rx">{formatRate(tv.download)}</span></span>
+                                                                <span className="rate-row"><i className="rate-ico tx">{iconEl('up', 9)}</i><span className="traffic-tx">{formatRate(tv.upload)}</span></span>
                                                             </div>
                                                         </div>
                                                         <span className="traffic-dot" />
@@ -758,14 +870,16 @@
                                                             {tv.ifaces.map((f, i) => (
                                                                 <div key={f.name} ref={el => ifaceRefs.current[i] = el}
                                                                      className={'traffic-node interface' + (detailKey && detailKey.type === 'iface' && detailKey.name === f.name ? ' active' : '')}
-                                                                     onClick={() => setDetailKey({ type: 'iface', name: f.name })}>
-                                                                    <span className="traffic-icon">🔌</span>
+                                                                     style={nodeStyle('if' + i)}
+                                                                     onPointerDown={e => startDrag(e, 'if' + i)}
+                                                                     onClick={nodeClick(() => setDetailKey({ type: 'iface', name: f.name }))}>
+                                                                    <span className="traffic-icon">{iconEl('plug', 13)}</span>
                                                                     <div style={{ flex: 1, minWidth: 0 }}>
                                                                         <div className="traffic-title">{f.name}</div>
                                                                         <div className="traffic-sub">{f.ip || (f.up ? '已连接' : '未连接')}</div>
                                                                         <div className="traffic-rate">
-                                                                            <span className="rate-row"><i className="rate-ico rx">↓</i><span className="traffic-rx">{formatRate(f.rx)}</span></span>
-                                                                            <span className="rate-row"><i className="rate-ico tx">↑</i><span className="traffic-tx">{formatRate(f.tx)}</span></span>
+                                                                            <span className="rate-row"><i className="rate-ico rx">{iconEl('down', 9)}</i><span className="traffic-rx">{formatRate(f.rx)}</span></span>
+                                                                            <span className="rate-row"><i className="rate-ico tx">{iconEl('up', 9)}</i><span className="traffic-tx">{formatRate(f.tx)}</span></span>
                                                                         </div>
                                                                     </div>
                                                                     <span className={'traffic-dot' + (f.up ? '' : ' offline')} />
@@ -780,14 +894,16 @@
                                                     {tv.services.map((s, i) => (
                                                         <div key={s.port} ref={el => svcRefs.current[i] = el}
                                                              className={'traffic-node leaf' + (detailKey && detailKey.type === 'service' && detailKey.port === s.port ? ' active' : '')}
-                                                             onClick={() => setDetailKey({ type: 'service', port: s.port })}>
-                                                            <span className="traffic-icon">{serviceIcon(s)}</span>
+                                                             style={nodeStyle('sv' + i)}
+                                                             onPointerDown={e => startDrag(e, 'sv' + i)}
+                                                             onClick={nodeClick(() => setDetailKey({ type: 'service', port: s.port }))}>
+                                                            <span className="traffic-icon">{iconEl(serviceIconName(s), 14)}</span>
                                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                                 <div className="traffic-title">{s.label}</div>
                                                                 <div className="traffic-sub">{(s.protocol || 'tcp').toUpperCase()}</div>
                                                                 <div className="traffic-rate">
-                                                                    <span className="rate-row"><i className="rate-ico rx">↓</i><span className="traffic-rx">{formatRate(s.rx)}</span></span>
-                                                                    <span className="rate-row"><i className="rate-ico tx">↑</i><span className="traffic-tx">{formatRate(s.tx)}</span></span>
+                                                                    <span className="rate-row"><i className="rate-ico rx">{iconEl('down', 9)}</i><span className="traffic-rx">{formatRate(s.rx)}</span></span>
+                                                                    <span className="rate-row"><i className="rate-ico tx">{iconEl('up', 9)}</i><span className="traffic-tx">{formatRate(s.tx)}</span></span>
                                                                 </div>
                                                             </div>
                                                             <span className="traffic-num">{i + 1}</span>
@@ -795,14 +911,16 @@
                                                     ))}
                                                     <div key="internet" ref={externalRef}
                                                          className={'traffic-node leaf' + (detailKey && detailKey.type === 'external' ? ' active' : '')}
-                                                         onClick={() => setDetailKey({ type: 'external' })}>
-                                                        <span className="traffic-icon">🌍</span>
+                                                         style={nodeStyle('ext')}
+                                                         onPointerDown={e => startDrag(e, 'ext')}
+                                                         onClick={nodeClick(() => setDetailKey({ type: 'external' }))}>
+                                                        <span className="traffic-icon">{iconEl('globe', 14)}</span>
                                                         <div style={{ flex: 1, minWidth: 0 }}>
                                                             <div className="traffic-title">互联网</div>
                                                             <div className="traffic-sub">外部网络</div>
                                                             <div className="traffic-rate">
-                                                                <span className="rate-row"><i className="rate-ico rx">↓</i><span className="traffic-rx">{formatRate(tv.external.rx)}</span></span>
-                                                                <span className="rate-row"><i className="rate-ico tx">↑</i><span className="traffic-tx">{formatRate(tv.external.tx)}</span></span>
+                                                                <span className="rate-row"><i className="rate-ico rx">{iconEl('down', 9)}</i><span className="traffic-rx">{formatRate(tv.external.rx)}</span></span>
+                                                                <span className="rate-row"><i className="rate-ico tx">{iconEl('up', 9)}</i><span className="traffic-tx">{formatRate(tv.external.tx)}</span></span>
                                                             </div>
                                                         </div>
                                                         <span className="traffic-num">{tv.services.length + 1}</span>
@@ -842,6 +960,20 @@
                                                         {detail.totalUpload && <div className="traffic-kv"><span>累计上传</span><b>{detail.totalUpload}</b></div>}
                                                         {detail.totalDownload && <div className="traffic-kv"><span>累计下载</span><b>{detail.totalDownload}</b></div>}
                                                     </div>
+                                                    {detail.links && detail.links.length > 0 && (
+                                                        <div className="traffic-detail-section">
+                                                            <div className="traffic-detail-subtitle">主机连接（{detail.links.length}）</div>
+                                                            {detail.links.map((lk, i) => (
+                                                                <div key={i} className="traffic-link-row">
+                                                                    <span className="traffic-link-name">{lk.label}{lk.connections ? ' · ' + lk.connections + ' 连接' : ''}</span>
+                                                                    <span className="traffic-link-rates">
+                                                                        <span className="traffic-rx">{formatRate(lk.rx)}</span>
+                                                                        <span className="traffic-tx">{formatRate(lk.tx)}</span>
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </>
                                             ) : <div className="traffic-empty">暂无数据</div>}
                                         </div>

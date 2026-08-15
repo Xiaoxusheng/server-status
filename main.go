@@ -1680,6 +1680,8 @@ type ServerStatus struct {
 	ServerIP        string           `json:"server_ip"`
 	TrafficServices []TrafficService `json:"traffic_services"`
 	TrafficInterfaces []TrafficInterface `json:"traffic_interfaces"`
+	TrafficHosts    []TrafficHost    `json:"traffic_hosts"`
+	TrafficLinks    []TrafficLink    `json:"traffic_links"`
 }
 
 type TrafficService struct {
@@ -1697,6 +1699,23 @@ type TrafficInterface struct {
 	TX   float64 `json:"tx"`
 	IP   string  `json:"ip"`
 	Up   bool    `json:"up"`
+}
+
+type TrafficHost struct {
+	IP          string  `json:"ip"`
+	RX          float64 `json:"rx"`
+	TX          float64 `json:"tx"`
+	Connections int     `json:"connections"`
+}
+
+type TrafficLink struct {
+	ClientIP    string  `json:"client_ip"`
+	Port        uint32  `json:"port"`
+	Service     string  `json:"service"`
+	Protocol    string  `json:"protocol"`
+	RX          float64 `json:"rx"`
+	TX          float64 `json:"tx"`
+	Connections int     `json:"connections"`
 }
 
 // OnlineUserInfo 用于WebSocket传输的在线用户信息结构
@@ -1783,6 +1802,9 @@ var (
 	totalDownloadAccum      uint64
 	trafficServiceCache     []TrafficService
 	trafficServiceCacheTime time.Time
+	socketStatsCache        *socketStatsSnapshot
+	lastSocketCumulative    = map[string]*socketCumulative{}
+	serviceNameCache        = map[uint32]string{}
 
 	accessStats = &AccessStats{
 		DailyVisits:    make(map[string]int),
@@ -4417,6 +4439,234 @@ func getTrafficInterfaces(now time.Time) []TrafficInterface {
 	return list
 }
 
+type socketCumulative struct {
+	sent uint64
+	recv uint64
+}
+
+type socketStatsSnapshot struct {
+	time      time.Time
+	hosts     []TrafficHost
+	links     []TrafficLink
+	portRates map[uint32][2]float64 // port -> [rx, tx] KB/s
+}
+
+func parseAddrPort(s string) (string, uint32, bool) {
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, "[") {
+		if i := strings.LastIndex(s, "]:"); i > 0 {
+			p, err := strconv.ParseUint(s[i+2:], 10, 32)
+			if err != nil {
+				return "", 0, false
+			}
+			return s[1:i], uint32(p), true
+		}
+		return "", 0, false
+	}
+	i := strings.LastIndex(s, ":")
+	if i <= 0 {
+		return "", 0, false
+	}
+	p, err := strconv.ParseUint(s[i+1:], 10, 32)
+	if err != nil {
+		return "", 0, false
+	}
+	return s[:i], uint32(p), true
+}
+
+// collectSocketStats 通过 ss -tin 读取每一条 TCP 连接的累计字节数，
+// 按 (本地端口, 对端IP) 聚合，并结合上次采样计算真实的实时速率 (KB/s)。
+func collectSocketStats(now time.Time) *socketStatsSnapshot {
+	if socketStatsCache != nil && now.Sub(socketStatsCache.time) < 2*time.Second {
+		return socketStatsCache
+	}
+	ssPath := "ss"
+	if _, err := exec.LookPath("ss"); err != nil {
+		ssPath = "/usr/sbin/ss"
+	}
+	out, err := exec.Command(ssPath, "-tin").Output()
+	if err != nil {
+		return socketStatsCache
+	}
+
+	type connAgg struct {
+		sent  uint64
+		recv  uint64
+		count int
+	}
+	conns := map[string]*connAgg{}
+	var curPort uint32
+	var curPeer string
+	haveConn := false
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+			if !haveConn {
+				continue
+			}
+			var sent, recv uint64
+			for _, f := range strings.Fields(line) {
+				if strings.HasPrefix(f, "bytes_sent:") {
+					if v, err := strconv.ParseUint(strings.TrimPrefix(f, "bytes_sent:"), 10, 64); err == nil {
+						sent += v
+					}
+				} else if strings.HasPrefix(f, "bytes_acked:") {
+					if v, err := strconv.ParseUint(strings.TrimPrefix(f, "bytes_acked:"), 10, 64); err == nil {
+						sent += v
+					}
+				} else if strings.HasPrefix(f, "bytes_received:") {
+					if v, err := strconv.ParseUint(strings.TrimPrefix(f, "bytes_received:"), 10, 64); err == nil {
+						recv += v
+					}
+				}
+			}
+			if sent == 0 && recv == 0 {
+				continue
+			}
+			key := fmt.Sprintf("%d|%s", curPort, curPeer)
+			if conns[key] == nil {
+				conns[key] = &connAgg{}
+			}
+			conns[key].sent += sent
+			conns[key].recv += recv
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 5 || fields[0] != "ESTAB" {
+			haveConn = false
+			continue
+		}
+		_, lp, ok1 := parseAddrPort(fields[3])
+		peer, _, ok2 := parseAddrPort(fields[4])
+		if !ok1 || !ok2 || lp == 0 {
+			haveConn = false
+			continue
+		}
+		curPort = lp
+		curPeer = peer
+		haveConn = true
+		key := fmt.Sprintf("%d|%s", lp, peer)
+		if conns[key] == nil {
+			conns[key] = &connAgg{}
+		}
+		conns[key].count++
+	}
+
+	secs := 2.0
+	if socketStatsCache != nil {
+		secs = now.Sub(socketStatsCache.time).Seconds()
+	}
+	if secs <= 0 {
+		secs = 2
+	}
+
+	type linkRate struct {
+		rx float64
+		tx float64
+		n  int
+	}
+	linkMap := map[string]*linkRate{}
+	hostMap := map[string]*linkRate{}
+	portMap := map[uint32]*linkRate{}
+	newCumulative := make(map[string]*socketCumulative, len(conns))
+
+	for key, agg := range conns {
+		var ds, dr int64
+		if prev := lastSocketCumulative[key]; prev != nil {
+			ds = int64(agg.sent - prev.sent)
+			dr = int64(agg.recv - prev.recv)
+			if ds < 0 {
+				ds = 0
+			}
+			if dr < 0 {
+				dr = 0
+			}
+		}
+		newCumulative[key] = &socketCumulative{sent: agg.sent, recv: agg.recv}
+
+		clientRX := float64(ds) / 1024 / secs  // 服务器发给客户端 = 客户端下载
+		clientTX := float64(dr) / 1024 / secs  // 客户端发给服务器 = 客户端上传
+		parts := strings.SplitN(key, "|", 2)
+		port, _ := strconv.ParseUint(parts[0], 10, 32)
+		peer := parts[1]
+
+		lk := linkMap[key]
+		if lk == nil {
+			lk = &linkRate{}
+			linkMap[key] = lk
+		}
+		lk.rx += clientRX
+		lk.tx += clientTX
+		lk.n += agg.count
+
+		hk := hostMap[peer]
+		if hk == nil {
+			hk = &linkRate{}
+			hostMap[peer] = hk
+		}
+		hk.rx += clientRX
+		hk.tx += clientTX
+		hk.n += agg.count
+
+		pk := portMap[uint32(port)]
+		if pk == nil {
+			pk = &linkRate{}
+			portMap[uint32(port)] = pk
+		}
+		pk.rx += clientTX // 服务下载 = 客户端上传进来的字节
+		pk.tx += clientRX // 服务上传 = 服务器发给客户端的字节
+		pk.n += agg.count
+	}
+	lastSocketCumulative = newCumulative
+
+	hosts := make([]TrafficHost, 0, len(hostMap))
+	for ip, h := range hostMap {
+		hosts = append(hosts, TrafficHost{IP: ip, RX: h.rx, TX: h.tx, Connections: h.n})
+	}
+	sort.Slice(hosts, func(i, j int) bool {
+		return hosts[i].RX+hosts[i].TX > hosts[j].RX+hosts[j].TX
+	})
+	if len(hosts) > 6 {
+		hosts = hosts[:6]
+	}
+
+	links := make([]TrafficLink, 0, len(linkMap))
+	for key, l := range linkMap {
+		parts := strings.SplitN(key, "|", 2)
+		port, _ := strconv.ParseUint(parts[0], 10, 32)
+		svcName := serviceNameForPort(uint32(port))
+		if n, ok := serviceNameCache[uint32(port)]; ok {
+			svcName = n
+		}
+		if svcName == "" {
+			svcName = fmt.Sprintf("%d", port)
+		}
+		links = append(links, TrafficLink{
+			ClientIP:    parts[1],
+			Port:        uint32(port),
+			Service:     svcName,
+			Protocol:    "tcp",
+			RX:          l.rx,
+			TX:          l.tx,
+			Connections: l.n,
+		})
+	}
+	sort.Slice(links, func(i, j int) bool {
+		return links[i].RX+links[i].TX > links[j].RX+links[j].TX
+	})
+	if len(links) > 12 {
+		links = links[:12]
+	}
+
+	portRates := make(map[uint32][2]float64, len(portMap))
+	for p, pr := range portMap {
+		portRates[p] = [2]float64{pr.rx, pr.tx}
+	}
+
+	snap := &socketStatsSnapshot{time: now, hosts: hosts, links: links, portRates: portRates}
+	socketStatsCache = snap
+	return snap
+}
+
 func getTrafficServices(uploadSpeed, downloadSpeed float64) []TrafficService {
 	if time.Since(trafficServiceCacheTime) < 5*time.Second && trafficServiceCache != nil {
 		return trafficServiceCache
@@ -4478,6 +4728,7 @@ func getTrafficServices(uploadSpeed, downloadSpeed float64) []TrafficService {
 		if name == "" {
 			name = fmt.Sprintf("%s:%d", svc.protocol, svc.port)
 		}
+		serviceNameCache[svc.port] = name
 		list = append(list, TrafficService{
 			Name:        name,
 			Port:        svc.port,
@@ -4515,6 +4766,14 @@ func getTrafficServices(uploadSpeed, downloadSpeed float64) []TrafficService {
 		list[i].RX = downloadSpeed * float64(weight) / float64(totalWeight)
 		list[i].TX = uploadSpeed * float64(weight) / float64(totalWeight)
 	}
+	if snap := socketStatsCache; snap != nil && time.Since(snap.time) < 4*time.Second {
+		for i := range list {
+			if pr, ok := snap.portRates[list[i].Port]; ok {
+				list[i].RX = pr[0]
+				list[i].TX = pr[1]
+			}
+		}
+	}
 
 	trafficServiceCache = list
 	trafficServiceCacheTime = time.Now()
@@ -4525,6 +4784,8 @@ func serviceNameForPort(port uint32) string {
 	switch port {
 	case 80:
 		return "http"
+	case 9000:
+		return "server-status"
 	case 443, 8443, 8081:
 		return "nginx"
 	case 22:
@@ -4717,8 +4978,15 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 	// 获取在线用户统计信息和详细列表
 	onlineCount, uniqueIPs, onlineUsersList := getOnlineUsersStats()
 	serverIP := getInterfaceIP(iface)
+	socketSnap := collectSocketStats(now)
 	trafficServices := getTrafficServices(uploadSpeed, downloadSpeed)
 	trafficInterfaces := getTrafficInterfaces(now)
+	trafficHosts := []TrafficHost{}
+	trafficLinks := []TrafficLink{}
+	if socketSnap != nil {
+		trafficHosts = socketSnap.hosts
+		trafficLinks = socketSnap.links
+	}
 
 	// 获取主机信息
 	hostInfo, err := getHostInfo()
@@ -4765,6 +5033,8 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 		ServerIP:        serverIP,
 		TrafficServices: trafficServices,
 		TrafficInterfaces: trafficInterfaces,
+		TrafficHosts:    trafficHosts,
+		TrafficLinks:    trafficLinks,
 	}
 
 	// 填装入缓存并回写记录刻度
