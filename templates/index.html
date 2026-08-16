@@ -30,98 +30,6 @@
         }
         .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
         .chart-card .chart { height: 260px; width: 100%; }
-        .traffic-card { box-shadow: 0 4px 18px rgba(20,34,58,.08); }
-        .traffic-card .ant-card-body { padding: 0 !important; }
-        .traffic-wrap { width: 100%; overflow-x: auto; }
-        .traffic-canvas {
-            position: relative; width: 1200px; height: 760px; transform-origin: top left; border-radius: 10px; overflow: hidden;
-            --bg: #f4f6fa; --card: #ffffff; --border: rgba(120,130,150,.18); --border2: rgba(120,130,150,.32);
-            --text: #1f2a44; --sub: #6b7688; --muted: #8b93a5;
-            --blue: #1677ff; --green: #2aaa3f; --teal: #13c2c2; --amber: #faad14;
-            background: var(--bg); color: var(--text);
-        }
-        .traffic-canvas.dark {
-            --bg: #131418; --card: #1d1f26; --border: rgba(255,255,255,.1); --border2: rgba(255,255,255,.22);
-            --text: #e8edf5; --sub: #9aa4b8; --muted: #7d8798;
-        }
-        .tr-head { position: absolute; left: 32px; top: 14px; right: 40px; }
-        .tr-title { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--text); }
-        .tr-live { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px; border-radius: 999px; background: rgba(82,196,26,.13); color: #52c41a; font-size: 10px; font-weight: 600; }
-        .tr-live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #52c41a; box-shadow: 0 0 0 0 rgba(82,196,26,.45); animation: traffic-pulse 1.6s infinite; }
-        @keyframes traffic-pulse { 70% { box-shadow: 0 0 0 6px rgba(82,196,26,0); } 100% { box-shadow: 0 0 0 0 rgba(82,196,26,0); } }
-        .tr-sub { margin-top: 3px; font-size: 10px; color: var(--sub); }
-        .tr-layout-btn { position: absolute; right: 32px; top: 16px; border: 1px solid rgba(22,119,255,.3); background: rgba(22,119,255,.07); color: var(--blue); font-size: 10px; line-height: 1; padding: 5px 12px; border-radius: 999px; cursor: pointer; transition: all .18s; }
-        .tr-layout-btn:hover { background: rgba(22,119,255,.14); }
-        .tr-stats { position: absolute; left: 32px; right: 32px; top: 78px; display: flex; gap: 10px; }
-        .tr-stat { flex: 1; box-sizing: border-box; display: flex; align-items: center; gap: 9px; min-width: 0; padding: 7px 11px; border-radius: 9px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(20,34,58,.05); }
-        .tr-stat .tr-ico { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; background: rgba(22,119,255,.12); color: var(--blue); }
-        .tr-stat:nth-child(2) .tr-ico { background: rgba(19,194,194,.14); color: var(--teal); }
-        .tr-stat:nth-child(n+3) .tr-ico { background: rgba(120,130,150,.14); color: var(--sub); }
-        .tr-stat > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; overflow: hidden; }
-        .tr-stat .tr-label { font-size: 9.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .tr-stat .tr-value { font-size: 13.5px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
-        .tr-stat .tr-value.rx { color: var(--blue); }
-        .tr-stat .tr-value.tx { color: var(--teal); }
-        .tr-topo { position: absolute; left: 0; right: 0; top: 0; height: 760px; z-index: 2; }
-        .tr-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
-        .tr-node { position: absolute; box-sizing: border-box; border-radius: 9px; background: var(--card); border: 1px solid var(--border); box-shadow: 0 2px 7px rgba(20,34,58,.07); display: flex; align-items: center; gap: 8px; padding: 7px 9px; cursor: grab; touch-action: none; user-select: none; transition: box-shadow .15s, border-color .15s; }
-        .tr-node:hover { border-color: var(--blue); box-shadow: 0 4px 13px rgba(22,119,255,.18); }
-        .tr-node:active { cursor: grabbing; }
-        .tr-node.active { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(22,119,255,.18); }
-        .tr-node .tr-ico { width: 29px; height: 29px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; background: rgba(22,119,255,.12); color: var(--blue); }
-        .tr-node .tr-body { flex: 1; min-width: 0; overflow: hidden; }
-        .tr-node .tr-name { font-size: 10px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .tr-node .tr-info { margin-top: 1px; font-size: 9px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .tr-node .tr-rates { margin-top: 3px; display: flex; flex-direction: column; gap: 1px; font-size: 9px; min-width: 0; }
-        .tr-rate { display: inline-flex; align-items: center; gap: 4px; }
-        .tr-rate i { width: 12px; height: 12px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-style: normal; color: #fff; }
-        .tr-rate.rx i { background: var(--green); }
-        .tr-rate.tx i { background: var(--blue); }
-        .tr-rate.rx b { color: var(--green); font-weight: 500; }
-        .tr-rate.tx b { color: var(--blue); font-weight: 500; }
-        .tr-dot { position: absolute; right: 7px; top: 7px; width: 7px; height: 7px; border-radius: 50%; background: #52c41a; box-shadow: 0 0 0 3px rgba(82,196,26,.14); }
-        .tr-dot.off { background: #a8b0bd; box-shadow: none; }
-        .tr-num { position: absolute; top: -6px; left: -6px; width: 17px; height: 17px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(22,119,255,.35); }
-        .tr-node.server { border-color: rgba(82,196,26,.42); background: linear-gradient(180deg, var(--card), rgba(82,196,26,.06)); }
-        .tr-node.server .tr-ico { background: rgba(82,196,26,.14); color: var(--green); }
-        .tr-badge { position: absolute; left: 9px; right: 9px; bottom: 5px; font-size: 8.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .tr-bottom { position: absolute; left: 32px; right: 32px; top: 580px; bottom: 14px; z-index: 2; }
-        .tr-panel { position: absolute; top: 0; bottom: 0; }
-        .tr-panel.clients { left: 0; width: 360px; }
-        .tr-panel.services { left: 392px; width: 330px; }
-        .tr-panel.trend { left: 760px; right: 0; }
-        .tr-panel-title { font-size: 10px; font-weight: 600; color: var(--text); margin-bottom: 6px; display: flex; align-items: center; gap: 7px; }
-        .tr-panel-title .tr-count { padding: 1px 7px; border-radius: 999px; background: rgba(22,119,255,.12); color: var(--blue); font-size: 9px; font-weight: 600; }
-        .tr-row { box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 5px 9px; margin-bottom: 4px; border-radius: 7px; background: var(--card); border: 1px solid var(--border); font-size: 9.5px; }
-        .tr-row .tr-num { position: static; width: 16px; height: 16px; font-size: 9.5px; flex: 0 0 auto; }
-        .tr-row-name { flex: 1; min-width: 0; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .tr-row-rates { display: inline-flex; gap: 10px; flex: 0 0 auto; font-variant-numeric: tabular-nums; }
-        .tr-row-rates .rx { color: var(--green); }
-        .tr-row-rates .tx { color: var(--blue); }
-        .tr-empty { font-size: 9.5px; color: var(--muted); padding: 4px 0; }
-        .tr-trend-chart { position: absolute; left: 0; right: 0; top: 24px; bottom: 0; }
-        .tr-legend { position: absolute; right: 32px; top: 506px; z-index: 2; display: flex; gap: 12px; font-size: 9px; color: var(--sub); }
-        .tr-legend .lg { display: inline-flex; align-items: center; gap: 5px; }
-        .tr-legend .lg::before { content: ''; width: 14px; height: 3px; border-radius: 2px; }
-        .tr-legend .lg-rx::before { background: var(--blue); }
-        .tr-legend .lg-tx::before { background: var(--amber); }
-        .tr-svg polyline { stroke-dasharray: 5 4; animation: traffic-flow 1.2s linear infinite; }
-        @keyframes traffic-flow { to { stroke-dashoffset: -9; } }
-        @media (max-width: 768px) {
-            .traffic-wrap { height: auto !important; overflow: visible; }
-            .traffic-canvas { width: 100% !important; height: auto !important; transform: none !important; overflow: visible; background: transparent; }
-            .tr-svg { display: none; }
-            .tr-head { position: static; }
-            .tr-layout-btn { position: static; margin: 6px 0 0; }
-            .tr-stats { position: static; margin-bottom: 10px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-            .tr-topo { position: static; height: auto; display: flex; flex-wrap: wrap; gap: 8px; }
-            .tr-node { position: static !important; width: calc(50% - 4px) !important; height: auto !important; min-height: 76px; transform: none !important; }
-            .tr-node.server { width: 100% !important; }
-            .tr-bottom { position: static; margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
-            .tr-panel { position: static; width: 100% !important; height: auto; }
-            .tr-trend-chart { position: static; height: 180px; }
-            .tr-legend { position: static; margin-top: 8px; }
-        }
         .chart-meta { font-size: 12px; color: #999; text-align: right; margin-top: 6px; }
         .login-bg {
             min-height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -157,7 +65,6 @@
             .topbar .tb-label { display: none; }
             .page-wrap { padding: 10px; }
             .chart-card .chart { height: 220px; }
-            .traffic-wrap { -webkit-overflow-scrolling: touch; }
             .stat-grid { grid-template-columns: 1fr; }
             .stat-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
             .ant-card-head { padding: 0 12px !important; }
@@ -221,40 +128,6 @@
         const h = hex.replace('#', '');
         return 'rgba(' + parseInt(h.substring(0, 2), 16) + ',' + parseInt(h.substring(2, 4), 16) + ',' + parseInt(h.substring(4, 6), 16) + ',' + a + ')';
     };
-
-    const Icon = ({ children, size = 14, ...rest }) => (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...rest}>{children}</svg>
-    );
-    const Ico = {
-        down: <><path d="M12 5v14" /><path d="M19 12l-7 7-7-7" /></>,
-        up: <><path d="M12 19V5" /><path d="M5 12l7-7 7 7" /></>,
-        server: <><rect x="2" y="3" width="20" height="7" rx="2" /><rect x="2" y="14" width="20" height="7" rx="2" /><path d="M6.5 6.5h.01M6.5 17.5h.01" /></>,
-        laptop: <><path d="M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9H3z" /><path d="M2 19h20" /></>,
-        globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18" /><path d="M12 3a13.5 13.5 0 0 1 0 18 13.5 13.5 0 0 1 0-18z" /></>,
-        plug: <><path d="M12 22v-4" /><path d="M9 8V2" /><path d="M15 8V2" /><path d="M5 8h14v5a7 7 0 0 1-14 0z" /></>,
-        box: <><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" /><path d="M3 8l9 5 9-5" /><path d="M12 13v8" /></>,
-        db: <><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5" /><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" /></>,
-        ssh: <><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M6 9l3 3-3 3" /><path d="M13 15h5" /></>,
-        folder: <><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></>,
-        users: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
-        link: <><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></>
-    };
-    const iconEl = (name, size) => <Icon size={size}>{Ico[name] || Ico.box}</Icon>;
-
-    // 1200x760 设计画布内的节点卡片布局
-    const CARD_LAYOUT = {
-        server: { left: 490, top: 225, w: 210, h: 80 },
-        eth0: { left: 270, top: 130, w: 115, h: 58 },
-        wlan0: { left: 430, top: 128, w: 115, h: 58 },
-        docker0: { left: 590, top: 130, w: 115, h: 58 },
-        c0: { left: 30, top: 395, w: 175, h: 82 },
-        c1: { left: 220, top: 395, w: 175, h: 82 },
-        c2: { left: 410, top: 395, w: 175, h: 82 },
-        s0: { left: 830, top: 395, w: 115, h: 82 },
-        s1: { left: 955, top: 395, w: 115, h: 82 },
-        s2: { left: 1080, top: 395, w: 115, h: 82 }
-    };
-    const IFACE_SLOTS = ['eth0', 'wlan0', 'docker0'];
 
     function Login({ onLogin }) {
         const [mode, setMode] = useState('login');
@@ -337,15 +210,7 @@
         const reconnectAttempts = useRef(0);
         const chartRefs = useRef({});
         const chartInsts = useRef({});
-        const dataRef = useRef({ labels: [], cpu: [], mem: [], up: [], down: [], r: [], w: [], trendLabels: [], trendRx: [], trendTx: [] });
-        const [detailKey, setDetailKey] = useState({ type: 'server' });
-        const [lines, setLines] = useState([]);
-        const [canvasScale, setCanvasScale] = useState(1);
-        const canvasWrapRef = useRef(null);
-        const dragPosRef = useRef({});
-        const dragSession = useRef(null);
-        const movedRef = useRef(false);
-        const [dragTick, setDragTick] = useState(0);
+        const dataRef = useRef({ labels: [], cpu: [], mem: [], up: [], down: [], r: [], w: [] });
 
         const hasPerm = p => (user.permissions || []).some(x => x === '*' || x === p);
 
@@ -363,9 +228,6 @@
             push(D.down, (parseFloat(d.download_speed) || 0).toFixed(2));
             push(D.r, (parseFloat(d.read_speed) || 0).toFixed(2));
             push(D.w, (parseFloat(d.write_speed) || 0).toFixed(2));
-            push(D.trendLabels, t, 60);
-            push(D.trendRx, (parseFloat(d.download_speed) || 0).toFixed(2), 60);
-            push(D.trendTx, (parseFloat(d.upload_speed) || 0).toFixed(2), 60);
             setOption('cpu', ['#1677ff'], D.labels, D.cpu, 'CPU 使用率 (%)');
             setOption('mem', ['#52c41a'], D.labels, D.mem, '内存使用率 (%)');
             setOption('net', ['#faad14', '#ff4d4f'], D.labels, [D.up, D.down], '网络速率 (KB/s)');
@@ -392,12 +254,6 @@
             });
         };
 
-        const formatRate = (kb) => {
-            const n = parseFloat(kb) || 0;
-            if (n >= 1024) return (n / 1024).toFixed(n >= 10240 ? 1 : 2) + ' MB/s';
-            return n.toFixed(n >= 100 ? 0 : 1) + ' KB/s';
-        };
-
         const pickTopClients = (users, maxCount) => {
             const map = {};
             (users || []).forEach(u => {
@@ -418,174 +274,6 @@
                 });
             }
             return list;
-        };
-
-        const buildTrafficView = (d) => {
-            const upload = parseFloat(d.upload_speed) || 0;
-            const download = parseFloat(d.download_speed) || 0;
-            const clients = (d.traffic_hosts || [])
-                .filter(h => h && h.ip && ((parseFloat(h.rx) || 0) + (parseFloat(h.tx) || 0) > 0.01))
-                .slice(0, 5)
-                .map(h => ({
-                    ip: h.ip,
-                    connections: h.connections || 0,
-                    rx: parseFloat(h.rx) || 0,
-                    tx: parseFloat(h.tx) || 0
-                }));
-            const services = (d.traffic_services || [])
-                .filter(s => s && s.port && (s.connections || 0) > 0)
-                .slice(0, 3)
-                .map(s => ({ ...s, label: (s.name || '服务') + ':' + s.port }));
-            const ifaces = (d.traffic_interfaces || []).slice(0, 3);
-            const links = (d.traffic_links || []).filter(l => l && l.client_ip && ((parseFloat(l.rx) || 0) + (parseFloat(l.tx) || 0) > 0.1)).slice(0, 12);
-            const connTotal = services.reduce((s, x) => s + (x.connections || 0), 0);
-            return {
-                upload,
-                download,
-                clients,
-                services,
-                links,
-                serviceTotal: services.length,
-                ifaces,
-                serverIP: d.server_ip || d.hostname || 'Server',
-                onlineCount: d.online_count || 0,
-                activeClients: clients.length,
-                activeConns: connTotal || 0
-            };
-        };
-
-        const serviceIconName = (s) => {
-            const n = (s.name || '').toLowerCase();
-            const p = s.port;
-            if (n === 'http' || n === 'nginx' || p === 80 || p === 443 || p === 8443 || p === 8081) return 'globe';
-            if (n === 'redis' || n === 'mysql' || n === 'postgres' || p === 6379 || p === 3306 || p === 5432) return 'db';
-            if (n === 'ssh' || p === 22) return 'ssh';
-            if (n === 'openlist') return 'folder';
-            return 'box';
-        };
-
-        const measureTrafficLines = () => {
-            if (!status) return;
-            const tv = buildTrafficView(status);
-            const out = [];
-            const rectOf = (id) => {
-                const c = CARD_LAYOUT[id];
-                const d = dragPosRef.current[id] || { x: 0, y: 0 };
-                return { left: c.left + d.x, top: c.top + d.y, w: c.w, h: c.h };
-            };
-            const server = rectOf('server');
-            const sTop = server.top;
-            const sBottom = server.top + server.h;
-            // 正交折线：节点 → 垂直进入空档 → 水平到服务器边缘 → 挂接
-            const addLine = (nodeId, rx, tx, key) => {
-                const r = rectOf(nodeId);
-                const nx = r.left + r.w / 2;
-                const above = r.top + r.h / 2 < server.top + server.h / 2;
-                const nodeY = above ? r.top + r.h : r.top;
-                const edgeY = above ? sTop : sBottom;
-                const gapY = above ? sTop - 4 : sBottom + 4;
-                const ax = Math.max(server.left + 12, Math.min(server.left + server.w - 12, nx));
-                out.push({
-                    key,
-                    rx: parseFloat(rx) || 0,
-                    tx: parseFloat(tx) || 0,
-                    points: [
-                        { x: nx, y: nodeY },
-                        { x: nx, y: gapY },
-                        { x: ax, y: gapY },
-                        { x: ax, y: edgeY }
-                    ]
-                });
-            };
-            const clients = tv.clients.slice(0, 3);
-            const services = tv.services.slice(0, 3);
-            const ifaces = tv.ifaces.slice(0, 3);
-            clients.forEach((c, i) => addLine('c' + i, c.rx, c.tx, 'cl' + i));
-            services.forEach((s, i) => addLine('s' + i, s.rx, s.tx, 'sv' + i));
-            ifaces.forEach((f, i) => addLine(IFACE_SLOTS[i], f.rx, f.tx, 'if' + i));
-            setLines(out);
-        };
-
-        const startDrag = (e, id) => {
-            if (e.button !== 0 && e.pointerType === 'mouse') return;
-            e.preventDefault();
-            const cur = dragPosRef.current[id] || { x: 0, y: 0 };
-            dragSession.current = { id, sx: e.clientX, sy: e.clientY, ox: cur.x, oy: cur.y, moved: false };
-            const move = (ev) => {
-                const s = dragSession.current;
-                if (!s) return;
-                const nx = s.ox + ev.clientX - s.sx;
-                const ny = s.oy + ev.clientY - s.sy;
-                if (Math.abs(nx - s.ox) + Math.abs(ny - s.oy) > 4) s.moved = true;
-                dragPosRef.current[s.id] = { x: nx, y: ny };
-                setDragTick(t => t + 1);
-                measureTrafficLines();
-            };
-            const up = () => {
-                if (dragSession.current) movedRef.current = dragSession.current.moved;
-                window.removeEventListener('pointermove', move);
-                window.removeEventListener('pointerup', up);
-                dragSession.current = null;
-                measureTrafficLines();
-            };
-            window.addEventListener('pointermove', move);
-            window.addEventListener('pointerup', up);
-        };
-
-        const nodeStyle = (id) => {
-            const c = CARD_LAYOUT[id];
-            const p = dragPosRef.current[id];
-            return {
-                left: c.left,
-                top: c.top,
-                width: c.w,
-                height: c.h,
-                transform: p ? 'translate(' + p.x + 'px,' + p.y + 'px)' : undefined,
-                zIndex: p ? 3 : undefined
-            };
-        };
-
-        const resetLayout = () => {
-            dragPosRef.current = {};
-            setDragTick(t => t + 1);
-            measureTrafficLines();
-        };
-
-        const nodeClick = (fn) => (e) => {
-            if (movedRef.current) { movedRef.current = false; return; }
-            fn(e);
-        };
-
-        const updateTrafficTrend = () => {
-            if (chartRefs.current.trend && !chartInsts.current.trend) {
-                chartInsts.current.trend = echarts.init(chartRefs.current.trend);
-            }
-            const inst = chartInsts.current.trend;
-            if (!inst) return;
-            const D = dataRef.current;
-            const len = D.trendLabels.length;
-            const axisColor = isDark ? '#7d8798' : '#8b93a5';
-            const splitColor = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(120,130,150,0.16)';
-            inst.setOption({
-                animationDurationUpdate: 350,
-                tooltip: {
-                    trigger: 'axis',
-                    backgroundColor: 'rgba(22,30,48,0.9)',
-                    borderWidth: 0,
-                    textStyle: { color: '#fff', fontSize: 11 },
-                    formatter: ps => {
-                        const rows = (ps || []).map(p => p.marker + ' ' + p.seriesName + ': ' + formatRate(p.value));
-                        return ((ps && ps[0] && ps[0].axisValue) || '') + '<br/>' + rows.join('<br/>');
-                    }
-                },
-                grid: { left: 8, right: 8, top: 16, bottom: 4, containLabel: true },
-                xAxis: { type: 'category', boundaryGap: false, data: D.trendLabels.slice(), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 9, interval: Math.max(0, Math.ceil(len / 6) - 1) } },
-                yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 9 }, splitLine: { lineStyle: { color: splitColor, type: 'dashed' } } },
-                series: [
-                    { name: '下载流量 (RX)', type: 'line', smooth: 0.35, symbol: 'none', lineStyle: { width: 2, color: '#1677ff' }, itemStyle: { color: '#1677ff' }, areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(22,119,255,0.28)' }, { offset: 1, color: 'rgba(22,119,255,0.02)' }]) }, data: D.trendRx.slice() },
-                    { name: '上传流量 (TX)', type: 'line', smooth: 0.35, symbol: 'none', lineStyle: { width: 2, color: '#faad14' }, itemStyle: { color: '#faad14' }, areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(250,173,20,0.24)' }, { offset: 1, color: 'rgba(250,173,20,0.02)' }]) }, data: D.trendTx.slice() }
-                ]
-            });
         };
 
         const connect = useCallback((i) => {
@@ -620,14 +308,13 @@
 
         // 初始化图表
         useEffect(() => {
-            ['cpu', 'mem', 'net', 'disk', 'trend'].forEach(k => {
+            ['cpu', 'mem', 'net', 'disk'].forEach(k => {
                 if (chartRefs.current[k] && !chartInsts.current[k]) {
                     chartInsts.current[k] = echarts.init(chartRefs.current[k]);
                 }
             });
             const onR = () => {
                 Object.values(chartInsts.current).forEach(c => c && c.resize());
-                measureTrafficLines();
             };
             window.addEventListener('resize', onR);
             return () => {
@@ -635,28 +322,6 @@
                 Object.values(chartInsts.current).forEach(c => c && c.dispose());
                 chartInsts.current = {};
             };
-        }, []);
-
-        // 流量拓扑连线与趋势图刷新
-        useEffect(() => {
-            if (chartRefs.current.trend && !chartInsts.current.trend) {
-                chartInsts.current.trend = echarts.init(chartRefs.current.trend);
-            }
-            measureTrafficLines();
-            updateTrafficTrend();
-            const w = canvasWrapRef.current && canvasWrapRef.current.clientWidth;
-            if (w > 0) setCanvasScale(w / 1200);
-        }, [status, isDark]);
-
-        // 画布自适应缩放（1536x1024 设计稿等比缩放）
-        useEffect(() => {
-            const update = () => {
-                const w = canvasWrapRef.current && canvasWrapRef.current.clientWidth;
-                if (w > 0) setCanvasScale(w / 1200);
-            };
-            update();
-            window.addEventListener('resize', update);
-            return () => window.removeEventListener('resize', update);
         }, []);
 
         // 加载网卡并连接
@@ -675,6 +340,7 @@
         const navBtns = [];
         navBtns.push(<Button key="ebooks" onClick={() => window.location.href = 'ebooks.html'}>📚 电子书</Button>);
         navBtns.push(<Button key="ip" onClick={() => window.location.href = 'ip-panel.html'}>🌐 IP 流量</Button>);
+        if (hasPerm('service:view') || hasPerm('port:view')) navBtns.push(<Button key="services" onClick={() => window.location.href = 'services.html'}>🧰 服务端口</Button>);
         if (hasPerm('files:manage')) navBtns.push(<Button key="files" onClick={() => window.location.href = 'files.html'}>📁 文件管理</Button>);
         if (hasPerm('system:process')) navBtns.push(<Button key="proc" onClick={() => window.location.href = 'process.html'}>⚙️ 进程</Button>);
         if (hasPerm('files:download')) navBtns.push(<Button key="dl" onClick={() => window.location.href = 'download.html'}>📥 安全下载</Button>);
@@ -741,181 +407,6 @@
                                 <div ref={el => chartRefs.current.mem = el} className="chart"></div>
                             </Card>
                         </div>
-
-                        <Card size="small" bordered className="traffic-card" style={{ marginBottom: 12 }}>
-                            {status ? (() => {
-                                const tv = buildTrafficView(status);
-                                const clients = tv.clients.slice(0, 3);
-                                const services = tv.services.slice(0, 3);
-                                const ifaces = tv.ifaces.slice(0, 3);
-                                const rates = [tv.download, tv.upload];
-                                clients.forEach(c => rates.push(c.rx, c.tx));
-                                services.forEach(s => rates.push(parseFloat(s.rx) || 0, parseFloat(s.tx) || 0));
-                                ifaces.forEach(f => rates.push(parseFloat(f.rx) || 0, parseFloat(f.tx) || 0));
-                                const maxRate = Math.max.apply(null, rates) || 1;
-                                const lineW = r => Math.max(1, Math.min(2.2, 1 + r / maxRate * 1.6));
-                                return (
-                                    <div className="traffic-wrap" ref={canvasWrapRef} style={{ height: Math.round(760 * canvasScale) }}>
-                                        <div className={'traffic-canvas' + (isDark ? ' dark' : '')} style={{ transform: 'scale(' + canvasScale + ')' }}>
-                                            <div className="tr-head">
-                                                <div className="tr-title">实时流量关系<span className="tr-live">实时</span></div>
-                                                <div className="tr-sub">当前服务器网络流量拓扑关系</div>
-                                            </div>
-                                            <button type="button" className="tr-layout-btn" onClick={resetLayout} title="恢复自动布局">自动布局</button>
-                                            <div className="tr-stats">
-                                                <div className="tr-stat">
-                                                    <span className="tr-ico">{iconEl('down', 17)}</span>
-                                                    <div><span className="tr-label">总下载速度</span><span className="tr-value rx">{formatRate(tv.download)}</span></div>
-                                                </div>
-                                                <div className="tr-stat">
-                                                    <span className="tr-ico">{iconEl('up', 17)}</span>
-                                                    <div><span className="tr-label">总上传速度</span><span className="tr-value tx">{formatRate(tv.upload)}</span></div>
-                                                </div>
-                                                <div className="tr-stat">
-                                                    <span className="tr-ico">{iconEl('link', 16)}</span>
-                                                    <div><span className="tr-label">活跃连接</span><span className="tr-value">{tv.activeConns}</span></div>
-                                                </div>
-                                                <div className="tr-stat">
-                                                    <span className="tr-ico">{iconEl('users', 16)}</span>
-                                                    <div><span className="tr-label">活跃客户端</span><span className="tr-value">{tv.activeClients}</span></div>
-                                                </div>
-                                                <div className="tr-stat">
-                                                    <span className="tr-ico">{iconEl('box', 16)}</span>
-                                                    <div><span className="tr-label">应用服务</span><span className="tr-value">{tv.serviceTotal}</span></div>
-                                                </div>
-                                            </div>
-
-                                            <svg className="tr-svg" viewBox="0 0 1200 760" preserveAspectRatio="none" aria-hidden="true">
-                                                {lines.map(l => (
-                                                    <polyline key={l.key} points={l.points.map(p => p.x + ',' + p.y).join(' ')}
-                                                              stroke={l.rx >= l.tx ? '#1677ff' : '#13c2c2'}
-                                                              strokeWidth={lineW(Math.max(l.rx, l.tx))}
-                                                              strokeOpacity={0.45}
-                                                              vectorEffect="non-scaling-stroke"
-                                                              fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                                                ))}
-                                            </svg>
-
-                                            <div className="tr-topo">
-
-                                                <div className={'tr-node server' + (detailKey && detailKey.type === 'server' ? ' active' : '')}
-                                                     style={nodeStyle('server')}
-                                                     onPointerDown={e => startDrag(e, 'server')}
-                                                     onClick={nodeClick(() => setDetailKey({ type: 'server' }))}>
-                                                    <span className="tr-ico">{iconEl('server', 17)}</span>
-                                                    <div className="tr-body">
-                                                        <div className="tr-name">本机 / Server</div>
-                                                        <div className="tr-info">{tv.serverIP}</div>
-                                                        <div className="tr-rates">
-                                                            <span className="tr-rate rx"><i>{iconEl('down', 9)}</i><b>{formatRate(tv.download)}</b></span>
-                                                            <span className="tr-rate tx"><i>{iconEl('up', 9)}</i><b>{formatRate(tv.upload)}</b></span>
-                                                        </div>
-                                                    </div>
-                                                    <span className="tr-dot" />
-                                                </div>
-
-                                                {ifaces.map((f, i) => (
-                                                    <div key={f.name}
-                                                         className={'tr-node' + (detailKey && detailKey.type === 'iface' && detailKey.name === f.name ? ' active' : '')}
-                                                         style={nodeStyle(IFACE_SLOTS[i])}
-                                                         onPointerDown={e => startDrag(e, IFACE_SLOTS[i])}
-                                                         onClick={nodeClick(() => setDetailKey({ type: 'iface', name: f.name }))}>
-                                                        <span className="tr-ico">{iconEl('plug', 15)}</span>
-                                                        <div className="tr-body">
-                                                            <div className="tr-name">{f.name}</div>
-                                                            <div className="tr-info">{f.ip || (f.up ? '已连接' : '未连接')}</div>
-                                                            <div className="tr-rates">
-                                                                <span className="tr-rate rx"><i>{iconEl('down', 9)}</i><b>{formatRate(f.rx)}</b></span>
-                                                                <span className="tr-rate tx"><i>{iconEl('up', 9)}</i><b>{formatRate(f.tx)}</b></span>
-                                                            </div>
-                                                        </div>
-                                                        <span className={'tr-dot' + (f.up ? '' : ' off')} />
-                                                    </div>
-                                                ))}
-
-                                                {clients.map((c, i) => (
-                                                    <div key={c.ip}
-                                                         className={'tr-node' + (detailKey && detailKey.type === 'client' && detailKey.ip === c.ip ? ' active' : '')}
-                                                         style={nodeStyle('c' + i)}
-                                                         onPointerDown={e => startDrag(e, 'c' + i)}
-                                                         onClick={nodeClick(() => setDetailKey({ type: 'client', ip: c.ip }))}>
-                                                        <span className="tr-ico">{iconEl(c.aggregated ? 'users' : 'laptop', 15)}</span>
-                                                        <div className="tr-body">
-                                                            <div className="tr-name">{c.ip}</div>
-                                                            <div className="tr-rates">
-                                                                <span className="tr-rate rx"><i>{iconEl('down', 9)}</i><b>{formatRate(c.rx)}</b></span>
-                                                                <span className="tr-rate tx"><i>{iconEl('up', 9)}</i><b>{formatRate(c.tx)}</b></span>
-                                                            </div>
-                                                        </div>
-                                                        <span className="tr-num">{i + 1}</span>
-                                                        <span className="tr-badge">Clients ({c.connections})</span>
-                                                    </div>
-                                                ))}
-
-                                                {services.map((s, i) => (
-                                                    <div key={s.port}
-                                                         className={'tr-node' + (detailKey && detailKey.type === 'service' && detailKey.port === s.port ? ' active' : '')}
-                                                         style={nodeStyle('s' + i)}
-                                                         onPointerDown={e => startDrag(e, 's' + i)}
-                                                         onClick={nodeClick(() => setDetailKey({ type: 'service', port: s.port }))}>
-                                                        <span className="tr-ico">{iconEl(serviceIconName(s), 15)}</span>
-                                                        <div className="tr-body">
-                                                            <div className="tr-name">{s.label}</div>
-                                                            <div className="tr-info">{(s.protocol || 'tcp').toUpperCase()}</div>
-                                                            <div className="tr-rates">
-                                                                <span className="tr-rate rx"><i>{iconEl('down', 9)}</i><b>{formatRate(s.rx)}</b></span>
-                                                                <span className="tr-rate tx"><i>{iconEl('up', 9)}</i><b>{formatRate(s.tx)}</b></span>
-                                                            </div>
-                                                        </div>
-                                                        <span className="tr-num">{i + 1}</span>
-                                                    </div>
-                                                ))}
-
-                                            </div>
-                                            <div className="tr-bottom">
-                                                <div className="tr-panel clients">
-                                                    <div className="tr-panel-title">TOP 客户端</div>
-                                                    {clients.length ? clients.map((c, i) => (
-                                                        <div key={c.ip} className="tr-row">
-                                                            <span className="tr-num">{i + 1}</span>
-                                                            <span className="tr-row-name">{c.ip}</span>
-                                                            <span className="tr-row-rates">
-                                                                <span className="rx">↓ {formatRate(c.rx)}</span>
-                                                                <span className="tx">↑ {formatRate(c.tx)}</span>
-                                                            </span>
-                                                        </div>
-                                                    )) : <div className="tr-empty">暂无活跃客户端</div>}
-                                                </div>
-                                                <div className="tr-panel services">
-                                                    <div className="tr-panel-title">TOP 应用服务<span className="tr-count">Services ({tv.serviceTotal})</span></div>
-                                                    {services.length ? services.map((s, i) => (
-                                                        <div key={s.port} className="tr-row">
-                                                            <span className="tr-num">{i + 1}</span>
-                                                            <span className="tr-row-name">{s.label}</span>
-                                                            <span className="tr-row-rates">
-                                                                <span className="rx">↓ {formatRate(s.rx)}</span>
-                                                                <span className="tx">↑ {formatRate(s.tx)}</span>
-                                                            </span>
-                                                        </div>
-                                                    )) : <div className="tr-empty">暂无活跃服务</div>}
-                                                </div>
-                                                <div className="tr-panel trend">
-                                                    <div className="tr-panel-title">流量趋势（1 分钟）</div>
-                                                    <div className="tr-trend-chart">
-                                                        <div ref={el => chartRefs.current.trend = el} style={{ width: '100%', height: '100%' }}></div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="tr-legend">
-                                                <span className="lg lg-rx">下载流量 (RX)</span>
-                                                <span className="lg lg-tx">上传流量 (TX)</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })() : <div style={{ padding: 40, textAlign: 'center', color: '#8b93a5' }}>等待流量数据...</div>}
-                        </Card>
 
                         <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
                             <Card size="small" hoverable bordered title={`👥 在线用户（${onlineCount}）`}>

@@ -2,61 +2,114 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>IP 流量监控 - Server Status</title>
     <link rel="icon" href="data:,">
     <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
     <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
     <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
     <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
     <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
     <style>
-        body { margin: 0; background: #f5f5f5; }
+        body { margin: 0; background: #f5f5f5; font-size: 14px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
         #root { min-height: 100vh; }
-        .page-wrap { padding: 16px; }
+        .page-wrap { padding: 16px; max-width: 1800px; margin: 0 auto; }
         .topbar {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 0 24px; height: 56px; background: #fff;
-            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            padding: 0 24px; height: 54px; background: #fff;
+            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
         }
-        .topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; color: #1677ff; }
         .topbar.dark { background: #1f1f1f; border-bottom-color: #303030; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-        .topbar.dark .brand { color: #4096ff; }
+        .topbar .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .topbar .brand .bt-name { font-size: 18px; font-weight: 600; color: #1f1f1f; line-height: 1; }
+        .topbar.dark .brand .bt-name { color: rgba(255,255,255,0.88); }
+        .topbar .brand .bt-sub { font-size: 14px; color: rgba(0,0,0,0.45); font-weight: 400; margin-left: 2px; }
+        .topbar.dark .brand .bt-sub { color: rgba(255,255,255,0.45); }
         .topbar .brand .logo {
-            width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #1677ff, #722ed1);
-            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px;
+            width: 28px; height: 28px; border-radius: 7px; background: linear-gradient(135deg, #1677ff, #722ed1);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px;
         }
-        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 12px; }
-        .chart-wrap { width: 100%; height: 260px; }
+        .topbar .ant-btn { font-size: 13px; }
+        .topbar .tb-text { margin-left: 4px; }
+        @media (max-width: 768px) {
+            body { font-size: 13px; }
+            .topbar { padding: 6px 10px; gap: 4px; height: auto; min-height: 52px; }
+            .topbar .brand { flex: 1; }
+            .topbar .brand .bt-name { max-width: 60vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .topbar .brand .bt-sub { display: none; }
+            .topbar .tb-text { display: none; }
+            .topbar .ant-space { gap: 4px !important; }
+            .topbar .ant-btn { padding: 4px 9px; height: 32px; }
+            .page-wrap { padding: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+        }
+
+        .sp-app { --bg: #f5f5f5; --card: #ffffff; --border: #f0f0f0; --text: rgba(0,0,0,0.88); --secondary: rgba(0,0,0,0.45); color-scheme: light; }
+        .sp-app.dark { --bg: #141414; --card: #1f1f1f; --border: #303030; --text: rgba(255,255,255,0.88); --secondary: rgba(255,255,255,0.45); color-scheme: dark; }
+
+        .mini-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; min-width: 0; }
+        .mini-stat {
+            background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+            padding: 10px 16px; height: 78px; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+            cursor: pointer; transition: border-color .2s, box-shadow .2s; min-width: 0; overflow: hidden;
+        }
+        .mini-stat:hover { border-color: #d6e4ff; box-shadow: 0 2px 8px rgba(22,119,255,.08); }
+        .mini-stat .ms-label { font-size: 12px; color: var(--secondary); display: flex; align-items: center; gap: 6px; }
+        .mini-stat .ms-value { font-size: 26px; font-weight: 600; line-height: 1.15; color: var(--text); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mini-stat .ms-value.ms-ip { font-size: 15px; }
+        .mini-stat .ms-sub { font-size: 12px; color: var(--secondary); }
+
+        .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .toolbar .toolbar-search { width: 280px; }
+        .toolbar .toolbar-extra { margin-left: auto; font-size: 12px; color: var(--secondary); white-space: nowrap; }
+        .filter-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; scrollbar-width: none; }
+        .filter-wrap::-webkit-scrollbar { display: none; }
+        .filter-wrap .ant-segmented { white-space: nowrap; }
+        @media (max-width: 768px) {
+            .toolbar .toolbar-search { width: 100%; order: -1; }
+            .toolbar .toolbar-extra { margin-left: 0; }
+            .mini-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+            .mini-stat { height: 72px; padding: 8px 10px; }
+            .mini-stat .ms-label { font-size: 11px; }
+            .mini-stat .ms-value { font-size: 22px; }
+            .mini-stat .ms-value.ms-ip { font-size: 13px !important; }
+            .ant-card-head { padding: 0 12px !important; }
+            .ant-card-head-wrapper { flex-wrap: wrap; gap: 6px; }
+            .ant-card-head-title { font-size: 14px !important; }
+            .ant-card-body { padding: 12px !important; }
+            .ant-table-content, .ant-table-body { -webkit-overflow-scrolling: touch; }
+            .ant-drawer-footer { padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important; }
+        }
+        @media (max-width: 480px) {
+            .toolbar { gap: 6px; }
+            .toolbar-extra { display: none; }
+            .topbar .bt-name { font-size: 15px; }
+            .tb-hide-sm { display: none !important; }
+        }
+
+        .chart-wrap { width: 100%; height: 220px; }
         .ip-card { margin-bottom: 10px; }
         .ip-card .ant-card-body { padding: 12px 14px; }
         .ip-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 13px; }
-        .ip-row .label { color: #999; font-size: 12px; }
-        @media (max-width: 768px) {
-            .topbar { padding: 8px 12px; flex-wrap: wrap; gap: 6px 8px; }
-            .topbar .brand { font-size: 14px; gap: 6px; }
-            .topbar .brand .logo { width: 26px; height: 26px; font-size: 14px; border-radius: 6px; }
-            .topbar .ant-space { flex-wrap: wrap; gap: 6px !important; }
-            .topbar .ant-btn { padding: 4px 8px; font-size: 12px; height: 30px; }
-            .topbar .tb-sub { display: none; }
-            .topbar .tb-label { display: none; }
-            .page-wrap { padding: 10px; }
-            .chart-wrap { height: 220px; }
-            .ant-card-head { padding: 0 12px !important; }
-            .ant-card-head-wrapper { flex-wrap: wrap; gap: 6px; }
-            .ant-card-body { padding: 12px !important; }
-            .stat-grid { grid-template-columns: 1fr; gap: 8px; }
-            .stat-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-        }
+        .ip-row .label { color: var(--secondary); font-size: 12px; }
+        .remaining { font-variant-numeric: tabular-nums; }
+        .anomaly-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px; border-bottom: 1px solid rgba(120,130,150,.15); cursor: pointer; }
+        .anomaly-row:hover { background: rgba(22,119,255,.05); }
+        .sp-app.dark .anomaly-row { border-bottom-color: rgba(255,255,255,.12); }
+        .rule-item { padding: 8px 4px; border-bottom: 1px solid rgba(120,130,150,.15); }
+        .sp-app.dark .rule-item { border-bottom-color: rgba(255,255,255,.12); }
     </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-    const { Card, Table, Button, Input, Modal, message, Space, Tag, Statistic, Typography, ConfigProvider, theme, Badge, Drawer, Alert, Segmented, Empty } = window.antd;
+    const { Card, Table, Button, Input, InputNumber, Modal, message, Space, Tag, Statistic, Typography, ConfigProvider,
+          theme, Badge, Drawer, Alert, Segmented, Empty, Form, Select, Checkbox, Popconfirm, notification, Tooltip,
+          Descriptions, Row, Col } = window.antd;
     const { useState, useEffect, useCallback, useRef } = React;
     const { darkAlgorithm } = theme;
+    const IconSet = window.icons || {};
 
     function useIsMobile() {
         const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
@@ -75,11 +128,16 @@
     function secureFetch(url, options = {}) {
         return fetch(url, {
             method: options.method || 'GET',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
             credentials: 'include',
             body: options.body
         });
     }
+
+    const UIIcon = ({ name, ...props }) => {
+        const C = IconSet[name];
+        return C ? <C {...props} /> : null;
+    };
 
     const statusColor = code => {
         if (code >= 200 && code < 300) return '#52c41a';
@@ -95,19 +153,84 @@
         return 'error';
     };
 
+    const sourceTag = (src) => {
+        if (src === 'auto') return <Tag color="orange">系统自动</Tag>;
+        if (src === 'manual') return <Tag color="blue">手动</Tag>;
+        return <Tag>未知</Tag>;
+    };
+
+    // 剩余时间倒计时格式化
+    const fmtRemaining = (untilStr, now) => {
+        if (!untilStr) return '-';
+        const ms = new Date(untilStr).getTime() - now;
+        if (ms <= 0) return '已到期';
+        const s = Math.floor(ms / 1000);
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        if (h > 0) return h + '小时 ' + m + '分';
+        if (m > 0) return m + '分 ' + sec + '秒';
+        return sec + '秒';
+    };
+
+    const fmtDateTime = (s) => s ? new Date(s).toLocaleString('zh-CN', { hour12: false }) : '-';
+
+    // IPv4 CIDR 匹配（用于前端白名单提示）
+    const ipInCidr = (ip, cidr) => {
+        const parts = cidr.split('/');
+        if (parts.length !== 2) return false;
+        const bits = parseInt(parts[1], 10);
+        const ipN = String(ip || '').split('.').map(Number);
+        const netN = parts[0].split('.').map(Number);
+        if (ipN.length !== 4 || netN.length !== 4 || isNaN(bits) || bits < 0 || bits > 32) return false;
+        for (let i = 0; i < 4; i++) {
+            const here = Math.max(0, Math.min(8, bits - i * 8));
+            const m = here === 0 ? 0 : ((0xff << (8 - here)) & 0xff);
+            if ((ipN[i] & m) !== (netN[i] & m)) return false;
+        }
+        return true;
+    };
+
+    const DURATION_OPTIONS = [
+        { label: '10 分钟', value: '10m' },
+        { label: '1 小时（默认）', value: '1h' },
+        { label: '6 小时', value: '6h' },
+        { label: '24 小时', value: '24h' },
+        { label: '7 天', value: '7d' },
+        { label: '30 天', value: '30d' },
+        { label: '永久', value: 'permanent' },
+        { label: '自定义', value: 'custom' }
+    ];
+    const REASON_OPTIONS = ['暴力尝试', '恶意请求', '异常流量', '测试', '其他'];
+
     function App() {
         const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
         const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
         const [ips, setIps] = useState([]);
         const [loading, setLoading] = useState(false);
         const [search, setSearch] = useState('');
-        const [blocked, setBlocked] = useState({});
+        const [blockedMap, setBlockedMap] = useState({});
+        const [history, setHistory] = useState([]);
+        const [whitelist, setWhitelist] = useState([]);
+        const [summary, setSummary] = useState(null);
+        const [filter, setFilter] = useState('all');
+        const [nowTs, setNowTs] = useState(Date.now());
+        const [blockModal, setBlockModal] = useState(null); // {ip}
+        const [blockForm] = Form.useForm();
+        const [blocking, setBlocking] = useState(false);
         const [blockPanel, setBlockPanel] = useState(false);
+        const [blockFilter, setBlockFilter] = useState('all');
+        const [wlOpen, setWlOpen] = useState(false);
+        const [wlForm] = Form.useForm();
         const [detail, setDetail] = useState(null);
         const [detailData, setDetailData] = useState(null);
         const [detailLoading, setDetailLoading] = useState(false);
+        const [anomalyOpen, setAnomalyOpen] = useState(false);
+        const [anomalyCat, setAnomalyCat] = useState(null);
         const freqChartRef = useRef(null);
         const freqInst = useRef(null);
+        const trendChartRef = useRef(null);
+        const trendInst = useRef(null);
         const isMobile = useIsMobile();
 
         const hasPerm = p => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
@@ -144,36 +267,147 @@
                 if (d.code === 200) {
                     const m = {};
                     (d.data || []).forEach(b => { m[b.ip] = b; });
-                    setBlocked(m);
+                    setBlockedMap(m);
                 }
             } catch (e) { /* 忽略 */ }
         }, []);
 
+        const loadHistory = useCallback(async () => {
+            try {
+                const r = await secureFetch(baseUrl + '/api/ip/blocked/history');
+                const d = await r.json();
+                if (d.code === 200) setHistory(d.data || []);
+            } catch (e) { /* 忽略 */ }
+        }, []);
+
+        const loadWhitelist = useCallback(async () => {
+            try {
+                const r = await secureFetch(baseUrl + '/api/ip/whitelist');
+                const d = await r.json();
+                if (d.code === 200) setWhitelist(d.data || []);
+            } catch (e) { /* 忽略 */ }
+        }, []);
+
+        const loadSummary = useCallback(async () => {
+            try {
+                const r = await secureFetch(baseUrl + '/api/ip/security/summary');
+                const d = await r.json();
+                if (d.code === 200) setSummary(d.data);
+            } catch (e) { /* 忽略 */ }
+        }, []);
+
+        const refreshAll = useCallback(() => {
+            fetchIps();
+            if (canManage) {
+                loadBlocked();
+                loadHistory();
+                loadWhitelist();
+                loadSummary();
+            }
+        }, [canManage, fetchIps, loadBlocked, loadHistory, loadWhitelist, loadSummary]);
+
         useEffect(() => {
             if (!auth.ok) return;
-            fetchIps();
-            if (canManage) loadBlocked();
+            refreshAll();
             const t = setInterval(fetchIps, 30000);
+            const t2 = canManage ? setInterval(() => { loadBlocked(); loadSummary(); }, 15000) : null;
+            return () => { clearInterval(t); if (t2) clearInterval(t2); };
+        }, [auth.ok, refreshAll, canManage, fetchIps, loadBlocked, loadSummary]);
+
+        // 倒计时每秒刷新
+        useEffect(() => {
+            const t = setInterval(() => setNowTs(Date.now()), 1000);
             return () => clearInterval(t);
-        }, [auth.ok, canManage, fetchIps, loadBlocked]);
+        }, []);
 
         useEffect(() => { localStorage.setItem('theme', isDark ? 'dark' : 'light'); }, [isDark]);
 
+        // IP 安全事件 WebSocket：ip.blocked
+        useEffect(() => {
+            if (!auth.ok || !canManage) return;
+            let ws = null;
+            let closed = false;
+            const connect = () => {
+                const url = baseUrl.replace(/^http/, 'ws') + '/ws/ip-events';
+                ws = new WebSocket(url);
+                ws.onopen = () => { /* 已连接 */ };
+                ws.onmessage = e => {
+                    try {
+                        const d = JSON.parse(e.data);
+                        if (d && d.type === 'ip.blocked' && d.source === 'auto') {
+                            loadBlocked();
+                            loadSummary();
+                            notification.open({
+                                message: '系统自动封禁 IP',
+                                description: <div>
+                                    <Typography.Text code>{d.ip}</Typography.Text><br />
+                                    原因：{d.reason}（{d.trigger === 'rate_limit' ? '5分钟 > 100次' : '行为评分 > 50'}）<br />
+                                    解封时间：{fmtDateTime(d.blocked_until)}
+                                </div>,
+                                placement: 'bottomRight',
+                                duration: 6,
+                                icon: <UIIcon name="SafetyOutlined" style={{ color: '#fa541c' }} />
+                            });
+                        }
+                    } catch (err) { /* 忽略 */ }
+                };
+                ws.onclose = () => { if (!closed) setTimeout(connect, 10000); };
+                ws.onerror = () => { try { ws.close(); } catch (err) {} };
+            };
+            connect();
+            return () => { closed = true; if (ws) ws.close(); };
+        }, [auth.ok, canManage, loadBlocked, loadSummary]);
+
         const doBlock = async (ip) => {
             try {
-                const r = await secureFetch(baseUrl + '/api/ip/block', { method: 'POST', body: JSON.stringify({ ip }) });
+                const v = await blockForm.validateFields();
+                const target = (ip || '').trim() || (v.ip || '').trim();
+                if (!target) { message.warning('请输入要封禁的 IP'); return; }
+                setBlocking(true);
+                const payload = {
+                    ip: target,
+                    duration: v.duration,
+                    duration_minutes: v.duration === 'custom' ? (v.duration_minutes || 60) : 0,
+                    reason: v.reason,
+                    note: v.note
+                };
+                const r = await secureFetch(baseUrl + '/api/ip/block', { method: 'POST', body: JSON.stringify(payload) });
                 const d = await r.json();
-                if (d.code === 200) { message.success('IP ' + ip + ' 已封禁'); await loadBlocked(); }
-                else message.error(d.message || '封禁失败');
-            } catch (e) { message.error('封禁失败: ' + e.message); }
+                if (d.code === 200) {
+                    message.success('IP ' + target + ' 已封禁');
+                    setBlockModal(null);
+                    blockForm.resetFields();
+                    refreshAll();
+                } else {
+                    message.error(d.message || '封禁失败');
+                }
+            } catch (e) {
+                if (e && e.errorFields) return;
+                message.error('封禁失败: ' + (e && e.message || ''));
+            } finally {
+                setBlocking(false);
+            }
         };
+
+        const openBlockModal = (ip) => {
+            setBlockModal(ip);
+            blockForm.resetFields();
+            blockForm.setFieldsValue({ duration: '1h', reason: '恶意请求', note: '' });
+        };
+
         const doUnblock = async (ip) => {
             try {
                 const r = await secureFetch(baseUrl + '/api/ip/unblock', { method: 'POST', body: JSON.stringify({ ip }) });
                 const d = await r.json();
-                if (d.code === 200) { message.success('IP ' + ip + ' 已解封'); await loadBlocked(); }
-                else message.error(d.message || '解封失败');
-            } catch (e) { message.error('解封失败: ' + e.message); }
+                if (d.code === 200) {
+                    message.success('IP ' + ip + ' 已解封');
+                    refreshAll();
+                } else {
+                    message.error(d.message || '解封失败');
+                }
+            } catch (e) {
+                message.error('解封失败: ' + e.message);
+            }
         };
 
         const openDetail = async (ip, pre) => {
@@ -193,7 +427,7 @@
             }
         };
 
-        // 频率图
+        // 访问频率图（原有）
         useEffect(() => {
             if (!detailData || !freqChartRef.current) return;
             if (!freqInst.current) {
@@ -217,36 +451,132 @@
                     ? (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':00'
                     : String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
             });
+            const axisColor = isDark ? '#7d8798' : '#8b93a5';
             freqInst.current.setOption({
                 tooltip: { trigger: 'axis', backgroundColor: 'rgba(22,30,48,0.9)', borderWidth: 0, textStyle: { color: '#fff' } },
                 grid: { left: 10, right: 16, top: 14, bottom: 6, containLabel: true },
-                xAxis: { type: 'category', data: labels, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#8b93a5', fontSize: 11 } },
-                yAxis: { type: 'value', minInterval: 1, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#8b93a5', fontSize: 11 }, splitLine: { lineStyle: { color: 'rgba(120,130,150,0.16)', type: 'dashed' } } },
+                xAxis: { type: 'category', data: labels, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 11 } },
+                yAxis: { type: 'value', minInterval: 1, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 11 }, splitLine: { lineStyle: { color: 'rgba(120,130,150,0.16)', type: 'dashed' } } },
                 series: [{
                     type: 'line', smooth: true, symbol: 'circle', symbolSize: 6, data: sorted.map(t => buckets[t]),
                     lineStyle: { width: 2.5, color: '#1677ff' }, itemStyle: { color: '#1677ff' },
                     areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: 'rgba(22,119,255,0.3)' }, { offset: 1, color: 'rgba(22,119,255,0.02)' }]) }
                 }]
             });
-        }, [detailData]);
+        }, [detailData, isDark]);
+
+        // 今日自动封禁趋势图
+        useEffect(() => {
+            if (!summary || !trendChartRef.current) return;
+            if (!trendInst.current) {
+                trendInst.current = echarts.init(trendChartRef.current);
+                const onR = () => trendInst.current && trendInst.current.resize();
+                window.addEventListener('resize', onR);
+                return () => window.removeEventListener('resize', onR);
+            }
+            const trend = summary.trend || [];
+            const hours = trend.map((_, i) => String(i).padStart(2, '0'));
+            const axisColor = isDark ? '#7d8798' : '#8b93a5';
+            trendInst.current.setOption({
+                tooltip: { trigger: 'axis' },
+                grid: { left: 8, right: 8, top: 18, bottom: 4, containLabel: true },
+                xAxis: { type: 'category', data: hours, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 10, interval: 2 } },
+                yAxis: { type: 'value', minInterval: 1, axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(120,130,150,0.16)', type: 'dashed' } } },
+                series: [{
+                    name: '自动封禁', type: 'bar', data: trend, barMaxWidth: 14,
+                    itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#fa8c16' }, { offset: 1, color: '#ffd591' }]), borderRadius: [3, 3, 0, 0] }
+                }]
+            });
+        }, [summary, isDark]);
 
         if (auth.loading) {
-            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Card loading style={{ width: 320 }} /></div>;
+            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
+                <Card loading style={{ width: 320 }} />
+            </div>;
         }
 
-        const filtered = search.trim() ? ips.filter(i => i.ip.toLowerCase().includes(search.trim().toLowerCase())) : ips;
+        const blockedCount = Object.keys(blockedMap).length;
+        const autoCount = Object.values(blockedMap).filter(b => b.source === 'auto').length;
+        const manualCount = Object.values(blockedMap).filter(b => b.source === 'manual').length;
         const totalReq = ips.reduce((a, b) => a + (b.total_access || 0), 0);
         const top = [...ips].sort((a, b) => b.total_access - a.total_access)[0];
+        const sum = summary || {};
+        const anomaly = sum.today_anomaly || {};
+        const anomalyIps = sum.anomaly_ips || {};
+
+        // 主表数据：访问 IP + 未出现在访问列表中的封禁 IP
+        const merged = [];
+        const seenIp = {};
+        ips.forEach(i => { seenIp[i.ip] = true; merged.push(i); });
+        Object.values(blockedMap).forEach(b => {
+            if (!seenIp[b.ip]) merged.push({ ip: b.ip, total_access: 0, last_access: null, status_counts: {} });
+        });
+
+        const filteredIps = merged.filter(i => {
+            if (filter === 'blocked' && !blockedMap[i.ip]) return false;
+            if (filter === 'auto' && (!blockedMap[i.ip] || blockedMap[i.ip].source !== 'auto')) return false;
+            const q = search.trim().toLowerCase();
+            if (q && !String(i.ip || '').toLowerCase().includes(q)) return false;
+            return true;
+        });
+        const filteredHistory = history.filter(h => {
+            const q = search.trim().toLowerCase();
+            return !q || String(h.ip || '').toLowerCase().includes(q);
+        });
+
+        const blockInfoCols = [
+            { title: 'IP', dataIndex: 'ip', width: 170, render: v => <Typography.Text code>{v}</Typography.Text> },
+            { title: '来源', dataIndex: 'source', width: 110, render: sourceTag },
+            { title: '封禁时间', dataIndex: 'blocked_at', width: 170, render: v => <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtDateTime(v)}</Typography.Text> },
+            { title: '剩余', dataIndex: 'blocked_until', width: 120, render: (v, b) => b.status === 'blocked'
+                ? <span className="remaining" style={{ color: '#fa541c' }}>{fmtRemaining(v, nowTs)}</span>
+                : <Tag>已到期</Tag> },
+            { title: '原因', dataIndex: 'reason', ellipsis: true, render: v => v || '-' },
+            { title: '操作', key: 'op', width: 150, fixed: 'right', render: (_, b) => (
+                <Space size={4}>
+                    <Button size="small" onClick={() => openDetail(b.ip)}>详情</Button>
+                    {canManage && <Popconfirm title="解封该 IP？" okText="解封" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => doUnblock(b.ip)}>
+                        <Button size="small" type="primary" ghost>{b.source === 'auto' ? '立即解封' : '解封'}</Button>
+                    </Popconfirm>}
+                </Space>
+            ) }
+        ];
+
+        const historyCols = [
+            { title: 'IP', dataIndex: 'ip', width: 170, render: v => <Typography.Text code>{v}</Typography.Text> },
+            { title: '封禁时间', dataIndex: 'blocked_at', width: 160, render: v => <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtDateTime(v)}</Typography.Text> },
+            { title: '解封时间', dataIndex: 'unblocked_at', width: 160, render: (v, h) => <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtDateTime(v || h.blocked_until)}</Typography.Text> },
+            { title: '原因', dataIndex: 'reason', width: 130, render: v => v || '-' },
+            { title: '触发', dataIndex: 'trigger', width: 110, render: v => v === 'rate_limit' ? '5分钟 > 100次' : v === 'behavior_score' ? '评分 > 50' : (v || '-') },
+            { title: '请求', dataIndex: 'request_count', width: 70, render: v => v || '-' },
+            { title: '评分', dataIndex: 'score', width: 70, render: v => v || '-' },
+            { title: '状态', key: 'st', width: 110, render: (_, h) => h.unblocked_at
+                ? (h.unblocked_by === 'manual' ? <Tag color="blue">已手动解封</Tag> : <Tag color="green">已自动解封</Tag>)
+                : <Tag color="orange">已解封</Tag> }
+        ];
 
         const columns = [
+            { title: 'IP 地址', dataIndex: 'ip', width: 230, render: v => <a onClick={() => openDetail(v)} style={{ fontFamily: 'monospace' }}>{v}</a> },
+            { title: '总请求', dataIndex: 'total_access', width: 90, render: v => <Typography.Text strong>{v || 0}</Typography.Text> },
             {
-                title: 'IP 地址', dataIndex: 'ip', width: 260,
-                render: (v) => <a onClick={() => openDetail(v)} style={{ fontFamily: 'monospace' }}>{v}</a>
+                title: '封禁状态', key: 'blk', width: 180,
+                render: (_, rec) => {
+                    const b = blockedMap[rec.ip];
+                    if (!b) return <Tag color="green">正常</Tag>;
+                    return <Space size={4}>{b.status === 'blocked' ? <Tag color="red">已封禁</Tag> : <Tag>已到期</Tag>}{sourceTag(b.source)}</Space>;
+                }
             },
-            { title: '总请求', dataIndex: 'total_access', width: 90, render: v => <Typography.Text strong>{v}</Typography.Text> },
+            {
+                title: '剩余时间', key: 'left', width: 130,
+                render: (_, rec) => {
+                    const b = blockedMap[rec.ip];
+                    if (!b || b.status !== 'blocked') return <Typography.Text type="secondary">-</Typography.Text>;
+                    return <span className="remaining" style={{ color: b.source === 'auto' ? '#fa541c' : '#1677ff' }}>{fmtRemaining(b.blocked_until, nowTs)}</span>;
+                }
+            },
             { title: '最后访问', dataIndex: 'last_access', width: 170, render: v => <Typography.Text type="secondary">{v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text> },
             {
-                title: '状态码分布', dataIndex: 'status_counts', width: 260,
+                title: '状态码分布', dataIndex: 'status_counts', width: 240,
                 render: (counts, rec) => {
                     const total = rec.total_access || 0;
                     return <div>
@@ -264,128 +594,277 @@
                 }
             },
             {
-                title: '操作', key: 'op', width: 180, fixed: 'right',
+                title: '操作', key: 'op', width: 170, fixed: 'right',
                 render: (_, rec) => {
-                    const isBlocked = blocked[rec.ip];
-                    return <Space>
+                    const b = blockedMap[rec.ip];
+                    return <Space size={4}>
                         <Button size="small" onClick={() => openDetail(rec.ip)}>详情</Button>
-                        {canManage && (isBlocked
-                            ? <Button size="small" type="primary" ghost onClick={() => doUnblock(rec.ip)}>解封</Button>
-                            : <Button size="small" danger onClick={() => Modal.confirm({ title: '封禁 IP', content: `确定封禁 ${rec.ip} 吗？默认 365 天。`, okText: '封禁', okButtonProps: { danger: true }, onOk: () => doBlock(rec.ip) })}>封禁</Button>)}
+                        {canManage && (b && b.status === 'blocked'
+                            ? <Popconfirm title="解封该 IP？" okText="解封" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => doUnblock(rec.ip)}>
+                                <Button size="small" type="primary" ghost>{b.source === 'auto' ? '立即解封' : '解封'}</Button>
+                              </Popconfirm>
+                            : <Button size="small" danger onClick={() => openBlockModal(rec.ip)}>封禁</Button>)}
                     </Space>;
                 }
             }
         ];
 
+        const wlIps = whitelist.map(w => w.ip_or_cidr);
+        const isInWhitelist = (ip) => wlIps.some(e => e === ip || (e.includes('/') && ipInCidr(ip, e)));
+
+        const anomalyCategories = [
+            { key: 'high_freq', label: '高频请求', count: anomaly.high_freq || 0, color: '#fa541c' },
+            { key: 'bad_ua', label: '异常 User-Agent', count: anomaly.bad_ua || 0, color: '#faad14' },
+            { key: 'behavior', label: '异常行为', count: anomaly.behavior || 0, color: '#722ed1' },
+            { key: 'http_4xx', label: '大量 4xx', count: anomaly.http_4xx || 0, color: '#1677ff' },
+            { key: 'http_5xx', label: '大量 5xx', count: anomaly.http_5xx || 0, color: '#ff4d4f' },
+            { key: 'other', label: '其他', count: anomaly.other || 0, color: '#8c8c8c' }
+        ];
+
         return (
-            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
-                <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: isMobile ? { fontSize: 13 } : undefined }}>
+                <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', background: 'var(--bg)' }}>
                     <div className={'topbar' + (isDark ? ' dark' : '')}>
-                        <div className="brand"><span className="logo">🌐</span><span>Server Status<span className="tb-sub"> · IP 流量监控</span></span></div>
+                        <div className="brand">
+                            <span className="logo"><UIIcon name="GlobalOutlined" /></span>
+                            <span>
+                                <span className="bt-name">Server Status</span>
+                                <span className="bt-sub">/ IP 流量监控</span>
+                            </span>
+                        </div>
                         <Space>
-                            <Button title="首页" onClick={() => window.location.href = 'index.html'}>🏠<span className="tb-label">首页</span></Button>
-                            <Button title="进程" onClick={() => window.location.href = 'process.html'}>⚙️<span className="tb-label">进程</span></Button>
-                            <Button title={isDark ? '浅色模式' : '深色模式'} onClick={() => setIsDark(!isDark)}>{isDark ? '🌞' : '🌙'}<span className="tb-label">{isDark ? '浅色' : '深色'}</span></Button>
-                            <Button danger title="退出登录" onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}>🚪<span className="tb-label">退出</span></Button>
+                            <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>
+                            <Button className="tb-hide-sm" icon={<UIIcon name="AppstoreOutlined" />} onClick={() => window.location.href = 'services.html'}><span className="tb-text">服务端口</span></Button>
+                            <Button className="tb-hide-sm" icon={<UIIcon name="SettingOutlined" />} onClick={() => window.location.href = 'process.html'}><span className="tb-text">进程</span></Button>
+                            <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                                <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                            </Tooltip>
+                            <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}><span className="tb-text">退出</span></Button>
                         </Space>
                     </div>
                     <div className="page-wrap">
-                        <div className="stat-grid stat-cards">
-                            <Card size="small" hoverable bordered><Statistic title="🌍 访问 IP 总数" value={ips.length} /></Card>
-                            <Card size="small" hoverable bordered><Statistic title="📈 总请求数" value={totalReq} /></Card>
-                            <Card size="small" hoverable bordered><Statistic title="🔥 最高访问 IP" value={top ? top.ip : '-'} valueStyle={{ fontSize: 15 }} /></Card>
-                            <Card size="small" hoverable bordered><Statistic title="🚫 封禁中 IP" value={Object.keys(blocked).length} /></Card>
-                        </div>
-                        <Card hoverable bordered
-                            title={`📋 访问 IP 列表（${filtered.length}）`}
-                            extra={<Space>
-                                <Button onClick={fetchIps} loading={loading}>🔄 刷新</Button>
-                                {canManage && <Button danger onClick={() => setBlockPanel(true)}>🚫 封禁管理</Button>}
-                            </Space>}
-                        >
-                            <div style={{ marginBottom: 12 }}>
-                                <Input.Search placeholder="搜索或输入 IP 精确查询..." allowClear style={{ maxWidth: 360 }}
-                                    onChange={e => setSearch(e.target.value)}
-                                    onSearch={async v => {
-                                        if (!v.trim()) return;
-                                        try {
-                                            const r = await fetch(API_URL + '?ip=' + encodeURIComponent(v.trim()), { headers: { 'User-Agent': navigator.userAgent || 'Mozilla/5.0' } });
-                                            if (r.status === 404) { message.warning('未找到该 IP 的访问记录'); return; }
-                                            const d = await r.json();
-                                            if (d && d.stats) openDetail(v.trim(), d);
-                                        } catch (e) { message.error('查询失败: ' + e.message); }
-                                    }} />
+                        <div className="mini-grid">
+                            <div className="mini-stat" onClick={() => setFilter('all')}>
+                                <div className="ms-label"><UIIcon name="GlobalOutlined" />访问 IP 总数</div>
+                                <div className="ms-value">{ips.length}</div>
                             </div>
-                            {isMobile ? (
-                                <div>
-                                    {filtered.map(rec => {
-                                        const counts = rec.status_counts || {};
-                                        const total = rec.total_access || 0;
-                                        const isBlocked = blocked[rec.ip];
-                                        return <Card key={rec.ip} size="small" hoverable bordered className="ip-card">
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                                <a onClick={() => openDetail(rec.ip)} style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{rec.ip}</a>
-                                                {isBlocked && <Tag color="red">已封禁</Tag>}
+                            <div className="mini-stat" onClick={() => setFilter('all')}>
+                                <div className="ms-label"><UIIcon name="RiseOutlined" />总请求数</div>
+                                <div className="ms-value">{totalReq}</div>
+                            </div>
+                            <div className="mini-stat" onClick={() => setFilter('all')} title={top ? top.ip : '-'}>
+                                <div className="ms-label"><UIIcon name="FireOutlined" />最高访问 IP</div>
+                                <div className="ms-value ms-ip">{top ? top.ip : '-'}</div>
+                            </div>
+                            <div className="mini-stat" onClick={() => setFilter('blocked')}>
+                                <div className="ms-label"><UIIcon name="StopOutlined" />封禁中 IP</div>
+                                <div className="ms-value" style={{ color: '#ff4d4f' }}>{blockedCount}</div>
+                            </div>
+                            <div className="mini-stat" onClick={() => setFilter('auto')}>
+                                <div className="ms-label"><UIIcon name="SafetyOutlined" />系统自动封禁</div>
+                                <div className="ms-value" style={{ color: '#fa8c16' }}>{sum.auto_blocked || 0}</div>
+                                <div className="ms-sub">过去24小时 {sum.auto_blocked_24h || 0} 次</div>
+                            </div>
+                            <div className="mini-stat" onClick={() => { setAnomalyCat(null); setAnomalyOpen(true); }}>
+                                <div className="ms-label"><UIIcon name="ExclamationCircleOutlined" />今日异常 IP</div>
+                                <div className="ms-value" style={{ color: '#722ed1' }}>{anomaly.total || 0}</div>
+                            </div>
+                        </div>
+
+                        <Row gutter={12}>
+                            <Col xs={24} lg={17}>
+                                <Card title={<Space size={6}><UIIcon name="BarsOutlined" />{filter === 'history' ? '系统自动封禁历史' : `访问 IP 列表（${filteredIps.length}）`}</Space>}
+                                      size="small" style={{ marginBottom: 12 }}
+                                      extra={<Space>
+                                          <Button icon={<UIIcon name="ReloadOutlined" />} loading={loading} onClick={refreshAll}>刷新</Button>
+                                          {canManage && <Button type="primary" icon={<UIIcon name="PlusOutlined" />} onClick={() => { setBlockPanel(true); setBlockFilter('all'); }}>封禁管理</Button>}
+                                          {canManage && <Button icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => setWlOpen(true)}>白名单</Button>}
+                                      </Space>}>
+                                    <div className="toolbar">
+                                        <div className="filter-wrap">
+                                            <Segmented value={filter} onChange={setFilter} options={[
+                                                { label: '全部 IP', value: 'all' },
+                                                { label: '封禁中 ' + blockedCount, value: 'blocked' },
+                                                { label: '系统自动封禁 ' + autoCount, value: 'auto' },
+                                                { label: '自动封禁历史 ' + history.length, value: 'history' }
+                                            ]} />
+                                        </div>
+                                        <Input.Search allowClear placeholder="搜索 IP..." className="toolbar-search"
+                                            onChange={e => setSearch(e.target.value)}
+                                            onSearch={async v => {
+                                                if (!v.trim() || filter === 'history') return;
+                                                try {
+                                                    const r = await fetch(API_URL + '?ip=' + encodeURIComponent(v.trim()), { headers: { 'User-Agent': navigator.userAgent || 'Mozilla/5.0' } });
+                                                    if (r.status === 404) { message.warning('未找到该 IP 的访问记录'); return; }
+                                                    const d = await r.json();
+                                                    if (d && d.stats) openDetail(v.trim(), d);
+                                                } catch (e) { message.error('查询失败: ' + e.message); }
+                                            }} />
+                                    </div>
+                                    {filter === 'history' ? (
+                                        isMobile ? (
+                                            <div>
+                                                {filteredHistory.map((h, i) => (
+                                                    <Card key={i} size="small" hoverable bordered className="ip-card">
+                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 4 }}>
+                                                            <Typography.Text code>{h.ip}</Typography.Text>
+                                                            {h.unblocked_at
+                                                                ? (h.unblocked_by === 'manual' ? <Tag color="blue">已手动解封</Tag> : <Tag color="green">已自动解封</Tag>)
+                                                                : <Tag color="orange">已解封</Tag>}
+                                                        </div>
+                                                        <div className="ip-row"><span className="label">封禁时间</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtDateTime(h.blocked_at)}</Typography.Text></div>
+                                                        <div className="ip-row"><span className="label">解封时间</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtDateTime(h.unblocked_at || h.blocked_until)}</Typography.Text></div>
+                                                        <div className="ip-row"><span className="label">原因 / 触发</span><span>{h.reason || '-'} / {h.trigger === 'rate_limit' ? '5分钟>100次' : h.trigger === 'behavior_score' ? '评分>50' : (h.trigger || '-')}</span></div>
+                                                        <div className="ip-row"><span className="label">请求 / 评分</span><span>{h.request_count || 0} / {h.score || 0}</span></div>
+                                                    </Card>
+                                                ))}
+                                                {!filteredHistory.length && <Empty description="暂无自动封禁历史" style={{ padding: 30 }} />}
                                             </div>
-                                            <div className="ip-row"><span className="label">总请求</span><Typography.Text strong>{total}</Typography.Text></div>
-                                            <div className="ip-row"><span className="label">最后访问</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{rec.last_access ? new Date(rec.last_access).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text></div>
-                                            <div className="ip-row"><span className="label">状态码</span>
-                                                <span>
-                                                    {Object.entries(counts).map(([code, n]) => (
-                                                        <Badge key={code} status={badgeClass(parseInt(code))} text={<span style={{ fontSize: 12 }}>{code}×{n}</span>} />
-                                                    ))}
-                                                </span>
-                                            </div>
-                                            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                                                <Button size="small" onClick={() => openDetail(rec.ip)}>详情</Button>
-                                                {canManage && (isBlocked
-                                                    ? <Button size="small" type="primary" ghost onClick={() => doUnblock(rec.ip)}>解封</Button>
-                                                    : <Button size="small" danger onClick={() => Modal.confirm({ title: '封禁 IP', content: `确定封禁 ${rec.ip} 吗？默认 365 天。`, okText: '封禁', okButtonProps: { danger: true }, onOk: () => doBlock(rec.ip) })}>封禁</Button>)}
-                                            </div>
-                                        </Card>;
-                                    })}
-                                    {!filtered.length && <Empty description={ips.length ? '没有匹配的 IP' : '暂无访问数据'} style={{ padding: 30 }} />}
-                                </div>
-                            ) : (
-                                <Table rowKey="ip" columns={columns} dataSource={filtered} loading={loading} size="middle"
-                                       scroll={{ x: 900 }} pagination={{ pageSize: 20, showSizeChanger: true, showTotal: t => `共 ${t} 条` }} />
-                            )}
-                        </Card>
+                                        ) : (
+                                            <Table size="small" rowKey={(r, i) => i} dataSource={filteredHistory} columns={historyCols}
+                                                   pagination={{ pageSize: 15, showSizeChanger: false }} scroll={{ x: 'max-content' }}
+                                                   locale={{ emptyText: <Empty description="暂无自动封禁历史" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }} />
+                                        )
+                                    ) : isMobile ? (
+                                        <div>
+                                            {filteredIps.map(rec => {
+                                                const counts = rec.status_counts || {};
+                                                const b = blockedMap[rec.ip];
+                                                return <Card key={rec.ip} size="small" hoverable bordered className="ip-card">
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, gap: 6 }}>
+                                                        <a onClick={() => openDetail(rec.ip)} style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{rec.ip}</a>
+                                                        {b && b.status === 'blocked' ? <Space size={4}><Tag color="red">已封禁</Tag>{sourceTag(b.source)}</Space> : <Tag color="green">正常</Tag>}
+                                                    </div>
+                                                    <div className="ip-row"><span className="label">总请求</span><Typography.Text strong>{rec.total_access || 0}</Typography.Text></div>
+                                                    <div className="ip-row"><span className="label">剩余时间</span>
+                                                        {b && b.status === 'blocked'
+                                                            ? <span className="remaining" style={{ color: '#fa541c' }}>{fmtRemaining(b.blocked_until, nowTs)}</span>
+                                                            : <Typography.Text type="secondary">-</Typography.Text>}
+                                                    </div>
+                                                    <div className="ip-row"><span className="label">最后访问</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{rec.last_access ? new Date(rec.last_access).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text></div>
+                                                    <div className="ip-row"><span className="label">状态码</span>
+                                                        <span>
+                                                            {Object.entries(counts).map(([code, n]) => (
+                                                                <Badge key={code} status={badgeClass(parseInt(code))} text={<span style={{ fontSize: 12 }}>{code}×{n}</span>} />
+                                                            ))}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                                                        <Button size="small" onClick={() => openDetail(rec.ip)}>详情</Button>
+                                                        {canManage && (b && b.status === 'blocked'
+                                                            ? <Popconfirm title="解封该 IP？" okText="解封" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => doUnblock(rec.ip)}>
+                                                                <Button size="small" type="primary" ghost>{b.source === 'auto' ? '立即解封' : '解封'}</Button>
+                                                              </Popconfirm>
+                                                            : <Button size="small" danger onClick={() => openBlockModal(rec.ip)}>封禁</Button>)}
+                                                    </div>
+                                                </Card>;
+                                            })}
+                                            {!filteredIps.length && <Empty description={ips.length ? '没有匹配的 IP' : '暂无访问数据'} style={{ padding: 30 }} />}
+                                        </div>
+                                    ) : (
+                                        <Table rowKey="ip" columns={columns} dataSource={filteredIps} loading={loading} size="middle"
+                                               scroll={{ x: 1000 }} pagination={{ pageSize: 20, showSizeChanger: true, showTotal: t => `共 ${t} 条` }} />
+                                    )}
+                                </Card>
+                            </Col>
+
+                            <Col xs={24} lg={7}>
+                                <Card title={<Space size={6}><UIIcon name="LineChartOutlined" />今日自动封禁趋势</Space>}
+                                      size="small" style={{ marginBottom: 12 }}>
+                                    <div className="mini-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+                                        <div className="mini-stat" style={{ cursor: 'default' }}>
+                                            <div className="ms-label">当前封禁</div>
+                                            <div className="ms-value" style={{ color: '#fa8c16' }}>{sum.auto_blocked || 0}</div>
+                                        </div>
+                                        <div className="mini-stat" style={{ cursor: 'default' }}>
+                                            <div className="ms-label">过去24小时</div>
+                                            <div className="ms-value">{sum.auto_blocked_24h || 0}</div>
+                                        </div>
+                                    </div>
+                                    <div ref={trendChartRef} className="chart-wrap" style={{ height: 180 }}></div>
+                                </Card>
+
+                                <Card title={<Space size={6}><UIIcon name="AlertOutlined" />今日异常 IP</Space>}
+                                      size="small" style={{ marginBottom: 12 }}
+                                      extra={<Button size="small" type="text" icon={<UIIcon name="RightOutlined" />} onClick={() => { setAnomalyCat(null); setAnomalyOpen(true); }}>查看</Button>}>
+                                    {anomalyCategories.map(c => (
+                                        <div key={c.key} className="anomaly-row" onClick={() => { setAnomalyCat(c.key); setAnomalyOpen(true); }}>
+                                            <span style={{ color: c.color }}>{c.label}</span>
+                                            <b>{c.count}</b>
+                                        </div>
+                                    ))}
+                                    {!anomaly.total && <Empty description="今日暂无异常 IP" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ margin: '10px 0' }} />}
+                                </Card>
+
+                                <Card title={<Space size={6}><UIIcon name="SafetyOutlined" />自动封禁规则（只读）</Space>} size="small">
+                                    {(sum.rules || []).map((r, i) => (
+                                        <div key={i} className="rule-item">
+                                            <Space size={6}><Tag color="orange">{r.name}</Tag><Typography.Text>{r.desc}</Typography.Text></Space>
+                                            <div style={{ fontSize: 12, color: 'var(--secondary)', marginTop: 3 }}>{r.duration}</div>
+                                        </div>
+                                    ))}
+                                </Card>
+                            </Col>
+                        </Row>
                     </div>
 
-                    <Drawer
-                        title={detail ? 'IP 访问详情：' + detail : ''}
-                        open={!!detail}
-                        onClose={() => { setDetail(null); setDetailData(null); }}
-                        width={640}
-                    >
+                    {/* 访问详情 Drawer（原有）+ 封禁信息 */}
+                    <Drawer title={detail ? 'IP 访问详情：' + detail : ''} open={!!detail}
+                            onClose={() => { setDetail(null); setDetailData(null); }} width={isMobile ? '100%' : 640}>
                         {detailLoading ? <Card loading /> : detailData ? (() => {
                             const st = detailData.stats || {};
                             const counts = st.status_counts || {};
                             const recs = detailData.records || [];
+                            const b = blockedMap[detail];
                             return <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                                <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+                                {b && b.status === 'blocked' && (
+                                    <Card size="small" title={<Space size={6}><UIIcon name="SafetyOutlined" />封禁信息</Space>}
+                                          extra={canManage && <Popconfirm title="解封该 IP？" okText="解封" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => doUnblock(detail)}>
+                                              <Button size="small" type="primary" ghost>{b.source === 'auto' ? '立即解封' : '解封'}</Button>
+                                          </Popconfirm>}>
+                                        <Descriptions size="small" column={1} bordered items={[
+                                            { key: 'src', label: '来源', children: sourceTag(b.source) },
+                                            { key: 'at', label: '封禁时间', children: fmtDateTime(b.blocked_at) },
+                                            { key: 'until', label: '到期时间', children: fmtDateTime(b.blocked_until) },
+                                            { key: 'left', label: '剩余', children: <span className="remaining" style={{ color: '#fa541c' }}>{fmtRemaining(b.blocked_until, nowTs)}</span> },
+                                            { key: 'reason', label: '原因', children: b.reason || '-' },
+                                            { key: 'trigger', label: '触发规则', children: b.trigger === 'rate_limit' ? '5 分钟内请求 > 100' : b.trigger === 'behavior_score' ? '行为评分 > 50' : (b.trigger === 'manual' ? '管理员手动封禁' : (b.trigger || '-')) },
+                                            { key: 'req', label: '请求次数', children: b.request_count || '-' },
+                                            { key: 'score', label: '行为评分', children: b.score || 0 },
+                                            { key: 'fp', label: 'Fingerprint', children: b.fingerprint ? <Typography.Text code style={{ fontSize: 12 }}>{b.fingerprint}</Typography.Text> : '-' },
+                                            ...(b.note ? [{ key: 'note', label: '备注', children: b.note }] : [])
+                                        ]} />
+                                        {canManage && <Space style={{ marginTop: 10 }}>
+                                            {b.source === 'auto' && !isInWhitelist(detail) && <Button size="small" icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => {
+                                                secureFetch(baseUrl + '/api/ip/whitelist', { method: 'POST', body: JSON.stringify({ ip_or_cidr: detail, note: '从封禁详情加入白名单' }) })
+                                                    .then(r => r.json()).then(d => {
+                                                        if (d.code === 200) { message.success('已加入白名单'); loadWhitelist(); }
+                                                        else message.error(d.message || '加入白名单失败');
+                                                    });
+                                            }}>加入白名单</Button>}
+                                        </Space>}
+                                    </Card>
+                                )}
+                                {canManage && !(b && b.status === 'blocked') && <Alert
+                                    type="info" showIcon
+                                    message={<span>该 IP 当前未封禁 <Button size="small" danger style={{ marginLeft: 8 }} onClick={() => openBlockModal(detail)}>封禁该 IP</Button></span>}
+                                />}
+                                <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
                                     <Card size="small" hoverable bordered><Statistic title="总请求" value={st.total_access || 0} /></Card>
                                     <Card size="small" hoverable bordered><Statistic title="首次访问" value={st.first_access ? new Date(st.first_access).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'} valueStyle={{ fontSize: 13 }} /></Card>
                                     <Card size="small" hoverable bordered><Statistic title="最后访问" value={st.last_access ? new Date(st.last_access).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'} valueStyle={{ fontSize: 13 }} /></Card>
                                 </div>
-                                {canManage && <Alert
-                                    type="info" showIcon
-                                    message={blocked[detail]
-                                        ? <span>该 IP 当前已封禁 <Button size="small" type="primary" style={{ marginLeft: 8 }} onClick={() => doUnblock(detail)}>解封</Button></span>
-                                        : <span>该 IP 当前未封禁 <Button size="small" danger style={{ marginLeft: 8 }} onClick={() => doBlock(detail)}>封禁该 IP</Button></span>}
-                                />}
-                                <Card size="small" title="📈 访问频率">
-                                    <div ref={freqChartRef} className="chart-wrap"></div>
+                                <Card size="small" title={<Space size={6}><UIIcon name="LineChartOutlined" />访问频率</Space>}>
+                                    <div ref={freqChartRef} className="chart-wrap" style={{ height: 220 }}></div>
                                 </Card>
-                                <Card size="small" title="🔢 状态码统计">
+                                <Card size="small" title={<Space size={6}><UIIcon name="NumberOutlined" />状态码统计</Space>}>
                                     <Space wrap>
                                         {Object.entries(counts).map(([code, n]) => (
                                             <Tag key={code} color={statusColor(parseInt(code))}>{code}: {n}</Tag>
                                         ))}
                                     </Space>
                                 </Card>
-                                <Card size="small" title={`🕘 最近访问记录（${recs.length} 条）`}>
+                                <Card size="small" title={<Space size={6}><UIIcon name="ClockCircleOutlined" />最近访问记录（{recs.length} 条）</Space>}>
                                     <Table size="small" rowKey={(_, i) => i} dataSource={recs} pagination={false} scroll={{ y: 320 }}
                                            columns={[
                                                { title: '时间', dataIndex: 'timestamp', width: 160, render: v => <Typography.Text type="secondary">{v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text> },
@@ -397,29 +876,154 @@
                         })() : null}
                     </Drawer>
 
-                    <Drawer title="🚫 封禁管理" open={blockPanel} onClose={() => setBlockPanel(false)} width={520}>
-                        <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                            <Space.Compact style={{ width: '100%' }}>
-                                <Input id="blockInput" placeholder="输入要封禁的 IP 地址..." />
-                                <Button type="primary" danger onClick={() => {
-                                    const v = document.getElementById('blockInput').value.trim();
-                                    if (!v) { message.warning('请输入 IP'); return; }
-                                    doBlock(v);
-                                    document.getElementById('blockInput').value = '';
-                                }}>封禁</Button>
-                            </Space.Compact>
-                            <Alert type="info" showIcon message="手动封禁默认有效 365 天，重启服务后依然生效" />
-                            <Table rowKey="ip" size="small" dataSource={Object.values(blocked)} pagination={false}
-                                   locale={{ emptyText: '暂无封禁 IP' }}
-                                   columns={[
-                                       { title: 'IP', dataIndex: 'ip', render: v => <Typography.Text code>{v}</Typography.Text> },
-                                       { title: '到期时间', dataIndex: 'expires', width: 170, render: v => <Typography.Text type="secondary">{v}</Typography.Text> },
-                                       {
-                                           title: '操作', key: 'op', width: 90,
-                                           render: (_, b) => <Button size="small" type="primary" ghost onClick={() => doUnblock(b.ip)}>解封</Button>
-                                       }
-                                   ]} />
-                        </Space>
+                    {/* 封禁管理 Drawer */}
+                    <Drawer title={<Space size={6}><UIIcon name="SafetyOutlined" />封禁管理</Space>}
+                            open={blockPanel} onClose={() => setBlockPanel(false)} width={isMobile ? '100%' : 720}
+                            footer={canManage && <Button type="primary" icon={<UIIcon name="PlusOutlined" />} onClick={() => { setBlockPanel(false); openBlockModal(''); }}>手动封禁</Button>}>
+                        <div style={{ marginBottom: 12 }}>
+                            <Segmented value={blockFilter} onChange={setBlockFilter} options={[
+                                { label: '全部封禁 ' + blockedCount, value: 'all' },
+                                { label: '手动 ' + manualCount, value: 'manual' },
+                                { label: '系统自动 ' + autoCount, value: 'auto' }
+                            ]} />
+                        </div>
+                        <Table rowKey="ip" size="small"
+                               dataSource={Object.values(blockedMap).filter(b => blockFilter === 'all' || b.source === blockFilter)}
+                               pagination={{ pageSize: 15, showSizeChanger: false }} scroll={{ x: 'max-content' }}
+                               locale={{ emptyText: '暂无封禁 IP' }} columns={blockInfoCols} />
+                    </Drawer>
+
+                    {/* 手动封禁 Modal */}
+                    <Modal title={'手动封禁 IP：' + (blockModal || '')} open={!!blockModal} width={isMobile ? '100%' : 520}
+                           onCancel={() => setBlockModal(null)} onOk={() => doBlock(blockModal)}
+                           confirmLoading={blocking} okText="确认封禁" okButtonProps={{ danger: true }} cancelText="取消">
+                        <Form form={blockForm} layout="vertical" style={{ marginTop: 12 }}>
+                            <Form.Item name="ip" label="IP 地址" hidden={!!blockModal}
+                                       rules={[{ required: !blockModal, message: '请输入 IP 地址' }]}>
+                                <Input placeholder="1.2.3.4" />
+                            </Form.Item>
+                            <Row gutter={12}>
+                                <Col span={12}>
+                                    <Form.Item name="duration" label="封禁时长" initialValue="1h" rules={[{ required: true }]}>
+                                        <Select options={DURATION_OPTIONS} />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="reason" label="封禁原因" initialValue="恶意请求" rules={[{ required: true }]}>
+                                        <Select options={REASON_OPTIONS.map(r => ({ label: r, value: r }))} />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Form.Item noStyle shouldUpdate={(p, c) => p.duration !== c.duration}>
+                                {({ getFieldValue }) => getFieldValue('duration') === 'custom' ? (
+                                    <Form.Item name="duration_minutes" label="自定义时长（分钟）" rules={[{ required: true, message: '请输入分钟数' }]}>
+                                        <InputNumber min={1} max={525600} style={{ width: '100%' }} />
+                                    </Form.Item>
+                                ) : null}
+                            </Form.Item>
+                            <Form.Item name="note" label="备注（可选）">
+                                <Input.TextArea rows={2} placeholder="封禁备注，便于后续查询历史" />
+                            </Form.Item>
+                            {isInWhitelist(blockModal) && (
+                                <Alert type="warning" showIcon style={{ marginBottom: 12 }}
+                                    message="该 IP 在白名单中"
+                                    description="白名单 IP 不会被系统自动封禁。手动封禁仍可执行，请确认这是有意操作。"
+                                    action={<Form.Item name="wl_confirm" valuePropName="checked" noStyle>
+                                        <Checkbox>我确认仍要封禁</Checkbox>
+                                    </Form.Item>} />
+                            )}
+                        </Form>
+                    </Modal>
+
+                    {/* 白名单 Drawer */}
+                    <Drawer title={<Space size={6}><UIIcon name="SafetyCertificateOutlined" />IP 白名单</Space>}
+                            open={wlOpen} onClose={() => setWlOpen(false)} width={isMobile ? '100%' : 620}
+                            footer={<Button type="primary" icon={<UIIcon name="PlusOutlined" />} onClick={() => {
+                                wlForm.resetFields();
+                                Modal.confirm({
+                                    title: '添加白名单',
+                                    content: (
+                                        <Form form={wlForm} layout="vertical" style={{ marginTop: 12 }}>
+                                            <Form.Item name="ip_or_cidr" label="IP / CIDR" rules={[{ required: true, message: '请输入 IP 或网段' }]}>
+                                                <Input placeholder="192.168.1.0/24 或 1.2.3.4" />
+                                            </Form.Item>
+                                            <Form.Item name="note" label="备注">
+                                                <Input placeholder="家庭局域网 / 可信客户端" />
+                                            </Form.Item>
+                                        </Form>
+                                    ),
+                                    okText: '添加',
+                                    onOk: async () => {
+                                        const v = await wlForm.validateFields();
+                                        const r = await secureFetch(baseUrl + '/api/ip/whitelist', { method: 'POST', body: JSON.stringify(v) });
+                                        const d = await r.json();
+                                        if (d.code === 200) { message.success('白名单已添加'); loadWhitelist(); }
+                                        else { message.error(d.message || '添加失败'); throw new Error('stop'); }
+                                    }
+                                });
+                            }}>添加白名单</Button>}>
+                        <Alert type="info" showIcon style={{ marginBottom: 12 }}
+                            message="白名单 IP 不会被系统自动封禁" description="支持单个 IP 或 CIDR 网段，如 192.168.1.0/24。" />
+                        <Table rowKey="id" size="small" dataSource={whitelist} pagination={false} scroll={{ y: 420 }}
+                               locale={{ emptyText: '暂无白名单' }}
+                               columns={[
+                                   { title: 'IP / CIDR', dataIndex: 'ip_or_cidr', render: v => <Typography.Text code>{v}</Typography.Text> },
+                                   { title: '备注', dataIndex: 'note', render: v => v || '-' },
+                                   { title: '创建时间', dataIndex: 'created_at', width: 160, render: v => <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtDateTime(v)}</Typography.Text> },
+                                   { title: '创建人', dataIndex: 'created_by', width: 100, render: v => v || '-' },
+                                   {
+                                       title: '操作', key: 'op', width: 80,
+                                       render: (_, w) => <Popconfirm title="移除白名单？" description={`${w.ip_or_cidr} 将不再受白名单保护。`} okText="移除" okButtonProps={{ danger: true }} cancelText="取消"
+                                            onConfirm={async () => {
+                                                const r = await secureFetch(baseUrl + '/api/ip/whitelist/remove', { method: 'POST', body: JSON.stringify({ id: w.id }) });
+                                                const d = await r.json();
+                                                if (d.code === 200) { message.success('已移除'); loadWhitelist(); }
+                                                else message.error(d.message || '移除失败');
+                                            }}>
+                                           <Button size="small" danger type="text">移除</Button>
+                                       </Popconfirm>
+                                   }
+                               ]} />
+                    </Drawer>
+
+                    {/* 今日异常 IP Drawer */}
+                    <Drawer title={<Space size={6}><UIIcon name="ExclamationCircleOutlined" />今日异常 IP</Space>}
+                            open={anomalyOpen} onClose={() => { setAnomalyOpen(false); setAnomalyCat(null); }} width={isMobile ? '100%' : 520}>
+                        {!anomalyCat ? (
+                            <div>
+                                {anomalyCategories.map(c => (
+                                    <div key={c.key} className="anomaly-row" onClick={() => setAnomalyCat(c.key)}>
+                                        <span style={{ color: c.color }}>{c.label}</span>
+                                        <b>{c.count}</b>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div>
+                                <Space style={{ marginBottom: 10 }}>
+                                    <Button size="small" icon={<UIIcon name="LeftOutlined" />} onClick={() => setAnomalyCat(null)}>返回</Button>
+                                    <Typography.Text strong>{anomalyCategories.find(c => c.key === anomalyCat)?.label}</Typography.Text>
+                                </Space>
+                                <Table size="small" rowKey={(r, i) => i} dataSource={anomalyIps[anomalyCat] || []}
+                                       pagination={{ pageSize: 15, showSizeChanger: false }}
+                                       columns={[
+                                           { title: 'IP', dataIndex: '', render: (_, ip) => <a onClick={() => openDetail(ip)} style={{ fontFamily: 'monospace' }}>{ip}</a> },
+                                           {
+                                               title: '操作', key: 'op', width: 140,
+                                               render: (_, ip) => {
+                                                   const b = blockedMap[ip];
+                                                   return <Space size={4}>
+                                                       <Button size="small" onClick={() => openDetail(ip)}>详情</Button>
+                                                       {canManage && (b && b.status === 'blocked'
+                                                           ? <Button size="small" type="primary" ghost onClick={() => doUnblock(ip)}>解封</Button>
+                                                           : <Button size="small" danger onClick={() => openBlockModal(ip)}>封禁</Button>)}
+                                                   </Space>;
+                                               }
+                                           }
+                                       ]}
+                                       locale={{ emptyText: '该分类暂无 IP' }} />
+                            </div>
+                        )}
                     </Drawer>
                 </div>
             </ConfigProvider>

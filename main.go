@@ -117,6 +117,11 @@ var allPermissions = []PermissionDef{
 	{Key: "user:view", Name: "查看用户", Group: "用户", Description: "查看系统用户列表"},
 	{Key: "user:manage", Name: "管理用户", Group: "用户", Description: "创建、编辑、禁用、删除用户"},
 	{Key: "role:manage", Name: "管理角色", Group: "用户", Description: "创建、编辑、删除角色及其权限"},
+	{Key: "service:view", Name: "查看服务与端口", Group: "服务与端口", Description: "查看 systemd 服务列表、状态、日志与监听端口"},
+	{Key: "service:manage", Name: "管理服务", Group: "服务与端口", Description: "创建/编辑服务，启停、重启、切换开机自启"},
+	{Key: "service:delete", Name: "删除服务", Group: "服务与端口", Description: "删除本系统创建的服务定义"},
+	{Key: "port:view", Name: "查看端口", Group: "服务与端口", Description: "查看监听端口、端口详情与变化"},
+	{Key: "port:manage", Name: "管理端口", Group: "服务与端口", Description: "开放/关闭端口公网访问，管理端口规则"},
 }
 
 // defaultRoles 返回系统内置的默认角色
@@ -1403,54 +1408,21 @@ const blockedIPsFile = "/opt/server-status/blocked_ips.json"
 
 // loadBlockedIPs 启动时加载手动封禁的 IP 列表
 func loadBlockedIPs() {
-	data, err := os.ReadFile(blockedIPsFile)
-	if os.IsNotExist(err) {
-		return
-	}
-	if err != nil {
-		log.Printf("读取封禁IP文件失败: %v", err)
-		return
-	}
-	var ips []string
-	if err := json.Unmarshal(data, &ips); err != nil {
-		log.Printf("解析封禁IP文件失败: %v", err)
-		return
-	}
-	now := time.Now()
-	antiCrawler.Lock()
-	for _, ip := range ips {
-		antiCrawler.blockedIPs[ip] = now.Add(365 * 24 * time.Hour)
-	}
-	antiCrawler.Unlock()
-	if len(ips) > 0 {
-		log.Printf("加载 %d 个手动封禁IP", len(ips))
-	}
+	loadIPSecurity()
 }
 
 // saveBlockedIPs 持久化手动封禁的 IP 列表
 func saveBlockedIPs() {
-	antiCrawler.RLock()
-	ips := make([]string, 0)
-	for ip, expiry := range antiCrawler.blockedIPs {
-		// 只持久化长期封禁（手动封禁标记为 365 天）
-		if time.Until(expiry) > 30*24*time.Hour {
-			ips = append(ips, ip)
-		}
-	}
-	antiCrawler.RUnlock()
-
-	data, err := json.Marshal(ips)
-	if err != nil {
-		return
-	}
-	if err := os.WriteFile(blockedIPsFile, data, 0600); err != nil {
-		log.Printf("保存封禁IP文件失败: %v", err)
-	}
+	saveIPSecurity()
 }
 
 // BlockIPRequest 封禁/解封请求
 type BlockIPRequest struct {
-	IP string `json:"ip"`
+	IP              string `json:"ip"`
+	Duration        string `json:"duration"`         // 10m/1h/6h/24h/7d/30d/permanent
+	DurationMinutes int    `json:"duration_minutes"` // 自定义时长（分钟）
+	Reason          string `json:"reason"`
+	Note            string `json:"note"`
 }
 
 // blockIPHandler 手动封禁 IP
@@ -1469,11 +1441,55 @@ func blockIPHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "无效的IP地址")
 		return
 	}
+
+	duration := strings.TrimSpace(req.Duration)
+	if duration == "" {
+		duration = "1h"
+	}
+	until := time.Now()
+	durLabel := duration
+	if duration == "permanent" {
+		until = until.AddDate(100, 0, 0)
+		durLabel = "permanent"
+	} else if duration == "custom" {
+		if req.DurationMinutes < 1 || req.DurationMinutes > 525600 {
+			writeJSONError(w, http.StatusBadRequest, "自定义时长需在 1 ~ 525600 分钟之间")
+			return
+		}
+		until = until.Add(time.Duration(req.DurationMinutes) * time.Minute)
+		durLabel = fmt.Sprintf("%dm", req.DurationMinutes)
+	} else {
+		d, ok := parseBlockDuration(duration)
+		if !ok {
+			writeJSONError(w, http.StatusBadRequest, "封禁时长不合法")
+			return
+		}
+		until = until.Add(d)
+	}
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" {
+		reason = "管理员手动封禁"
+	}
+	username := ""
+	if s, ok := getSessionFromRequest(r); ok {
+		username = s.Username
+	}
 	antiCrawler.Lock()
-	antiCrawler.blockedIPs[ip] = time.Now().Add(365 * 24 * time.Hour)
+	antiCrawler.blockedIPs[ip] = &BlockedIP{
+		IP:           ip,
+		BlockedAt:    time.Now(),
+		BlockedUntil: until,
+		Reason:       reason,
+		Source:       "manual",
+		Duration:     durLabel,
+		Note:         strings.TrimSpace(req.Note),
+		Trigger:      "manual",
+	}
 	antiCrawler.Unlock()
 	saveBlockedIPs()
-	log.Printf("手动封禁IP: %s", ip)
+	auditAction(r, "ip.block.manual",
+		fmt.Sprintf("手动封禁 IP=%s 时长=%s 原因=%s 备注=%s 操作人=%s", ip, durLabel, reason, req.Note, username))
+	log.Printf("🚫 手动封禁IP: %s（%s）", ip, durLabel)
 	writeJSON(w, http.StatusOK, "IP 已封禁", nil)
 }
 
@@ -1489,32 +1505,8 @@ func unblockIPHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := strings.TrimSpace(req.IP)
-	antiCrawler.Lock()
-	delete(antiCrawler.blockedIPs, ip)
-	antiCrawler.Unlock()
-	saveBlockedIPs()
-	log.Printf("解封IP: %s", ip)
+	removeBlockedIP(ip, r)
 	writeJSON(w, http.StatusOK, "IP 已解封", nil)
-}
-
-// listBlockedIPsHandler 列出当前封禁的 IP
-func listBlockedIPsHandler(w http.ResponseWriter, r *http.Request) {
-	antiCrawler.RLock()
-	list := make([]map[string]interface{}, 0)
-	for ip, expiry := range antiCrawler.blockedIPs {
-		list = append(list, map[string]interface{}{
-			"ip":      ip,
-			"expires": expiry.Format("2006-01-02 15:04:05"),
-			"blocked": time.Now().Before(expiry),
-		})
-	}
-	antiCrawler.RUnlock()
-
-	sort.Slice(list, func(i, j int) bool {
-		return list[i]["ip"].(string) < list[j]["ip"].(string)
-	})
-
-	writeJSON(w, http.StatusOK, "获取封禁列表成功", list)
 }
 
 // ==================== 进程结束功能 ====================
@@ -1654,68 +1646,30 @@ var (
 )
 
 type ServerStatus struct {
-	CPUUsage        float64          `json:"cpu_usage"`
-	MemoryUsage     float64          `json:"memory_usage"`
-	MemoryTotal     uint64           `json:"memory_total"`
-	DiskUsage       float64          `json:"disk_usage"`
-	DiskTotal       uint64           `json:"disk_total"`
-	UploadSpeed     float64          `json:"upload_speed"`
-	DownloadSpeed   float64          `json:"download_speed"`
-	TotalUpload     string           `json:"total_upload"`
-	TotalDownload   string           `json:"total_download"`
-	ReadSpeed       float64          `json:"read_speed"`
-	WriteSpeed      float64          `json:"write_speed"`
-	Load1           float64          `json:"load1"`
-	Load5           float64          `json:"load5"`
-	Load15          float64          `json:"load15"`
-	Uptime          string           `json:"uptime"`
-	OnlineCount     int              `json:"online_count"`
-	UniqueIPs       []string         `json:"unique_ips"`
-	OnlineUsers     []OnlineUserInfo `json:"online_users"`
-	Hostname        string           `json:"hostname"`
-	OS              string           `json:"os"`
-	Platform        string           `json:"platform"`
-	KernelVersion   string           `json:"kernel_version"`
-	Architecture    string           `json:"architecture"`
-	ServerIP        string           `json:"server_ip"`
-	TrafficServices []TrafficService `json:"traffic_services"`
-	TrafficInterfaces []TrafficInterface `json:"traffic_interfaces"`
-	TrafficHosts    []TrafficHost    `json:"traffic_hosts"`
-	TrafficLinks    []TrafficLink    `json:"traffic_links"`
-}
-
-type TrafficService struct {
-	Name        string  `json:"name"`
-	Port        uint32  `json:"port"`
-	Protocol    string  `json:"protocol"`
-	RX          float64 `json:"rx"`
-	TX          float64 `json:"tx"`
-	Connections int     `json:"connections"`
-}
-
-type TrafficInterface struct {
-	Name string  `json:"name"`
-	RX   float64 `json:"rx"`
-	TX   float64 `json:"tx"`
-	IP   string  `json:"ip"`
-	Up   bool    `json:"up"`
-}
-
-type TrafficHost struct {
-	IP          string  `json:"ip"`
-	RX          float64 `json:"rx"`
-	TX          float64 `json:"tx"`
-	Connections int     `json:"connections"`
-}
-
-type TrafficLink struct {
-	ClientIP    string  `json:"client_ip"`
-	Port        uint32  `json:"port"`
-	Service     string  `json:"service"`
-	Protocol    string  `json:"protocol"`
-	RX          float64 `json:"rx"`
-	TX          float64 `json:"tx"`
-	Connections int     `json:"connections"`
+	CPUUsage      float64          `json:"cpu_usage"`
+	MemoryUsage   float64          `json:"memory_usage"`
+	MemoryTotal   uint64           `json:"memory_total"`
+	DiskUsage     float64          `json:"disk_usage"`
+	DiskTotal     uint64           `json:"disk_total"`
+	UploadSpeed   float64          `json:"upload_speed"`
+	DownloadSpeed float64          `json:"download_speed"`
+	TotalUpload   string           `json:"total_upload"`
+	TotalDownload string           `json:"total_download"`
+	ReadSpeed     float64          `json:"read_speed"`
+	WriteSpeed    float64          `json:"write_speed"`
+	Load1         float64          `json:"load1"`
+	Load5         float64          `json:"load5"`
+	Load15        float64          `json:"load15"`
+	Uptime        string           `json:"uptime"`
+	OnlineCount   int              `json:"online_count"`
+	UniqueIPs     []string         `json:"unique_ips"`
+	OnlineUsers   []OnlineUserInfo `json:"online_users"`
+	Hostname      string           `json:"hostname"`
+	OS            string           `json:"os"`
+	Platform      string           `json:"platform"`
+	KernelVersion string           `json:"kernel_version"`
+	Architecture  string           `json:"architecture"`
+	ServerIP      string           `json:"server_ip"`
 }
 
 // OnlineUserInfo 用于WebSocket传输的在线用户信息结构
@@ -1764,7 +1718,7 @@ type PersistData struct {
 // 反爬验证结构体
 type AntiCrawler struct {
 	sync.RWMutex
-	blockedIPs         map[string]time.Time
+	blockedIPs         map[string]*BlockedIP
 	suspiciousIPs      map[string]int
 	failedAttempts     map[string]int
 	clientFingerprints map[string]*ClientProfile
@@ -1795,16 +1749,10 @@ var (
 	statusCache      = make(map[string]*ServerStatus)
 	statusCacheTime  = make(map[string]time.Time)
 
-	lastNetStats            = map[string]NetStat{}
-	lastTrafficIfaceStats   = map[string]NetStat{}
-	lastDiskStats           = map[string]DiskStat{}
-	totalUploadAccum        uint64
-	totalDownloadAccum      uint64
-	trafficServiceCache     []TrafficService
-	trafficServiceCacheTime time.Time
-	socketStatsCache        *socketStatsSnapshot
-	lastSocketCumulative    = map[string]*socketCumulative{}
-	serviceNameCache        = map[uint32]string{}
+	lastNetStats       = map[string]NetStat{}
+	lastDiskStats      = map[string]DiskStat{}
+	totalUploadAccum   uint64
+	totalDownloadAccum uint64
 
 	accessStats = &AccessStats{
 		DailyVisits:    make(map[string]int),
@@ -1815,7 +1763,7 @@ var (
 		Users: make(map[string]*OnlineUser),
 	}
 	antiCrawler = &AntiCrawler{
-		blockedIPs:         make(map[string]time.Time),
+		blockedIPs:         make(map[string]*BlockedIP),
 		suspiciousIPs:      make(map[string]int),
 		failedAttempts:     make(map[string]int),
 		clientFingerprints: make(map[string]*ClientProfile),
@@ -3275,7 +3223,12 @@ func generateHMACSignature(data string) string {
 
 // checkUserAgent 检测浏览器标识符以驳回显眼的恶意探查器与爬虫
 func checkUserAgent(r *http.Request) bool {
-	userAgent := strings.ToLower(r.Header.Get("User-Agent"))
+	return checkUserAgentString(r.Header.Get("User-Agent"))
+}
+
+// checkUserAgentString 对 User-Agent 字符串做浏览器标识校验
+func checkUserAgentString(ua string) bool {
+	userAgent := strings.ToLower(ua)
 
 	if userAgent == "" {
 		return false
@@ -3319,19 +3272,16 @@ func checkRequiredHeaders(r *http.Request) bool {
 // isIPBlocked 判断指定客户端是否受制于防火墙主动断流策略
 func isIPBlocked(ip string) bool {
 	antiCrawler.RLock()
-	defer antiCrawler.RUnlock()
-
-	if blockTime, exists := antiCrawler.blockedIPs[ip]; exists {
-		if time.Now().Before(blockTime) {
-			return true
-		}
-		// 已过期，解除封锁
-		antiCrawler.RUnlock()
-		antiCrawler.Lock()
-		delete(antiCrawler.blockedIPs, ip)
-		antiCrawler.Unlock()
-		antiCrawler.RLock()
+	b, exists := antiCrawler.blockedIPs[ip]
+	antiCrawler.RUnlock()
+	if !exists || b == nil {
+		return false
 	}
+	if time.Now().Before(b.BlockedUntil) {
+		return true
+	}
+	// 已过期：清理并归档历史
+	expireBlockedIP(ip)
 	return false
 }
 
@@ -3368,11 +3318,16 @@ func isKnownProxyIP(ip string) bool {
 
 // analyzeBehavior 统计高频访问的规律并针对性开展反机器人分析
 func analyzeBehavior(r *http.Request, fingerprint string) bool {
-	antiCrawler.Lock()
-	defer antiCrawler.Unlock()
+	// 已登录的管理员会话不受反爬频率限制：
+	// 管理后台（服务与端口中心等）需要高频轮询刷新实时状态，不应被误封
+	if session, ok := r.Context().Value("session").(*Session); ok && session != nil && session.Username != "" {
+		return true
+	}
 
 	now := time.Now()
 	ip := getClientIP(r)
+
+	antiCrawler.Lock()
 
 	// 记录请求模式
 	antiCrawler.requestPatterns[ip] = append(antiCrawler.requestPatterns[ip], now)
@@ -3386,15 +3341,9 @@ func analyzeBehavior(r *http.Request, fingerprint string) bool {
 	}
 	antiCrawler.requestPatterns[ip] = validRequests
 
-	// 检查请求频率（5分钟内超过100次请求视为异常）
-	if len(validRequests) > 100 {
-		antiCrawler.blockedIPs[ip] = now.Add(time.Hour)
-		log.Printf("🚫 IP %s 因高频请求被封锁", ip)
-		return false
-	}
-
 	// 更新客户端档案
-	if profile, exists := antiCrawler.clientFingerprints[fingerprint]; exists {
+	profile := antiCrawler.clientFingerprints[fingerprint]
+	if profile != nil {
 		profile.LastSeen = now
 		profile.RequestCount++
 
@@ -3408,16 +3357,9 @@ func analyzeBehavior(r *http.Request, fingerprint string) bool {
 		if !checkUserAgent(r) {
 			profile.Score += 30
 		}
-
-		if profile.Score > 50 {
-			profile.Blocked = true
-			antiCrawler.blockedIPs[ip] = now.Add(time.Hour)
-			log.Printf("🚫 客户端 %s 因行为异常被封锁，评分: %d", fingerprint, profile.Score)
-			return false
-		}
 	} else {
 		// 创建新客户端档案
-		antiCrawler.clientFingerprints[fingerprint] = &ClientProfile{
+		profile = &ClientProfile{
 			Fingerprint:  fingerprint,
 			IP:           ip,
 			UserAgent:    r.Header.Get("User-Agent"),
@@ -3427,8 +3369,52 @@ func analyzeBehavior(r *http.Request, fingerprint string) bool {
 			Score:        0,
 			Blocked:      false,
 		}
+		antiCrawler.clientFingerprints[fingerprint] = profile
 	}
 
+	// 白名单 IP 不允许被系统自动封禁
+	if isWhitelisted(ip) {
+		antiCrawler.Unlock()
+		return true
+	}
+
+	// 触发自动封禁（记录详细原因/触发规则/请求数/评分/指纹）
+	var auto *BlockedIP
+	if len(validRequests) > 100 {
+		profile.Blocked = true
+		auto = &BlockedIP{
+			IP:           ip,
+			BlockedAt:    now,
+			BlockedUntil: now.Add(time.Hour),
+			Reason:       "高频请求",
+			Trigger:      "rate_limit",
+			Score:        profile.Score,
+			RequestCount: len(validRequests),
+			Fingerprint:  fingerprint,
+			Source:       "auto",
+			Duration:     "1h",
+		}
+	} else if profile.Score > 50 {
+		profile.Blocked = true
+		auto = &BlockedIP{
+			IP:           ip,
+			BlockedAt:    now,
+			BlockedUntil: now.Add(time.Hour),
+			Reason:       "异常行为评分",
+			Trigger:      "behavior_score",
+			Score:        profile.Score,
+			RequestCount: profile.RequestCount,
+			Fingerprint:  fingerprint,
+			Source:       "auto",
+			Duration:     "1h",
+		}
+	}
+	antiCrawler.Unlock()
+
+	if auto != nil {
+		addAutoBlock(auto, r)
+		return false
+	}
 	return true
 }
 
@@ -3440,7 +3426,7 @@ func verifySecurityHeaders(r *http.Request) bool {
 	}
 
 	// 1. 检查必要头部
-	if !checkRequiredHeaders(r) && r.URL.Path != "/ws" {
+	if !checkRequiredHeaders(r) && !strings.HasPrefix(r.URL.Path, "/ws") {
 		log.Printf("🚫 缺少必要请求头 from %s", getClientIP(r))
 		return false
 	}
@@ -3877,8 +3863,13 @@ func cleanupAntiCrawlerData() {
 	now := time.Now()
 
 	// 清理过期的封锁IP
-	for ip, blockTime := range antiCrawler.blockedIPs {
-		if now.After(blockTime) {
+	for ip, b := range antiCrawler.blockedIPs {
+		if b == nil || now.After(b.BlockedUntil) {
+			if b != nil && b.Source == "auto" {
+				b.UnblockedAt = &now
+				b.UnblockedBy = "auto"
+				appendAutoHistory(b)
+			}
 			delete(antiCrawler.blockedIPs, ip)
 		}
 	}
@@ -4373,447 +4364,6 @@ func getInterfaceIP(iface string) string {
 	return ""
 }
 
-func getTrafficInterfaces(now time.Time) []TrafficInterface {
-	netIOs, err := psnet.IOCounters(true)
-	if err != nil {
-		return nil
-	}
-
-	ifaceMap := map[string]psnet.InterfaceStat{}
-	ifaces, err := psnet.Interfaces()
-	if err == nil {
-		for _, iface := range ifaces {
-			ifaceMap[iface.Name] = iface
-		}
-	}
-
-	list := make([]TrafficInterface, 0, len(netIOs))
-	for _, io := range netIOs {
-		if io.Name == "" {
-			continue
-		}
-		last := lastTrafficIfaceStats[io.Name]
-		var rx, tx float64
-		if !last.Time.IsZero() {
-			secs := now.Sub(last.Time).Seconds()
-			if secs > 0 {
-				tx = float64(io.BytesSent-last.BytesSent) / 1024 / secs
-				rx = float64(io.BytesRecv-last.BytesRecv) / 1024 / secs
-			}
-		}
-		lastTrafficIfaceStats[io.Name] = NetStat{
-			BytesSent: io.BytesSent,
-			BytesRecv: io.BytesRecv,
-			Time:      now,
-		}
-
-		iface := ifaceMap[io.Name]
-		ip := ""
-		for _, addr := range iface.Addrs {
-			addrIP, _, err := net.ParseCIDR(addr.Addr)
-			if err == nil && addrIP != nil && addrIP.To4() != nil {
-				ip = addrIP.String()
-				break
-			}
-		}
-		up := false
-		for _, flag := range iface.Flags {
-			if strings.EqualFold(flag, "up") {
-				up = true
-				break
-			}
-		}
-		if io.Name != "lo" && len(iface.HardwareAddr) == 0 && rx == 0 && tx == 0 {
-			continue
-		}
-
-		list = append(list, TrafficInterface{Name: io.Name, RX: rx, TX: tx, IP: ip, Up: up})
-	}
-
-	sort.Slice(list, func(i, j int) bool {
-		return list[i].RX+list[i].TX > list[j].RX+list[j].TX
-	})
-	if len(list) > 6 {
-		list = list[:6]
-	}
-	return list
-}
-
-type socketCumulative struct {
-	sent uint64
-	recv uint64
-}
-
-type socketStatsSnapshot struct {
-	time      time.Time
-	hosts     []TrafficHost
-	links     []TrafficLink
-	portRates map[uint32][2]float64 // port -> [rx, tx] KB/s
-}
-
-func parseAddrPort(s string) (string, uint32, bool) {
-	s = strings.TrimSpace(s)
-	if strings.HasPrefix(s, "[") {
-		if i := strings.LastIndex(s, "]:"); i > 0 {
-			p, err := strconv.ParseUint(s[i+2:], 10, 32)
-			if err != nil {
-				return "", 0, false
-			}
-			return s[1:i], uint32(p), true
-		}
-		return "", 0, false
-	}
-	i := strings.LastIndex(s, ":")
-	if i <= 0 {
-		return "", 0, false
-	}
-	p, err := strconv.ParseUint(s[i+1:], 10, 32)
-	if err != nil {
-		return "", 0, false
-	}
-	return s[:i], uint32(p), true
-}
-
-// collectSocketStats 通过 ss -tin 读取每一条 TCP 连接的累计字节数，
-// 按 (本地端口, 对端IP) 聚合，并结合上次采样计算真实的实时速率 (KB/s)。
-func collectSocketStats(now time.Time) *socketStatsSnapshot {
-	if socketStatsCache != nil && now.Sub(socketStatsCache.time) < 2*time.Second {
-		return socketStatsCache
-	}
-	ssPath := "ss"
-	if _, err := exec.LookPath("ss"); err != nil {
-		ssPath = "/usr/sbin/ss"
-	}
-	out, err := exec.Command(ssPath, "-tin").Output()
-	if err != nil {
-		return socketStatsCache
-	}
-
-	type connAgg struct {
-		sent  uint64
-		recv  uint64
-		count int
-	}
-	conns := map[string]*connAgg{}
-	var curPort uint32
-	var curPeer string
-	haveConn := false
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
-			if !haveConn {
-				continue
-			}
-			var sent, recv uint64
-			for _, f := range strings.Fields(line) {
-				if strings.HasPrefix(f, "bytes_sent:") {
-					if v, err := strconv.ParseUint(strings.TrimPrefix(f, "bytes_sent:"), 10, 64); err == nil {
-						sent += v
-					}
-				} else if strings.HasPrefix(f, "bytes_acked:") {
-					if v, err := strconv.ParseUint(strings.TrimPrefix(f, "bytes_acked:"), 10, 64); err == nil {
-						sent += v
-					}
-				} else if strings.HasPrefix(f, "bytes_received:") {
-					if v, err := strconv.ParseUint(strings.TrimPrefix(f, "bytes_received:"), 10, 64); err == nil {
-						recv += v
-					}
-				}
-			}
-			if sent == 0 && recv == 0 {
-				continue
-			}
-			key := fmt.Sprintf("%d|%s", curPort, curPeer)
-			if conns[key] == nil {
-				conns[key] = &connAgg{}
-			}
-			conns[key].sent += sent
-			conns[key].recv += recv
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 5 || fields[0] != "ESTAB" {
-			haveConn = false
-			continue
-		}
-		_, lp, ok1 := parseAddrPort(fields[3])
-		peer, _, ok2 := parseAddrPort(fields[4])
-		if !ok1 || !ok2 || lp == 0 {
-			haveConn = false
-			continue
-		}
-		curPort = lp
-		curPeer = peer
-		haveConn = true
-		key := fmt.Sprintf("%d|%s", lp, peer)
-		if conns[key] == nil {
-			conns[key] = &connAgg{}
-		}
-		conns[key].count++
-	}
-
-	secs := 2.0
-	if socketStatsCache != nil {
-		secs = now.Sub(socketStatsCache.time).Seconds()
-	}
-	if secs <= 0 {
-		secs = 2
-	}
-
-	type linkRate struct {
-		rx float64
-		tx float64
-		n  int
-	}
-	linkMap := map[string]*linkRate{}
-	hostMap := map[string]*linkRate{}
-	portMap := map[uint32]*linkRate{}
-	newCumulative := make(map[string]*socketCumulative, len(conns))
-
-	for key, agg := range conns {
-		var ds, dr int64
-		if prev := lastSocketCumulative[key]; prev != nil {
-			ds = int64(agg.sent - prev.sent)
-			dr = int64(agg.recv - prev.recv)
-			if ds < 0 {
-				ds = 0
-			}
-			if dr < 0 {
-				dr = 0
-			}
-		}
-		newCumulative[key] = &socketCumulative{sent: agg.sent, recv: agg.recv}
-
-		clientRX := float64(ds) / 1024 / secs  // 服务器发给客户端 = 客户端下载
-		clientTX := float64(dr) / 1024 / secs  // 客户端发给服务器 = 客户端上传
-		parts := strings.SplitN(key, "|", 2)
-		port, _ := strconv.ParseUint(parts[0], 10, 32)
-		peer := parts[1]
-
-		lk := linkMap[key]
-		if lk == nil {
-			lk = &linkRate{}
-			linkMap[key] = lk
-		}
-		lk.rx += clientRX
-		lk.tx += clientTX
-		lk.n += agg.count
-
-		hk := hostMap[peer]
-		if hk == nil {
-			hk = &linkRate{}
-			hostMap[peer] = hk
-		}
-		hk.rx += clientRX
-		hk.tx += clientTX
-		hk.n += agg.count
-
-		pk := portMap[uint32(port)]
-		if pk == nil {
-			pk = &linkRate{}
-			portMap[uint32(port)] = pk
-		}
-		pk.rx += clientTX // 服务下载 = 客户端上传进来的字节
-		pk.tx += clientRX // 服务上传 = 服务器发给客户端的字节
-		pk.n += agg.count
-	}
-	lastSocketCumulative = newCumulative
-
-	hosts := make([]TrafficHost, 0, len(hostMap))
-	for ip, h := range hostMap {
-		hosts = append(hosts, TrafficHost{IP: ip, RX: h.rx, TX: h.tx, Connections: h.n})
-	}
-	sort.Slice(hosts, func(i, j int) bool {
-		return hosts[i].RX+hosts[i].TX > hosts[j].RX+hosts[j].TX
-	})
-	if len(hosts) > 6 {
-		hosts = hosts[:6]
-	}
-
-	links := make([]TrafficLink, 0, len(linkMap))
-	for key, l := range linkMap {
-		parts := strings.SplitN(key, "|", 2)
-		port, _ := strconv.ParseUint(parts[0], 10, 32)
-		svcName := serviceNameForPort(uint32(port))
-		if n, ok := serviceNameCache[uint32(port)]; ok {
-			svcName = n
-		}
-		if svcName == "" {
-			svcName = fmt.Sprintf("%d", port)
-		}
-		links = append(links, TrafficLink{
-			ClientIP:    parts[1],
-			Port:        uint32(port),
-			Service:     svcName,
-			Protocol:    "tcp",
-			RX:          l.rx,
-			TX:          l.tx,
-			Connections: l.n,
-		})
-	}
-	sort.Slice(links, func(i, j int) bool {
-		return links[i].RX+links[i].TX > links[j].RX+links[j].TX
-	})
-	if len(links) > 12 {
-		links = links[:12]
-	}
-
-	portRates := make(map[uint32][2]float64, len(portMap))
-	for p, pr := range portMap {
-		portRates[p] = [2]float64{pr.rx, pr.tx}
-	}
-
-	snap := &socketStatsSnapshot{time: now, hosts: hosts, links: links, portRates: portRates}
-	socketStatsCache = snap
-	return snap
-}
-
-func getTrafficServices(uploadSpeed, downloadSpeed float64) []TrafficService {
-	if time.Since(trafficServiceCacheTime) < 5*time.Second && trafficServiceCache != nil {
-		return trafficServiceCache
-	}
-
-	conns, err := psnet.Connections("inet")
-	if err != nil {
-		return trafficServiceCache
-	}
-
-	type svcAgg struct {
-		port        uint32
-		protocol    string
-		name        string
-		connections int
-		pid         int32
-	}
-
-	services := map[string]*svcAgg{}
-	for _, conn := range conns {
-		if conn.Laddr.Port == 0 {
-			continue
-		}
-		status := strings.ToUpper(conn.Status)
-		if status != "LISTEN" {
-			continue
-		}
-		protocol := "tcp"
-		if conn.Type == syscall.SOCK_DGRAM {
-			protocol = "udp"
-		}
-		key := fmt.Sprintf("%s:%d", protocol, conn.Laddr.Port)
-		svc, exists := services[key]
-		if !exists {
-			svc = &svcAgg{port: conn.Laddr.Port, protocol: protocol, name: serviceNameForPort(conn.Laddr.Port), pid: conn.Pid}
-			services[key] = svc
-		}
-		if svc.name == "" && conn.Pid > 0 {
-			svc.name = processNameByPID(conn.Pid)
-		}
-	}
-	for _, conn := range conns {
-		if strings.ToUpper(conn.Status) != "ESTABLISHED" || conn.Laddr.Port == 0 {
-			continue
-		}
-		protocol := "tcp"
-		if conn.Type == syscall.SOCK_DGRAM {
-			protocol = "udp"
-		}
-		key := fmt.Sprintf("%s:%d", protocol, conn.Laddr.Port)
-		if svc, exists := services[key]; exists {
-			svc.connections++
-		}
-	}
-
-	list := make([]TrafficService, 0, len(services))
-	for _, svc := range services {
-		name := svc.name
-		if name == "" {
-			name = fmt.Sprintf("%s:%d", svc.protocol, svc.port)
-		}
-		serviceNameCache[svc.port] = name
-		list = append(list, TrafficService{
-			Name:        name,
-			Port:        svc.port,
-			Protocol:    svc.protocol,
-			Connections: svc.connections,
-		})
-	}
-
-	sort.Slice(list, func(i, j int) bool {
-		if list[i].Connections == list[j].Connections {
-			return list[i].Port < list[j].Port
-		}
-		return list[i].Connections > list[j].Connections
-	})
-	if len(list) > 8 {
-		list = list[:8]
-	}
-
-	totalWeight := 0
-	for _, svc := range list {
-		if svc.Connections > 0 {
-			totalWeight += svc.Connections
-		} else {
-			totalWeight++
-		}
-	}
-	if totalWeight == 0 {
-		totalWeight = len(list)
-	}
-	for i := range list {
-		weight := list[i].Connections
-		if weight <= 0 {
-			weight = 1
-		}
-		list[i].RX = downloadSpeed * float64(weight) / float64(totalWeight)
-		list[i].TX = uploadSpeed * float64(weight) / float64(totalWeight)
-	}
-	if snap := socketStatsCache; snap != nil && time.Since(snap.time) < 4*time.Second {
-		for i := range list {
-			if pr, ok := snap.portRates[list[i].Port]; ok {
-				list[i].RX = pr[0]
-				list[i].TX = pr[1]
-			}
-		}
-	}
-
-	trafficServiceCache = list
-	trafficServiceCacheTime = time.Now()
-	return list
-}
-
-func serviceNameForPort(port uint32) string {
-	switch port {
-	case 80:
-		return "http"
-	case 9000:
-		return "server-status"
-	case 443, 8443, 8081:
-		return "nginx"
-	case 22:
-		return "ssh"
-	case 3306:
-		return "mysql"
-	case 5432:
-		return "postgres"
-	case 6379:
-		return "redis"
-	case 8080, 3000, 5173:
-		return "app"
-	default:
-		return ""
-	}
-}
-
-func processNameByPID(pid int32) string {
-	if pid <= 0 {
-		return ""
-	}
-	cmd, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid))
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(cmd))
-}
-
 // getServerStatus 查询深层探针系统状态。现已引入O(1)级全局锁定防并发灾变与1秒时效高能缓存调度体系
 func getServerStatus(iface string) (*ServerStatus, error) {
 	// ====== 高能缓存命中逻辑开始 ======
@@ -4978,15 +4528,6 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 	// 获取在线用户统计信息和详细列表
 	onlineCount, uniqueIPs, onlineUsersList := getOnlineUsersStats()
 	serverIP := getInterfaceIP(iface)
-	socketSnap := collectSocketStats(now)
-	trafficServices := getTrafficServices(uploadSpeed, downloadSpeed)
-	trafficInterfaces := getTrafficInterfaces(now)
-	trafficHosts := []TrafficHost{}
-	trafficLinks := []TrafficLink{}
-	if socketSnap != nil {
-		trafficHosts = socketSnap.hosts
-		trafficLinks = socketSnap.links
-	}
 
 	// 获取主机信息
 	hostInfo, err := getHostInfo()
@@ -5007,34 +4548,30 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 
 	// 拼装最终结果
 	result := &ServerStatus{
-		CPUUsage:        cpuPercent[0],
-		MemoryUsage:     memInfo.UsedPercent,
-		MemoryTotal:     memInfo.Total / 1024 / 1024,
-		DiskUsage:       diskUsagePercent,
-		DiskTotal:       totalDisk / 1024 / 1024 / 1024,
-		UploadSpeed:     uploadSpeed,
-		DownloadSpeed:   downloadSpeed,
-		TotalUpload:     formatBytes(totalUploadAccum),
-		TotalDownload:   formatBytes(totalDownloadAccum),
-		ReadSpeed:       readSpeed,
-		WriteSpeed:      writeSpeed,
-		Load1:           loadAvg.Load1,
-		Load5:           loadAvg.Load5,
-		Load15:          loadAvg.Load15,
-		Uptime:          uptimeStr,
-		OnlineCount:     onlineCount,
-		UniqueIPs:       uniqueIPs,
-		OnlineUsers:     onlineUsersList,
-		Hostname:        hostname,
-		OS:              osName,
-		Platform:        platform,
-		KernelVersion:   kernelVersion,
-		Architecture:    runtime.GOARCH,
-		ServerIP:        serverIP,
-		TrafficServices: trafficServices,
-		TrafficInterfaces: trafficInterfaces,
-		TrafficHosts:    trafficHosts,
-		TrafficLinks:    trafficLinks,
+		CPUUsage:      cpuPercent[0],
+		MemoryUsage:   memInfo.UsedPercent,
+		MemoryTotal:   memInfo.Total / 1024 / 1024,
+		DiskUsage:     diskUsagePercent,
+		DiskTotal:     totalDisk / 1024 / 1024 / 1024,
+		UploadSpeed:   uploadSpeed,
+		DownloadSpeed: downloadSpeed,
+		TotalUpload:   formatBytes(totalUploadAccum),
+		TotalDownload: formatBytes(totalDownloadAccum),
+		ReadSpeed:     readSpeed,
+		WriteSpeed:    writeSpeed,
+		Load1:         loadAvg.Load1,
+		Load5:         loadAvg.Load5,
+		Load15:        loadAvg.Load15,
+		Uptime:        uptimeStr,
+		OnlineCount:   onlineCount,
+		UniqueIPs:     uniqueIPs,
+		OnlineUsers:   onlineUsersList,
+		Hostname:      hostname,
+		OS:            osName,
+		Platform:      platform,
+		KernelVersion: kernelVersion,
+		Architecture:  runtime.GOARCH,
+		ServerIP:      serverIP,
 	}
 
 	// 填装入缓存并回写记录刻度
@@ -5144,6 +4681,14 @@ func main() {
 	// 加载手动封禁的 IP 列表
 	loadBlockedIPs()
 
+	// 定期清理过期的自动/手动封禁
+	go ipSecurityPruneLoop()
+
+	// 初始化服务与端口中心（托管服务注册表、防火墙状态、端口变化检测）
+	loadManagedServices()
+	loadFirewallState()
+	go trackPortChangesLoop()
+
 	// 确保在程序退出时停止速率限制器的清理goroutine
 	defer globalRateLimiter.Stop()
 
@@ -5251,6 +4796,37 @@ func main() {
 	http.HandleFunc("POST /api/ip/block", authMiddleware(requirePermission("ip:manage", securityMiddleware(blockIPHandler))))
 	http.HandleFunc("POST /api/ip/unblock", authMiddleware(requirePermission("ip:manage", securityMiddleware(unblockIPHandler))))
 	http.HandleFunc("GET /api/ipinfo", authMiddleware(securityMiddleware(ipinfoProxyHandler)))
+	http.HandleFunc("GET /api/ip/blocked/history", authMiddleware(requirePermission("ip:manage", securityMiddleware(listBlockHistoryHandler))))
+	http.HandleFunc("GET /api/ip/whitelist", authMiddleware(requirePermission("ip:manage", securityMiddleware(listWhitelistHandler))))
+	http.HandleFunc("POST /api/ip/whitelist", authMiddleware(requirePermission("ip:manage", securityMiddleware(addWhitelistHandler))))
+	http.HandleFunc("POST /api/ip/whitelist/remove", authMiddleware(requirePermission("ip:manage", securityMiddleware(removeWhitelistHandler))))
+	http.HandleFunc("GET /api/ip/security/summary", authMiddleware(requirePermission("ip:manage", securityMiddleware(ipSecuritySummaryHandler))))
+	http.HandleFunc("GET /ws/ip-events", authMiddleware(requirePermission("ip:manage", securityMiddleware(ipEventsWSHandler))))
+
+	// 服务与端口中心 - 服务管理
+	http.HandleFunc("GET /api/services", authMiddleware(requirePermission("service:view", securityMiddleware(listServicesHandler))))
+	http.HandleFunc("GET /api/services/{name}", authMiddleware(requirePermission("service:view", securityMiddleware(getServiceHandler))))
+	http.HandleFunc("POST /api/services", authMiddleware(requirePermission("service:manage", securityMiddleware(createServiceHandler))))
+	http.HandleFunc("PUT /api/services/{name}", authMiddleware(requirePermission("service:manage", securityMiddleware(updateServiceHandler))))
+	http.HandleFunc("DELETE /api/services/{name}", authMiddleware(requirePermission("service:delete", securityMiddleware(deleteServiceHandler))))
+	http.HandleFunc("POST /api/services/{name}/start", authMiddleware(requirePermission("service:manage", securityMiddleware(serviceActionHandler("start")))))
+	http.HandleFunc("POST /api/services/{name}/stop", authMiddleware(requirePermission("service:manage", securityMiddleware(serviceActionHandler("stop")))))
+	http.HandleFunc("POST /api/services/{name}/restart", authMiddleware(requirePermission("service:manage", securityMiddleware(serviceActionHandler("restart")))))
+	http.HandleFunc("POST /api/services/{name}/enable", authMiddleware(requirePermission("service:manage", securityMiddleware(serviceActionHandler("enable")))))
+	http.HandleFunc("POST /api/services/{name}/disable", authMiddleware(requirePermission("service:manage", securityMiddleware(serviceActionHandler("disable")))))
+	http.HandleFunc("GET /api/services/{name}/logs", authMiddleware(requirePermission("service:view", securityMiddleware(getServiceLogsHandler))))
+	http.HandleFunc("GET /api/services/{name}/ports", authMiddleware(requirePermission("service:view", securityMiddleware(getServicePortsHandler))))
+	// 服务与端口中心 - 端口管理
+	http.HandleFunc("GET /api/ports", authMiddleware(requirePermission("port:view", securityMiddleware(listPortsHandler))))
+	http.HandleFunc("GET /api/ports/changes", authMiddleware(requirePermission("port:view", securityMiddleware(listPortChangesHandler))))
+	http.HandleFunc("GET /api/ports/{port}", authMiddleware(requirePermission("port:view", securityMiddleware(getPortDetailHandler))))
+	http.HandleFunc("POST /api/ports/{port}/close", authMiddleware(requirePermission("port:manage", securityMiddleware(closePortHandler))))
+	http.HandleFunc("POST /api/ports/{port}/open", authMiddleware(requirePermission("port:manage", securityMiddleware(openPortHandler))))
+	http.HandleFunc("GET /api/firewall", authMiddleware(requirePermission("port:view", securityMiddleware(listFirewallHandler))))
+	http.HandleFunc("POST /api/ports/rules", authMiddleware(requirePermission("port:manage", securityMiddleware(createPortRuleHandler))))
+	http.HandleFunc("DELETE /api/ports/rules/{id}", authMiddleware(requirePermission("port:manage", securityMiddleware(deletePortRuleHandler))))
+	// 服务与端口中心 - 实时服务日志
+	http.HandleFunc("GET /ws/service-logs", authMiddleware(requirePermission("service:view", securityMiddleware(serviceLogsWSHandler))))
 
 	fmt.Println("Server running at https://localhost:9000")
 	log.Printf("服务器启动时间: %s", serverStartTime.Format("2006-01-02 15:04:05"))
