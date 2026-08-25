@@ -5,6 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>服务与端口中心 - Server Status</title>
     <link rel="icon" href="data:,">
+    <style>
+        html, body, #root { margin: 0; min-height: 100%; background: #f5f5f5; }
+        html.dark, html.dark body, html.dark #root { background: #141414; }
+        html.dark body { color: rgba(255,255,255,.85); }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f5f5f5; }
+        ::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #bfbfbf; }
+        html.dark ::-webkit-scrollbar-track { background: #141414; }
+        html.dark ::-webkit-scrollbar-thumb { background: #3a3a3a; }
+        html.dark ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) {}
+        })();
+    </script>
     <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
     <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
     <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
@@ -950,7 +970,7 @@
         return map[e] || null;
     };
 
-    function PortsTab({ isDark, canManage, onViewService }) {
+    function PortsTab({ isDark, canManage, onViewService, deepPort }) {
         const [data, setData] = useState({ ports: [], firewall: { provider: '', available: false, blocked: [], rules: [] }, changes: [] });
         const [loading, setLoading] = useState(true);
         const [refreshing, setRefreshing] = useState(false);
@@ -1020,6 +1040,13 @@
                 message.error('端口详情加载失败: ' + e.message);
             }
         };
+
+        // 深链：从进程页跳转打开端口详情
+        useEffect(() => {
+            if (deepPort && deepPort.port > 0) {
+                loadPortDetail(deepPort.port, deepPort.proto || 'tcp');
+            }
+        }, [deepPort]);
 
         const confirmFirewall = (p) => {
             const blocked = (data.firewall.blocked || []).includes(p.port + '/' + p.protocol);
@@ -1387,6 +1414,7 @@
         const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
         const [tab, setTab] = useState('services');
         const [svcDetail, setSvcDetail] = useState(null);
+        const [deepPort, setDeepPort] = useState(null);
 
         const hasPerm = p => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
         const canViewServices = hasPerm('service:view');
@@ -1397,8 +1425,22 @@
 
         useEffect(() => {
             localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.documentElement.classList.toggle('dark', isDark);
+            document.body.classList.toggle('dark', isDark);
             document.body.style.background = isDark ? '#141414' : '#f5f5f5';
         }, [isDark]);
+
+        // 深链：?svc=服务名 / ?port=端口&proto=tcp
+        useEffect(() => {
+            const p = new URLSearchParams(window.location.search);
+            const svc = p.get('svc');
+            const port = p.get('port');
+            if (svc) { setTab('services'); setSvcDetail(svc); }
+            if (port) {
+                setTab('ports');
+                setDeepPort({ port: parseInt(port, 10) || 0, proto: p.get('proto') || 'tcp' });
+            }
+        }, []);
 
         useEffect(() => {
             secureFetch(baseUrl + '/check-auth')
@@ -1417,7 +1459,7 @@
         }
 
         if (!canViewServices && !canViewPorts) {
-            return <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
+            return <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
                 <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
                     <Card style={{ width: 400, textAlign: 'center' }}>
                         <div style={{ fontSize: 40, marginBottom: 8 }}><UIIcon name="StopOutlined" /></div>
@@ -1445,12 +1487,13 @@
                 key: 'ports',
                 label: <span><UIIcon name="ApiOutlined" />端口</span>,
                 children: <PortsTab isDark={isDark} canManage={canManagePorts}
+                                    deepPort={deepPort}
                                     onViewService={(name) => { if (canViewServices) { setTab('services'); setSvcDetail(name); } }} />
             });
         }
 
         return (
-            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
+            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
                 <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', background: 'var(--bg)' }}>
                     <div className={'topbar' + (isDark ? ' dark' : '')}>
                         <div className="brand">
@@ -1478,6 +1521,38 @@
     }
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script>
+    (function () {
+        function openPrivateSpace() {
+            try {
+                fetch('/api/private/entry', { method: 'POST', credentials: 'include' })
+                    .catch(function () {})
+                    .finally(function () { window.location.href = 'private.html'; });
+            } catch (e) { window.location.href = 'private.html'; }
+        }
+        var taps = [], lastTap = 0;
+        document.addEventListener('keydown', function (e) {
+            if (e.ctrlKey && e.shiftKey && e.altKey && (e.key === 'N' || e.key === 'n')) {
+                e.preventDefault();
+                openPrivateSpace();
+            }
+        });
+        document.addEventListener('click', function (e) {
+            var el = e.target;
+            while (el && el !== document.documentElement) {
+                if (el.classList && (el.classList.contains('logo') || el.classList.contains('brand'))) {
+                    var now = Date.now();
+                    if (now - lastTap > 3000) taps = [];
+                    lastTap = now;
+                    taps.push(now);
+                    if (taps.length >= 5) { taps = []; openPrivateSpace(); }
+                    return;
+                }
+                el = el.parentElement;
+            }
+        });
+    })();
 </script>
 </body>
 </html>

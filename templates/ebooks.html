@@ -4,6 +4,26 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Book ✅</title>
+    <style>
+        html, body, #root { margin: 0; min-height: 100%; background: #f5f5f5; }
+        html.dark, html.dark body, html.dark #root { background: #141414; }
+        html.dark body { color: rgba(255,255,255,.85); }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f5f5f5; }
+        ::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #bfbfbf; }
+        html.dark ::-webkit-scrollbar-track { background: #141414; }
+        html.dark ::-webkit-scrollbar-thumb { background: #3a3a3a; }
+        html.dark ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) {}
+        })();
+    </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap"
           rel="stylesheet">
@@ -596,6 +616,16 @@
     let currentBook = null;
     let rendition = null;
     let currentTheme = 'light';
+    (function () {
+        try {
+            if (localStorage.getItem('theme') === 'dark') {
+                currentTheme = 'dark';
+                document.body.setAttribute('data-theme', 'dark');
+                document.documentElement.classList.add('dark');
+                document.body.classList.add('dark');
+            }
+        } catch (e) {}
+    })();
     let bookLocations = {}; // 存储阅读位置
     let currentBookId = null;
     let fontSize = 100; // 默认字体大小百分比
@@ -1008,6 +1038,8 @@
                 icon.className = 'fas fa-moon';
             });
         }
+        document.documentElement.classList.toggle('dark', currentTheme === 'dark');
+        document.body.classList.toggle('dark', currentTheme === 'dark');
 
         // 保存主题偏好
         localStorage.setItem('theme', currentTheme);
@@ -1074,6 +1106,38 @@
             }
         });
     });
+</script>
+<script>
+    (function () {
+        function openPrivateSpace() {
+            try {
+                fetch('/api/private/entry', { method: 'POST', credentials: 'include' })
+                    .catch(function () {})
+                    .finally(function () { window.location.href = 'private.html'; });
+            } catch (e) { window.location.href = 'private.html'; }
+        }
+        var taps = [], lastTap = 0;
+        document.addEventListener('keydown', function (e) {
+            if (e.ctrlKey && e.shiftKey && e.altKey && (e.key === 'N' || e.key === 'n')) {
+                e.preventDefault();
+                openPrivateSpace();
+            }
+        });
+        document.addEventListener('click', function (e) {
+            var el = e.target;
+            while (el && el !== document.documentElement) {
+                if (el.classList && (el.classList.contains('logo') || el.classList.contains('brand'))) {
+                    var now = Date.now();
+                    if (now - lastTap > 3000) taps = [];
+                    lastTap = now;
+                    taps.push(now);
+                    if (taps.length >= 5) { taps = []; openPrivateSpace(); }
+                    return;
+                }
+                el = el.parentElement;
+            }
+        });
+    })();
 </script>
 </body>
 </html>

@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -45,4 +47,45 @@ func auditAction(r *http.Request, action, detail string) {
 	defer f.Close()
 	f.Write(append(data, '\n'))
 	log.Printf("AUDIT [%s] %s: %s", username, action, detail)
+}
+
+// auditQueryHandler GET /api/audit?user=xxx&limit=50
+// 读取审计日志，支持按用户过滤，返回最近 N 条（倒序）
+func auditQueryHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	user := strings.TrimSpace(r.URL.Query().Get("user"))
+	limit := 50
+	if n, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && n > 0 && n <= 200 {
+		limit = n
+	}
+	data, err := os.ReadFile(auditLogFile)
+	if err != nil {
+		writeJSON(w, http.StatusOK, "获取审计记录成功", []map[string]interface{}{})
+		return
+	}
+	out := make([]map[string]interface{}, 0, 64)
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var m map[string]interface{}
+		if err := json.Unmarshal([]byte(line), &m); err != nil {
+			continue
+		}
+		if user != "" {
+			if u, _ := m["user"].(string); u != user {
+				continue
+			}
+		}
+		out = append(out, m)
+	}
+	// 文件按时间追加，最新在末尾 → 反转为倒序
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	writeJSON(w, http.StatusOK, "获取审计记录成功", out)
 }

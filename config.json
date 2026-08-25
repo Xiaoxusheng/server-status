@@ -1,0 +1,8 @@
+{
+  "trojan": {
+    "enabled": true,
+    "api_addr": "127.0.0.1:10000",
+    "api_timeout": 5,
+    "refresh_interval": 2
+  }
+}

@@ -38,6 +38,7 @@ import (
 	"github.com/shirou/gopsutil/v3/load"
 	"github.com/shirou/gopsutil/v3/mem"
 	psnet "github.com/shirou/gopsutil/v3/net"
+	psprocess "github.com/shirou/gopsutil/v3/process"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -50,7 +51,6 @@ const (
 	dataFile          = "/opt/server-status/server_data.json"             //服务器数据保存路径
 	rateLimit         = 10                                      // 每分钟最大请求数
 	rateLimitDuration = time.Minute                             // 速率限制时间窗口
-	logDir            = "/opt/server-status/log"                          // 日志目录
 	securityToken     = "redacted_anti_crawler_2024_security_key" // 反爬安全令牌
 	signatureTimeout  = 30 * time.Second                        // 签名超时时间
 	usersFile         = "/opt/server-status/users.json"                   // 用户数据文件
@@ -64,6 +64,16 @@ const (
 	downloadTokenSecret = "redacted_download_token_secret_2024" // 下载令牌密钥
 	downloadTokensFile  = "/opt/server-status/download_tokens.json"     // 下载令牌存储文件
 )
+
+// logDir 日志目录（生产默认 /opt/server-status/log，可用 SERVER_STATUS_HOME 覆盖便于本地测试/开发）
+var logDir = defaultLogDir()
+
+func defaultLogDir() string {
+	if root := os.Getenv("SERVER_STATUS_HOME"); root != "" {
+		return filepath.Join(root, "log")
+	}
+	return "/opt/server-status/log"
+}
 
 // 用户相关结构体
 type Users struct {
@@ -122,6 +132,7 @@ var allPermissions = []PermissionDef{
 	{Key: "service:delete", Name: "删除服务", Group: "服务与端口", Description: "删除本系统创建的服务定义"},
 	{Key: "port:view", Name: "查看端口", Group: "服务与端口", Description: "查看监听端口、端口详情与变化"},
 	{Key: "port:manage", Name: "管理端口", Group: "服务与端口", Description: "开放/关闭端口公网访问，管理端口规则"},
+	{Key: "trojan:manage", Name: "管理 Trojan-Go", Group: "服务与端口", Description: "查看 Trojan-Go 状态并管理用户"},
 }
 
 // defaultRoles 返回系统内置的默认角色
@@ -140,7 +151,7 @@ func defaultRoles() map[string]*Role {
 			RoleID:      "operator",
 			Name:        "运维人员",
 			Description: "负责服务器日常运维，可查看状态并执行命令",
-			Permissions: []string{"system:view", "system:exec", "files:view", "files:download", "token:manage", "user:view"},
+			Permissions: []string{"system:view", "system:exec", "files:view", "files:download", "token:manage", "user:view", "trojan:manage"},
 			IsSystem:    true,
 			CreatedAt:   now,
 		},
@@ -522,6 +533,13 @@ func listPermissionsHandler(w http.ResponseWriter, r *http.Request) {
 		"message": "获取权限列表成功",
 		"data":    allPermissions,
 	})
+}
+
+// onlineCountHandler GET /api/rbac/online-count 返回当前在线用户数
+func onlineCountHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	count, _, _ := getOnlineUsersStats()
+	writeJSON(w, http.StatusOK, "获取在线用户数成功", map[string]interface{}{"count": count})
 }
 
 // listRolesHandler 返回角色列表（含用户数）
@@ -1284,14 +1302,154 @@ func deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 
 // ProcessInfo 进程信息
 type ProcessInfo struct {
-	User    string `json:"user"`
-	PID     string `json:"pid"`
-	CPU     string `json:"cpu"`
-	MemPct  string `json:"mem_pct"`
-	RSSMB   string `json:"rss_mb"`
-	VSZMB   string `json:"vsz_mb"`
-	Elapsed string `json:"elapsed"`
-	Command string `json:"command"`
+	User        string `json:"user"`
+	PID         string `json:"pid"`
+	CPU         string `json:"cpu"`
+	MemPct      string `json:"mem_pct"`
+	RSSMB       string `json:"rss_mb"`
+	VSZMB       string `json:"vsz_mb"`
+	Elapsed     string `json:"elapsed"`
+	Command     string `json:"command"`
+	Name        string `json:"name"`
+	Status      string `json:"status"`
+	ParentPID   string `json:"parent_pid"`
+	StartTime   string `json:"start_time"`
+	ServiceName string `json:"service_name"`
+}
+
+// ProcessDetail 进程详情（可执行文件/工作目录/父进程/子进程/服务/端口）
+type ProcessDetail struct {
+	ProcessInfo
+	ParentName string        `json:"parent_name"`
+	Exe        string        `json:"exe"`
+	Cwd        string        `json:"working_directory"`
+	Ports      []PortInfo    `json:"ports"`
+	Children   []ProcessInfo `json:"children"`
+}
+
+// parseEtime 解析 ps etime（MM:SS / HH:MM:SS / D-HH:MM:SS）为时长
+func parseEtime(s string) (time.Duration, bool) {
+	days := 0
+	rest := s
+	if i := strings.Index(s, "-"); i > 0 {
+		d, err := strconv.Atoi(s[:i])
+		if err != nil {
+			return 0, false
+		}
+		days = d
+		rest = s[i+1:]
+	}
+	parts := strings.Split(rest, ":")
+	if len(parts) < 2 || len(parts) > 3 {
+		return 0, false
+	}
+	sec, err1 := strconv.Atoi(parts[len(parts)-1])
+	min, err2 := strconv.Atoi(parts[len(parts)-2])
+	if err1 != nil || err2 != nil || sec < 0 || min < 0 {
+		return 0, false
+	}
+	hrs := 0
+	if len(parts) == 3 {
+		hrs, err1 = strconv.Atoi(parts[0])
+		if err1 != nil || hrs < 0 {
+			return 0, false
+		}
+	}
+	return time.Duration(days)*24*time.Hour +
+		time.Duration(hrs)*time.Hour +
+		time.Duration(min)*time.Minute +
+		time.Duration(sec)*time.Second, true
+}
+
+// mapProcStatus ps 状态字符 → 可读状态
+func mapProcStatus(stat string) string {
+	if stat == "" {
+		return "unknown"
+	}
+	switch stat[0] {
+	case 'R':
+		return "running"
+	case 'S', 'I':
+		return "sleeping"
+	case 'D':
+		return "uninterruptible"
+	case 'Z':
+		return "zombie"
+	case 'T', 't':
+		return "stopped"
+	case 'X':
+		return "dead"
+	default:
+		return "unknown"
+	}
+}
+
+// collectProcesses 通过 ps 采集进程列表（含进程名/状态/父PID/启动时间/所属服务）
+func collectProcesses(sortBy string, top int) ([]ProcessInfo, error) {
+	psSort := "pcpu"
+	if sortBy == "mem" {
+		psSort = "pmem"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "ps", "-eo", "user,pid,ppid,pcpu,pmem,rss,vsz,etime,stat,comm,args", "--sort=-"+psSort)
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	svcMap := pidServiceMap()
+	now := time.Now()
+	lines := strings.Split(string(output), "\n")
+	processes := make([]ProcessInfo, 0, top)
+	for i, line := range lines {
+		if i == 0 {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 10 {
+			continue
+		}
+		// 0 user 1 pid 2 ppid 3 pcpu 4 pmem 5 rss 6 vsz 7 etime 8 stat 9 comm 10+ args
+		command := fields[9]
+		if len(fields) > 10 {
+			command = strings.Join(fields[10:], " ")
+		}
+		if len(command) > 200 {
+			command = command[:200] + "..."
+		}
+		startTime := ""
+		if d, ok := parseEtime(fields[7]); ok {
+			startTime = now.Add(-d).Format("2006-01-02 15:04:05")
+		}
+		ppid := ""
+		if _, err := strconv.Atoi(fields[2]); err == nil {
+			ppid = fields[2]
+		}
+		processes = append(processes, ProcessInfo{
+			User:      fields[0],
+			PID:       fields[1],
+			ParentPID: ppid,
+			CPU:       fields[3],
+			MemPct:    fields[4],
+			RSSMB:     fmt.Sprintf("%.1f", parseKbToMb(fields[5])),
+			VSZMB:     fmt.Sprintf("%.1f", parseKbToMb(fields[6])),
+			Elapsed:   fields[7],
+			Status:    mapProcStatus(fields[8]),
+			Name:      fields[9],
+			Command:   command,
+			StartTime: startTime,
+		})
+		if pidInt, err := strconv.Atoi(fields[1]); err == nil {
+			if svc, ok := svcMap[int32(pidInt)]; ok {
+				processes[len(processes)-1].ServiceName = svc + ".service"
+			}
+		}
+		if len(processes) >= top {
+			break
+		}
+	}
+	return processes, nil
 }
 
 // listProcessesHandler 返回按 CPU/内存排序的进程列表
@@ -1300,65 +1458,77 @@ func listProcessesHandler(w http.ResponseWriter, r *http.Request) {
 	if sortBy != "mem" {
 		sortBy = "cpu"
 	}
-	psSort := "pcpu"
-	if sortBy == "mem" {
-		psSort = "pmem"
-	}
-	topStr := r.URL.Query().Get("top")
-	top := 50
-	if n, err := strconv.Atoi(topStr); err == nil && n > 0 && n <= 200 {
+	top := 100
+	if n, err := strconv.Atoi(r.URL.Query().Get("top")); err == nil && n > 0 && n <= 1000 {
 		top = n
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// 使用 ps 获取进程列表，LC_ALL=C 避免本地化输出差异
-	cmd := exec.CommandContext(ctx, "ps", "-eo", "user,pid,pcpu,pmem,rss,vsz,etime,comm,args", "--sort=-"+psSort)
-	cmd.Env = append(os.Environ(), "LC_ALL=C")
-	output, err := cmd.Output()
+	processes, err := collectProcesses(sortBy, top)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "获取进程列表失败: "+err.Error())
 		return
 	}
+	writeJSON(w, http.StatusOK, "获取进程列表成功", processes)
+}
 
-	lines := strings.Split(string(output), "\n")
-	processes := make([]ProcessInfo, 0, top)
-	for i, line := range lines {
-		if i == 0 { // 跳过表头
-			continue
-		}
-		fields := strings.Fields(line)
-		if len(fields) < 8 {
-			continue
-		}
-		// 0 user 1 pid 2 pcpu 3 pmem 4 rss(KB) 5 vsz(KB) 6 etime 7 comm 8+ args
-		command := fields[7]
-		if len(fields) > 8 {
-			command = strings.Join(fields[8:], " ")
-		}
-		if command == "" {
-			command = fields[7]
-		}
-		if len(command) > 200 {
-			command = command[:200] + "..."
-		}
-		processes = append(processes, ProcessInfo{
-			User:    fields[0],
-			PID:     fields[1],
-			CPU:     fields[2],
-			MemPct:  fields[3],
-			RSSMB:   fmt.Sprintf("%.1f", parseKbToMb(fields[4])),
-			VSZMB:   fmt.Sprintf("%.1f", parseKbToMb(fields[5])),
-			Elapsed: fields[6],
-			Command: command,
-		})
-		if len(processes) >= top {
+// getProcessDetailHandler 返回单个进程详情（可执行文件/工作目录/父子/服务/端口）
+func getProcessDetailHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	pid, err := strconv.Atoi(r.PathValue("pid"))
+	if err != nil || pid < 1 {
+		writeJSONError(w, http.StatusBadRequest, "无效的进程PID")
+		return
+	}
+	all, err := collectProcesses("cpu", 1000)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "获取进程信息失败: "+err.Error())
+		return
+	}
+	var base *ProcessInfo
+	for i := range all {
+		if all[i].PID == strconv.Itoa(pid) {
+			base = &all[i]
 			break
 		}
 	}
-
-	writeJSON(w, http.StatusOK, "获取进程列表成功", processes)
+	if base == nil {
+		writeJSONError(w, http.StatusNotFound, "进程不存在")
+		return
+	}
+	detail := ProcessDetail{ProcessInfo: *base}
+	detail.Ports = portsForPID(int32(pid))
+	for i := range all {
+		if all[i].ParentPID == strconv.Itoa(pid) {
+			detail.Children = append(detail.Children, all[i])
+			if len(detail.Children) >= 20 {
+				break
+			}
+		}
+	}
+	for i := range all {
+		if all[i].PID == base.ParentPID {
+			detail.ParentName = all[i].Name
+			break
+		}
+	}
+	if p, e := psprocess.NewProcess(int32(pid)); e == nil {
+		if exe, err := p.Exe(); err == nil {
+			detail.Exe = exe
+		}
+		if cwd, err := p.Cwd(); err == nil {
+			detail.Cwd = cwd
+		}
+	}
+	if detail.Exe == "" {
+		if exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid)); err == nil {
+			detail.Exe = exe
+		}
+	}
+	if detail.Cwd == "" {
+		if cwd, err := os.Readlink(fmt.Sprintf("/proc/%d/cwd", pid)); err == nil {
+			detail.Cwd = cwd
+		}
+	}
+	writeJSON(w, http.StatusOK, "获取进程详情成功", detail)
 }
 
 // parseKbToMb 将 KB 字符串转为 MB 数值
@@ -1513,7 +1683,8 @@ func unblockIPHandler(w http.ResponseWriter, r *http.Request) {
 
 // KillProcessRequest 结束进程请求
 type KillProcessRequest struct {
-	PID int `json:"pid"`
+	PID   int  `json:"pid"`
+	Force bool `json:"force"`
 }
 
 // killProcessHandler 结束指定进程
@@ -1545,12 +1716,19 @@ func killProcessHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusNotFound, "进程不存在或无权操作")
 		return
 	}
-	if err := proc.Signal(syscall.SIGTERM); err != nil {
+	sig := syscall.SIGTERM
+	msg := "已发送终止信号"
+	if req.Force {
+		sig = syscall.SIGKILL
+		msg = "已强制结束进程"
+	}
+	if err := proc.Signal(sig); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "结束进程失败: "+err.Error())
 		return
 	}
-	log.Printf("已发送终止信号给进程 %d", req.PID)
-	writeJSON(w, http.StatusOK, "已发送终止信号", nil)
+	auditAction(r, "process.kill", fmt.Sprintf("结束进程 PID=%d force=%v", req.PID, req.Force))
+	log.Printf("%s给进程 %d", msg, req.PID)
+	writeJSON(w, http.StatusOK, msg, nil)
 }
 
 type LoginRequest struct {
@@ -1670,6 +1848,7 @@ type ServerStatus struct {
 	KernelVersion string           `json:"kernel_version"`
 	Architecture  string           `json:"architecture"`
 	ServerIP      string           `json:"server_ip"`
+	Trojan        TrojanStatus     `json:"trojan"`
 }
 
 // OnlineUserInfo 用于WebSocket传输的在线用户信息结构
@@ -4222,6 +4401,18 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// trojanPageHandler 提供 Trojan-Go 详情页（需登录且具备 trojan:manage 权限）
+func trojanPageHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	htmlData, err := os.ReadFile(filepath.Join(indexPath, "trojan.html"))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("无法读取 Trojan-Go 页面: %v", err), http.StatusInternalServerError)
+		log.Printf("读取 trojan.html 失败: %v", err)
+		return
+	}
+	_, _ = w.Write(htmlData)
+}
+
 // ifacesHandler HTTP 端点：反馈后端系统探测获取到的有效活跃网卡池
 func ifacesHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
@@ -4572,6 +4763,12 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 		KernelVersion: kernelVersion,
 		Architecture:  runtime.GOARCH,
 		ServerIP:      serverIP,
+		Trojan: func() TrojanStatus {
+			if trojanClient == nil {
+				return TrojanStatus{}
+			}
+			return trojanClient.snapshot()
+		}(),
 	}
 
 	// 填装入缓存并回写记录刻度
@@ -4669,6 +4866,10 @@ func main() {
 	// 初始化用户系统
 	loadUsers()
 
+	// 初始化 Trojan-Go 客户端并启动状态刷新
+	trojanClient = newTrojanClient()
+	defer trojanClient.close()
+
 	// 初始化数据
 	loadData()
 
@@ -4677,6 +4878,13 @@ func main() {
 
 	// 初始化 RBAC 角色权限系统
 	initRBAC()
+
+	// 初始化隐藏私人空间（双层认证 / SQLite / 卡片分享）
+	if err := initPrivateNotes(); err != nil {
+		log.Printf("⚠️ 私人空间未启用: %v", err)
+	} else {
+		privateStore.StartMaintenance()
+	}
 
 	// 加载手动封禁的 IP 列表
 	loadBlockedIPs()
@@ -4726,6 +4934,11 @@ func main() {
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 		<-c
 		saveData()
+		if trojanClient != nil {
+			if err := trojanClient.close(); err != nil {
+				log.Printf("关闭 Trojan-Go 客户端失败: %v", err)
+			}
+		}
 		log.Println("程序退出，数据已保存")
 		os.Exit(0)
 	}()
@@ -4773,6 +4986,14 @@ func main() {
 	http.HandleFunc("/exec", authMiddleware(requirePermission("system:exec", securityMiddleware(execHandler))))
 	http.HandleFunc("/epubs", enableCORSh(authMiddleware(requirePermission("files:view", securityMiddleware(listEpubs)))))
 
+	// Trojan-Go 状态与用户管理接口
+	http.HandleFunc("GET /api/trojan/status", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanStatusHandler))))
+	http.HandleFunc("GET /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUsersHandler))))
+	http.HandleFunc("POST /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
+	http.HandleFunc("PUT /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
+	http.HandleFunc("DELETE /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
+	http.HandleFunc("/trojan", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanPageHandler))))
+
 	// RBAC 权限管理接口
 	http.HandleFunc("GET /api/rbac/permissions", authMiddleware(requirePermission("role:manage", securityMiddleware(listPermissionsHandler))))
 	http.HandleFunc("GET /api/rbac/roles", authMiddleware(requireAnyPermission([]string{"role:manage", "user:manage", "user:view"}, securityMiddleware(listRolesHandler))))
@@ -4784,6 +5005,8 @@ func main() {
 	http.HandleFunc("POST /api/rbac/users", authMiddleware(requirePermission("user:manage", securityMiddleware(createRbacUserHandler))))
 	http.HandleFunc("PUT /api/rbac/users/{username}", authMiddleware(requirePermission("user:manage", securityMiddleware(updateRbacUserHandler))))
 	http.HandleFunc("DELETE /api/rbac/users/{username}", authMiddleware(requirePermission("user:manage", securityMiddleware(deleteRbacUserHandler))))
+	http.HandleFunc("GET /api/rbac/online-count", authMiddleware(requireAnyPermission([]string{"role:manage", "user:manage", "user:view"}, securityMiddleware(onlineCountHandler))))
+	http.HandleFunc("GET /api/audit", authMiddleware(requireAnyPermission([]string{"role:manage", "user:manage"}, securityMiddleware(auditQueryHandler))))
 
 	// 文件管理与进程监控接口
 	http.HandleFunc("GET /api/files", authMiddleware(requirePermission("files:manage", securityMiddleware(listFilesHandler))))
@@ -4791,6 +5014,7 @@ func main() {
 	http.HandleFunc("POST /api/files/mkdir", authMiddleware(requirePermission("files:manage", securityMiddleware(mkdirFileHandler))))
 	http.HandleFunc("DELETE /api/files", authMiddleware(requirePermission("files:manage", securityMiddleware(deleteFileHandler))))
 	http.HandleFunc("GET /api/processes", authMiddleware(requirePermission("system:process", securityMiddleware(listProcessesHandler))))
+	http.HandleFunc("GET /api/processes/{pid}", authMiddleware(requirePermission("system:process", securityMiddleware(getProcessDetailHandler))))
 	http.HandleFunc("POST /api/processes/kill", authMiddleware(requirePermission("system:process", securityMiddleware(killProcessHandler))))
 	http.HandleFunc("GET /api/ip/blocked", authMiddleware(requirePermission("ip:manage", securityMiddleware(listBlockedIPsHandler))))
 	http.HandleFunc("POST /api/ip/block", authMiddleware(requirePermission("ip:manage", securityMiddleware(blockIPHandler))))
@@ -4827,6 +5051,9 @@ func main() {
 	http.HandleFunc("DELETE /api/ports/rules/{id}", authMiddleware(requirePermission("port:manage", securityMiddleware(deletePortRuleHandler))))
 	// 服务与端口中心 - 实时服务日志
 	http.HandleFunc("GET /ws/service-logs", authMiddleware(requirePermission("service:view", securityMiddleware(serviceLogsWSHandler))))
+
+	// ==================== 隐藏私人空间路由 ====================
+	registerPrivateRoutes(http.DefaultServeMux)
 
 	fmt.Println("Server running at https://localhost:9000")
 	log.Printf("服务器启动时间: %s", serverStartTime.Format("2006-01-02 15:04:05"))

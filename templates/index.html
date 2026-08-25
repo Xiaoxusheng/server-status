@@ -1,528 +1,876 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>服务器状态监控 - Server Status</title>
     <link rel="icon" href="data:,">
+    <style>
+        html,
+        body,
+        #root {
+            margin: 0;
+            min-height: 100%;
+            background: #f5f5f5;
+        }
+
+        html.dark,
+        html.dark body,
+        html.dark #root {
+            background: #141414;
+        }
+
+        html.dark body {
+            color: rgba(255, 255, 255, .85);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f5f5f5;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #d9d9d9;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #bfbfbf;
+        }
+
+        html.dark ::-webkit-scrollbar-track {
+            background: #141414;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb {
+            background: #3a3a3a;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb:hover {
+            background: #4a4a4a;
+        }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) { }
+        })();
+    </script>
     <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
-    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script crossorigin
+        src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
     <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
     <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
     <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>
     <style>
-        body { margin: 0; background: #f5f5f5; }
-        #root { min-height: 100vh; }
-        .page-wrap { padding: 16px; }
+        body {
+            margin: 0;
+            background: #f5f5f5;
+        }
+
+        #root {
+            min-height: 100vh;
+        }
+
+        .page-wrap {
+            padding: 16px;
+        }
+
         .topbar {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 24px; height: 56px; background: #fff;
-            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            height: 56px;
+            background: #fff;
+            border-bottom: 1px solid #f0f0f0;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
         }
-        .topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; color: #1677ff; }
-        .topbar.dark { background: #1f1f1f; border-bottom-color: #303030; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-        .topbar.dark .brand { color: #4096ff; }
+
+        .topbar .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 17px;
+            color: #1677ff;
+        }
+
+        .topbar.dark {
+            background: #1f1f1f;
+            border-bottom-color: #303030;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .topbar.dark .brand {
+            color: #4096ff;
+        }
+
         .topbar .brand .logo {
-            width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #1677ff, #722ed1);
-            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px;
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #1677ff, #722ed1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 16px;
         }
-        .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 12px; }
-        .chart-card .chart { height: 260px; width: 100%; }
-        .chart-meta { font-size: 12px; color: #999; text-align: right; margin-top: 6px; }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .chart-card .chart {
+            height: 260px;
+            width: 100%;
+        }
+
+        .chart-meta {
+            font-size: 12px;
+            color: #999;
+            text-align: right;
+            margin-top: 6px;
+        }
+
+        .trojan-ov-card .ant-card-body {
+            padding: 12px 16px;
+        }
+
+        .trojan-ov .trojan-ov-label {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .trojan-ov .trojan-ov-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: rgba(0, 0, 0, 0.88);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        html.dark .trojan-ov .trojan-ov-value {
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .trojan-ov .trojan-ov-download { color: #52c41a; }
+        .trojan-ov .trojan-ov-upload { color: #faad14; }
+        .trojan-ov .trojan-ov-api { font-size: 13px; font-weight: 500; color: #52c41a; }
+        .trojan-ov .trojan-ov-api.offline { color: #ff4d4f; }
+
         .login-bg {
-            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             background: linear-gradient(135deg, #1677ff22, #722ed122);
         }
+
         .media-window {
-            position: fixed; right: 20px; bottom: 20px; z-index: 999;
-            width: 380px; height: 260px; border-radius: 12px; overflow: hidden;
-            background: #fff; box-shadow: 0 8px 30px rgba(0,0,0,.16);
-            border: 1px solid rgba(22,119,255,.15); display: flex; flex-direction: column;
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 999;
+            width: 380px;
+            height: 260px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, .16);
+            border: 1px solid rgba(22, 119, 255, .15);
+            display: flex;
+            flex-direction: column;
             transition: all .3s;
         }
-        .media-window.zoomed { right: 0 !important; bottom: 0 !important; width: 100% !important; height: 100% !important; border-radius: 0; }
+
+        .media-window.zoomed {
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            border-radius: 0;
+        }
+
         .media-head {
-            display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-            background: #fff; color: #1677ff; font-size: 13px; font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #fff;
+            color: #1677ff;
+            font-size: 13px;
+            font-weight: 600;
             border-bottom: 1px solid #f0f0f0;
         }
-        .media-head .m-title { flex: 1; }
-        .media-body { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden; }
-        .media-body img, .media-body video { max-width: 100%; max-height: 100%; object-fit: contain; }
-        .media-body .placeholder { color: #999; font-size: 13px; }
-        .media-body .empty-media { text-align: center; color: #666; }
+
+        .media-head .m-title {
+            flex: 1;
+        }
+
+        .media-body {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            overflow: hidden;
+        }
+
+        .media-body img,
+        .media-body video {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .media-body .placeholder {
+            color: #999;
+            font-size: 13px;
+        }
+
+        .media-body .empty-media {
+            text-align: center;
+            color: #666;
+        }
+
         @media (max-width: 768px) {
-            .login-bg { padding: 16px; }
-            .topbar { padding: 8px 12px; flex-wrap: wrap; gap: 6px 8px; }
-            .topbar .brand { font-size: 14px; gap: 6px; }
-            .topbar .brand .logo { width: 26px; height: 26px; font-size: 14px; border-radius: 6px; }
-            .topbar .ant-space { flex-wrap: wrap; gap: 6px !important; }
-            .topbar .ant-btn { padding: 4px 8px; font-size: 12px; height: 30px; }
-            .topbar .tb-sub { display: none; }
-            .topbar .tb-status { display: none; }
-            .topbar .tb-label { display: none; }
-            .page-wrap { padding: 10px; }
-            .chart-card .chart { height: 220px; }
-            .stat-grid { grid-template-columns: 1fr; }
-            .stat-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-            .ant-card-head { padding: 0 12px !important; }
-            .ant-card-head-wrapper { flex-wrap: wrap; gap: 6px; }
-            .ant-card-body { padding: 12px !important; }
-            .media-window { display: none; }
+            .login-bg {
+                padding: 16px;
+            }
+
+            .topbar {
+                padding: 8px 12px;
+                flex-wrap: wrap;
+                gap: 6px 8px;
+            }
+
+            .topbar .brand {
+                font-size: 14px;
+                gap: 6px;
+            }
+
+            .topbar .brand .logo {
+                width: 26px;
+                height: 26px;
+                font-size: 14px;
+                border-radius: 6px;
+            }
+
+            .topbar .ant-space {
+                flex-wrap: wrap;
+                gap: 6px !important;
+            }
+
+            .topbar .ant-btn {
+                padding: 4px 8px;
+                font-size: 12px;
+                height: 30px;
+            }
+
+            .topbar .tb-sub {
+                display: none;
+            }
+
+            .topbar .tb-status {
+                display: none;
+            }
+
+            .topbar .tb-label {
+                display: none;
+            }
+
+            .page-wrap {
+                padding: 10px;
+            }
+
+            .chart-card .chart {
+                height: 220px;
+            }
+
+            .stat-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stat-cards {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+
+            .ant-card-head {
+                padding: 0 12px !important;
+            }
+
+            .ant-card-head-wrapper {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            .ant-card-body {
+                padding: 12px !important;
+            }
+
+            .media-window {
+                display: none;
+            }
         }
     </style>
 </head>
+
 <body>
-<div id="root"></div>
-<script type="text/babel">
-    const { Card, Table, Button, Input, Form, Tag, Space, Statistic, Typography, ConfigProvider, theme, message, Descriptions, Badge, Alert, Segmented, Select } = window.antd;
-    const { useState, useEffect, useRef, useCallback } = React;
-    const { darkAlgorithm } = theme;
+    <div id="root"></div>
+    <script type="text/babel">
+        const { Card, Table, Button, Input, Form, Tag, Space, Statistic, Typography, ConfigProvider, theme, message, Descriptions, Badge, Alert } = window.antd;
+        const { useState, useEffect, useRef, useCallback } = React;
+        const { darkAlgorithm } = theme;
 
-    const baseUrl = window.location.origin;
-    const securityToken = "redacted_anti_crawler_2024_security_key";
-    const SESSION_KEY = 'server_monitor_session';
-    const LOCAL_KEY = 'server_monitor_remember';
+        const baseUrl = window.location.origin;
+        const securityToken = "redacted_anti_crawler_2024_security_key";
+        const SESSION_KEY = 'server_monitor_session';
+        const LOCAL_KEY = 'server_monitor_remember';
 
-    const generateSignature = (path) => {
-        const timestamp = Math.floor(Date.now() / 1000).toString();
-        const nonce = CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);
-        const sig = CryptoJS.HmacSHA256(timestamp + '|' + nonce + '|' + path + '|' + securityToken, securityToken).toString(CryptoJS.enc.Hex);
-        return { timestamp, nonce, signature: sig };
-    };
+        const generateSignature = (path) => {
+            const timestamp = Math.floor(Date.now() / 1000).toString();
+            const nonce = CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);
+            const sig = CryptoJS.HmacSHA256(timestamp + '|' + nonce + '|' + path + '|' + securityToken, securityToken).toString(CryptoJS.enc.Hex);
+            return { timestamp, nonce, signature: sig };
+        };
 
-    const secureFetch = (url, options = {}) => {
-        const path = new URL(url).pathname;
-        const sig = generateSignature(path);
-        return fetch(url, {
-            method: options.method || 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Timestamp': sig.timestamp,
-                'X-Nonce': sig.nonce,
-                'X-Signature': sig.signature,
-                ...(options.headers || {})
+        const secureFetch = (url, options = {}) => {
+            const path = new URL(url).pathname;
+            const sig = generateSignature(path);
+            return fetch(url, {
+                method: options.method || 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Timestamp': sig.timestamp,
+                    'X-Nonce': sig.nonce,
+                    'X-Signature': sig.signature,
+                    ...(options.headers || {})
+                },
+                credentials: 'include',
+                body: options.body
+            });
+        };
+
+        const SessionManager = {
+            save: (user, remember) => {
+                const data = { user, timestamp: Date.now(), expiry: Date.now() + 30 * 24 * 3600 * 1000 };
+                (remember ? localStorage : sessionStorage).setItem(remember ? LOCAL_KEY : SESSION_KEY, JSON.stringify(data));
             },
-            credentials: 'include',
-            body: options.body
-        });
-    };
-
-    const SessionManager = {
-        save: (user, remember) => {
-            const data = { user, timestamp: Date.now(), expiry: Date.now() + 30 * 24 * 3600 * 1000 };
-            (remember ? localStorage : sessionStorage).setItem(remember ? LOCAL_KEY : SESSION_KEY, JSON.stringify(data));
-        },
-        get: () => {
-            try {
-                const s = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(LOCAL_KEY);
-                return s ? JSON.parse(s) : null;
-            } catch (e) { return null; }
-        },
-        clear: () => { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(LOCAL_KEY); }
-    };
-
-    const hexToRgba = (hex, a) => {
-        const h = hex.replace('#', '');
-        return 'rgba(' + parseInt(h.substring(0, 2), 16) + ',' + parseInt(h.substring(2, 4), 16) + ',' + parseInt(h.substring(4, 6), 16) + ',' + a + ')';
-    };
-
-    function Login({ onLogin }) {
-        const [mode, setMode] = useState('login');
-        const [loading, setLoading] = useState(false);
-        const [form] = Form.useForm();
-        const submit = async () => {
-            const v = await form.validateFields();
-            setLoading(true);
-            try {
-                const r = await fetch(baseUrl + '/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify(mode === 'login' ? { username: v.username, password: v.password } : { username: v.username, email: v.email, password: v.password })
-                });
-                const d = await r.json();
-                if (d.code === 200) {
-                    SessionManager.save(d.user, !!v.remember);
-                    message.success('登录成功');
-                    onLogin(d.user);
-                } else {
-                    message.error(d.message || '登录失败');
-                }
-            } catch (e) {
-                message.error('网络错误: ' + e.message);
-            } finally {
-                setLoading(false);
-            }
-        };
-        return (
-            <div className="login-bg">
-                <Card style={{ width: '100%', maxWidth: 420 }}>
-                    <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                        <div style={{ fontSize: 40 }}>🖥️</div>
-                        <Typography.Title level={3} style={{ marginBottom: 4 }}>Server Status</Typography.Title>
-                        <Typography.Text type="secondary">服务器状态监控系统</Typography.Text>
-                    </div>
-                    <Form form={form} layout="vertical" onFinish={submit}>
-                        <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
-                            <Input placeholder="用户名" size="large" />
-                        </Form.Item>
-                        {mode === 'register' && (
-                            <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}>
-                                <Input placeholder="user@example.com" size="large" />
-                            </Form.Item>
-                        )}
-                        <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
-                            <Input.Password placeholder="密码" size="large" />
-                        </Form.Item>
-                        {mode === 'login' && (
-                            <Form.Item name="remember" valuePropName="checked">
-                                <antdCheckbox>记住我</antdCheckbox>
-                            </Form.Item>
-                        )}
-                        <Button type="primary" htmlType="submit" block size="large" loading={loading}>
-                            {mode === 'login' ? '登 录' : '注 册'}
-                        </Button>
-                        <div style={{ textAlign: 'center', marginTop: 12 }}>
-                            <Typography.Link onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); form.resetFields(); }}>
-                                {mode === 'login' ? '没有账户？注册新账户' : '已有账户？返回登录'}
-                            </Typography.Link>
-                        </div>
-                    </Form>
-                </Card>
-            </div>
-        );
-    }
-    const antdCheckbox = window.antd.Checkbox;
-
-    function Dashboard({ user, onLogout }) {
-        const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
-        const [status, setStatus] = useState(null);
-        const [online, setOnline] = useState([]);
-        const [onlineCount, setOnlineCount] = useState(0);
-        const [conn, setConn] = useState('disconnected');
-        const [ifaces, setIfaces] = useState([]);
-        const [iface, setIface] = useState('');
-        const wsRef = useRef(null);
-        const reconnectTimer = useRef(null);
-        const reconnectAttempts = useRef(0);
-        const chartRefs = useRef({});
-        const chartInsts = useRef({});
-        const dataRef = useRef({ labels: [], cpu: [], mem: [], up: [], down: [], r: [], w: [] });
-
-        const hasPerm = p => (user.permissions || []).some(x => x === '*' || x === p);
-
-        useEffect(() => { localStorage.setItem('theme', isDark ? 'dark' : 'light'); }, [isDark]);
-
-        const push = (arr, v, max = 20) => { arr.push(v); if (arr.length > max) arr.shift(); };
-
-        const updateCharts = (d) => {
-            const t = new Date().toLocaleTimeString();
-            const D = dataRef.current;
-            D.labels.push(t); if (D.labels.length > 20) D.labels.shift();
-            push(D.cpu, (parseFloat(d.cpu_usage) || 0).toFixed(2));
-            push(D.mem, (parseFloat(d.memory_usage) || 0).toFixed(2));
-            push(D.up, (parseFloat(d.upload_speed) || 0).toFixed(2));
-            push(D.down, (parseFloat(d.download_speed) || 0).toFixed(2));
-            push(D.r, (parseFloat(d.read_speed) || 0).toFixed(2));
-            push(D.w, (parseFloat(d.write_speed) || 0).toFixed(2));
-            setOption('cpu', ['#1677ff'], D.labels, D.cpu, 'CPU 使用率 (%)');
-            setOption('mem', ['#52c41a'], D.labels, D.mem, '内存使用率 (%)');
-            setOption('net', ['#faad14', '#ff4d4f'], D.labels, [D.up, D.down], '网络速率 (KB/s)');
-            setOption('disk', ['#13c2c2', '#722ed1'], D.labels, [D.r, D.w], '磁盘 I/O (KB/s)');
-        };
-
-        const setOption = (key, colors, labels, series, title) => {
-            const inst = chartInsts.current[key];
-            if (!inst) return;
-            const s = Array.isArray(series[0]) ? series : [series];
-            inst.setOption({
-                title: { text: title, left: 'center', textStyle: { fontSize: 13, color: '#999' } },
-                tooltip: { trigger: 'axis', backgroundColor: 'rgba(22,30,48,0.9)', borderWidth: 0, textStyle: { color: '#fff' } },
-                grid: { left: 10, right: 14, top: 36, bottom: 4, containLabel: true },
-                xAxis: { type: 'category', boundaryGap: false, data: labels.slice(), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#8b93a5', fontSize: 11 } },
-                yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#8b93a5', fontSize: 11 }, splitLine: { lineStyle: { color: 'rgba(120,130,150,0.16)', type: 'dashed' } } },
-                series: s.map((arr, i) => ({
-                    name: arr === series[0] && key === 'net' ? '上传' : arr === series[1] && key === 'net' ? '下载' : arr === series[0] && key === 'disk' ? '读取' : arr === series[1] && key === 'disk' ? '写入' : (key === 'cpu' ? 'CPU' : key === 'mem' ? '内存' : ''),
-                    type: 'line', smooth: 0.35, symbol: 'none',
-                    lineStyle: { width: 2.5, color: colors[i] }, itemStyle: { color: colors[i] },
-                    areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: hexToRgba(colors[i], 0.3) }, { offset: 1, color: hexToRgba(colors[i], 0.02) }]) },
-                    data: arr.slice()
-                }))
-            });
-        };
-
-        const pickTopClients = (users, maxCount) => {
-            const map = {};
-            (users || []).forEach(u => {
-                const ip = u.ip || '未知客户端';
-                if (!map[ip]) map[ip] = { ip, connections: 0, pages: {} };
-                map[ip].connections += 1;
-                map[ip].pages[u.page || 'websocket'] = true;
-            });
-            let list = Object.values(map).sort((a, b) => b.connections - a.connections);
-            if (list.length > maxCount) {
-                const rest = list.slice(maxCount - 1);
-                list = list.slice(0, maxCount - 1);
-                list.push({
-                    ip: '其他客户端',
-                    connections: rest.reduce((sum, x) => sum + x.connections, 0),
-                    pages: { aggregated: true },
-                    aggregated: true
-                });
-            }
-            return list;
-        };
-
-        const connect = useCallback((i) => {
-            if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
-            if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
-            setConn('connecting');
-            const sig = generateSignature('/ws');
-            const url = baseUrl.replace(/^http/, 'ws') + '/ws?iface=' + encodeURIComponent(i) +
-                '&timestamp=' + sig.timestamp + '&nonce=' + sig.nonce + '&signature=' + sig.signature;
-            const ws = new WebSocket(url);
-            wsRef.current = ws;
-            ws.onopen = () => { setConn('connected'); reconnectAttempts.current = 0; };
-            ws.onmessage = (e) => {
+            get: () => {
                 try {
-                    const d = JSON.parse(e.data);
-                    setStatus(d);
-                    setOnline(d.online_users || []);
-                    setOnlineCount(d.online_count || 0);
-                    updateCharts(d);
-                } catch (err) { /* 忽略 */ }
-            };
-            ws.onerror = () => setConn('disconnected');
-            ws.onclose = () => {
-                setConn('disconnected');
-                if (reconnectAttempts.current < 10) {
-                    reconnectAttempts.current++;
-                    const delay = Math.min(3000 * reconnectAttempts.current, 15000);
-                    reconnectTimer.current = setTimeout(() => connect(i), delay);
-                }
-            };
-        }, []);
-
-        // 初始化图表
-        useEffect(() => {
-            ['cpu', 'mem', 'net', 'disk'].forEach(k => {
-                if (chartRefs.current[k] && !chartInsts.current[k]) {
-                    chartInsts.current[k] = echarts.init(chartRefs.current[k]);
-                }
-            });
-            const onR = () => {
-                Object.values(chartInsts.current).forEach(c => c && c.resize());
-            };
-            window.addEventListener('resize', onR);
-            return () => {
-                window.removeEventListener('resize', onR);
-                Object.values(chartInsts.current).forEach(c => c && c.dispose());
-                chartInsts.current = {};
-            };
-        }, []);
-
-        // 加载网卡并连接
-        useEffect(() => {
-            secureFetch(baseUrl + '/status-ifaces')
-                .then(r => r.json())
-                .then(list => {
-                    setIfaces(Array.isArray(list) ? list : []);
-                    const pick = list && list.length > 1 ? list[1] : (list && list[0]);
-                    if (pick) { setIface(pick); connect(pick); }
-                })
-                .catch(() => { setIface('eth4'); connect('eth4'); });
-            return () => { if (wsRef.current) wsRef.current.close(); if (reconnectTimer.current) clearTimeout(reconnectTimer.current); };
-        }, [connect]);
-
-        const navBtns = [];
-        navBtns.push(<Button key="ebooks" onClick={() => window.location.href = 'ebooks.html'}>📚 电子书</Button>);
-        navBtns.push(<Button key="ip" onClick={() => window.location.href = 'ip-panel.html'}>🌐 IP 流量</Button>);
-        if (hasPerm('service:view') || hasPerm('port:view')) navBtns.push(<Button key="services" onClick={() => window.location.href = 'services.html'}>🧰 服务端口</Button>);
-        if (hasPerm('files:manage')) navBtns.push(<Button key="files" onClick={() => window.location.href = 'files.html'}>📁 文件管理</Button>);
-        if (hasPerm('system:process')) navBtns.push(<Button key="proc" onClick={() => window.location.href = 'process.html'}>⚙️ 进程</Button>);
-        if (hasPerm('files:download')) navBtns.push(<Button key="dl" onClick={() => window.location.href = 'download.html'}>📥 安全下载</Button>);
-        if (hasPerm('user:manage') || hasPerm('role:manage')) navBtns.push(<Button key="rbac" onClick={() => window.location.href = 'rbac.html'}>🛡️ 权限管理</Button>);
-
-        const onlineCols = [
-            { title: 'IP 地址', dataIndex: 'ip' },
-            { title: '访问页面', dataIndex: 'page' },
-            { title: '连接时间', dataIndex: 'since' },
-            { title: '用户标识', dataIndex: 'user_agent', ellipsis: true }
-        ];
-
-        return (
-            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
-                <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
-                    <div className={'topbar' + (isDark ? ' dark' : '')}>
-                        <div className="brand"><span className="logo">🖥️</span><span>Server Status<span className="tb-sub"> · 实时监控</span></span></div>
-                        <Space wrap>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                <Badge status={conn === 'connected' ? 'success' : conn === 'connecting' ? 'processing' : 'error'} />
-                                <Typography.Text className="tb-status" type="secondary">{conn === 'connected' ? '已连接' : conn === 'connecting' ? '连接中...' : '已断开'}</Typography.Text>
-                            </span>
-                            <Button title={isDark ? '浅色模式' : '深色模式'} onClick={() => setIsDark(!isDark)}>{isDark ? '🌞' : '🌙'}<span className="tb-label">{isDark ? '浅色' : '深色'}</span></Button>
-                            <Button danger title="退出登录" onClick={onLogout}>🚪<span className="tb-label">退出</span></Button>
-                        </Space>
-                    </div>
-                    <div className="page-wrap">
-                        <Space wrap style={{ marginBottom: 12 }}>
-                            {navBtns}
-                        </Space>
-
-                        <div className="stat-grid stat-cards">
-                            <Card size="small" hoverable bordered><Statistic title="CPU 使用率" value={status ? (parseFloat(status.cpu_usage) || 0).toFixed(1) : '-'} suffix="%" valueStyle={{ color: '#1677ff' }} /></Card>
-                            <Card size="small" hoverable bordered><Statistic title="内存使用率" value={status ? (parseFloat(status.memory_usage) || 0).toFixed(1) : '-'} suffix="%" valueStyle={{ color: '#52c41a' }} /></Card>
-                            <Card size="small" hoverable bordered><Statistic title="磁盘使用率" value={status ? (parseFloat(status.disk_usage) || 0).toFixed(1) : '-'} suffix="%" valueStyle={{ color: '#faad14' }} /></Card>
-                            <Card size="small" hoverable bordered><Statistic title="在线用户" value={onlineCount} suffix="人" valueStyle={{ color: '#722ed1' }} /></Card>
-                            <Card size="small" hoverable bordered><Statistic title="运行时间" value={status ? status.uptime : '-'} valueStyle={{ fontSize: 14 }} /></Card>
-                        </div>
-
-                        <Card size="small" style={{ marginBottom: 12 }}>
-                            <Descriptions size="small" column={{ xs: 1, sm: 2, md: 4 }} items={[
-                                { key: 'host', label: '主机名', children: status?.hostname || '-' },
-                                { key: 'os', label: '操作系统', children: status?.os || '-' },
-                                { key: 'kernel', label: '内核', children: status?.kernel_version || '-' },
-                                { key: 'arch', label: '架构', children: status?.architecture || '-' },
-                                { key: 'up', label: '上传总流量', children: status?.total_upload || '-' },
-                                { key: 'down', label: '下载总流量', children: status?.total_download || '-' },
-                                { key: 'load', label: '系统负载', children: status ? (status.load1 + ' / ' + status.load5 + ' / ' + status.load15) : '-' },
-                                { key: 'net', label: '网络', children: status ? '↑' + (parseFloat(status.upload_speed) || 0).toFixed(1) + ' / ↓' + (parseFloat(status.download_speed) || 0).toFixed(1) + ' KB/s' : '-' }
-                            ]} />
-                        </Card>
-
-                        <div className="stat-grid">
-                            <Card size="small" hoverable bordered className="chart-card" title="📈 网络速率">
-                                <div ref={el => chartRefs.current.net = el} className="chart"></div>
-                            </Card>
-                            <Card size="small" hoverable bordered className="chart-card" title="💿 磁盘 I/O">
-                                <div ref={el => chartRefs.current.disk = el} className="chart"></div>
-                            </Card>
-                            <Card size="small" hoverable bordered className="chart-card" title="🔋 CPU 使用率">
-                                <div ref={el => chartRefs.current.cpu = el} className="chart"></div>
-                            </Card>
-                            <Card size="small" hoverable bordered className="chart-card" title="🧠 内存使用率">
-                                <div ref={el => chartRefs.current.mem = el} className="chart"></div>
-                            </Card>
-                        </div>
-
-                        <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-                            <Card size="small" hoverable bordered title={`👥 在线用户（${onlineCount}）`}>
-                                <Table size="small" rowKey={(_, i) => i} dataSource={online} columns={onlineCols}
-                                       pagination={false} scroll={{ y: 240, x: 'max-content' }} />
-                            </Card>
-                        </div>
-
-                        <Alert type="info" showIcon style={{ marginTop: 12 }}
-                               message={conn !== 'connected' ? '⚠️ WebSocket 连接已断开，正在自动重连，图表暂停更新' : '✅ 实时数据推送中，每 1 秒更新一次'} />
-                    </div>
-                    <MediaWindow />
-                </div>
-            </ConfigProvider>
-        );
-    }
-
-    function MediaWindow() {
-        const [src, setSrc] = useState(null);
-        const [playing, setPlaying] = useState(true);
-        const [zoomed, setZoomed] = useState(false);
-        const [volume, setVolume] = useState(() => {
-            const v = parseFloat(localStorage.getItem('media_volume'));
-            return isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
-        });
-        const [muted, setMuted] = useState(() => localStorage.getItem('media_sound') !== 'on');
-        const videoRef = useRef(null);
-        const isVideo = src && /\.(mp4|webm|mov)(\?|$)/i.test(src);
-        const fixSrc = (u) => {
-            try {
-                const p = new URL(u);
-                p.hostname = window.location.hostname;
-                return p.toString();
-            } catch (e) { return u; }
+                    const s = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(LOCAL_KEY);
+                    return s ? JSON.parse(s) : null;
+                } catch (e) { return null; }
+            },
+            clear: () => { sessionStorage.removeItem(SESSION_KEY); localStorage.removeItem(LOCAL_KEY); }
         };
 
-        const load = useCallback(() => {
-            secureFetch(baseUrl + '/random-media')
-                .then(r => r.json())
-                .then(d => { if (d && d.src) { setSrc(fixSrc(d.src)); setPlaying(true); setMuted(localStorage.getItem('media_sound') !== 'on'); } })
-                .catch(() => {});
-        }, []);
-        useEffect(() => {
-            load();
-            const t = setInterval(load, 80000);
-            return () => clearInterval(t);
-        }, [load]);
-        useEffect(() => {
-            const v = videoRef.current;
-            if (!v) return;
-            v.muted = muted;
-            v.volume = volume;
-            if (playing) v.play().catch(() => {});
-            else v.pause();
-        }, [src, playing, volume, muted]);
-        useEffect(() => { localStorage.setItem('media_sound', muted ? 'off' : 'on'); }, [muted]);
-        useEffect(() => { localStorage.setItem('media_volume', String(volume)); }, [volume]);
+        const hexToRgba = (hex, a) => {
+            const h = hex.replace('#', '');
+            return 'rgba(' + parseInt(h.substring(0, 2), 16) + ',' + parseInt(h.substring(2, 4), 16) + ',' + parseInt(h.substring(4, 6), 16) + ',' + a + ')';
+        };
 
-        return (
-            <div className={'media-window' + (zoomed ? ' zoomed' : '')}>
-                <div className="media-head">
-                    <span className="m-title">🎬 媒体展示</span>
-                    {isVideo && <window.antd.Slider min={0} max={1} step={0.05} value={volume}
-                        onChange={v => { setVolume(v); setMuted(v === 0); }}
-                        style={{ width: 70, margin: 0 }} tooltip={{ open: false }} />}
-                    {isVideo && <window.antd.Button size="small" type="text"
-                        onClick={() => {
-                            const nextMuted = !muted;
-                            const v = videoRef.current;
-                            if (!nextMuted && v) {
-                                const vol = volume > 0 ? volume : 0.5;
-                                setVolume(vol);
-                                v.muted = false;
-                                v.volume = vol;
-                                v.play().catch(() => {});
-                            } else if (nextMuted && v) {
-                                v.muted = true;
-                            }
-                            setMuted(nextMuted);
-                        }}
-                        title={muted ? '取消静音' : '静音'}>{muted ? '🔇' : '🔊'}</window.antd.Button>}
-                    <window.antd.Button size="small" type="text" onClick={load} title="刷新">🔄</window.antd.Button>
-                    {isVideo && <window.antd.Button size="small" type="text"
-                        onClick={() => setPlaying(!playing)} title={playing ? '暂停' : '播放'}>{playing ? '⏸' : '▶'}</window.antd.Button>}
-                    <window.antd.Button size="small" type="text" onClick={() => setZoomed(!zoomed)}
-                        title={zoomed ? '还原' : '放大'}>{zoomed ? '🗕' : '⛶'}</window.antd.Button>
+        function Login({ onLogin }) {
+            const [mode, setMode] = useState('login');
+            const [loading, setLoading] = useState(false);
+            const [form] = Form.useForm();
+            const submit = async () => {
+                const v = await form.validateFields();
+                setLoading(true);
+                try {
+                    const r = await fetch(baseUrl + '/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify(mode === 'login' ? { username: v.username, password: v.password } : { username: v.username, email: v.email, password: v.password })
+                    });
+                    const d = await r.json();
+                    if (d.code === 200) {
+                        SessionManager.save(d.user, !!v.remember);
+                        message.success('登录成功');
+                        onLogin(d.user);
+                    } else {
+                        message.error(d.message || '登录失败');
+                    }
+                } catch (e) {
+                    message.error('网络错误: ' + e.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            return (
+                <div className="login-bg">
+                    <Card style={{ width: '100%', maxWidth: 420 }}>
+                        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                            <div style={{ fontSize: 40 }}>🖥️</div>
+                            <Typography.Title level={3} style={{ marginBottom: 4 }}>Server Status</Typography.Title>
+                            <Typography.Text type="secondary">服务器状态监控系统</Typography.Text>
+                        </div>
+                        <Form form={form} layout="vertical" onFinish={submit}>
+                            <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
+                                <Input placeholder="用户名" size="large" />
+                            </Form.Item>
+                            {mode === 'register' && (
+                                <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}>
+                                    <Input placeholder="user@example.com" size="large" />
+                                </Form.Item>
+                            )}
+                            <Form.Item name="password" label="密码" rules={[{ required: true, message: '请输入密码' }]}>
+                                <Input.Password placeholder="密码" size="large" />
+                            </Form.Item>
+                            {mode === 'login' && (
+                                <Form.Item name="remember" valuePropName="checked">
+                                    <antdCheckbox>记住我</antdCheckbox>
+                                </Form.Item>
+                            )}
+                            <Button type="primary" htmlType="submit" block size="large" loading={loading}>
+                                {mode === 'login' ? '登 录' : '注 册'}
+                            </Button>
+                            <div style={{ textAlign: 'center', marginTop: 12 }}>
+                                <Typography.Link onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); form.resetFields(); }}>
+                                    {mode === 'login' ? '没有账户？注册新账户' : '已有账户？返回登录'}
+                                </Typography.Link>
+                            </div>
+                        </Form>
+                    </Card>
                 </div>
-                <div className="media-body" onClick={() => isVideo && setPlaying(!playing)}>
-                    {!src ? <span className="placeholder">加载媒体中...</span>
-                        : isVideo
-                            ? <video ref={videoRef} src={src} muted={muted} playsInline loop autoPlay />
-                            : <img src={src} alt="media" />}
-                </div>
-            </div>
-        );
-    }
-
-    function App() {
-        const [user, setUser] = useState(null);
-        const [checking, setChecking] = useState(true);
-        useEffect(() => {
-            secureFetch(baseUrl + '/check-auth')
-                .then(r => r.json())
-                .then(d => { setUser(d.code === 200 ? d.user : null); setChecking(false); })
-                .catch(() => setChecking(false));
-        }, []);
-        if (checking) {
-            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Card loading style={{ width: 320 }} /></div>;
+            );
         }
-        if (!user) return <Login onLogin={setUser} />;
-        return <Dashboard key={user.username} user={user} onLogout={() => {
-            secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => { SessionManager.clear(); setUser(null); });
-        }} />;
-    }
+        const antdCheckbox = window.antd.Checkbox;
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-</script>
+        function Dashboard({ user, onLogout }) {
+            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const [status, setStatus] = useState(null);
+            const [online, setOnline] = useState([]);
+            const [onlineCount, setOnlineCount] = useState(0);
+            const [conn, setConn] = useState('disconnected');
+            const [ifaces, setIfaces] = useState([]);
+            const [iface, setIface] = useState('');
+            const wsRef = useRef(null);
+            const reconnectTimer = useRef(null);
+            const reconnectAttempts = useRef(0);
+            const chartRefs = useRef({});
+            const chartInsts = useRef({});
+            const dataRef = useRef({ labels: [], cpu: [], mem: [], up: [], down: [], r: [], w: [] });
+            const [trojanStatus, setTrojanStatus] = useState(null);
+
+            const hasPerm = p => (user.permissions || []).some(x => x === '*' || x === p);
+
+            // 格式化 Trojan-Go 的字节数、速度和流量显示。
+            const formatBytes = (value, suffix = 'B/s') => {
+                let n = Number(value) || 0;
+                const units = suffix === 'B/s' ? ['B/s', 'KB/s', 'MB/s', 'GB/s'] : ['B', 'KB', 'MB', 'GB', 'TB'];
+                let i = 0;
+                while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+                return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + ' ' + units[i];
+            };
+
+            useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+            }, [isDark]);
+
+            const push = (arr, v, max = 20) => { arr.push(v); if (arr.length > max) arr.shift(); };
+
+            const updateCharts = (d) => {
+                const t = new Date().toLocaleTimeString();
+                const D = dataRef.current;
+                D.labels.push(t); if (D.labels.length > 20) D.labels.shift();
+                push(D.cpu, (parseFloat(d.cpu_usage) || 0).toFixed(2));
+                push(D.mem, (parseFloat(d.memory_usage) || 0).toFixed(2));
+                push(D.up, (parseFloat(d.upload_speed) || 0).toFixed(2));
+                push(D.down, (parseFloat(d.download_speed) || 0).toFixed(2));
+                push(D.r, (parseFloat(d.read_speed) || 0).toFixed(2));
+                push(D.w, (parseFloat(d.write_speed) || 0).toFixed(2));
+                setOption('cpu', ['#1677ff'], D.labels, D.cpu, 'CPU 使用率 (%)');
+                setOption('mem', ['#52c41a'], D.labels, D.mem, '内存使用率 (%)');
+                setOption('net', ['#faad14', '#ff4d4f'], D.labels, [D.up, D.down], '网络速率 (KB/s)');
+                setOption('disk', ['#13c2c2', '#722ed1'], D.labels, [D.r, D.w], '磁盘 I/O (KB/s)');
+            };
+
+            const setOption = (key, colors, labels, series, title) => {
+                const inst = chartInsts.current[key];
+                if (!inst) return;
+                const s = Array.isArray(series[0]) ? series : [series];
+                inst.setOption({
+                    title: { text: title, left: 'center', textStyle: { fontSize: 13, color: '#999' } },
+                    tooltip: { trigger: 'axis', backgroundColor: 'rgba(22,30,48,0.9)', borderWidth: 0, textStyle: { color: '#fff' } },
+                    grid: { left: 10, right: 14, top: 36, bottom: 4, containLabel: true },
+                    xAxis: { type: 'category', boundaryGap: false, data: labels.slice(), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#8b93a5', fontSize: 11 } },
+                    yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: '#8b93a5', fontSize: 11 }, splitLine: { lineStyle: { color: 'rgba(120,130,150,0.16)', type: 'dashed' } } },
+                    series: s.map((arr, i) => ({
+                        name: arr === series[0] && key === 'net' ? '上传' : arr === series[1] && key === 'net' ? '下载' : arr === series[0] && key === 'disk' ? '读取' : arr === series[1] && key === 'disk' ? '写入' : (key === 'cpu' ? 'CPU' : key === 'mem' ? '内存' : ''),
+                        type: 'line', smooth: 0.35, symbol: 'none',
+                        lineStyle: { width: 2.5, color: colors[i] }, itemStyle: { color: colors[i] },
+                        areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: hexToRgba(colors[i], 0.3) }, { offset: 1, color: hexToRgba(colors[i], 0.02) }]) },
+                        data: arr.slice()
+                    }))
+                });
+            };
+
+            const pickTopClients = (users, maxCount) => {
+                const map = {};
+                (users || []).forEach(u => {
+                    const ip = u.ip || '未知客户端';
+                    if (!map[ip]) map[ip] = { ip, connections: 0, pages: {} };
+                    map[ip].connections += 1;
+                    map[ip].pages[u.page || 'websocket'] = true;
+                });
+                let list = Object.values(map).sort((a, b) => b.connections - a.connections);
+                if (list.length > maxCount) {
+                    const rest = list.slice(maxCount - 1);
+                    list = list.slice(0, maxCount - 1);
+                    list.push({
+                        ip: '其他客户端',
+                        connections: rest.reduce((sum, x) => sum + x.connections, 0),
+                        pages: { aggregated: true },
+                        aggregated: true
+                    });
+                }
+                return list;
+            };
+
+            const connect = useCallback((i) => {
+                if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
+                if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
+                setConn('connecting');
+                const sig = generateSignature('/ws');
+                const url = baseUrl.replace(/^http/, 'ws') + '/ws?iface=' + encodeURIComponent(i) +
+                    '&timestamp=' + sig.timestamp + '&nonce=' + sig.nonce + '&signature=' + sig.signature;
+                const ws = new WebSocket(url);
+                wsRef.current = ws;
+                ws.onopen = () => { setConn('connected'); reconnectAttempts.current = 0; };
+                ws.onmessage = (e) => {
+                    try {
+                        const d = JSON.parse(e.data);
+                        setStatus(d);
+                        setOnline(d.online_users || []);
+                        setOnlineCount(d.online_count || 0);
+                        updateCharts(d);
+                        if (d.trojan) setTrojanStatus(d.trojan);
+                    } catch (err) { /* 忽略 */ }
+                };
+                ws.onerror = () => setConn('disconnected');
+                ws.onclose = () => {
+                    setConn('disconnected');
+                    if (reconnectAttempts.current < 10) {
+                        reconnectAttempts.current++;
+                        const delay = Math.min(3000 * reconnectAttempts.current, 15000);
+                        reconnectTimer.current = setTimeout(() => connect(i), delay);
+                    }
+                };
+            }, []);
+
+            // 初始化图表
+            useEffect(() => {
+                ['cpu', 'mem', 'net', 'disk'].forEach(k => {
+                    if (chartRefs.current[k] && !chartInsts.current[k]) {
+                        chartInsts.current[k] = echarts.init(chartRefs.current[k]);
+                    }
+                });
+                const onR = () => {
+                    Object.values(chartInsts.current).forEach(c => c && c.resize());
+                };
+                window.addEventListener('resize', onR);
+                return () => {
+                    window.removeEventListener('resize', onR);
+                    Object.values(chartInsts.current).forEach(c => c && c.dispose());
+                    chartInsts.current = {};
+                };
+            }, []);
+
+            // 加载网卡并连接
+            useEffect(() => {
+                secureFetch(baseUrl + '/status-ifaces')
+                    .then(r => r.json())
+                    .then(list => {
+                        setIfaces(Array.isArray(list) ? list : []);
+                        const pick = list && list.length > 1 ? list[1] : (list && list[0]);
+                        if (pick) { setIface(pick); connect(pick); }
+                    })
+                    .catch(() => { setIface('eth4'); connect('eth4'); });
+                return () => { if (wsRef.current) wsRef.current.close(); if (reconnectTimer.current) clearTimeout(reconnectTimer.current); };
+            }, [connect]);
+
+            const navBtns = [];
+            navBtns.push(<Button key="ebooks" onClick={() => window.location.href = 'ebooks.html'}>📚 电子书</Button>);
+            navBtns.push(<Button key="ip" onClick={() => window.location.href = 'ip-panel.html'}>🌐 IP 流量</Button>);
+            if (hasPerm('service:view') || hasPerm('port:view')) navBtns.push(<Button key="services" onClick={() => window.location.href = 'services.html'}>🧰 服务端口</Button>);
+            if (hasPerm('files:manage')) navBtns.push(<Button key="files" onClick={() => window.location.href = 'files.html'}>📁 文件管理</Button>);
+            if (hasPerm('system:process')) navBtns.push(<Button key="proc" onClick={() => window.location.href = 'process.html'}>⚙️ 进程</Button>);
+            if (hasPerm('files:download')) navBtns.push(<Button key="dl" onClick={() => window.location.href = 'download.html'}>📥 安全下载</Button>);
+            if (hasPerm('user:manage') || hasPerm('role:manage')) navBtns.push(<Button key="rbac" onClick={() => window.location.href = 'rbac.html'}>🛡️ 权限管理</Button>);
+
+            const onlineCols = [
+                { title: 'IP 地址', dataIndex: 'ip' },
+                { title: '访问页面', dataIndex: 'page' },
+                { title: '连接时间', dataIndex: 'since' },
+                { title: '用户标识', dataIndex: 'user_agent', ellipsis: true }
+            ];
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <div className={'topbar' + (isDark ? ' dark' : '')}>
+                            <div className="brand"><span className="logo">🖥️</span><span>Server Status<span className="tb-sub"> · 实时监控</span></span></div>
+                            <Space wrap>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                    <Badge status={conn === 'connected' ? 'success' : conn === 'connecting' ? 'processing' : 'error'} />
+                                    <Typography.Text className="tb-status" type="secondary">{conn === 'connected' ? '已连接' : conn === 'connecting' ? '连接中...' : '已断开'}</Typography.Text>
+                                </span>
+                                <Button title={isDark ? '浅色模式' : '深色模式'} onClick={() => setIsDark(!isDark)}>{isDark ? '🌞' : '🌙'}<span className="tb-label">{isDark ? '浅色' : '深色'}</span></Button>
+                                <Button danger title="退出登录" onClick={onLogout}>🚪<span className="tb-label">退出</span></Button>
+                            </Space>
+                        </div>
+                        <div className="page-wrap">
+                            <Space wrap style={{ marginBottom: 12 }}>
+                                {navBtns}
+                            </Space>
+
+                            <div className="stat-grid stat-cards">
+                                <Card size="small" hoverable bordered><Statistic title="CPU 使用率" value={status ? (parseFloat(status.cpu_usage) || 0).toFixed(1) : '-'} suffix="%" valueStyle={{ color: '#1677ff' }} /></Card>
+                                <Card size="small" hoverable bordered><Statistic title="内存使用率" value={status ? (parseFloat(status.memory_usage) || 0).toFixed(1) : '-'} suffix="%" valueStyle={{ color: '#52c41a' }} /></Card>
+                                <Card size="small" hoverable bordered><Statistic title="磁盘使用率" value={status ? (parseFloat(status.disk_usage) || 0).toFixed(1) : '-'} suffix="%" valueStyle={{ color: '#faad14' }} /></Card>
+                                <Card size="small" hoverable bordered><Statistic title="在线用户" value={onlineCount} suffix="人" valueStyle={{ color: '#722ed1' }} /></Card>
+                                <Card size="small" hoverable bordered><Statistic title="运行时间" value={status ? status.uptime : '-'} valueStyle={{ fontSize: 14 }} /></Card>
+                            </div>
+
+                            <Card size="small" style={{ marginBottom: 12 }}>
+                                <Descriptions size="small" column={{ xs: 1, sm: 2, md: 4 }} items={[
+                                    { key: 'host', label: '主机名', children: status?.hostname || '-' },
+                                    { key: 'os', label: '操作系统', children: status?.os || '-' },
+                                    { key: 'kernel', label: '内核', children: status?.kernel_version || '-' },
+                                    { key: 'arch', label: '架构', children: status?.architecture || '-' },
+                                    { key: 'up', label: '上传总流量', children: status?.total_upload || '-' },
+                                    { key: 'down', label: '下载总流量', children: status?.total_download || '-' },
+                                    { key: 'load', label: '系统负载', children: status ? (status.load1 + ' / ' + status.load5 + ' / ' + status.load15) : '-' },
+                                    { key: 'net', label: '网络', children: status ? '↑' + (parseFloat(status.upload_speed) || 0).toFixed(1) + ' / ↓' + (parseFloat(status.download_speed) || 0).toFixed(1) + ' KB/s' : '-' }
+                                ]} />
+                            </Card>
+
+                            <div className="stat-grid">
+                                <Card size="small" hoverable bordered className="chart-card" title="📈 网络速率">
+                                    <div ref={el => chartRefs.current.net = el} className="chart"></div>
+                                </Card>
+                                <Card size="small" hoverable bordered className="chart-card" title="💿 磁盘 I/O">
+                                    <div ref={el => chartRefs.current.disk = el} className="chart"></div>
+                                </Card>
+                                <Card size="small" hoverable bordered className="chart-card" title="🔋 CPU 使用率">
+                                    <div ref={el => chartRefs.current.cpu = el} className="chart"></div>
+                                </Card>
+                                <Card size="small" hoverable bordered className="chart-card" title="🧠 内存使用率">
+                                    <div ref={el => chartRefs.current.mem = el} className="chart"></div>
+                                </Card>
+                            </div>
+
+                            <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
+                                <Card size="small" hoverable bordered title={`👥 在线用户（${onlineCount}）`}>
+                                    <Table size="small" rowKey={(_, i) => i} dataSource={online} columns={onlineCols}
+                                        pagination={false} scroll={{ y: 240, x: 'max-content' }} />
+                                </Card>
+                            </div>
+
+                            {hasPerm('trojan:manage') && (
+                                <Card size="small" hoverable bordered className="trojan-ov-card" style={{ marginBottom: 12, cursor: 'pointer' }}
+                                    onClick={() => { window.location.href = '/trojan'; }}
+                                    title={
+                                        <Space size={8}>
+                                            <span>Trojan-Go</span>
+                                            <Tag color={trojanStatus?.connected ? 'green' : 'red'} style={{ marginRight: 0 }}>
+                                                {trojanStatus?.connected ? '● Running' : '● Offline'}
+                                            </Tag>
+                                        </Space>
+                                    }
+                                    extra={
+                                        <Typography.Link onClick={e => { e.stopPropagation(); window.location.href = '/trojan'; }}>
+                                            查看详情 ›
+                                        </Typography.Link>
+                                    }>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 28px', alignItems: 'center' }}>
+                                        <div className="trojan-ov">
+                                            <div className="trojan-ov-label">在线用户</div>
+                                            <div className="trojan-ov-value">{trojanStatus ? trojanStatus.online_users : '-'}</div>
+                                        </div>
+                                        <div className="trojan-ov">
+                                            <div className="trojan-ov-label">在线 IP</div>
+                                            <div className="trojan-ov-value">{trojanStatus ? trojanStatus.online_ips : '-'}</div>
+                                        </div>
+                                        <div className="trojan-ov">
+                                            <div className="trojan-ov-label">下载速度</div>
+                                            <div className="trojan-ov-value trojan-ov-download">{trojanStatus ? '↓ ' + formatBytes(trojanStatus.download_speed, 'B/s') : '↓ -'}</div>
+                                        </div>
+                                        <div className="trojan-ov">
+                                            <div className="trojan-ov-label">上传速度</div>
+                                            <div className="trojan-ov-value trojan-ov-upload">{trojanStatus ? '↑ ' + formatBytes(trojanStatus.upload_speed, 'B/s') : '↑ -'}</div>
+                                        </div>
+                                        <div className="trojan-ov" style={{ marginLeft: 'auto' }}>
+                                            <div className="trojan-ov-label">Trojan API</div>
+                                            <div className="trojan-ov-value trojan-ov-api">
+                                                {trojanStatus ? (trojanStatus.connected ? '● Connected' : '● Disconnected') : '● Disconnected'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Card>
+                            )}
+
+                            <Alert type="info" showIcon style={{ marginTop: 12 }}
+                                message={conn !== 'connected' ? '⚠️ WebSocket 连接已断开，正在自动重连，图表暂停更新' : '✅ 实时数据推送中，每 1 秒更新一次'} />
+                        </div>
+                        <MediaWindow />
+                    </div>
+                </ConfigProvider>
+            );
+        }
+
+        function MediaWindow() {
+            const [src, setSrc] = useState(null);
+            const [playing, setPlaying] = useState(true);
+            const [zoomed, setZoomed] = useState(false);
+            const [volume, setVolume] = useState(() => {
+                const v = parseFloat(localStorage.getItem('media_volume'));
+                return isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
+            });
+            const [muted, setMuted] = useState(() => localStorage.getItem('media_sound') !== 'on');
+            const videoRef = useRef(null);
+            const isVideo = src && /\.(mp4|webm|mov)(\?|$)/i.test(src);
+            const fixSrc = (u) => {
+                try {
+                    const p = new URL(u);
+                    p.hostname = window.location.hostname;
+                    return p.toString();
+                } catch (e) { return u; }
+            };
+
+            const load = useCallback(() => {
+                secureFetch(baseUrl + '/random-media')
+                    .then(r => r.json())
+                    .then(d => { if (d && d.src) { setSrc(fixSrc(d.src)); setPlaying(true); setMuted(localStorage.getItem('media_sound') !== 'on'); } })
+                    .catch(() => { });
+            }, []);
+            useEffect(() => {
+                load();
+                const t = setInterval(load, 80000);
+                return () => clearInterval(t);
+            }, [load]);
+            useEffect(() => {
+                const v = videoRef.current;
+                if (!v) return;
+                v.muted = muted;
+                v.volume = volume;
+                if (playing) v.play().catch(() => { });
+                else v.pause();
+            }, [src, playing, volume, muted]);
+            useEffect(() => { localStorage.setItem('media_sound', muted ? 'off' : 'on'); }, [muted]);
+            useEffect(() => { localStorage.setItem('media_volume', String(volume)); }, [volume]);
+
+            return (
+                <div className={'media-window' + (zoomed ? ' zoomed' : '')}>
+                    <div className="media-head">
+                        <span className="m-title">🎬 媒体展示</span>
+                        {isVideo && <window.antd.Slider min={0} max={1} step={0.05} value={volume}
+                            onChange={v => { setVolume(v); setMuted(v === 0); }}
+                            style={{ width: 70, margin: 0 }} tooltip={{ open: false }} />}
+                        {isVideo && <window.antd.Button size="small" type="text"
+                            onClick={() => {
+                                const nextMuted = !muted;
+                                const v = videoRef.current;
+                                if (!nextMuted && v) {
+                                    const vol = volume > 0 ? volume : 0.5;
+                                    setVolume(vol);
+                                    v.muted = false;
+                                    v.volume = vol;
+                                    v.play().catch(() => { });
+                                } else if (nextMuted && v) {
+                                    v.muted = true;
+                                }
+                                setMuted(nextMuted);
+                            }}
+                            title={muted ? '取消静音' : '静音'}>{muted ? '🔇' : '🔊'}</window.antd.Button>}
+                        <window.antd.Button size="small" type="text" onClick={load} title="刷新">🔄</window.antd.Button>
+                        {isVideo && <window.antd.Button size="small" type="text"
+                            onClick={() => setPlaying(!playing)} title={playing ? '暂停' : '播放'}>{playing ? '⏸' : '▶'}</window.antd.Button>}
+                        <window.antd.Button size="small" type="text" onClick={() => setZoomed(!zoomed)}
+                            title={zoomed ? '还原' : '放大'}>{zoomed ? '🗕' : '⛶'}</window.antd.Button>
+                    </div>
+                    <div className="media-body" onClick={() => isVideo && setPlaying(!playing)}>
+                        {!src ? <span className="placeholder">加载媒体中...</span>
+                            : isVideo
+                                ? <video ref={videoRef} src={src} muted={muted} playsInline loop autoPlay />
+                                : <img src={src} alt="media" />}
+                    </div>
+                </div>
+            );
+        }
+
+        function App() {
+            const [user, setUser] = useState(null);
+            const [checking, setChecking] = useState(true);
+            useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => { setUser(d.code === 200 ? d.user : null); setChecking(false); })
+                    .catch(() => setChecking(false));
+            }, []);
+            if (checking) {
+                return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Card loading style={{ width: 320 }} /></div>;
+            }
+            if (!user) return <Login onLogin={setUser} />;
+            return <Dashboard key={user.username} user={user} onLogout={() => {
+                secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => { SessionManager.clear(); setUser(null); });
+            }} />;
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+    <script>
+        (function () {
+            function openPrivateSpace() {
+                try {
+                    fetch('/api/private/entry', { method: 'POST', credentials: 'include' })
+                        .catch(function () { })
+                        .finally(function () { window.location.href = 'private.html'; });
+                } catch (e) { window.location.href = 'private.html'; }
+            }
+            var taps = [], lastTap = 0;
+            document.addEventListener('keydown', function (e) {
+                if (e.ctrlKey && e.shiftKey && e.altKey && (e.key === 'N' || e.key === 'n')) {
+                    e.preventDefault();
+                    openPrivateSpace();
+                }
+            });
+            document.addEventListener('click', function (e) {
+                var el = e.target;
+                while (el && el !== document.documentElement) {
+                    if (el.classList && (el.classList.contains('logo') || el.classList.contains('brand'))) {
+                        var now = Date.now();
+                        if (now - lastTap > 3000) taps = [];
+                        lastTap = now;
+                        taps.push(now);
+                        if (taps.length >= 5) { taps = []; openPrivateSpace(); }
+                        return;
+                    }
+                    el = el.parentElement;
+                }
+            });
+        })();
+    </script>
 </body>
+
 </html>

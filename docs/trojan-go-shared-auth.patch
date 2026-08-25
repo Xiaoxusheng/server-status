@@ -1,0 +1,36 @@
+--- a/statistic/statistics.go
++++ b/statistic/statistics.go
+@@ -46,7 +46,11 @@ var (
+ 	createdAuthLock sync.Mutex
+ 	authCreators    = make(map[string]Creator)
+-	createdAuth     = make(map[context.Context]Authenticator)
++	// FIX: 原版按 context 缓存认证器，WebSocket 与 TLS 两个 trojan 实例各自创建独立统计，
++	// 导致 gRPC API 绑定到其中一个实例而看不到另一个实例的流量。
++	// 改为按后端名称共享同一个认证器，两个实例共用同一份统计。
++	createdAuth = make(map[string]Authenticator)
+ )
+@@ -58,16 +62,17 @@ func RegisterAuthenticatorCreator(name string, creator Creator) {
+ func NewAuthenticator(ctx context.Context, name string) (Authenticator, error) {
+-	// allocate a unique authenticator for each context
++	// allocate a unique authenticator for each auth driver name
+ 	createdAuthLock.Lock() // avoid concurrent map read/write
+ 	defer createdAuthLock.Unlock()
+-	if auth, found := createdAuth[ctx]; found {
++	upperName := strings.ToUpper(name)
++	if auth, found := createdAuth[upperName]; found {
+ 		log.Debug("authenticator has been created:", name)
+ 		return auth, nil
+ 	}
+-	creator, found := authCreators[strings.ToUpper(name)]
++	creator, found := authCreators[upperName]
+ 	if !found {
+ 		return nil, common.NewError("auth driver name " + name + " not found")
+ 	}
+@@ -75,6 +80,6 @@ func NewAuthenticator(ctx context.Context, name string) (Authenticator, error) {
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	createdAuth[ctx] = auth
++	createdAuth[upperName] = auth
+ 	return auth, err
+ }

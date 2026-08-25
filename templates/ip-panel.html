@@ -5,6 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>IP 流量监控 - Server Status</title>
     <link rel="icon" href="data:,">
+    <style>
+        html, body, #root { margin: 0; min-height: 100%; background: #f5f5f5; }
+        html.dark, html.dark body, html.dark #root { background: #141414; }
+        html.dark body { color: rgba(255,255,255,.85); }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f5f5f5; }
+        ::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #bfbfbf; }
+        html.dark ::-webkit-scrollbar-track { background: #141414; }
+        html.dark ::-webkit-scrollbar-thumb { background: #3a3a3a; }
+        html.dark ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) {}
+        })();
+    </script>
     <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
     <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
     <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
@@ -320,7 +340,12 @@
             return () => clearInterval(t);
         }, []);
 
-        useEffect(() => { localStorage.setItem('theme', isDark ? 'dark' : 'light'); }, [isDark]);
+        useEffect(() => {
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.documentElement.classList.toggle('dark', isDark);
+            document.body.classList.toggle('dark', isDark);
+            document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+        }, [isDark]);
 
         // IP 安全事件 WebSocket：ip.blocked
         useEffect(() => {
@@ -417,9 +442,19 @@
             if (!pre) {
                 try {
                     const r = await fetch(API_URL + '?ip=' + encodeURIComponent(ip), { headers: { 'User-Agent': navigator.userAgent || 'Mozilla/5.0' } });
-                    if (!r.ok) throw new Error('查询失败 (' + r.status + ')');
-                    setDetailData(await r.json());
+                    const text = await r.text();
+                    let d = null;
+                    try { d = JSON.parse(text); } catch (e) { d = null; }
+                    if (!r.ok || !d || !d.stats) {
+                        // 该 IP 无访问统计记录（ipinfo 返回 "IP not found" 等纯文本）
+                        setDetailData(null);
+                        if (blockedMap[ip]) message.info('该 IP 无访问统计记录，已展示封禁信息');
+                        else message.warning('未找到该 IP 的访问记录');
+                        return;
+                    }
+                    setDetailData(d);
                 } catch (e) {
+                    setDetailData(null);
                     message.error('加载详情失败: ' + e.message);
                 } finally {
                     setDetailLoading(false);
@@ -622,7 +657,7 @@
         ];
 
         return (
-            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: isMobile ? { fontSize: 13 } : undefined }}>
+            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff', ...(isMobile ? { fontSize: 13 } : {}) } }}>
                 <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', background: 'var(--bg)' }}>
                     <div className={'topbar' + (isDark ? ' dark' : '')}>
                         <div className="brand">
@@ -695,8 +730,10 @@
                                                 if (!v.trim() || filter === 'history') return;
                                                 try {
                                                     const r = await fetch(API_URL + '?ip=' + encodeURIComponent(v.trim()), { headers: { 'User-Agent': navigator.userAgent || 'Mozilla/5.0' } });
-                                                    if (r.status === 404) { message.warning('未找到该 IP 的访问记录'); return; }
-                                                    const d = await r.json();
+                                                    const text = await r.text();
+                                                    let d = null;
+                                                    try { d = JSON.parse(text); } catch (e) { d = null; }
+                                                    if (r.status === 404 || !d || !d.stats) { message.warning('未找到该 IP 的访问记录'); return; }
                                                     if (d && d.stats) openDetail(v.trim(), d);
                                                 } catch (e) { message.error('查询失败: ' + e.message); }
                                             }} />
@@ -811,10 +848,7 @@
                     {/* 访问详情 Drawer（原有）+ 封禁信息 */}
                     <Drawer title={detail ? 'IP 访问详情：' + detail : ''} open={!!detail}
                             onClose={() => { setDetail(null); setDetailData(null); }} width={isMobile ? '100%' : 640}>
-                        {detailLoading ? <Card loading /> : detailData ? (() => {
-                            const st = detailData.stats || {};
-                            const counts = st.status_counts || {};
-                            const recs = detailData.records || [];
+                        {detailLoading ? <Card loading /> : (() => {
                             const b = blockedMap[detail];
                             return <Space direction="vertical" size={16} style={{ width: '100%' }}>
                                 {b && b.status === 'blocked' && (
@@ -849,31 +883,38 @@
                                     type="info" showIcon
                                     message={<span>该 IP 当前未封禁 <Button size="small" danger style={{ marginLeft: 8 }} onClick={() => openBlockModal(detail)}>封禁该 IP</Button></span>}
                                 />}
-                                <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
-                                    <Card size="small" hoverable bordered><Statistic title="总请求" value={st.total_access || 0} /></Card>
-                                    <Card size="small" hoverable bordered><Statistic title="首次访问" value={st.first_access ? new Date(st.first_access).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'} valueStyle={{ fontSize: 13 }} /></Card>
-                                    <Card size="small" hoverable bordered><Statistic title="最后访问" value={st.last_access ? new Date(st.last_access).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'} valueStyle={{ fontSize: 13 }} /></Card>
-                                </div>
-                                <Card size="small" title={<Space size={6}><UIIcon name="LineChartOutlined" />访问频率</Space>}>
-                                    <div ref={freqChartRef} className="chart-wrap" style={{ height: 220 }}></div>
-                                </Card>
-                                <Card size="small" title={<Space size={6}><UIIcon name="NumberOutlined" />状态码统计</Space>}>
-                                    <Space wrap>
-                                        {Object.entries(counts).map(([code, n]) => (
-                                            <Tag key={code} color={statusColor(parseInt(code))}>{code}: {n}</Tag>
-                                        ))}
-                                    </Space>
-                                </Card>
-                                <Card size="small" title={<Space size={6}><UIIcon name="ClockCircleOutlined" />最近访问记录（{recs.length} 条）</Space>}>
-                                    <Table size="small" rowKey={(_, i) => i} dataSource={recs} pagination={false} scroll={{ y: 320 }}
-                                           columns={[
-                                               { title: '时间', dataIndex: 'timestamp', width: 160, render: v => <Typography.Text type="secondary">{v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text> },
-                                               { title: '方法/状态', key: 'ms', width: 110, render: (_, r) => <span><Typography.Text code>{r.method}</Typography.Text> <Tag color={statusColor(r.status)}>{r.status}</Tag></span> },
-                                               { title: 'URL', dataIndex: 'url', ellipsis: true, render: v => <Typography.Text code style={{ fontSize: 12 }}>{v}</Typography.Text> }
-                                           ]} />
-                                </Card>
+                                {detailData ? (() => {
+                                    const st = detailData.stats || {};
+                                    const counts = st.status_counts || {};
+                                    const recs = detailData.records || [];
+                                    return <div>
+                                        <div className="stat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+                                            <Card size="small" hoverable bordered><Statistic title="总请求" value={st.total_access || 0} /></Card>
+                                            <Card size="small" hoverable bordered><Statistic title="首次访问" value={st.first_access ? new Date(st.first_access).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'} valueStyle={{ fontSize: 13 }} /></Card>
+                                            <Card size="small" hoverable bordered><Statistic title="最后访问" value={st.last_access ? new Date(st.last_access).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'} valueStyle={{ fontSize: 13 }} /></Card>
+                                        </div>
+                                        <Card size="small" title={<Space size={6}><UIIcon name="LineChartOutlined" />访问频率</Space>}>
+                                            <div ref={freqChartRef} className="chart-wrap" style={{ height: 220 }}></div>
+                                        </Card>
+                                        <Card size="small" title={<Space size={6}><UIIcon name="NumberOutlined" />状态码统计</Space>}>
+                                            <Space wrap>
+                                                {Object.entries(counts).map(([code, n]) => (
+                                                    <Tag key={code} color={statusColor(parseInt(code))}>{code}: {n}</Tag>
+                                                ))}
+                                            </Space>
+                                        </Card>
+                                        <Card size="small" title={<Space size={6}><UIIcon name="ClockCircleOutlined" />最近访问记录（{recs.length} 条）</Space>}>
+                                            <Table size="small" rowKey={(_, i) => i} dataSource={recs} pagination={false} scroll={{ y: 320 }}
+                                                   columns={[
+                                                       { title: '时间', dataIndex: 'timestamp', width: 160, render: v => <Typography.Text type="secondary">{v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text> },
+                                                       { title: '方法/状态', key: 'ms', width: 110, render: (_, r) => <span><Typography.Text code>{r.method}</Typography.Text> <Tag color={statusColor(r.status)}>{r.status}</Tag></span> },
+                                                       { title: 'URL', dataIndex: 'url', ellipsis: true, render: v => <Typography.Text code style={{ fontSize: 12 }}>{v}</Typography.Text> }
+                                                   ]} />
+                                        </Card>
+                                    </div>;
+                                })() : <Empty description="该 IP 无访问统计记录，已展示封禁信息" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '20px 0' }} />}
                             </Space>;
-                        })() : null}
+                        })()}
                     </Drawer>
 
                     {/* 封禁管理 Drawer */}
@@ -1031,6 +1072,38 @@
     }
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script>
+    (function () {
+        function openPrivateSpace() {
+            try {
+                fetch('/api/private/entry', { method: 'POST', credentials: 'include' })
+                    .catch(function () {})
+                    .finally(function () { window.location.href = 'private.html'; });
+            } catch (e) { window.location.href = 'private.html'; }
+        }
+        var taps = [], lastTap = 0;
+        document.addEventListener('keydown', function (e) {
+            if (e.ctrlKey && e.shiftKey && e.altKey && (e.key === 'N' || e.key === 'n')) {
+                e.preventDefault();
+                openPrivateSpace();
+            }
+        });
+        document.addEventListener('click', function (e) {
+            var el = e.target;
+            while (el && el !== document.documentElement) {
+                if (el.classList && (el.classList.contains('logo') || el.classList.contains('brand'))) {
+                    var now = Date.now();
+                    if (now - lastTap > 3000) taps = [];
+                    lastTap = now;
+                    taps.push(now);
+                    if (taps.length >= 5) { taps = []; openPrivateSpace(); }
+                    return;
+                }
+                el = el.parentElement;
+            }
+        });
+    })();
 </script>
 </body>
 </html>

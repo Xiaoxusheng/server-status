@@ -1,0 +1,14 @@
+{
+    "private_notes": {
+        "enabled": true,
+        "unlock_timeout": "30m",
+        "max_login_attempts": 5,
+        "lockout_duration": "1m",
+        "storage_dir": "./data/notes"
+    },
+    "cards": {
+        "enabled": true,
+        "default_width": 1080,
+        "default_height": 1080
+    }
+}

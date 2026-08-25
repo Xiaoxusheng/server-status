@@ -2,72 +2,171 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>权限管理 - Server Status</title>
     <link rel="icon" href="data:,">
+    <style>
+        html, body, #root { margin: 0; min-height: 100%; background: #f5f5f5; }
+        html.dark, html.dark body, html.dark #root { background: #141414; }
+        html.dark body { color: rgba(255,255,255,.85); }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f5f5f5; }
+        ::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #bfbfbf; }
+        html.dark ::-webkit-scrollbar-track { background: #141414; }
+        html.dark ::-webkit-scrollbar-thumb { background: #3a3a3a; }
+        html.dark ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) {}
+        })();
+    </script>
     <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
     <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
     <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
     <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
     <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
     <style>
-        body { margin: 0; background: #f5f5f5; }
+        body { margin: 0; background: #f5f5f5; font-size: 14px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
         #root { min-height: 100vh; }
-        .page-wrap { padding: 16px; }
+        .page-wrap { padding: 16px; max-width: 1800px; margin: 0 auto; }
         .topbar {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 0 24px; height: 56px; background: #fff;
-            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            padding: 0 24px; height: 54px; background: #fff;
+            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
         }
-        .topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; color: #1677ff; }
         .topbar.dark { background: #1f1f1f; border-bottom-color: #303030; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-        .topbar.dark .brand { color: #4096ff; }
+        .topbar .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .topbar .brand .bt-name { font-size: 18px; font-weight: 600; color: #1f1f1f; line-height: 1; }
+        .topbar.dark .brand .bt-name { color: rgba(255,255,255,0.88); }
+        .topbar .brand .bt-sub { font-size: 14px; color: rgba(0,0,0,0.45); font-weight: 400; margin-left: 2px; }
+        .topbar.dark .brand .bt-sub { color: rgba(255,255,255,0.45); }
         .topbar .brand .logo {
-            width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #1677ff, #722ed1);
-            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px;
+            width: 28px; height: 28px; border-radius: 7px; background: linear-gradient(135deg, #1677ff, #722ed1);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px;
         }
-        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
-        .toolbar .spacer { flex: 1; }
-        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-        .user-card .ant-card-body { padding: 16px; }
-        .user-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-        .user-head .info { flex: 1; min-width: 0; }
-        .user-head .name { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 6px; }
-        .user-meta { color: #999; font-size: 12px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .user-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 10px; border-top: 1px dashed #f0f0f0; }
-        .role-card { transition: box-shadow .2s, transform .2s; }
-        .role-card:hover { box-shadow: 0 6px 18px rgba(22,119,255,.12); transform: translateY(-2px); }
-        .role-perms { min-height: 44px; }
-        .perm-group { margin-bottom: 10px; }
-        .perm-group .perm-label { font-weight: 600; margin-bottom: 4px; color: #888; font-size: 12px; }
-        .empty-tip { text-align: center; padding: 40px 0; color: #999; }
+        .topbar .ant-btn { font-size: 13px; }
+        .topbar .tb-text { margin-left: 4px; }
         @media (max-width: 768px) {
-            .topbar { padding: 8px 12px; flex-wrap: wrap; gap: 6px 8px; }
-            .topbar .brand { font-size: 14px; gap: 6px; }
-            .topbar .brand .logo { width: 26px; height: 26px; font-size: 14px; border-radius: 6px; }
-            .topbar .ant-space { flex-wrap: wrap; gap: 6px !important; }
-            .topbar .ant-btn { padding: 4px 8px; font-size: 12px; height: 30px; }
-            .topbar .tb-sub { display: none; }
-            .topbar .tb-label { display: none; }
-            .page-wrap { padding: 10px; }
-            .card-grid { grid-template-columns: 1fr; }
-            .toolbar .btn { flex: 1; }
-            .toolbar input { min-width: 0 !important; }
+            .topbar { padding: 6px 10px; gap: 4px; height: auto; min-height: 52px; }
+            .topbar .brand { flex: 1; }
+            .topbar .brand .bt-name { max-width: 60vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .topbar .brand .bt-sub { display: none; }
+            .topbar .tb-text { display: none; }
+            .topbar .ant-space { gap: 4px !important; }
+            .topbar .ant-btn { padding: 4px 9px; height: 32px; }
+            .page-wrap { padding: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+        }
+        @media (max-width: 480px) {
+            .tb-hide-sm { display: none !important; }
+        }
+
+        .sp-app { --bg: #f5f5f5; --card: #ffffff; --border: #f0f0f0; --text: rgba(0,0,0,0.88); --secondary: rgba(0,0,0,0.45); color-scheme: light; }
+        .sp-app.dark { --bg: #141414; --card: #1f1f1f; --border: #303030; --text: rgba(255,255,255,0.88); --secondary: rgba(255,255,255,0.45); color-scheme: dark; }
+
+        .page-title { font-size: 20px; font-weight: 600; color: var(--text); }
+        .page-desc { font-size: 13px; color: var(--secondary); margin-top: 2px; }
+
+        .mini-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; min-width: 0; }
+        .mini-stat {
+            background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+            padding: 8px 16px; height: 64px; display: flex; flex-direction: column; justify-content: center; gap: 1px;
+            min-width: 0; overflow: hidden;
+        }
+        .mini-stat .ms-label { font-size: 12px; color: var(--secondary); display: flex; align-items: center; gap: 6px; }
+        .mini-stat .ms-label .anticon { font-size: 13px; }
+        .mini-stat .ms-value { font-size: 22px; font-weight: 600; line-height: 1.15; color: var(--text); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .toolbar .toolbar-search { width: 260px; }
+        .toolbar .spacer { flex: 1; }
+        .filter-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; scrollbar-width: none; }
+        .filter-wrap::-webkit-scrollbar { display: none; }
+        @media (max-width: 768px) {
+            .toolbar .toolbar-search { width: 100%; order: -1; }
+            .mini-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+            .mini-stat { height: 60px; padding: 8px 12px; }
+            .mini-stat .ms-value { font-size: 20px; }
             .ant-card-head { padding: 0 12px !important; }
             .ant-card-head-wrapper { flex-wrap: wrap; gap: 6px; }
             .ant-card-body { padding: 12px !important; }
+            .ant-table-content, .ant-table-body { -webkit-overflow-scrolling: touch; }
+            .ant-drawer-footer { padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important; }
         }
+
+        .user-card .ant-card-body { padding: 14px 16px; }
+        .user-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; min-width: 0; }
+        .user-head .info { flex: 1; min-width: 0; }
+        .user-head .name { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .user-meta { color: var(--secondary); font-size: 12px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .user-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+
+        .role-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+        @media (min-width: 1600px) { .role-grid { grid-template-columns: repeat(4, 1fr); } }
+        @media (max-width: 991px) { .role-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 767px) { .role-grid { grid-template-columns: 1fr; } }
+        .role-card { transition: box-shadow .2s; min-width: 0; }
+        .role-card:hover { box-shadow: 0 4px 14px rgba(22,119,255,.10); }
+        .role-card .ant-card-body { padding: 14px 16px; }
+        .role-title { font-size: 16px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .role-id { font-family: Consolas, Monaco, monospace; font-size: 12px; color: var(--secondary); margin: 2px 0 8px; }
+        .role-desc { color: var(--secondary); font-size: 13px; min-height: 40px; }
+        .role-stats { display: flex; gap: 8px; margin: 10px 0; }
+        .role-stat { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; text-align: center; min-width: 0; }
+        .role-stat span { display: block; font-size: 12px; color: var(--secondary); }
+        .role-stat b { font-size: 16px; font-weight: 600; color: var(--text); }
+        .perm-sect-title { font-size: 12px; color: var(--secondary); margin: 14px 0 6px; display: flex; align-items: center; gap: 6px; }
+        .perm-sect-title .anticon { font-size: 13px; }
+        .perm-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; font-size: 13px; color: var(--text); }
+        .perm-item:hover { background: rgba(22,119,255,.06); }
+        .perm-item .perm-key { font-family: Consolas, Monaco, monospace; font-size: 12px; color: var(--secondary); }
+        .perm-item .perm-desc { font-size: 12px; color: var(--secondary); margin-left: auto; text-align: right; }
+        .diff-item { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 2px 0; }
+        .diff-item .anticon { font-size: 12px; }
+        .diff-add { color: #52c41a; }
+        .diff-remove { color: #ff4d4f; }
+        .high-risk { color: #fa541c; }
+        .matrix-check { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; }
+        .matrix-yes { color: #52c41a; }
+        .matrix-no { color: rgba(0,0,0,0.25); }
+        .sp-app.dark .matrix-no { color: rgba(255,255,255,0.25); }
+        .audit-detail { font-size: 12px; color: var(--secondary); white-space: pre-wrap; word-break: break-all; }
     </style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
-    const { Card, Button, Input, Modal, message, Space, Tag, Switch, Select, Form, Tabs, Popconfirm, ConfigProvider, theme, Typography, Badge, Avatar, Alert, Tooltip, Empty } = window.antd;
-    const { useState, useEffect, useCallback } = React;
+    const { Card, Button, Input, Select, Tag, Space, message, Modal, Drawer, Form, Switch, Tabs, Popconfirm,
+          ConfigProvider, theme, Typography, Badge, Avatar, Alert, Tooltip, Dropdown, Checkbox, Segmented,
+          Descriptions, Empty, Table, Divider, Spin } = window.antd;
+    const { useState, useEffect, useCallback, useMemo } = React;
     const { darkAlgorithm } = theme;
+    const IconSet = window.icons || {};
 
     const baseUrl = window.location.origin;
     const AVATAR_COLORS = ['#1677ff', '#722ed1', '#13c2c2', '#eb2f96', '#fa8c16', '#52c41a', '#f5222d'];
+    const HIGH_RISK = ['system:exec', 'files:manage', 'user:manage', 'role:manage', 'ip:manage', 'token:issue'];
+
+    const UIIcon = ({ name, ...props }) => {
+        const C = IconSet[name];
+        return C ? <C {...props} /> : null;
+    };
+
+    function useIsMobile() {
+        const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
+        useEffect(() => {
+            const q = window.matchMedia('(max-width: 768px)');
+            const h = e => setM(e.matches);
+            q.addListener(h);
+            return () => q.removeListener(h);
+        }, []);
+        return m;
+    }
 
     function secureFetch(url, options = {}) {
         return fetch(url, {
@@ -84,6 +183,13 @@
         return d.data;
     }
 
+    const fmtTime = (s) => s ? new Date(s).toLocaleString('zh-CN', { hour12: false }) : '-';
+    const fmtDate = (s) => s ? new Date(s).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }) : '-';
+
+    const statusBadge = (active) => active
+        ? <Badge status="success" text="正常" />
+        : <Badge status="error" text="禁用" />;
+
     function App() {
         const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
         const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
@@ -91,12 +197,30 @@
         const [users, setUsers] = useState([]);
         const [roles, setRoles] = useState([]);
         const [perms, setPerms] = useState([]);
+        const [online, setOnline] = useState(0);
         const [loading, setLoading] = useState(false);
         const [search, setSearch] = useState('');
-        const [userModal, setUserModal] = useState(null);
-        const [roleModal, setRoleModal] = useState(null);
+        const [roleFilter, setRoleFilter] = useState(undefined);
+        const [statusFilter, setStatusFilter] = useState(undefined);
+        const [userView, setUserView] = useState(() => localStorage.getItem('rbac_user_view') || 'list');
+        const [matrixRoles, setMatrixRoles] = useState([]);
+        const isMobile = useIsMobile();
+
+        // Drawer 状态
+        const [userDetail, setUserDetail] = useState(null);
+        const [userEdit, setUserEdit] = useState(null); // {mode:'create'|'edit', record}
+        const [roleDetail, setRoleDetail] = useState(null);
+        const [roleEdit, setRoleEdit] = useState(null); // {mode:'create'|'edit', record}
+        const [auditUser, setAuditUser] = useState(null);
+        const [auditRecords, setAuditRecords] = useState([]);
+        const [auditLoading, setAuditLoading] = useState(false);
+        const [pwdModal, setPwdModal] = useState(null); // 用户名
+        const [pwdForm] = Form.useForm();
         const [uForm] = Form.useForm();
         const [rForm] = Form.useForm();
+        const userEditRoleId = Form.useWatch('role_id', uForm);
+        const roleEditPerms = Form.useWatch('permissions', rForm);
+        const [showAllPerms, setShowAllPerms] = useState(false);
 
         const hasPerm = p => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
         const canViewUser = hasPerm('user:view') || hasPerm('user:manage');
@@ -112,268 +236,820 @@
                 })
                 .catch(() => { window.location.href = 'index.html'; });
         }, []);
-        useEffect(() => { localStorage.setItem('theme', isDark ? 'dark' : 'light'); }, [isDark]);
+        useEffect(() => {
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.documentElement.classList.toggle('dark', isDark);
+            document.body.classList.toggle('dark', isDark);
+            document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+        }, [isDark]);
+        useEffect(() => { localStorage.setItem('rbac_user_view', userView); }, [userView]);
 
-        const loadRoles = useCallback(async () => {
-            try { setRoles(await api('/api/rbac/roles')); } catch (e) { message.error('加载角色失败: ' + e.message); }
-        }, []);
         const loadUsers = useCallback(async () => {
             setLoading(true);
             try { setUsers(await api('/api/rbac/users')); } catch (e) { message.error('加载用户失败: ' + e.message); } finally { setLoading(false); }
         }, []);
+        const loadRoles = useCallback(async () => {
+            try { setRoles(await api('/api/rbac/roles')); } catch (e) { message.error('加载角色失败: ' + e.message); }
+        }, []);
+        const loadPerms = useCallback(async () => {
+            try { setPerms(await api('/api/rbac/permissions')); } catch (e) { /* 权限不足时忽略 */ }
+        }, []);
+        const loadOnline = useCallback(async () => {
+            try { const d = await api('/api/rbac/online-count'); setOnline(d.count || 0); } catch (e) { /* 忽略 */ }
+        }, []);
+
+        const refresh = useCallback(() => {
+            if (canViewUser) loadUsers();
+            if (canManageRole) { loadRoles(); loadPerms(); }
+            loadOnline();
+        }, [canViewUser, canManageRole, loadUsers, loadRoles, loadPerms, loadOnline]);
 
         useEffect(() => {
             if (!auth.ok) return;
-            if (canViewUser) loadUsers();
-            if (canManageRole) { loadRoles(); api('/api/rbac/permissions').then(setPerms).catch(() => {}); }
-        }, [auth.ok, canViewUser, canManageRole, loadUsers, loadRoles]);
+            refresh();
+            const t = setInterval(loadOnline, 30000);
+            return () => clearInterval(t);
+        }, [auth.ok, refresh, loadOnline]);
+
+        const permDef = useMemo(() => {
+            const m = {};
+            perms.forEach(p => { m[p.key] = p; });
+            return m;
+        }, [perms]);
+        const permGroups = useMemo(() => {
+            const g = {};
+            perms.forEach(p => { (g[p.group] = g[p.group] || []).push(p); });
+            return g;
+        }, [perms]);
+        const permName = k => { const d = permDef[k]; return d ? d.name : k; };
+        const isHighRisk = k => HIGH_RISK.includes(k);
+
+        // 角色权限展开（admin * → 全部权限）
+        const rolePermSet = (role) => {
+            if (!role) return new Set();
+            if (role.permissions && role.permissions.includes('*')) return new Set(perms.map(p => p.key));
+            return new Set(role.permissions || []);
+        };
+        const diffPerms = (before, after) => {
+            const b = before instanceof Set ? before : new Set(before || []);
+            const a = after instanceof Set ? after : new Set(after || []);
+            return {
+                added: [...a].filter(x => !b.has(x)),
+                removed: [...b].filter(x => !a.has(x))
+            };
+        };
 
         if (auth.loading) {
-            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Card loading style={{ width: 320 }} /></div>;
+            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
+                <Card loading style={{ width: 320 }} />
+            </div>;
         }
         if (!canViewUser && !canManageRole) {
-            return <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
+            return <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
                 <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
-                    <Card style={{ width: 380, textAlign: 'center' }}>
-                        <div style={{ fontSize: 48 }}>🚫</div>
+                    <Card style={{ width: 400, textAlign: 'center' }}>
+                        <div style={{ fontSize: 40, marginBottom: 8 }}><UIIcon name="StopOutlined" /></div>
                         <Typography.Title level={4}>没有访问权限</Typography.Title>
-                        <Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>
+                        <Typography.Text type="secondary">当前账号没有权限管理相关权限，请联系管理员开通。</Typography.Text>
+                        <div style={{ marginTop: 16 }}>
+                            <Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>
+                        </div>
                     </Card>
                 </div>
             </ConfigProvider>;
         }
 
-        const permGroups = {};
-        perms.forEach(p => { (permGroups[p.group] = permGroups[p.group] || []).push(p); });
-        const permName = k => { const d = perms.find(x => x.key === k); return d ? d.name : k; };
+        const filteredUsers = users.filter(u => {
+            if (roleFilter && u.role_id !== roleFilter) return false;
+            if (statusFilter === 'active' && !u.is_active) return false;
+            if (statusFilter === 'disabled' && u.is_active) return false;
+            const q = search.trim().toLowerCase();
+            if (q && !(u.username || '').toLowerCase().includes(q) && !(u.email || '').toLowerCase().includes(q)) return false;
+            return true;
+        });
 
+        // ============ 用户操作 ============
+        const openUserDetail = (u) => { setUserDetail(u); setShowAllPerms(false); };
+        const openUserEdit = (u) => {
+            setUserEdit({ mode: u ? 'edit' : 'create', record: u || null });
+            uForm.resetFields();
+            if (u) uForm.setFieldsValue({ username: u.username, email: u.email, role_id: u.role_id || 'user', is_active: u.is_active, password: '' });
+            else uForm.setFieldsValue({ is_active: true, role_id: 'user', password: '' });
+        };
         const submitUser = async () => {
             const v = await uForm.validateFields();
             try {
-                if (userModal.mode === 'create') {
-                    await api('/api/rbac/users', 'POST', v);
+                if (userEdit.mode === 'create') {
+                    await api('/api/rbac/users', 'POST', { username: v.username, email: v.email, password: v.password, role_id: v.role_id });
                     message.success('用户创建成功');
                 } else {
                     const body = { email: v.email, role_id: v.role_id, is_active: v.is_active };
                     if (v.password) body.password = v.password;
-                    await api('/api/rbac/users/' + encodeURIComponent(userModal.record.username), 'PUT', body);
+                    await api('/api/rbac/users/' + encodeURIComponent(userEdit.record.username), 'PUT', body);
                     message.success('用户更新成功');
                 }
-                setUserModal(null);
+                setUserEdit(null);
                 loadUsers();
+                loadRoles();
             } catch (e) { message.error(e.message); }
+        };
+        const setUserActive = async (u, active) => {
+            try {
+                await api('/api/rbac/users/' + encodeURIComponent(u.username), 'PUT', { is_active: active });
+                message.success(active ? '已启用 ' + u.username : '已禁用 ' + u.username);
+                loadUsers();
+                if (userDetail && userDetail.username === u.username) setUserDetail({ ...userDetail, is_active: active });
+            } catch (e) { message.error(e.message); }
+        };
+        const deleteUser = async (u) => {
+            try {
+                await api('/api/rbac/users/' + encodeURIComponent(u.username), 'DELETE');
+                message.success('用户已删除');
+                loadUsers();
+                loadRoles();
+                if (userDetail && userDetail.username === u.username) setUserDetail(null);
+            } catch (e) { message.error(e.message); }
+        };
+        const resetPassword = async () => {
+            const v = await pwdForm.validateFields();
+            Modal.confirm({
+                title: '重置密码？',
+                content: '将为用户 ' + pwdModal + ' 设置新密码，操作不可撤销。',
+                okText: '确认重置',
+                okButtonProps: { danger: true },
+                cancelText: '取消',
+                onOk: async () => {
+                    try {
+                        await api('/api/rbac/users/' + encodeURIComponent(pwdModal), 'PUT', { password: v.password });
+                        message.success('密码已重置');
+                        setPwdModal(null);
+                        pwdForm.resetFields();
+                    } catch (e) { message.error(e.message); }
+                }
+            });
+        };
+        const loadAudit = async (username) => {
+            setAuditUser(username);
+            setAuditLoading(true);
+            setAuditRecords([]);
+            try {
+                const d = await api('/api/audit?user=' + encodeURIComponent(username || '') + '&limit=100');
+                setAuditRecords(d || []);
+            } catch (e) { message.error('加载操作记录失败: ' + e.message); } finally { setAuditLoading(false); }
+        };
+
+        const userMoreMenu = (u) => ({
+            items: [
+                { key: 'detail', label: '详情', icon: <UIIcon name="ProfileOutlined" /> },
+                { key: 'edit', label: '编辑', icon: <UIIcon name="EditOutlined" /> },
+                { key: 'pwd', label: '修改密码', icon: <UIIcon name="KeyOutlined" /> },
+                { type: 'divider' },
+                u.is_active
+                    ? { key: 'disable', label: '禁用', danger: true, icon: <UIIcon name="StopOutlined" /> }
+                    : { key: 'enable', label: '启用', icon: <UIIcon name="PlayCircleOutlined" /> },
+                { key: 'delete', label: '删除', danger: true, icon: <UIIcon name="DeleteOutlined" /> },
+                { type: 'divider' },
+                { key: 'audit', label: '查看操作记录', icon: <UIIcon name="HistoryOutlined" /> }
+            ],
+            onClick: ({ key }) => {
+                if (key === 'detail') openUserDetail(u);
+                else if (key === 'edit') openUserEdit(u);
+                else if (key === 'pwd') { pwdForm.resetFields(); setPwdModal(u.username); }
+                else if (key === 'disable') Modal.confirm({ title: '禁用用户？', content: `禁用后 ${u.username} 将无法登录。`, okText: '禁用', okButtonProps: { danger: true }, cancelText: '取消', onOk: () => setUserActive(u, false) });
+                else if (key === 'enable') Modal.confirm({ title: '启用用户？', content: `将恢复 ${u.username} 的登录权限。`, okText: '启用', cancelText: '取消', onOk: () => setUserActive(u, true) });
+                else if (key === 'delete') Modal.confirm({ title: '删除用户？', content: `确定删除用户 ${u.username} 吗？该操作不可恢复。`, okText: '删除', okButtonProps: { danger: true }, cancelText: '取消', onOk: () => deleteUser(u) });
+                else if (key === 'audit') loadAudit(u.username);
+            }
+        });
+
+        // ============ 角色操作 ============
+        const openRoleDetail = (r) => setRoleDetail(r);
+        const openRoleEdit = (r) => {
+            setRoleEdit({ mode: r ? 'edit' : 'create', record: r || null });
+            rForm.resetFields();
+            if (r) rForm.setFieldsValue({ role_id: r.role_id, name: r.name, description: r.description || '', permissions: r.permissions || [] });
+            else rForm.setFieldsValue({ permissions: [] });
         };
         const submitRole = async () => {
             const v = await rForm.validateFields();
             try {
-                if (roleModal.mode === 'create') {
-                    await api('/api/rbac/roles', 'POST', v);
+                if (roleEdit.mode === 'create') {
+                    await api('/api/rbac/roles', 'POST', { role_id: v.role_id, name: v.name, description: v.description || '', permissions: v.permissions });
                     message.success('角色创建成功');
                 } else {
-                    await api('/api/rbac/roles/' + encodeURIComponent(roleModal.record.role_id), 'PUT', { name: v.name, description: v.description, permissions: v.permissions });
+                    await api('/api/rbac/roles/' + encodeURIComponent(roleEdit.record.role_id), 'PUT', { name: v.name, description: v.description || '', permissions: v.permissions });
                     message.success('角色更新成功');
                 }
-                setRoleModal(null);
+                setRoleEdit(null);
                 loadRoles();
                 loadUsers();
             } catch (e) { message.error(e.message); }
         };
+        const deleteRole = async (r) => {
+            try {
+                await api('/api/rbac/roles/' + encodeURIComponent(r.role_id), 'DELETE');
+                message.success('角色已删除');
+                loadRoles();
+                loadUsers();
+                if (roleDetail && roleDetail.role_id === r.role_id) setRoleDetail(null);
+            } catch (e) { message.error(e.message); }
+        };
 
-        const filteredUsers = search.trim()
-            ? users.filter(u => (u.username || '').toLowerCase().includes(search.trim().toLowerCase()) || (u.email || '').toLowerCase().includes(search.trim().toLowerCase()))
-            : users;
+        // ============ 权限渲染 ============
+        const PermList = ({ keys, max = 999 }) => {
+            const arr = (keys || []).slice(0, max);
+            const rest = (keys || []).length - arr.length;
+            return <div>
+                {arr.map(k => (
+                    <div key={k} className="perm-item">
+                        <UIIcon name="CheckCircleOutlined" style={{ color: '#52c41a', fontSize: 13 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{permName(k)}</span>
+                        {isHighRisk(k) && <Tag color="orange" style={{ marginRight: 0 }}>高风险</Tag>}
+                    </div>
+                ))}
+                {rest > 0 && <Typography.Text type="secondary" style={{ fontSize: 12 }}>+{rest} 项</Typography.Text>}
+            </div>;
+        };
 
         const PermPicker = ({ value = [], onChange }) => (
             <div>
                 {Object.keys(permGroups).map(g => (
-                    <div className="perm-group" key={g}>
-                        <div className="perm-label">{g}</div>
-                        <window.antd.Checkbox.Group
-                            value={(value || []).filter(p => permGroups[g].some(x => x.key === p))}
-                            options={permGroups[g].map(p => ({ label: p.name, value: p.key }))}
-                            onChange={vals => {
-                                const others = (value || []).filter(p => !permGroups[g].some(x => x.key === p));
-                                onChange([...new Set([...others, ...vals])]);
-                            }}
-                        />
+                    <div key={g} style={{ marginBottom: 10 }}>
+                        <div className="perm-sect-title" style={{ margin: '6px 0 4px' }}>{g}</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {permGroups[g].map(p => (
+                                <label key={p.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 4px', borderRadius: 6, cursor: 'pointer' }}>
+                                    <Checkbox
+                                        checked={(value || []).includes(p.key)}
+                                        onChange={e => {
+                                            const set = new Set(value || []);
+                                            if (e.target.checked) set.add(p.key); else set.delete(p.key);
+                                            onChange([...set]);
+                                        }} />
+                                    <Tooltip title={p.description || p.key}>
+                                        <span>{p.name}</span>
+                                    </Tooltip>
+                                    {isHighRisk(p.key) && <Tag color="orange" style={{ marginRight: 0, fontSize: 11 }}>高风险</Tag>}
+                                    <Typography.Text type="secondary" style={{ fontSize: 11, marginLeft: 'auto' }}>{p.key}</Typography.Text>
+                                </label>
+                            ))}
+                        </div>
                     </div>
                 ))}
             </div>
         );
 
-        const renderPerms = () => (
-            <Form.Item name="permissions" label="权限">
-                <PermPicker />
-            </Form.Item>
+        const DiffPreview = ({ before, after }) => {
+            const d = diffPerms(before, after);
+            if (!d.added.length && !d.removed.length) {
+                return <div className="diff-item" style={{ color: '#52c41a' }}><UIIcon name="CheckCircleOutlined" />权限没有变化</div>;
+            }
+            return <div>
+                <div style={{ fontSize: 12, color: 'var(--secondary)', marginBottom: 4 }}>当前：{before.size || before.length} 项 → 修改后：{after.size || after.length} 项</div>
+                {d.added.map(k => <div key={'a' + k} className="diff-item diff-add"><UIIcon name="PlusCircleOutlined" />{permName(k)} <span className="perm-key">{k}</span></div>)}
+                {d.removed.map(k => <div key={'r' + k} className="diff-item diff-remove"><UIIcon name="MinusCircleOutlined" />{permName(k)} <span className="perm-key">{k}</span></div>)}
+            </div>;
+        };
+
+        // ============ 用户 Tab ============
+        const userColumns = [
+            {
+                title: '用户名', dataIndex: 'username', width: 220,
+                render: (v, u) => (
+                    <Space size={10}>
+                        <Avatar size={28} style={{ background: AVATAR_COLORS[(v.charCodeAt(0) || 0) % AVATAR_COLORS.length], fontSize: 13, fontWeight: 600 }}>
+                            {(v || '?').charAt(0).toUpperCase()}
+                        </Avatar>
+                        <Typography.Link strong onClick={() => openUserDetail(u)}>{v}</Typography.Link>
+                    </Space>
+                )
+            },
+            { title: '邮箱', dataIndex: 'email', width: 220, render: v => <Typography.Text type="secondary">{v || '-'}</Typography.Text> },
+            { title: '角色', dataIndex: 'role_name', width: 140, render: (v, u) => u.role_id === 'admin' ? <Tag color="gold">{v || '-'}</Tag> : <Tag>{v || '无角色'}</Tag> },
+            { title: '状态', dataIndex: 'is_active', width: 100, render: statusBadge },
+            { title: '最近登录', dataIndex: 'last_login', width: 170, render: v => <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtTime(v)}</Typography.Text> },
+            { title: '创建时间', dataIndex: 'created_at', width: 170, render: v => <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtDate(v)}</Typography.Text> },
+            {
+                title: '操作', key: 'op', width: 150, fixed: 'right',
+                render: (_, u) => (
+                    <Space size={4}>
+                        <Button size="small" onClick={() => openUserDetail(u)}>详情</Button>
+                        {canManageUser && <Dropdown menu={userMoreMenu(u)} trigger={['click']}>
+                            <Button size="small" icon={<UIIcon name="MoreOutlined" />} />
+                        </Dropdown>}
+                    </Space>
+                )
+            }
+        ];
+
+        const renderUsersTab = () => (
+            <div>
+                <div className="toolbar">
+                    <Input.Search allowClear placeholder="搜索用户名 / 邮箱..." className="toolbar-search"
+                                  onChange={e => setSearch(e.target.value)} onSearch={v => setSearch(v)} />
+                    {canManageRole && (
+                        <Select allowClear placeholder="角色" style={{ width: 160 }} value={roleFilter} onChange={setRoleFilter}
+                                options={roles.map(r => ({ label: r.name, value: r.role_id }))} />
+                    )}
+                    <Select allowClear placeholder="状态" style={{ width: 110 }} value={statusFilter} onChange={setStatusFilter}
+                            options={[{ label: '正常', value: 'active' }, { label: '禁用', value: 'disabled' }]} />
+                    <div className="spacer" />
+                    <Segmented value={userView} onChange={setUserView} options={[
+                        { label: <span><UIIcon name="UnorderedListOutlined" />列表</span>, value: 'list' },
+                        { label: <span><UIIcon name="AppstoreOutlined" />卡片</span>, value: 'card' }
+                    ]} />
+                    <Button icon={<UIIcon name="ReloadOutlined" />} loading={loading} onClick={refresh}>刷新</Button>
+                    {canManageUser && <Button type="primary" icon={<UIIcon name="PlusOutlined" />} onClick={() => openUserEdit(null)}>创建用户</Button>}
+                </div>
+
+                {userView === 'list' ? (
+                    isMobile ? (
+                        <div>
+                            {filteredUsers.map(u => (
+                                <Card key={u.username} size="small" bordered className="user-card" style={{ marginBottom: 10 }}>
+                                    <div className="user-head">
+                                        <Avatar size={40} style={{ background: AVATAR_COLORS[(u.username.charCodeAt(0) || 0) % AVATAR_COLORS.length], fontWeight: 600 }}>
+                                            {(u.username || '?').charAt(0).toUpperCase()}
+                                        </Avatar>
+                                        <div className="info">
+                                            <div className="name">{u.username} {statusBadge(u.is_active)}</div>
+                                            <div className="user-meta">{u.email || '-'}</div>
+                                            <div className="user-meta">角色：{u.role_name || '无角色'} · 最近登录 {fmtTime(u.last_login)}</div>
+                                        </div>
+                                    </div>
+                                    <div className="user-foot">
+                                        <Space size={4}>
+                                            <Button size="small" onClick={() => openUserDetail(u)}>详情</Button>
+                                            {canManageUser && <Button size="small" onClick={() => openUserEdit(u)}>编辑</Button>}
+                                        </Space>
+                                        {canManageUser && <Dropdown menu={userMoreMenu(u)} trigger={['click']}>
+                                            <Button size="small" icon={<UIIcon name="MoreOutlined" />} />
+                                        </Dropdown>}
+                                    </div>
+                                </Card>
+                            ))}
+                            {!filteredUsers.length && <Empty description="暂无用户" style={{ padding: 30 }} />}
+                        </div>
+                    ) : (
+                        <Table rowKey="username" size="middle" columns={userColumns} dataSource={filteredUsers} loading={loading}
+                               scroll={{ x: 1000 }} pagination={{ pageSize: 20, showSizeChanger: true, showTotal: t => `共 ${t} 条` }} />
+                    )
+                ) : (
+                    <div className="role-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+                        {filteredUsers.map(u => (
+                            <Card key={u.username} size="small" bordered hoverable className="user-card" onClick={() => openUserDetail(u)}>
+                                <div className="user-head">
+                                    <Avatar size={44} style={{ background: AVATAR_COLORS[(u.username.charCodeAt(0) || 0) % AVATAR_COLORS.length], fontWeight: 600 }}>
+                                        {(u.username || '?').charAt(0).toUpperCase()}
+                                    </Avatar>
+                                    <div className="info">
+                                        <div className="name">{u.username} {statusBadge(u.is_active)}</div>
+                                        <div className="user-meta">{u.role_id === 'admin' ? <Tag color="gold">{u.role_name}</Tag> : <Tag>{u.role_name || '无角色'}</Tag>}</div>
+                                        <div className="user-meta">{u.email || '-'}</div>
+                                    </div>
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--secondary)' }}>
+                                    最近登录：{fmtTime(u.last_login)}
+                                </div>
+                                <div className="user-foot" onClick={e => e.stopPropagation()}>
+                                    <Space size={4}>
+                                        <Button size="small" onClick={() => openUserDetail(u)}>详情</Button>
+                                        {canManageUser && <Button size="small" onClick={() => openUserEdit(u)}>编辑</Button>}
+                                    </Space>
+                                    {canManageUser && <Dropdown menu={userMoreMenu(u)} trigger={['click']}>
+                                        <Button size="small" icon={<UIIcon name="MoreOutlined" />} />
+                                    </Dropdown>}
+                                </div>
+                            </Card>
+                        ))}
+                        {!filteredUsers.length && <Empty description="暂无用户" style={{ padding: 30 }} />}
+                    </div>
+                )}
+            </div>
         );
 
+        // ============ 角色 Tab ============
+        const roleUsers = (roleId) => users.filter(u => u.role_id === roleId);
+        const renderRolesTab = () => (
+            <div>
+                <div className="toolbar">
+                    <Typography.Text type="secondary">共 {roles.length} 个角色</Typography.Text>
+                    <div className="spacer" />
+                    <Button icon={<UIIcon name="ReloadOutlined" />} onClick={refresh}>刷新</Button>
+                    {canManageRole && <Button type="primary" icon={<UIIcon name="PlusOutlined" />} onClick={() => openRoleEdit(null)}>创建角色</Button>}
+                </div>
+                <div className="role-grid">
+                    {roles.map(r => {
+                        const isAdmin = r.role_id === 'admin' && r.is_system;
+                        const allPerm = r.permissions && r.permissions.includes('*');
+                        return (
+                            <Card key={r.role_id} size="small" bordered hoverable className="role-card" onClick={() => openRoleDetail(r)}>
+                                <div className="role-title">
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+                                    {r.is_system ? <Tag style={{ marginRight: 0 }}>系统角色</Tag> : null}
+                                </div>
+                                <div className="role-id">{r.role_id}</div>
+                                <div className="role-desc">{r.description || '暂无描述'}</div>
+                                <div className="role-stats">
+                                    <div className="role-stat"><span>权限</span><b>{allPerm ? '全部' : (r.permissions || []).length + ' 项'}</b></div>
+                                    <div className="role-stat" style={{ cursor: 'pointer' }} onClick={e => { e.stopPropagation(); openRoleDetail(r); }}>
+                                        <span>用户</span><b>{r.user_count || 0} 名</b>
+                                    </div>
+                                </div>
+                                <div className="user-foot" onClick={e => e.stopPropagation()}>
+                                    <Space size={4}>
+                                        <Button size="small" onClick={() => openRoleDetail(r)}>详情</Button>
+                                        {canManageRole && <Button size="small" onClick={() => openRoleEdit(r)}>编辑</Button>}
+                                    </Space>
+                                    {r.is_system
+                                        ? <Typography.Text type="secondary" style={{ fontSize: 12 }}><UIIcon name="LockOutlined" /> 系统内置角色</Typography.Text>
+                                        : canManageRole && <Popconfirm title={`删除角色「${r.name}」？`} description="该角色下的用户将迁移为普通用户。" okText="删除" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => deleteRole(r)}>
+                                            <Button size="small" danger type="text">删除</Button>
+                                        </Popconfirm>}
+                                </div>
+                            </Card>
+                        );
+                    })}
+                    {!roles.length && <Empty description="暂无角色" style={{ padding: 30 }} />}
+                </div>
+            </div>
+        );
+
+        // ============ 权限矩阵 Tab ============
+        const matrixRoleList = roles.filter(r => !matrixRoles.length || matrixRoles.includes(r.role_id));
+        const matrixRows = Object.keys(permGroups).map(g => ({
+            key: 'g_' + g,
+            name: g,
+            isGroup: true,
+            children: permGroups[g].map(p => ({
+                key: p.key,
+                name: p.name,
+                keyText: p.key,
+                desc: p.description,
+                highRisk: isHighRisk(p.key)
+            }))
+        }));
+        const matrixCols = [
+            { title: '权限', dataIndex: 'name', width: 220, render: (v, r) => r.isGroup
+                ? <Typography.Text strong style={{ fontSize: 13 }}>{v}</Typography.Text>
+                : <Space size={6}>{v}{r.highRisk && <Tag color="orange" style={{ marginRight: 0, fontSize: 11 }}>高风险</Tag>}</Space> },
+            { title: 'Key', dataIndex: 'keyText', width: 180, render: (v, r) => r.isGroup ? null : <Typography.Text type="secondary" code style={{ fontSize: 12 }}>{v}</Typography.Text> },
+            { title: '描述', dataIndex: 'desc', ellipsis: true, render: (v, r) => r.isGroup ? null : <Typography.Text type="secondary" style={{ fontSize: 12 }}>{v}</Typography.Text> },
+            ...matrixRoleList.map(r => ({
+                title: <Tooltip title={r.role_id}><span>{r.name}</span></Tooltip>,
+                width: 110,
+                align: 'center',
+                render: (_, row) => {
+                    if (row.isGroup) return null;
+                    const has = rolePermSet(r).has(row.key);
+                    return <span className={'matrix-check ' + (has ? 'matrix-yes' : 'matrix-no')}>
+                        {has ? <UIIcon name="CheckOutlined" /> : <UIIcon name="CloseOutlined" />}
+                    </span>;
+                }
+            }))
+        ];
+
+        const renderMatrixTab = () => (
+            <div>
+                <div className="toolbar">
+                    <Select mode="multiple" allowClear placeholder="筛选角色（默认全部）" style={{ minWidth: 280, maxWidth: 420 }}
+                            value={matrixRoles} onChange={setMatrixRoles}
+                            options={roles.map(r => ({ label: r.name, value: r.role_id }))} />
+                    <div className="spacer" />
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>✓ 拥有 · ✕ 未授权</Typography.Text>
+                </div>
+                <Table rowKey="key" size="small" columns={matrixCols} dataSource={matrixRows} pagination={false}
+                       scroll={{ x: 'max-content' }} expandable={{ defaultExpandAllRows: true }} />
+            </div>
+        );
+
+        // ============ 用户详情 Drawer ============
+        const renderUserDetail = () => {
+            const u = userDetail;
+            if (!u) return null;
+            const effective = u.permissions || [];
+            const shown = showAllPerms ? effective : effective.slice(0, 12);
+            return (
+                <Drawer title={<Space size={8}><Avatar size={26} style={{ background: AVATAR_COLORS[(u.username.charCodeAt(0) || 0) % AVATAR_COLORS.length], fontSize: 13 }}>{(u.username || '?').charAt(0).toUpperCase()}</Avatar>{u.username}</Space>}
+                        open={!!u} onClose={() => setUserDetail(null)} width={isMobile ? '100%' : 720}
+                        footer={<Space wrap>
+                            {canManageUser && <Button icon={<UIIcon name="EditOutlined" />} onClick={() => { setUserDetail(null); openUserEdit(u); }}>编辑</Button>}
+                            {canManageUser && (u.is_active
+                                ? <Button danger icon={<UIIcon name="StopOutlined" />} onClick={() => Modal.confirm({ title: '禁用用户？', content: `禁用后 ${u.username} 将无法登录。`, okText: '禁用', okButtonProps: { danger: true }, cancelText: '取消', onOk: () => setUserActive(u, false) })}>禁用</Button>
+                                : <Button icon={<UIIcon name="PlayCircleOutlined" />} onClick={() => Modal.confirm({ title: '启用用户？', content: `将恢复 ${u.username} 的登录权限。`, okText: '启用', cancelText: '取消', onOk: () => setUserActive(u, true) })}>启用</Button>)}
+                            {canManageUser && <Button danger type="text" icon={<UIIcon name="DeleteOutlined" />} onClick={() => Modal.confirm({ title: '删除用户？', content: `确定删除用户 ${u.username} 吗？该操作不可恢复。`, okText: '删除', okButtonProps: { danger: true }, cancelText: '取消', onOk: () => deleteUser(u) })}>删除</Button>}
+                        </Space>}>
+                    <Descriptions size="small" column={2} bordered items={[
+                        { key: 'username', label: '用户名', children: u.username },
+                        { key: 'status', label: '状态', children: statusBadge(u.is_active) },
+                        { key: 'email', label: '邮箱', children: u.email || '-' },
+                        { key: 'role', label: '角色', children: u.role_id === 'admin' ? <Tag color="gold">{u.role_name}</Tag> : <Tag>{u.role_name || '无角色'}</Tag> },
+                        { key: 'created', label: '创建时间', children: fmtDate(u.created_at) },
+                        { key: 'last', label: '最近登录', children: fmtTime(u.last_login) }
+                    ]} />
+                    <div className="perm-sect-title"><UIIcon name="SafetyCertificateOutlined" />权限摘要（{effective.length} 项）</div>
+                    {effective.includes('*')
+                        ? <Alert type="info" showIcon message="该用户拥有全部权限（超级管理员）" style={{ marginBottom: 8 }} />
+                        : <PermList keys={shown} />}
+                    {effective.length > 12 && (
+                        <Button size="small" type="link" onClick={() => setShowAllPerms(!showAllPerms)}>
+                            {showAllPerms ? '收起' : '查看全部权限'}
+                        </Button>
+                    )}
+                </Drawer>
+            );
+        };
+
+        // ============ 用户编辑 Drawer ============
+        const userEditRole = roles.find(r => r.role_id === userEditRoleId) || null;
+        const currentRoleForUser = userEdit && userEdit.record ? roles.find(r => r.role_id === userEdit.record.role_id) : null;
+
+        const renderUserEdit = () => {
+            if (!userEdit) return null;
+            const isCreate = userEdit.mode === 'create';
+            const before = currentRoleForUser ? rolePermSet(currentRoleForUser) : new Set();
+            const after = userEditRole ? rolePermSet(userEditRole) : new Set();
+            return (
+                <Drawer title={isCreate ? '创建用户' : '编辑用户：' + userEdit.record.username}
+                        open={!!userEdit} onClose={() => setUserEdit(null)} width={isMobile ? '100%' : 640}
+                        footer={<Space>
+                            <Button onClick={() => setUserEdit(null)}>取消</Button>
+                            <Button type="primary" onClick={submitUser}>保存</Button>
+                        </Space>}>
+                    <Form form={uForm} layout="vertical">
+                        {isCreate && (
+                            <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }, { pattern: /^[a-zA-Z0-9_-]{3,20}$/, message: '3-20位字母/数字/下划线' }]}>
+                                <Input placeholder="用户名" />
+                            </Form.Item>
+                        )}
+                        <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}>
+                            <Input placeholder="user@example.com" />
+                        </Form.Item>
+                        <Form.Item name="is_active" label="账号状态" valuePropName="checked">
+                            <Switch checkedChildren="启用" unCheckedChildren="禁用" />
+                        </Form.Item>
+                        <Form.Item name="role_id" label="角色" rules={[{ required: true, message: '请选择角色' }]}>
+                            <Select options={roles.map(r => ({ label: r.name + (r.is_system ? '（系统）' : ''), value: r.role_id }))} />
+                        </Form.Item>
+                        {isCreate
+                            ? <Form.Item name="password" label="初始密码" rules={[{ required: true, min: 8, message: '至少8位，需包含字母和数字' }]}>
+                                <Input.Password placeholder="至少8位，包含字母和数字" />
+                              </Form.Item>
+                            : <Form.Item name="password" label="重置密码（留空不修改）">
+                                <Input.Password placeholder="至少8位，包含字母和数字" />
+                              </Form.Item>}
+                    </Form>
+                    <Divider style={{ margin: '12px 0' }} />
+                    <div className="perm-sect-title"><UIIcon name="SafetyCertificateOutlined" />角色权限</div>
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '4px 10px', maxHeight: 260, overflowY: 'auto' }}>
+                        {userEditRole ? (userEditRole.permissions && userEditRole.permissions.includes('*')
+                            ? <Alert type="info" showIcon message="该角色拥有全部权限" />
+                            : <PermList keys={userEditRole.permissions || []} />)
+                            : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择角色" />}
+                    </div>
+                    {!isCreate && (
+                        <>
+                            <div className="perm-sect-title"><UIIcon name="SwapOutlined" />权限变化预览</div>
+                            <DiffPreview before={before} after={after} />
+                        </>
+                    )}
+                </Drawer>
+            );
+        };
+
+        // ============ 角色详情 Drawer ============
+        const renderRoleDetail = () => {
+            const r = roleDetail;
+            if (!r) return null;
+            const allPerm = r.permissions && r.permissions.includes('*');
+            const keys = allPerm ? perms.map(p => p.key) : (r.permissions || []);
+            const groupKeys = {};
+            keys.forEach(k => { const d = permDef[k]; if (!d) return; (groupKeys[d.group] = groupKeys[d.group] || []).push(k); });
+            return (
+                <Drawer title={<Space size={8}>
+                    <Typography.Text strong style={{ fontSize: 16 }}>{r.name}</Typography.Text>
+                    {r.is_system ? <Tag style={{ marginRight: 0 }}>系统角色</Tag> : null}
+                </Space>}
+                        open={!!r} onClose={() => setRoleDetail(null)} width={isMobile ? '100%' : 720}
+                        footer={<Space wrap>
+                            {canManageRole && <Button icon={<UIIcon name="EditOutlined" />} onClick={() => { setRoleDetail(null); openRoleEdit(r); }}>编辑</Button>}
+                            {r.is_system
+                                ? <Typography.Text type="secondary"><UIIcon name="LockOutlined" /> 系统内置角色</Typography.Text>
+                                : canManageRole && <Button danger type="text" icon={<UIIcon name="DeleteOutlined" />} onClick={() => Modal.confirm({ title: '删除角色？', content: `确定删除角色「${r.name}」吗？该角色下的用户将迁移为普通用户。`, okText: '删除', okButtonProps: { danger: true }, cancelText: '取消', onOk: () => deleteRole(r) })}>删除</Button>}
+                        </Space>}>
+                    <Descriptions size="small" column={2} bordered items={[
+                        { key: 'id', label: '角色 ID', children: <Typography.Text code>{r.role_id}</Typography.Text> },
+                        { key: 'type', label: '类型', children: r.is_system ? <Tag>系统内置</Tag> : <Tag color="blue">自定义</Tag> },
+                        { key: 'desc', label: '描述', children: r.description || '-' },
+                        { key: 'users', label: '用户数', children: r.user_count || 0 }
+                    ]} />
+                    <div className="perm-sect-title"><UIIcon name="SafetyCertificateOutlined" />权限（{keys.length} 项）</div>
+                    {allPerm && <Alert type="info" showIcon message="该角色拥有系统全部权限" style={{ marginBottom: 8 }} />}
+                    {Object.keys(groupKeys).map(g => (
+                        <div key={g}>
+                            <div className="perm-sect-title">{g}</div>
+                            {groupKeys[g].map(k => (
+                                <div key={k} className="perm-item">
+                                    <UIIcon name="CheckCircleOutlined" style={{ color: '#52c41a', fontSize: 13 }} />
+                                    <span style={{ minWidth: 0 }}>{permName(k)}</span>
+                                    {isHighRisk(k) && <Tag color="orange" style={{ marginRight: 0, fontSize: 11 }}>高风险</Tag>}
+                                    <span className="perm-key">{k}</span>
+                                    <span className="perm-desc" style={{ maxWidth: '45%' }}>{permDef[k] ? permDef[k].description : ''}</span>
+                                </div>
+                            ))}
+                        </div>
+                    ))}
+                    <div className="perm-sect-title"><UIIcon name="TeamOutlined" />使用此角色的用户（{roleUsers(r.role_id).length}）</div>
+                    {roleUsers(r.role_id).length ? roleUsers(r.role_id).map(u => (
+                        <div key={u.username} className="perm-item" style={{ cursor: 'pointer' }} onClick={() => { setRoleDetail(null); openUserDetail(u); }}>
+                            <Avatar size={22} style={{ background: AVATAR_COLORS[(u.username.charCodeAt(0) || 0) % AVATAR_COLORS.length], fontSize: 11 }}>{(u.username || '?').charAt(0).toUpperCase()}</Avatar>
+                            <span>{u.username}</span>
+                            <span className="perm-key">{u.email || ''}</span>
+                            {statusBadge(u.is_active)}
+                        </div>
+                    )) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无用户使用该角色" />}
+                </Drawer>
+            );
+        };
+
+        // ============ 角色编辑 Drawer ============
+        const roleEditSelected = roleEditPerms || [];
+        const roleEditBefore = roleEdit && roleEdit.record ? rolePermSet(roleEdit.record) : new Set();
+        const roleEditAfter = roleEdit && roleEdit.record && roleEdit.record.role_id === 'admin' && roleEdit.record.is_system
+            ? new Set(perms.map(p => p.key))
+            : new Set(roleEditSelected);
+        const selectedHighRisk = roleEditSelected.filter(isHighRisk);
+
+        const renderRoleEdit = () => {
+            if (!roleEdit) return null;
+            const isCreate = roleEdit.mode === 'create';
+            const isAdmin = roleEdit.record && roleEdit.record.role_id === 'admin' && roleEdit.record.is_system;
+            return (
+                <Drawer title={isCreate ? '创建角色' : '编辑角色：' + roleEdit.record.name}
+                        open={!!roleEdit} onClose={() => setRoleEdit(null)} width={isMobile ? '100%' : 640}
+                        footer={<Space>
+                            <Button onClick={() => setRoleEdit(null)}>取消</Button>
+                            <Button type="primary" onClick={submitRole}>保存</Button>
+                        </Space>}>
+                    <Form form={rForm} layout="vertical">
+                        {isCreate && (
+                            <Form.Item name="role_id" label="角色 ID" rules={[{ required: true, pattern: /^[a-zA-Z0-9_-]{1,32}$/, message: '字母/数字/下划线' }]}>
+                                <Input placeholder="如 viewer" />
+                            </Form.Item>
+                        )}
+                        <Form.Item name="name" label="角色名称" rules={[{ required: true, message: '请输入角色名称' }]}>
+                            <Input placeholder="角色名称" disabled={isAdmin} />
+                        </Form.Item>
+                        <Form.Item name="description" label="角色描述">
+                            <Input.TextArea rows={2} placeholder="角色说明（可选）" disabled={isAdmin} />
+                        </Form.Item>
+                        {isAdmin ? (
+                            <Alert type="warning" showIcon message="内置超级管理员角色权限固定为全部权限，不可修改。" />
+                        ) : (
+                            <Form.Item name="permissions" label="权限" valuePropName="value" initialValue={[]}>
+                                <PermPicker />
+                            </Form.Item>
+                        )}
+                    </Form>
+                    {!isAdmin && selectedHighRisk.length > 0 && (
+                        <Alert type="warning" showIcon style={{ marginBottom: 10 }}
+                            message="高风险权限"
+                            description={<span>以下权限允许用户执行高风险系统操作，请确认角色是否需要：<br />
+                                {selectedHighRisk.map(k => <Tag key={k} color="orange" style={{ marginTop: 4 }}>{permName(k)}（{k}）</Tag>)}
+                            </span>} />
+                    )}
+                    <div className="perm-sect-title"><UIIcon name="SwapOutlined" />权限变化预览</div>
+                    <DiffPreview before={roleEditBefore} after={roleEditAfter} />
+                </Drawer>
+            );
+        };
+
+        // ============ 审计 Drawer ============
+        const auditCols = [
+            { title: '时间', dataIndex: 'time', width: 170, render: v => <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtTime(v)}</Typography.Text> },
+            { title: '操作', dataIndex: 'action', width: 170, render: v => <Tag style={{ marginRight: 0 }}>{v}</Tag> },
+            { title: '详情', dataIndex: 'detail', render: v => <span className="audit-detail">{v || '-'}</span> }
+        ];
+
+        const tabItems = [];
+        if (canViewUser) {
+            tabItems.push({
+                key: 'users',
+                label: <span><UIIcon name="TeamOutlined" />用户管理（{users.length}）</span>,
+                children: renderUsersTab()
+            });
+        }
+        if (canManageRole) {
+            tabItems.push({
+                key: 'roles',
+                label: <span><UIIcon name="SafetyCertificateOutlined" />角色管理（{roles.length}）</span>,
+                children: renderRolesTab()
+            });
+            tabItems.push({
+                key: 'matrix',
+                label: <span><UIIcon name="PartitionOutlined" />权限矩阵</span>,
+                children: renderMatrixTab()
+            });
+        }
+
         return (
-            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
-                <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff', ...(isMobile ? { fontSize: 13 } : {}) } }}>
+                <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', background: 'var(--bg)' }}>
                     <div className={'topbar' + (isDark ? ' dark' : '')}>
-                        <div className="brand"><span className="logo">🛡️</span><span>Server Status<span className="tb-sub"> · 权限管理</span></span></div>
+                        <div className="brand">
+                            <span className="logo"><UIIcon name="SafetyCertificateOutlined" /></span>
+                            <span>
+                                <span className="bt-name">Server Status</span>
+                                <span className="bt-sub">/ 权限管理</span>
+                            </span>
+                        </div>
                         <Space>
-                            <Button title="首页" onClick={() => window.location.href = 'index.html'}>🏠<span className="tb-label">首页</span></Button>
-                            <Button title={isDark ? '浅色模式' : '深色模式'} onClick={() => setIsDark(!isDark)}>{isDark ? '🌞' : '🌙'}<span className="tb-label">{isDark ? '浅色' : '深色'}</span></Button>
-                            <Button danger title="退出登录" onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}>🚪<span className="tb-label">退出</span></Button>
+                            <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>
+                            <Button className="tb-hide-sm" icon={<UIIcon name="AppstoreOutlined" />} onClick={() => window.location.href = 'services.html'}><span className="tb-text">服务端口</span></Button>
+                            <Button className="tb-hide-sm" icon={<UIIcon name="GlobalOutlined" />} onClick={() => window.location.href = 'ip-panel.html'}><span className="tb-text">IP 流量</span></Button>
+                            <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                                <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                            </Tooltip>
+                            <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}><span className="tb-text">退出</span></Button>
                         </Space>
                     </div>
                     <div className="page-wrap">
-                        <Card style={{ marginBottom: 12 }}>
-                            <Tabs activeKey={tab} onChange={setTab} items={[
-                                ...(canViewUser ? [{
-                                    key: 'users', label: `👥 用户管理（${users.length}）`,
-                                    children: <div>
-                                        <div className="toolbar">
-                                            <Input.Search placeholder="搜索用户名 / 邮箱..." allowClear style={{ maxWidth: 320 }}
-                                                onChange={e => setSearch(e.target.value)} onSearch={v => setSearch(v)} />
-                                            <span className="spacer" />
-                                            {canManageUser && <Button type="primary" onClick={() => {
-                                                setUserModal({ mode: 'create' });
-                                                uForm.resetFields();
-                                                uForm.setFieldsValue({ is_active: true, role_id: 'user' });
-                                            }}>➕ 创建用户</Button>}
-                                        </div>
-                                        {loading ? <div style={{ textAlign: 'center', padding: 40 }}><window.antd.Spin /></div> : filteredUsers.length ? (
-                                            <div className="card-grid">
-                                                {filteredUsers.map(u => (
-                                                    <Card key={u.username} hoverable bordered className="user-card" size="small"
-                                                          actions={canManageUser ? [
-                                                              <Button size="small" key="edit" onClick={() => {
-                                                                  setUserModal({ mode: 'edit', record: u });
-                                                                  uForm.setFieldsValue({ username: u.username, email: u.email, role_id: u.role_id || 'user', is_active: u.is_active });
-                                                              }}>编辑</Button>,
-                                                              <Popconfirm key="del" title={`删除用户 ${u.username}？`} onConfirm={async () => {
-                                                                  try { await api('/api/rbac/users/' + encodeURIComponent(u.username), 'DELETE'); message.success('已删除'); loadUsers(); loadRoles(); } catch (e) { message.error(e.message); }
-                                                              }}><Button size="small" danger>删除</Button></Popconfirm>
-                                                          ] : undefined}>
-                                                        <div className="user-head">
-                                                            <Avatar size={44} style={{ background: AVATAR_COLORS[(u.username.charCodeAt(0) || 0) % AVATAR_COLORS.length], fontWeight: 600 }}>
-                                                                {(u.username || '?').charAt(0).toUpperCase()}
-                                                            </Avatar>
-                                                            <div className="info">
-                                                                <div className="name">{u.username} <Badge status={u.is_active ? 'success' : 'error'} /></div>
-                                                                <div className="user-meta">{u.role_name || '-'} · {u.email || '-'}</div>
-                                                            </div>
-                                                        </div>
-                                                        <div style={{ fontSize: 12, color: '#999' }}>
-                                                            最近登录: {u.last_login ? new Date(u.last_login).toLocaleString('zh-CN', { hour12: false }) : '-'}
-                                                        </div>
-                                                    </Card>
-                                                ))}
-                                            </div>
-                                        ) : <Empty description="暂无用户" style={{ padding: 30 }} />}
-                                    </div>
-                                }] : []),
-                                ...(canManageRole ? [{
-                                    key: 'roles', label: `🎭 角色管理（${roles.length}）`,
-                                    children: <div>
-                                        <div className="toolbar">
-                                            <span className="muted" style={{ color: '#999', fontSize: 13 }}>共 {roles.length} 个角色</span>
-                                            <span className="spacer" />
-                                            <Button type="primary" onClick={() => {
-                                                setRoleModal({ mode: 'create' });
-                                                rForm.resetFields();
-                                                rForm.setFieldsValue({ permissions: [] });
-                                            }}>➕ 创建角色</Button>
-                                        </div>
-                                        <div className="card-grid">
-                                            {roles.map(r => {
-                                                const isAdmin = r.role_id === 'admin' && r.is_system;
-                                                return <Card key={r.role_id} hoverable bordered className="role-card" size="small"
-                                                             actions={canManageRole ? [
-                                                                 <Button size="small" key="edit" onClick={() => {
-                                                                     setRoleModal({ mode: 'edit', record: r });
-                                                                     rForm.setFieldsValue({ role_id: r.role_id, name: r.name, description: r.description, permissions: r.permissions });
-                                                                 }}>编辑</Button>,
-                                                                 r.is_system
-                                                                     ? <Tooltip key="lock" title="系统内置角色不可删除"><Typography.Text type="secondary">不可删除</Typography.Text></Tooltip>
-                                                                     : <Popconfirm key="del" title={`删除角色「${r.name}」？该角色下的用户将变为普通用户。`} onConfirm={async () => {
-                                                                         try { await api('/api/rbac/roles/' + encodeURIComponent(r.role_id), 'DELETE'); message.success('已删除'); loadRoles(); loadUsers(); } catch (e) { message.error(e.message); }
-                                                                     }}><Button size="small" danger>删除</Button></Popconfirm>
-                                                             ] : undefined}>
-                                                    <div style={{ marginBottom: 8 }}>
-                                                        <Space size={6}>
-                                                            <Typography.Text strong style={{ fontSize: 15 }}>{r.name}</Typography.Text>
-                                                            {r.is_system && <Tag color="gold">内置</Tag>}
-                                                        </Space>
-                                                        <div style={{ color: '#999', fontSize: 12, fontFamily: 'monospace' }}>{r.role_id}</div>
-                                                    </div>
-                                                    <Typography.Paragraph type="secondary" ellipsis={{ rows: 2 }} style={{ marginBottom: 8, fontSize: 13 }}>
-                                                        {r.description || '暂无描述'}
-                                                    </Typography.Paragraph>
-                                                    <div className="role-perms">
-                                                        {r.permissions.includes('*')
-                                                            ? <Tag color="purple">★ 全部权限</Tag>
-                                                            : <Space size={4} wrap>{r.permissions.map(p => <Tag key={p}>{permName(p)}</Tag>)}</Space>}
-                                                    </div>
-                                                    <div style={{ marginTop: 10, fontSize: 12, color: '#999' }}>
-                                                        👥 {r.user_count} 个用户
-                                                    </div>
-                                                </Card>;
-                                            })}
-                                        </div>
-                                    </div>
-                                }] : [])
-                            ]} />
+                        <div className="page-title">权限管理</div>
+                        <div className="page-desc">管理系统用户、角色与访问权限</div>
+                        <div className="mini-grid">
+                            <div className="mini-stat"><div className="ms-label"><UIIcon name="TeamOutlined" />用户</div><div className="ms-value">{users.length}</div></div>
+                            <div className="mini-stat"><div className="ms-label"><UIIcon name="SafetyCertificateOutlined" />角色</div><div className="ms-value">{roles.length}</div></div>
+                            <div className="mini-stat"><div className="ms-label"><UIIcon name="KeyOutlined" />权限</div><div className="ms-value">{perms.length}</div></div>
+                            <div className="mini-stat"><div className="ms-label"><UIIcon name="WifiOutlined" />在线</div><div className="ms-value">{online}</div></div>
+                        </div>
+                        <Card size="small">
+                            <Tabs activeKey={tab} onChange={setTab} items={tabItems} />
                         </Card>
                     </div>
 
-                    <Modal title={userModal?.mode === 'create' ? '创建用户' : '编辑用户'} open={!!userModal}
-                           onCancel={() => setUserModal(null)} onOk={submitUser} okText="保存" cancelText="取消" destroyOnClose>
-                        <Form form={uForm} layout="vertical">
-                            {userModal?.mode === 'create' ? (
-                                <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }, { pattern: /^[a-zA-Z0-9_-]{3,20}$/, message: '3-20位字母/数字/下划线' }]}>
-                                    <Input placeholder="用户名" />
-                                </Form.Item>
-                            ) : (
-                                <Form.Item name="username" label="用户名"><Input disabled /></Form.Item>
-                            )}
-                            <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email', message: '请输入有效邮箱' }]}>
-                                <Input placeholder="user@example.com" />
-                            </Form.Item>
-                            {userModal?.mode === 'create' && (
-                                <Form.Item name="password" label="初始密码" rules={[{ required: true, min: 8, message: '至少8位' }]}>
-                                    <Input.Password placeholder="至少8位，包含字母和数字" />
-                                </Form.Item>
-                            )}
-                            {userModal?.mode === 'edit' && (
-                                <Form.Item name="password" label="重置密码（留空不修改）">
-                                    <Input.Password placeholder="至少8位" />
-                                </Form.Item>
-                            )}
-                            <Form.Item name="role_id" label="角色" rules={[{ required: true }]}>
-                                <Select options={roles.map(r => ({ label: r.name + (r.is_system ? '（内置）' : ''), value: r.role_id }))} />
-                            </Form.Item>
-                            <Form.Item name="is_active" label="账号启用" valuePropName="checked">
-                                <Switch />
+                    {renderUserDetail()}
+                    {renderUserEdit()}
+                    {renderRoleDetail()}
+                    {renderRoleEdit()}
+
+                    {/* 修改密码 Modal */}
+                    <Modal title={'重置密码：' + (pwdModal || '')} open={!!pwdModal} onCancel={() => setPwdModal(null)}
+                           onOk={resetPassword} okText="确认重置" okButtonProps={{ danger: true }} cancelText="取消">
+                        <Form form={pwdForm} layout="vertical" style={{ marginTop: 12 }}>
+                            <Form.Item name="password" label="新密码" rules={[{ required: true, min: 8, message: '至少8位，需包含字母和数字' }]}>
+                                <Input.Password placeholder="至少8位，包含字母和数字" />
                             </Form.Item>
                         </Form>
                     </Modal>
 
-                    <Modal title={roleModal?.mode === 'create' ? '创建角色' : '编辑角色'} open={!!roleModal}
-                           onCancel={() => setRoleModal(null)} onOk={submitRole} okText="保存" cancelText="取消" destroyOnClose width={640}>
-                        <Form form={rForm} layout="vertical">
-                            <Form.Item name="role_id" label="角色ID" rules={[{ required: true, pattern: /^[a-zA-Z0-9_-]{1,32}$/, message: '字母/数字/下划线' }]}>
-                                <Input disabled={roleModal?.mode === 'edit'} placeholder="如 viewer" />
-                            </Form.Item>
-                            <Form.Item name="name" label="角色名称" rules={[{ required: true, message: '请输入角色名称' }]}>
-                                <Input placeholder="如 访客" disabled={roleModal?.record?.role_id === 'admin' && roleModal?.record?.is_system} />
-                            </Form.Item>
-                            <Form.Item name="description" label="描述">
-                                <Input placeholder="角色说明（可选）" disabled={roleModal?.record?.role_id === 'admin' && roleModal?.record?.is_system} />
-                            </Form.Item>
-                            {roleModal?.record?.role_id === 'admin' && roleModal?.record?.is_system
-                                ? <Alert type="warning" showIcon message="内置超级管理员角色权限固定为全部权限，不可修改。" />
-                                : renderPerms()}
-                        </Form>
-                    </Modal>
+                    {/* 审计 Drawer */}
+                    <Drawer title={<Space size={6}><UIIcon name="HistoryOutlined" />操作记录{auditUser ? '：' + auditUser : ''}</Space>}
+                            open={auditUser !== null} onClose={() => setAuditUser(null)} width={isMobile ? '100%' : 720}
+                            footer={<Space>
+                                <Button icon={<UIIcon name="ReloadOutlined" />} onClick={() => loadAudit(auditUser)}>刷新</Button>
+                            </Space>}>
+                        {auditLoading ? <div style={{ textAlign: 'center', padding: 40 }}><Spin /></div>
+                            : <Table rowKey={(r, i) => i} size="small" columns={auditCols} dataSource={auditRecords} pagination={{ pageSize: 20, showSizeChanger: false }}
+                                     scroll={{ y: 480 }} locale={{ emptyText: '暂无操作记录' }} />}
+                    </Drawer>
                 </div>
             </ConfigProvider>
         );
     }
 
     ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script>
+    (function () {
+        function openPrivateSpace() {
+            try {
+                fetch('/api/private/entry', { method: 'POST', credentials: 'include' })
+                    .catch(function () {})
+                    .finally(function () { window.location.href = 'private.html'; });
+            } catch (e) { window.location.href = 'private.html'; }
+        }
+        var taps = [], lastTap = 0;
+        document.addEventListener('keydown', function (e) {
+            if (e.ctrlKey && e.shiftKey && e.altKey && (e.key === 'N' || e.key === 'n')) {
+                e.preventDefault();
+                openPrivateSpace();
+            }
+        });
+        document.addEventListener('click', function (e) {
+            var el = e.target;
+            while (el && el !== document.documentElement) {
+                if (el.classList && (el.classList.contains('logo') || el.classList.contains('brand'))) {
+                    var now = Date.now();
+                    if (now - lastTap > 3000) taps = [];
+                    lastTap = now;
+                    taps.push(now);
+                    if (taps.length >= 5) { taps = []; openPrivateSpace(); }
+                    return;
+                }
+                el = el.parentElement;
+            }
+        });
+    })();
 </script>
 </body>
 </html>

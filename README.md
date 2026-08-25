@@ -11,10 +11,98 @@
 - 📁 **文件管理**：浏览、上传、新建目录、删除（含移动端卡片视图）
 - ⚙️ **进程监控**：实时进程列表、CPU/内存 TOP10、结束进程
 - 🧰 **服务与端口中心**：systemd 服务创建/启停/自启/实时日志、监听端口识别与分类、防火墙开放/关闭与端口规则
+- 🚀 **Trojan-Go 监控与管理**：状态/在线用户/IP/实时流量图表，用户增删改、限速与 IP 限制（gRPC → 后端 → WebSocket）
 - 🔑 **授权下载**：令牌签发/撤销，支持粘贴下载链接自动解析令牌，配额与有效期控制
 - 🛡️ **RBAC 权限管理**：用户/角色/权限管理，细粒度访问控制
+- 🔒 **隐藏私人空间**：普通界面完全不可见，仅通过隐藏入口进入；私人手记 + 图片 + 定位 + 语音 + 信息卡片生成与分享
 - 🔒 **安全加固**：HMAC 签名、bcrypt 密码、登录防爆破、TLS 1.2+、CORS 白名单、XSS 转义、路径穿越防护
 - 📱 **响应式设计**：桌面/移动端自适应，暗黑模式
+
+## 🔒 隐藏私人空间（Private Notes）
+
+> 这是我服务器里隐藏的一个私人数字空间，可以记录生活，也可以把记录变成可以带走的图片卡片。
+
+### 入口（普通 UI 完全看不到）
+
+- 桌面端：`Ctrl + Shift + Alt + N` 打开密码验证
+- 移动端：连续快速点击 Server Status Logo 5 次
+- 主菜单、顶部导航、Dashboard 均不显示任何入口与提示
+
+### 首次启用
+
+1. 部署 `private_notes.json`（默认已启用），私人密码只保存 bcrypt Hash，**不会写入任何 JSON / JS / HTML / localStorage**。
+2. 首次启动时设置私人空间密码（二选一）：
+   - 环境变量：`PRIVATE_NOTES_PASSWORD=你的密码 ./server-status`（仅首次启动且未设置密码时生效）
+   - 管理员接口：登录后调用
+     ```bash
+     curl -k -X POST https://your-host:9000/api/private/setup-password \
+       -H "Content-Type: application/json" -b "session_id=<登录Cookie>" \
+       -H "X-Timestamp: ..." -H "X-Nonce: ..." -H "X-Signature: ..." \
+       -d '{"password":"你的密码"}'
+     ```
+     （需要 HMAC 签名头，与前端其他 API 相同）
+
+### 双层认证与安全模型
+
+- 第一层：Server Status 普通登录；第二层：私人空间密码。
+- `private session` 默认 30 分钟无操作自动锁定；右上角可手动锁定，立即删除服务端 session。
+- 密码错误 5 次 → 锁定 60 秒，且不会暴露“密码是否正确/用户是否存在/功能是否存在”。
+- 私人 API 缺少普通登录返回 401，缺少私人解锁返回 403。
+- 图片/语音只保存在私有目录 `data/notes/YYYY/MM/DD/`，必须经过双层认证的 API 访问；
+  静态文件服务不会暴露该目录。数据库 `private_notes.db` 只存 `file_path`，不存二进制。
+- 分享 Token 为 32 字节随机数，数据库只保存 Hash；分享密码使用 bcrypt；过期/撤销由服务端强制判断。
+- 审计日志记录解锁/锁定/创建/删除/卡片/分享/撤销动作，**绝不记录正文、图片内容、密码或 Hash**。
+
+### 功能
+
+- 时间线（按天分组，卡片式手记，支持 Markdown / 代码块 / Checklist）
+- 新建/编辑手记：标题（可空）、正文、多图（点击/拖拽/拍照/相册/排序/删除/预览）、定位（浏览器定位或手动选择地点）、标签、语音录音、手动修改时间、`Ctrl + Enter` 快速保存
+- 标签页、全局搜索（标题/正文/标签/地点）、Markdown 导出
+- 离线“我的记忆地图”（内置简化世界轮廓，不依赖地图 API）
+- 卡片生成器：简洁 / 深色 / 图片 / 旅行 / 服务器状态 5 种模板；1080×1080 / 1080×1350 / 1170×2532；
+  Canvas 渲染真实 PNG，支持保存图片、复制到剪贴板、分享链接 + 二维码 + 访问密码 + 有效期 + 允许下载开关
+- 卡片历史：预览、再次保存、创建分享、撤销分享、删除
+- Light / Dark 自动跟随系统主题（与 Server Status 一致）
+
+### 配置（private_notes.json）
+
+```json
+{
+  "private_notes": {
+    "enabled": true,
+    "unlock_timeout": "30m",
+    "max_login_attempts": 5,
+    "lockout_duration": "1m",
+    "storage_dir": "./data/notes"
+  },
+  "cards": {
+    "enabled": true,
+    "default_width": 1080,
+    "default_height": 1080
+  }
+}
+```
+
+### 部署到服务器
+
+```bash
+# 1. 本地构建 Linux 产物
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o server-status .
+
+# 2. 上传到服务器 /opt/server-status（与现有部署一致）
+scp server-status root@your-server:/opt/server-status/
+scp -r templates root@your-server:/opt/server-status/   # 必须包含 private.html / share.html / world-simple.js
+scp private_notes.json root@your-server:/opt/server-status/
+
+# 3. 首次启动前设置私人空间密码（只执行一次）
+#    在 systemd 服务中添加 Environment=PRIVATE_NOTES_PASSWORD=你的密码，启动后即可移除
+
+# 4. 重启服务
+sudo systemctl restart server-status
+```
+
+注意：`private_notes.db` 与 `data/` 由程序自动创建，请确保运行用户对 `/opt/server-status` 有写权限。
+分享页面 `/card/<token>` 无需登录；设置密码的分享必须验证密码后才能查看图片。
 
 ## 安装与部署
 
@@ -49,6 +137,12 @@ go build -o server-monitor
 ```
 
 生产环境建议使用 systemd 管理（`server-status.service`），可用 `restart-server.sh` 编译并重启。
+
+### Trojan-Go 监控与管理
+
+详见 [TROJAN.md](TROJAN.md)：在 `/opt/server-status/config.json` 配置 Trojan-Go gRPC 地址
+（默认 `127.0.0.1:10000`），启动后 Dashboard 显示 Trojan-Go 状态、实时流量与用户管理，
+所有接口均经过现有登录/RBAC/HMAC 认证。
 
 ## 配置说明
 
@@ -206,8 +300,12 @@ POST /exec?command=<命令名>
             <td><img src="img/4.png" alt="暗黑模式" width="1920" /></td>
             <td><img src="img/5.png" alt="移动端布局" width="1920" /></td>
         </tr>
+        <tr>
+            <td><img src="img/trojan.png" alt="Trojan-Go 监控与管理" width="1920" /></td>
+            <td><img src="img/trojan-dark.png" alt="Trojan-Go 暗色模式" width="1920" /></td>
+        </tr>
     </tbody>
 </table>
 
-> 说明：截图可能滞后于最新界面；最新版本还包含文件管理、进程监控、IP 流量、权限管理、安全下载等管理页面。
+> 说明：截图可能滞后于最新界面；最新版本还包含文件管理、进程监控、IP 流量、Trojan-Go 监控、权限管理、安全下载等管理页面。
 ---

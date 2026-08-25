@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow">
+    <title>分享卡片</title>
+    <link rel="icon" href="data:,">
+    <style>
+        html, body, #root { margin: 0; min-height: 100%; background: #f5f5f5; }
+        html.dark, html.dark body, html.dark #root { background: #141414; }
+        body { color: rgba(0,0,0,.88); }
+        html.dark body { color: rgba(255,255,255,.85); }
+        * { box-sizing: border-box; }
+        .share-wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 24px 16px; }
+        .share-card { max-width: 560px; width: 100%; background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 6px 24px rgba(0,0,0,.08); }
+        html.dark .share-card { background: #1f1f1f; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+        .share-card img.card-img { width: 100%; border-radius: 10px; display: block; background: #f0f0f0; }
+        .share-brand { text-align: center; margin-top: 18px; font-size: 13px; color: rgba(0,0,0,.35); }
+        html.dark .share-brand { color: rgba(255,255,255,.35); }
+        .share-pw { max-width: 400px; width: 100%; background: #fff; border-radius: 14px; padding: 28px; text-align: center; box-shadow: 0 6px 24px rgba(0,0,0,.08); }
+        html.dark .share-pw { background: #1f1f1f; }
+        .share-pw h3 { margin: 8px 0 4px; }
+        .share-expired { color: rgba(0,0,0,.45); text-align: center; margin-top: 30px; }
+        .btn-row { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) {}
+        })();
+    </script>
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+    const { Button, Input, message, Spin, ConfigProvider, theme, Typography, Alert } = window.antd;
+    const { useState, useEffect } = React;
+    const { darkAlgorithm } = theme;
+    const securityToken = "redacted_anti_crawler_2024_security_key";
+    const baseUrl = window.location.origin;
+    const token = window.location.pathname.replace(/^\/card\//, '').replace(/\/$/, '') || '';
+
+    const generateSignature = (path) => {
+        const timestamp = Math.floor(Date.now() / 1000).toString();
+        const nonce = CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);
+        const sig = CryptoJS.HmacSHA256(timestamp + '|' + nonce + '|' + path + '|' + securityToken, securityToken).toString(CryptoJS.enc.Hex);
+        return { timestamp, nonce, signature: sig };
+    };
+    const api = (path, options = {}) => {
+        const sig = generateSignature(new URL(path, baseUrl).pathname);
+        return fetch(baseUrl + path, {
+            method: options.method || 'GET',
+            headers: { 'Content-Type': 'application/json', 'X-Timestamp': sig.timestamp, 'X-Nonce': sig.nonce, 'X-Signature': sig.signature },
+            credentials: 'include',
+            body: options.body
+        }).then(r => r.json().catch(() => ({ code: r.status, message: '请求失败' })));
+    };
+
+    function SharePage() {
+        const [state, setState] = useState('loading');
+        const [data, setData] = useState(null);
+        const [pw, setPw] = useState('');
+        const [checking, setChecking] = useState(false);
+        const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+        useEffect(() => {
+            api('/api/share/' + token + '/data').then(d => {
+                if (ok(d) && d.data) {
+                    setData(d.data);
+                    setState(d.data.invalid ? 'invalid' : (d.data.has_password ? 'password' : 'ready'));
+                } else setState('invalid');
+            }).catch(() => setState('invalid'));
+        }, []);
+        const ok = d => d && (d.code === 200 || d.code === 0);
+        const verify = async () => {
+            setChecking(true);
+            const d = await api('/api/share/' + token + '/verify', { method: 'POST', body: JSON.stringify({ password: pw }) });
+            setChecking(false);
+            if (ok(d)) setState('ready');
+            else message.error('密码错误');
+        };
+        if (state === 'loading') return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin size="large" /></div>;
+        if (state === 'invalid') return <div className="share-wrap"><Alert type="warning" message="分享不存在或已失效" /></div>;
+        return (
+            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
+                <div className="share-wrap">
+                    {state === 'password' ? (
+                        <div className="share-pw">
+                            <div style={{ fontSize: 30 }}>🔒</div>
+                            <h3>此分享需要密码</h3>
+                            <Input.Password size="large" placeholder="访问密码" value={pw} onChange={e => setPw(e.target.value)} onPressEnter={verify} style={{ marginTop: 14 }} />
+                            <div className="btn-row">
+                                <Button type="primary" size="large" loading={checking} onClick={verify}>查看卡片</Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="share-card">
+                            <img className="card-img" src={baseUrl + '/api/share/' + token + '/image'} alt="卡片" />
+                            {data && data.title && <Typography.Title level={5} style={{ marginTop: 14 }}>{data.title}</Typography.Title>}
+                            {data && data.allow_download && (
+                                <div className="btn-row">
+                                    <Button type="primary" icon={<span>↓</span>} onClick={async () => {
+                                        try {
+                                            const r = await fetch(baseUrl + '/api/share/' + token + '/image', { credentials: 'include' });
+                                            const blob = await r.blob();
+                                            const a = document.createElement('a');
+                                            a.href = URL.createObjectURL(blob);
+                                            a.download = 'card-' + token + '.png';
+                                            a.click();
+                                            setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+                                        } catch (e) { message.error('下载失败'); }
+                                    }}>下载图片</Button>
+                                </div>
+                            )}
+                            <div className="share-brand">Server Status</div>
+                        </div>
+                    )}
+                </div>
+            </ConfigProvider>
+        );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<SharePage />);
+</script>
+</body>
+</html>

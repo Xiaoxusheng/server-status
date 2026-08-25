@@ -10,6 +10,11 @@ rbac.json
 download_tokens.json
 blocked_ips.json
 *.db
+*.db-wal
+*.db-shm
+
+# 私人空间附件
+data/
 
 # 日志与临时文件
 log/

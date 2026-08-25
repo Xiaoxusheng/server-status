@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Trojan-Go 监控与管理 - Server Status</title>
+    <link rel="icon" href="data:,">
+    <style>
+        html, body, #root { margin: 0; min-height: 100%; background: #f5f5f5; }
+        html.dark, html.dark body, html.dark #root { background: #141414; }
+        html.dark body { color: rgba(255,255,255,.85); }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f5f5f5; }
+        ::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #bfbfbf; }
+        html.dark ::-webkit-scrollbar-track { background: #141414; }
+        html.dark ::-webkit-scrollbar-thumb { background: #3a3a3a; }
+        html.dark ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) {}
+        })();
+    </script>
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>
+    <style>
+        body { margin: 0; background: #f5f5f5; font-size: 14px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+        #root { min-height: 100vh; }
+        .ant-table-content, .ant-table-body { -webkit-overflow-scrolling: touch; }
+        .page-wrap { padding: 16px; max-width: 1800px; margin: 0 auto; }
+        .topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 54px; background: #fff;
+            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+        }
+        .topbar.dark { background: #1f1f1f; border-bottom-color: #303030; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+        .topbar .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .topbar .brand .bt-name { font-size: 18px; font-weight: 600; color: #1f1f1f; line-height: 1; }
+        .topbar.dark .brand .bt-name { color: rgba(255,255,255,0.88); }
+        .topbar .brand .bt-sub { font-size: 14px; color: rgba(0,0,0,0.45); font-weight: 400; margin-left: 2px; }
+        .topbar.dark .brand .bt-sub { color: rgba(255,255,255,0.45); }
+        .topbar .brand .logo {
+            width: 28px; height: 28px; border-radius: 7px; background: linear-gradient(135deg, #1677ff, #722ed1);
+            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px;
+        }
+        .topbar .ant-btn { font-size: 13px; }
+        .topbar .tb-text { margin-left: 4px; }
+        @media (max-width: 768px) {
+            .topbar { padding: 6px 10px; gap: 4px; height: auto; min-height: 52px; }
+            .topbar .brand { flex: 1; min-width: 0; }
+            .topbar .brand .bt-name { max-width: 60vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .topbar .brand .bt-sub { display: none; }
+            .topbar .tb-text { display: none; }
+            .topbar .ant-space { gap: 4px !important; }
+            .topbar .ant-btn { padding: 4px 9px; height: 32px; }
+            .page-wrap { padding: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+        }
+
+        /* 与当前 server-status 一致的视觉变量 */
+        .sp-app { --bg: #f5f5f5; --card: #ffffff; --border: #f0f0f0; --text: rgba(0,0,0,0.88); --secondary: rgba(0,0,0,0.45); color-scheme: light; }
+        .sp-app.dark { --bg: #141414; --card: #1f1f1f; --border: #303030; --text: rgba(255,255,255,0.88); --secondary: rgba(255,255,255,0.45); color-scheme: dark; }
+
+        /* 页面头：标题 + 副标题 + 右侧状态/操作 */
+        .page-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+        .page-head .ph-title { font-size: 20px; font-weight: 600; color: var(--text); line-height: 1.2; }
+        .page-head .ph-sub { font-size: 13px; color: var(--secondary); margin-top: 2px; }
+        .page-head .ph-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+        /* 紧凑统计卡片（与 服务/端口/IP 页一致） */
+        .mini-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; min-width: 0; }
+        .mini-stat {
+            background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+            padding: 10px 16px; height: 78px; display: flex; flex-direction: column; justify-content: center; gap: 2px;
+            min-width: 0; overflow: hidden;
+        }
+        .mini-stat .ms-label { font-size: 12px; color: var(--secondary); display: flex; align-items: center; gap: 6px; }
+        .mini-stat .ms-label .anticon { font-size: 13px; }
+        .mini-stat .ms-value { font-size: 22px; font-weight: 600; line-height: 1.15; color: var(--text); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mini-stat .ms-value.sm { font-size: 17px; }
+        @media (max-width: 768px) {
+            .mini-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+            .mini-stat { height: 72px; padding: 8px 12px; }
+            .mini-stat .ms-value { font-size: 20px; }
+            .mini-stat .ms-value.sm { font-size: 15px; }
+            .ant-card-head { padding: 0 12px !important; }
+            .ant-card-head-wrapper { flex-wrap: wrap; gap: 6px; }
+            .ant-card-head-title { font-size: 14px !important; }
+            .ant-card-body { padding: 12px !important; }
+            .ant-drawer-footer { padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important; }
+        }
+        @media (max-width: 480px) {
+            .page-head .ph-title { font-size: 17px; }
+            .topbar .bt-name { font-size: 15px; }
+            .topbar .logo { width: 26px; height: 26px; font-size: 14px; }
+        }
+
+        .chart-box { width: 100%; height: 280px; }
+        @media (max-width: 768px) { .chart-box { height: 220px; } }
+        .chart-meta { font-size: 12px; color: var(--secondary); text-align: right; margin-top: 6px; }
+        .drawer-speed { display: flex; gap: 12px; flex-wrap: wrap; }
+        .drawer-speed .ds-item { flex: 1 1 160px; }
+        .user-hash { font-family: Consolas, Monaco, monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+    const { Card, Table, Statistic, Button, Input, InputNumber, Select, Form, Tag, Space, message, Modal, Drawer,
+          Row, Col, Typography, ConfigProvider, theme, Empty, Descriptions, Divider, Badge, Alert, Tooltip } = window.antd;
+    const { useState, useEffect, useRef, useCallback } = React;
+    const { darkAlgorithm } = theme;
+    const IconSet = window.icons || {};
+
+    const UIIcon = ({ name, ...props }) => {
+        const C = IconSet[name];
+        return C ? <C {...props} /> : null;
+    };
+
+    function useIsMobile() {
+        const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
+        useEffect(() => {
+            const q = window.matchMedia('(max-width: 768px)');
+            const h = e => setM(e.matches);
+            q.addListener(h);
+            return () => q.removeListener(h);
+        }, []);
+        return m;
+    }
+
+    const baseUrl = window.location.origin;
+    const securityToken = "redacted_anti_crawler_2024_security_key";
+
+    const generateSignature = (path) => {
+        const timestamp = Math.floor(Date.now() / 1000).toString();
+        const nonce = CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);
+        const sig = CryptoJS.HmacSHA256(timestamp + '|' + nonce + '|' + path + '|' + securityToken, securityToken).toString(CryptoJS.enc.Hex);
+        return { timestamp, nonce, signature: sig };
+    };
+
+    const secureFetch = (url, options = {}) => {
+        const path = new URL(url).pathname;
+        const sig = generateSignature(path);
+        return fetch(url, {
+            method: options.method || 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Timestamp': sig.timestamp,
+                'X-Nonce': sig.nonce,
+                'X-Signature': sig.signature,
+                ...(options.headers || {})
+            },
+            credentials: 'include',
+            body: options.body
+        });
+    };
+
+    const hexToRgba = (hex, a) => {
+        const h = hex.replace('#', '');
+        return 'rgba(' + parseInt(h.substring(0, 2), 16) + ',' + parseInt(h.substring(2, 4), 16) + ',' + parseInt(h.substring(4, 6), 16) + ',' + a + ')';
+    };
+
+    // 字节/速率格式化：B/s -> KB/s -> MB/s -> GB/s；流量 -> B -> KB -> MB -> GB -> TB
+    const formatBytes = (value, suffix = 'B/s') => {
+        let n = Number(value) || 0;
+        const units = suffix === 'B/s' ? ['B/s', 'KB/s', 'MB/s', 'GB/s'] : ['B', 'KB', 'MB', 'GB', 'TB'];
+        let i = 0;
+        while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+        return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + ' ' + units[i];
+    };
+
+    // 速度单位 -> bytes/s 倍率
+    const UNIT_RATE = { 'KB/s': 1024, 'MB/s': 1024 * 1024, 'GB/s': 1024 * 1024 * 1024 };
+    const bytesToUnit = (bytes, unit) => (Number(bytes) || 0) / (UNIT_RATE[unit] || 1);
+
+    const unwrapResponse = response => response && Object.prototype.hasOwnProperty.call(response, 'data') ? response.data : response;
+
+    function TrojanPage() {
+        const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+        const isMobile = useIsMobile();
+        const [user, setUser] = useState(null);
+        const [checking, setChecking] = useState(true);
+        const [status, setStatus] = useState(null);
+        const [users, setUsers] = useState([]);
+        const [refreshing, setRefreshing] = useState(false);
+        const [detail, setDetail] = useState(null);
+        const [modalOpen, setModalOpen] = useState(false);
+        const [editing, setEditing] = useState(null);
+        const [saving, setSaving] = useState(false);
+        const [form] = Form.useForm();
+        const wsRef = useRef(null);
+        const reconnectTimer = useRef(null);
+        const reconnectAttempts = useRef(0);
+        const chartRef = useRef(null);
+        const chartInst = useRef(null);
+        const dataRef = useRef({ labels: [], download: [], upload: [] });
+
+        const hasPerm = p => (user && (user.permissions || []).some(x => x === '*' || x === p));
+        const connected = !!(status && status.connected);
+
+        useEffect(() => {
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.documentElement.classList.toggle('dark', isDark);
+            document.body.classList.toggle('dark', isDark);
+            document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+        }, [isDark]);
+
+        // 认证检查：未登录跳回首页
+        useEffect(() => {
+            secureFetch(baseUrl + '/check-auth')
+                .then(r => r.json())
+                .then(d => {
+                    if (d.code !== 200 || !d.user) { window.location.href = '/'; return; }
+                    setUser(d.user);
+                    setChecking(false);
+                })
+                .catch(() => { window.location.href = '/'; });
+        }, []);
+
+        // 图表（随主题切换配色，随窗口自适应）
+        const setChart = (labels, download, upload, title, dark) => {
+            const inst = chartInst.current;
+            if (!inst) return;
+            const axisColor = dark ? '#8b93a5' : '#8b93a5';
+            const splitColor = dark ? 'rgba(255,255,255,0.10)' : 'rgba(120,130,150,0.16)';
+            const titleColor = dark ? 'rgba(255,255,255,0.45)' : '#999';
+            inst.setOption({
+                title: { text: title, left: 'center', textStyle: { fontSize: 13, color: titleColor } },
+                tooltip: { trigger: 'axis', backgroundColor: dark ? 'rgba(22,30,48,0.95)' : 'rgba(22,30,48,0.9)', borderWidth: 0, textStyle: { color: '#fff' }, valueFormatter: v => formatBytes(v, 'B/s') },
+                legend: { top: 0, right: 8, textStyle: { color: axisColor, fontSize: 11 }, data: ['Download', 'Upload'] },
+                grid: { left: 10, right: 14, top: 36, bottom: 4, containLabel: true },
+                xAxis: { type: 'category', boundaryGap: false, data: labels.slice(), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 11 } },
+                yAxis: { type: 'value', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 11 }, splitLine: { lineStyle: { color: splitColor, type: 'dashed' } } },
+                series: [
+                    { name: 'Download', type: 'line', smooth: 0.35, symbol: 'none', lineStyle: { width: 2.5, color: '#1677ff' }, itemStyle: { color: '#1677ff' }, areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: hexToRgba('#1677ff', 0.25) }, { offset: 1, color: hexToRgba('#1677ff', 0.02) }]) }, data: download.slice() },
+                    { name: 'Upload', type: 'line', smooth: 0.35, symbol: 'none', lineStyle: { width: 2.5, color: '#52c41a' }, itemStyle: { color: '#52c41a' }, areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: hexToRgba('#52c41a', 0.25) }, { offset: 1, color: hexToRgba('#52c41a', 0.02) }]) }, data: upload.slice() }
+                ]
+            });
+        };
+
+        // 最多保留最近 60 个采样点；API 断开时切换离线标题
+        const updateChart = (d, dark) => {
+            const data = dataRef.current;
+            if (!d || !d.connected) {
+                setChart(data.labels, data.download, data.upload, 'Trojan-Go Traffic · API Offline', dark);
+                return;
+            }
+            data.labels.push(new Date().toLocaleTimeString());
+            data.download.push(Number(d.download_speed) || 0);
+            data.upload.push(Number(d.upload_speed) || 0);
+            ['labels', 'download', 'upload'].forEach(key => { if (data[key].length > 60) data[key].shift(); });
+            setChart(data.labels, data.download, data.upload, 'Trojan-Go Traffic', dark);
+        };
+
+        useEffect(() => {
+            if (checking || !user || !hasPerm('trojan:manage')) return;
+            if (chartRef.current && !chartInst.current) {
+                chartInst.current = echarts.init(chartRef.current);
+                updateChart(null, isDark);
+            }
+            const onR = () => chartInst.current && chartInst.current.resize();
+            window.addEventListener('resize', onR);
+            return () => {
+                window.removeEventListener('resize', onR);
+                if (chartInst.current) { chartInst.current.dispose(); chartInst.current = null; }
+            };
+        }, [checking, user]);
+
+        // 主题切换后刷新图表配色
+        useEffect(() => {
+            if (chartInst.current) {
+                const data = dataRef.current;
+                setChart(data.labels, data.download, data.upload, status && !status.connected ? 'Trojan-Go Traffic · API Offline' : 'Trojan-Go Traffic', isDark);
+            }
+        }, [isDark]);
+
+        // 从后端读取用户列表（增删改/手动刷新；平时由 WebSocket 推送更新）
+        const loadUsers = useCallback(async () => {
+            if (!hasPerm('trojan:manage')) return;
+            try {
+                const response = await secureFetch(baseUrl + '/api/trojan/users');
+                const payload = unwrapResponse(await response.json());
+                if (!response.ok || (payload && payload.code && payload.code !== 200)) throw new Error(payload?.message || '获取用户失败');
+                setUsers(Array.isArray(payload) ? payload : []);
+            } catch (e) { message.error(e.message || '获取 Trojan-Go 用户失败'); }
+        }, [user]);
+
+        useEffect(() => { if (user && hasPerm('trojan:manage')) loadUsers(); }, [user]);
+
+        const refreshAll = async () => {
+            setRefreshing(true);
+            try {
+                const [statusResp, usersResp] = await Promise.all([
+                    secureFetch(baseUrl + '/api/trojan/status'),
+                    secureFetch(baseUrl + '/api/trojan/users')
+                ]);
+                const sp = unwrapResponse(await statusResp.json());
+                const up = unwrapResponse(await usersResp.json());
+                if (sp && typeof sp.connected === 'boolean') setStatus(sp);
+                if (Array.isArray(up)) setUsers(up);
+                message.success('已刷新');
+            } catch (e) { message.error(e.message || '刷新失败'); }
+            finally { setRefreshing(false); }
+        };
+
+        const connect = useCallback((i) => {
+            if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
+            if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
+            const sig = generateSignature('/ws');
+            const url = baseUrl.replace(/^http/, 'ws') + '/ws?iface=' + encodeURIComponent(i) +
+                '&timestamp=' + sig.timestamp + '&nonce=' + sig.nonce + '&signature=' + sig.signature;
+            const ws = new WebSocket(url);
+            wsRef.current = ws;
+            ws.onopen = () => { reconnectAttempts.current = 0; };
+            ws.onmessage = (e) => {
+                try {
+                    const d = JSON.parse(e.data);
+                    if (d && d.trojan) {
+                        setStatus(d.trojan);
+                        updateChart(d.trojan, isDark);
+                        if (Array.isArray(d.trojan.users)) setUsers(d.trojan.users);
+                    }
+                } catch (err) { /* 忽略 */ }
+            };
+            ws.onerror = () => {};
+            ws.onclose = () => {
+                if (reconnectAttempts.current < 10) {
+                    reconnectAttempts.current++;
+                    const delay = Math.min(3000 * reconnectAttempts.current, 15000);
+                    reconnectTimer.current = setTimeout(() => connect(i), delay);
+                }
+            };
+        }, [isDark]);
+
+        useEffect(() => {
+            secureFetch(baseUrl + '/status-ifaces')
+                .then(r => r.json())
+                .then(list => {
+                    const arr = Array.isArray(list) ? list : [];
+                    const pick = arr.length > 1 ? arr[1] : arr[0];
+                    if (pick) connect(pick); else connect('eth4');
+                })
+                .catch(() => connect('eth4'));
+            return () => { if (wsRef.current) wsRef.current.close(); if (reconnectTimer.current) clearTimeout(reconnectTimer.current); };
+        }, [connect]);
+
+        // 实时详情对象（Drawer 内容随 WS 推送更新）
+        const liveDetail = detail ? (users.find(u => u.hash === detail.hash) || detail) : null;
+
+        const openAdd = () => {
+            setEditing(null);
+            form.setFieldsValue({ password: '', ip_limit: 5, upload_limit: 0, upload_unit: 'MB/s', download_limit: 0, download_unit: 'MB/s' });
+            setModalOpen(true);
+        };
+
+        const openEdit = record => {
+            setEditing(record);
+            form.setFieldsValue({
+                hash: record.hash,
+                ip_limit: Number(record.ip_limit) || 0,
+                upload_limit: bytesToUnit(record.upload_limit, 'MB/s'),
+                upload_unit: 'MB/s',
+                download_limit: bytesToUnit(record.download_limit, 'MB/s'),
+                download_unit: 'MB/s'
+            });
+            setModalOpen(true);
+        };
+
+        const submitUser = async () => {
+            const values = await form.validateFields();
+            setSaving(true);
+            try {
+                const body = {
+                    hash: values.hash || '',
+                    password: values.password || '',
+                    ip_limit: Number(values.ip_limit) || 0,
+                    upload_limit: Math.round((Number(values.upload_limit) || 0) * (UNIT_RATE[values.upload_unit] || 1)),
+                    download_limit: Math.round((Number(values.download_limit) || 0) * (UNIT_RATE[values.download_unit] || 1))
+                };
+                const response = await secureFetch(baseUrl + '/api/trojan/users', { method: editing ? 'PUT' : 'POST', body: JSON.stringify(body) });
+                const payload = await response.json();
+                if (!response.ok || payload.code !== 200) throw new Error(payload.message || '保存失败');
+                message.success(editing ? '用户已更新' : '用户已添加');
+                setModalOpen(false);
+                await loadUsers();
+                await refreshAll();
+            } catch (e) { message.error(e.message || '保存 Trojan-Go 用户失败'); }
+            finally { setSaving(false); }
+        };
+
+        const deleteUser = async record => {
+            try {
+                const response = await secureFetch(baseUrl + '/api/trojan/users', { method: 'DELETE', body: JSON.stringify({ hash: record.hash }) });
+                const payload = await response.json();
+                if (!response.ok || payload.code !== 200) throw new Error(payload.message || '删除失败');
+                message.success('用户已删除');
+                if (detail && detail.hash === record.hash) setDetail(null);
+                await loadUsers();
+                await refreshAll();
+            } catch (e) { message.error(e.message || '删除 Trojan-Go 用户失败'); }
+        };
+
+        const confirmDelete = record => {
+            Modal.confirm({
+                title: '删除用户',
+                content: <span>确定删除该 Trojan 用户？<br /><Typography.Text code>{record.hash}</Typography.Text></span>,
+                okText: '删除',
+                okButtonProps: { danger: true },
+                cancelText: '取消',
+                onOk: () => deleteUser(record)
+            });
+        };
+
+        const columns = [
+            { title: '用户', dataIndex: 'hash', ellipsis: true, render: v => <span className="user-hash" title={v}>{v}</span> },
+            { title: '状态', dataIndex: 'online', width: 100, render: online => online ? <Badge status="success" text="Online" /> : <Badge status="default" text="Offline" /> },
+            { title: '在线 IP', dataIndex: 'ip_current', width: 100, render: (v, r) => (Number(v) || 0) + ' / ' + (Number(r.ip_limit) || 0) },
+            { title: '当前下载', dataIndex: 'download_speed', width: 110, render: v => '↓ ' + formatBytes(v, 'B/s') },
+            { title: '当前上传', dataIndex: 'upload_speed', width: 110, render: v => '↑ ' + formatBytes(v, 'B/s') },
+            { title: '下载限制', dataIndex: 'download_limit', width: 110, render: v => (Number(v) || 0) === 0 ? '不限' : '↓ ' + formatBytes(v, 'B/s') },
+            { title: '上传限制', dataIndex: 'upload_limit', width: 110, render: v => (Number(v) || 0) === 0 ? '不限' : '↑ ' + formatBytes(v, 'B/s') },
+            { title: '总下载', dataIndex: 'download_total', width: 110, render: v => formatBytes(v, '') },
+            { title: '总上传', dataIndex: 'upload_total', width: 110, render: v => formatBytes(v, '') },
+            { title: '操作', width: 160, fixed: 'right', render: (_, r) => (
+                <Space size={4}>
+                    <Button size="small" onClick={() => setDetail(r)}>详情</Button>
+                    <Button size="small" onClick={() => openEdit(r)}>编辑</Button>
+                    <Button size="small" danger onClick={() => confirmDelete(r)}>删除</Button>
+                </Space>
+            ) }
+        ];
+
+        if (checking) {
+            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
+                <Card loading style={{ width: 320 }} />
+            </div>;
+        }
+
+        if (!hasPerm('trojan:manage')) {
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <Card style={{ width: 400, textAlign: 'center' }}>
+                            <div style={{ fontSize: 40, marginBottom: 8 }}><UIIcon name="StopOutlined" /></div>
+                            <Typography.Title level={4}>没有访问权限</Typography.Title>
+                            <Typography.Text type="secondary">当前账号没有「管理 Trojan-Go」权限，请联系管理员开通。</Typography.Text>
+                            <div style={{ marginTop: 16 }}>
+                                <Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>
+                            </div>
+                        </Card>
+                    </div>
+                </ConfigProvider>
+            );
+        }
+
+        return (
+            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+                    <div className={'topbar' + (isDark ? ' dark' : '')}>
+                        <div className="brand">
+                            <span className="logo"><UIIcon name="RocketOutlined" /></span>
+                            <span>
+                                <span className="bt-name">Server Status</span>
+                                <span className="bt-sub">/ Trojan-Go</span>
+                            </span>
+                        </div>
+                        <Space>
+                            <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = '/'}><span className="tb-text">首页</span></Button>
+                            <Button icon={<UIIcon name="GlobalOutlined" />} onClick={() => window.location.href = 'ip-panel.html'}><span className="tb-text">IP 流量</span></Button>
+                            <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                                <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                            </Tooltip>
+                            <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = '/')}><span className="tb-text">退出</span></Button>
+                        </Space>
+                    </div>
+
+                    <div className="page-wrap">
+                        <div className="page-head">
+                            <div>
+                                <div className="ph-title">Trojan-Go</div>
+                                <div className="ph-sub">监控与管理</div>
+                            </div>
+                            <div className="ph-actions">
+                                <Badge status={connected ? 'success' : 'default'} text={connected ? 'Running' : 'Offline'} />
+                                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                                    Trojan API {connected ? '● Connected' : '● Disconnected'}
+                                </Typography.Text>
+                                <Button size="small" icon={<UIIcon name="ReloadOutlined" />} loading={refreshing} onClick={refreshAll}>刷新</Button>
+                                <Button size="small" onClick={() => window.location.href = '/'}>返回</Button>
+                            </div>
+                        </div>
+
+                        {status && !status.connected && (
+                            <Alert type="warning" showIcon style={{ marginBottom: 12 }}
+                                message="Trojan API Disconnected — Trojan-Go 监控数据暂不可用，服务器其他监控不受影响。" />
+                        )}
+
+                        <div className="mini-grid">
+                            <div className="mini-stat">
+                                <div className="ms-label"><UIIcon name="TeamOutlined" />在线用户</div>
+                                <div className="ms-value">{status ? status.online_users : '-'}</div>
+                            </div>
+                            <div className="mini-stat">
+                                <div className="ms-label"><UIIcon name="GlobalOutlined" />在线 IP</div>
+                                <div className="ms-value">{status ? status.online_ips : '-'}</div>
+                            </div>
+                            <div className="mini-stat">
+                                <div className="ms-label"><UIIcon name="DownloadOutlined" />当前下载速度</div>
+                                <div className="ms-value sm">{status ? formatBytes(status.download_speed, 'B/s') : '-'}</div>
+                            </div>
+                            <div className="mini-stat">
+                                <div className="ms-label"><UIIcon name="UploadOutlined" />当前上传速度</div>
+                                <div className="ms-value sm">{status ? formatBytes(status.upload_speed, 'B/s') : '-'}</div>
+                            </div>
+                            <div className="mini-stat">
+                                <div className="ms-label"><UIIcon name="CloudDownloadOutlined" />总下载流量</div>
+                                <div className="ms-value sm">{status ? formatBytes(status.download_total, '') : '-'}</div>
+                            </div>
+                            <div className="mini-stat">
+                                <div className="ms-label"><UIIcon name="CloudUploadOutlined" />总上传流量</div>
+                                <div className="ms-value sm">{status ? formatBytes(status.upload_total, '') : '-'}</div>
+                            </div>
+                        </div>
+
+                        <Card size="small" style={{ marginBottom: 12 }}
+                            title={<Space size={8}><UIIcon name="LineChartOutlined" />Trojan-Go Traffic</Space>}
+                            extra={<Space size={8}>
+                                <Tag color="blue">实时</Tag>
+                                <Typography.Text type="secondary" style={{ fontSize: 12 }}>最近 60 秒</Typography.Text>
+                            </Space>}>
+                            <div ref={el => chartRef.current = el} className="chart-box"></div>
+                            <div className="chart-meta">Download / Upload · 每 1~2 秒更新 · 最多保留 60 个数据点</div>
+                        </Card>
+
+                        <Card size="small"
+                            title={<Space size={8}><UIIcon name="SafetyCertificateOutlined" />Trojan 用户<span style={{ fontSize: 12, color: 'var(--secondary)', fontWeight: 400 }}>（{users.length}）</span></Space>}
+                            extra={<Button type="primary" size="small" icon={<UIIcon name="PlusOutlined" />} onClick={openAdd}>添加用户</Button>}>
+                            <Table size="small" rowKey="hash" dataSource={users} columns={columns} loading={false}
+                                pagination={users.length > 10 ? { pageSize: 10, showSizeChanger: false, showTotal: t => '共 ' + t + ' 个用户' } : false}
+                                scroll={{ x: 'max-content' }}
+                                locale={{ emptyText: connected ? <Empty description="暂无用户" image={Empty.PRESENTED_IMAGE_SIMPLE} /> : 'Trojan API Disconnected，无法获取用户列表' }} />
+                        </Card>
+                    </div>
+
+                    <Drawer title={liveDetail ? <Space size={6}><UIIcon name="UserOutlined" />客户端详情</Space> : '客户端详情'}
+                        width={isMobile ? '100%' : 520} open={!!liveDetail} onClose={() => setDetail(null)}
+                        footer={liveDetail && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                                <Button onClick={() => { setDetail(null); openEdit(liveDetail); }}>编辑</Button>
+                                <Button danger onClick={() => { setDetail(null); confirmDelete(liveDetail); }}>删除</Button>
+                            </div>
+                        )}>
+                        {liveDetail && (
+                            <>
+                                <Descriptions size="small" column={1} bordered
+                                    items={[
+                                        { key: 'hash', label: '用户标识', children: <Typography.Text code copyable className="user-hash">{liveDetail.hash}</Typography.Text> },
+                                        { key: 'online', label: '状态', children: liveDetail.online ? <Badge status="success" text="Online" /> : <Badge status="default" text="Offline" /> },
+                                        { key: 'ip', label: '在线 IP / IP 限制', children: (Number(liveDetail.ip_current) || 0) + ' / ' + (Number(liveDetail.ip_limit) || 0) }
+                                    ]} />
+
+                                <Divider style={{ margin: '14px 0 10px' }}>实时速度</Divider>
+                                <div className="drawer-speed">
+                                    <div className="ds-item">
+                                        <Statistic title="当前下载" value={formatBytes(liveDetail.download_speed, 'B/s')} valueStyle={{ fontSize: 20 }} prefix={<UIIcon name="DownloadOutlined" />} />
+                                    </div>
+                                    <div className="ds-item">
+                                        <Statistic title="当前上传" value={formatBytes(liveDetail.upload_speed, 'B/s')} valueStyle={{ fontSize: 20 }} prefix={<UIIcon name="UploadOutlined" />} />
+                                    </div>
+                                </div>
+
+                                <Divider style={{ margin: '14px 0 10px' }}>限制与累计</Divider>
+                                <Descriptions size="small" column={1} bordered
+                                    items={[
+                                        { key: 'dl', label: '下载限制', children: (Number(liveDetail.download_limit) || 0) === 0 ? '不限' : <Tag color="blue">↓ ' + formatBytes(liveDetail.download_limit, 'B/s')</Tag> },
+                                        { key: 'ul', label: '上传限制', children: (Number(liveDetail.upload_limit) || 0) === 0 ? '不限' : <Tag color="green">↑ ' + formatBytes(liveDetail.upload_limit, 'B/s')</Tag> },
+                                        { key: 'dt', label: '累计下载', children: formatBytes(liveDetail.download_total, '') },
+                                        { key: 'ut', label: '累计上传', children: formatBytes(liveDetail.upload_total, '') }
+                                    ]} />
+                            </>
+                        )}
+                    </Drawer>
+
+                    <Modal title={editing ? '编辑用户' : '添加用户'} open={modalOpen}
+                        onCancel={() => setModalOpen(false)} onOk={submitUser} confirmLoading={saving}
+                        okText={editing ? '保存' : '创建'} cancelText="取消" destroyOnClose>
+                        <Form form={form} layout="vertical">
+                            {editing && <Form.Item name="hash" label="用户 Hash"><Input disabled /></Form.Item>}
+                            {!editing && (
+                                <Form.Item name="password" label="Password" rules={[{ required: true, message: '请输入用户密码' }]}>
+                                    <Input.Password placeholder="用户连接密码" />
+                                </Form.Item>
+                            )}
+                            <Form.Item name="ip_limit" label="IP 限制" rules={[{ required: true, message: '请输入 IP 限制' }]}>
+                                <InputNumber min={0} precision={0} style={{ width: '100%' }} placeholder="0 = 不限，>0 才会统计在线 IP" />
+                            </Form.Item>
+                            <Form.Item name="upload_limit" label="上传限速" rules={[{ required: true, message: '请输入上传限速' }]}>
+                                <Space.Compact style={{ width: '100%' }}>
+                                    <InputNumber min={0} step={1} style={{ width: '100%' }} />
+                                    <Form.Item name="upload_unit" noStyle>
+                                        <Select style={{ width: 96 }} options={[{ value: 'KB/s', label: 'KB/s' }, { value: 'MB/s', label: 'MB/s' }, { value: 'GB/s', label: 'GB/s' }]} />
+                                    </Form.Item>
+                                </Space.Compact>
+                            </Form.Item>
+                            <Form.Item name="download_limit" label="下载限速" rules={[{ required: true, message: '请输入下载限速' }]}>
+                                <Space.Compact style={{ width: '100%' }}>
+                                    <InputNumber min={0} step={1} style={{ width: '100%' }} />
+                                    <Form.Item name="download_unit" noStyle>
+                                        <Select style={{ width: 96 }} options={[{ value: 'KB/s', label: 'KB/s' }, { value: 'MB/s', label: 'MB/s' }, { value: 'GB/s', label: 'GB/s' }]} />
+                                    </Form.Item>
+                                </Space.Compact>
+                            </Form.Item>
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                {editing
+                                    ? 'Trojan-Go v0.10.6 的 Modify 接口不支持修改密码，仅可修改限速与 IP 限制。'
+                                    : '限速按所选单位提交，后端自动转换为 bytes/s（如 10 MB/s = 10485760 B/s）。'}
+                            </Typography.Text>
+                        </Form>
+                    </Modal>
+                </div>
+            </ConfigProvider>
+        );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<TrojanPage />);
+</script>
+</body>
+</html>
