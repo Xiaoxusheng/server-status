@@ -35,12 +35,13 @@
    - 环境变量：`PRIVATE_NOTES_PASSWORD=你的密码 ./server-status`（仅首次启动且未设置密码时生效）
    - 管理员接口：登录后调用
      ```bash
+     CSRF=$(grep csrf_token <登录Cookie文件> | awk '{print $7}')
      curl -k -X POST https://your-host:9000/api/private/setup-password \
        -H "Content-Type: application/json" -b "session_id=<登录Cookie>" \
-       -H "X-Timestamp: ..." -H "X-Nonce: ..." -H "X-Signature: ..." \
+       -H "X-CSRF-Token: $CSRF" \
        -d '{"password":"你的密码"}'
      ```
-     （需要 HMAC 签名头，与前端其他 API 相同）
+     （写操作需会话 + CSRF Token，与前端其他 API 相同）
 
 ### 双层认证与安全模型
 
@@ -162,7 +163,8 @@ go build -o server-monitor
 
 ## API 接口说明
 
-所有 `/api/` 接口均需登录会话；关键接口额外要求 HMAC-SHA256 签名头（`X-Timestamp`、`X-Nonce`、`X-Signature`）。
+所有 `/api/` 接口均需登录会话（HttpOnly + Secure + SameSite Cookie）；写操作（POST/PUT/PATCH/DELETE）额外要求 CSRF Token（请求头 `X-CSRF-Token` 来自登录会话绑定的非 HttpOnly `csrf_token` Cookie，Double-Submit 模式）。
+> 说明：已彻底移除浏览器端 HMAC 签名（`X-Timestamp`/`X-Nonce`/`X-Signature`），浏览器不再持有任何服务端 Secret。
 
 ### WebSocket 监控接口
 
@@ -258,8 +260,8 @@ POST /exec?command=<命令名>
 ## 安全特性
 
 - 登录：bcrypt 密码哈希，登录/注册失败次数过多自动锁定（防暴力破解）
-- 会话：HttpOnly + Secure + SameSite Cookie，服务端会话管理
-- 请求签名：HMAC-SHA256 防篡改/防重放（关键接口）
+- 会话：HttpOnly + Secure + SameSite Cookie，服务端会话管理（浏览器不持有任何 HMAC Secret）
+- CSRF：服务端 `crypto/rand` 生成的高强度随机 Token，写入非 HttpOnly Cookie（Double-Submit 模式），写操作（POST/PUT/PATCH/DELETE）强制校验
 - 反爬：浏览器 UA 白名单、行为分析、IP 封禁（不信任可伪造的 X-Forwarded-For）
 - 命令执行：白名单命令 + 固定参数，禁止 shell 拼接
 - 路径安全：目录穿越防护（路径规范化 + 目录边界校验）
@@ -276,7 +278,20 @@ POST /exec?command=<命令名>
 2. SSL 证书路径需要根据实际部署调整
 3. 媒体文件目录需要包含支持的媒体类型（.jpg, .png, .jpeg, .mp4, .webm）
 4. 程序需要足够的权限读取系统监控信息
-5. 生产环境建议修改默认的安全令牌
+5. 生产环境建议通过环境变量注入服务端密钥（见下方「环境变量」），替换内置默认值
+
+## 环境变量（服务端密钥）
+
+以下变量为**仅服务端持有的密码学密钥**，不会下发到浏览器。生产环境务必通过环境变量注入，替换内置默认值。
+
+| 环境变量 | 用途 | 说明 |
+|---|---|---|
+| `SERVER_STATUS_ENCRYPT_KEY` | 用户数据（私人手记等）AES-GCM 加密密钥 | 若缺失使用内置默认值（向后兼容，建议生产覆盖） |
+| `SERVER_STATUS_DOWNLOAD_TOKEN_SECRET` | 下载令牌签名密钥 | 同上，建议生产覆盖 |
+| `SERVER_STATUS_SIGNING_KEY` | 服务端 HMAC 签名密钥（私有入口/分享密码 Cookie、下载令牌） | 未设置时用 `crypto/rand` 随机生成并告警 |
+| `SERVER_STATUS_HOME` | 数据/日志根目录 | 例如 `SERVER_STATUS_HOME=/opt/server-status`，便于本地测试 |
+
+> 注意：内置默认值仅为保证旧部署可用；任何真实的部署都应通过环境变量提供随机高强度密钥。
 
 ## 依赖库
 

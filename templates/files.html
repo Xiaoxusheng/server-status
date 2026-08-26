@@ -1,483 +1,648 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>文件管理 - Server Status</title>
     <link rel="icon" href="data:,">
     <style>
-        html, body, #root { margin: 0; min-height: 100%; background: #f5f5f5; }
-        html.dark, html.dark body, html.dark #root { background: #141414; }
-        html.dark body { color: rgba(255,255,255,.85); }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f5f5f5; }
-        ::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #bfbfbf; }
-        html.dark ::-webkit-scrollbar-track { background: #141414; }
-        html.dark ::-webkit-scrollbar-thumb { background: #3a3a3a; }
-        html.dark ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+        html,
+        body,
+        #root {
+            margin: 0;
+            min-height: 100%;
+            background: #f5f5f5;
+        }
+
+        html.dark,
+        html.dark body,
+        html.dark #root {
+            background: #141414;
+        }
+
+        html.dark body {
+            color: rgba(255, 255, 255, .85);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f5f5f5;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #d9d9d9;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #bfbfbf;
+        }
+
+        html.dark ::-webkit-scrollbar-track {
+            background: #141414;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb {
+            background: #3a3a3a;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb:hover {
+            background: #4a4a4a;
+        }
     </style>
     <script>
         (function () {
             try {
                 var dark = localStorage.getItem('theme') === 'dark';
                 document.documentElement.classList.toggle('dark', dark);
-            } catch (e) {}
+            } catch (e) { }
         })();
     </script>
     <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
-    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script crossorigin
+        src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
     <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
     <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
     <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
     <style>
-        body { margin: 0; background: #f5f5f5; }
-        #root { min-height: 100vh; }
-        .page-wrap { padding: 16px; }
+        body {
+            margin: 0;
+            background: #f5f5f5;
+        }
+
+        #root {
+            min-height: 100vh;
+        }
+
+        .page-wrap {
+            padding: 16px;
+        }
+
         .topbar {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 24px; height: 56px; background: #fff;
-            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            height: 56px;
+            background: #fff;
+            border-bottom: 1px solid #f0f0f0;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
         }
-        .topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; color: #1677ff; }
-        .topbar.dark { background: #1f1f1f; border-bottom-color: #303030; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-        .topbar.dark .brand { color: #4096ff; }
+
+        .topbar .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 17px;
+            color: #1677ff;
+        }
+
+        .topbar.dark {
+            background: #1f1f1f;
+            border-bottom-color: #303030;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .topbar.dark .brand {
+            color: #4096ff;
+        }
+
         .topbar .brand .logo {
-            width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #1677ff, #722ed1);
-            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px;
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #1677ff, #722ed1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 16px;
         }
-        .token-url { word-break: break-all; background: #f5f5f5; padding: 8px 12px; border-radius: 6px; font-size: 12px; }
-        .file-card { margin-bottom: 10px; }
-        .file-card .ant-card-body { padding: 12px 14px; }
-        .file-row { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; font-size: 13px; }
-        .file-row .label { color: #999; font-size: 12px; }
+
+        .topbar .ant-btn {
+            font-size: 13px;
+        }
+
+        .topbar .tb-text {
+            margin-left: 4px;
+        }
+
+        .token-url {
+            word-break: break-all;
+            background: #f5f5f5;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .file-card {
+            margin-bottom: 10px;
+        }
+
+        .file-card .ant-card-body {
+            padding: 12px 14px;
+        }
+
+        .file-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 2px 0;
+            font-size: 13px;
+        }
+
+        .file-row .label {
+            color: #999;
+            font-size: 12px;
+        }
+
         @media (max-width: 768px) {
-            .topbar { padding: 8px 12px; flex-wrap: wrap; gap: 6px 8px; }
-            .topbar .brand { font-size: 14px; gap: 6px; }
-            .topbar .brand .logo { width: 26px; height: 26px; font-size: 14px; border-radius: 6px; }
-            .topbar .ant-space { flex-wrap: wrap; gap: 6px !important; }
-            .topbar .ant-btn { padding: 4px 8px; font-size: 12px; height: 30px; }
-            .topbar .tb-sub { display: none; }
-            .topbar .tb-label { display: none; }
-            .page-wrap { padding: 10px; }
-            .ant-card-head { padding: 0 12px !important; }
-            .ant-card-head-wrapper { flex-wrap: wrap; gap: 6px; }
-            .ant-card-body { padding: 12px !important; }
+            .topbar {
+                padding: 8px 12px;
+                flex-wrap: wrap;
+                gap: 6px 8px;
+            }
+
+            .topbar .brand {
+                font-size: 14px;
+                gap: 6px;
+            }
+
+            .topbar .brand .logo {
+                width: 26px;
+                height: 26px;
+                font-size: 14px;
+                border-radius: 6px;
+            }
+
+            .topbar .ant-space {
+                flex-wrap: wrap;
+                gap: 6px !important;
+            }
+
+            .topbar .ant-btn {
+                padding: 4px 8px;
+                font-size: 12px;
+                height: 30px;
+            }
+
+            .topbar .tb-sub {
+                display: none;
+            }
+
+            .topbar .tb-text {
+                display: none;
+            }
+
+            .tb-hide-sm {
+                display: none !important;
+            }
+
+            .page-wrap {
+                padding: 10px;
+            }
+
+            .ant-card-head {
+                padding: 0 12px !important;
+            }
+
+            .ant-card-head-wrapper {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            .ant-card-body {
+                padding: 12px !important;
+            }
         }
     </style>
 </head>
+
 <body>
-<div id="root"></div>
-<script type="text/babel">
-    const { Card, Table, Button, Input, Modal, message, Space, Tag, Breadcrumb, Upload, Typography, ConfigProvider, theme, Form, InputNumber, Select, Alert, Empty } = window.antd;
-    const { useState, useEffect, useCallback } = React;
-    const { darkAlgorithm } = theme;
+    <div id="root"></div>
+    <script type="text/babel">
+        const { Card, Table, Button, Input, Modal, message, Space, Tag, Breadcrumb, Upload, Typography, ConfigProvider, theme, Form, InputNumber, Select, Alert, Empty, Tooltip } = window.antd;
+        const { useState, useEffect, useCallback } = React;
+        const { darkAlgorithm } = theme;
+        const IconSet = window.icons || {};
+        const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
 
-    function useIsMobile() {
-        const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
-        useEffect(() => {
-            const q = window.matchMedia('(max-width: 768px)');
-            const h = e => setM(e.matches);
-            q.addListener(h);
-            return () => q.removeListener(h);
-        }, []);
-        return m;
-    }
-
-    const baseUrl = window.location.origin;
-
-    function secureFetch(url, options = {}) {
-        return fetch(url, {
-            method: options.method || 'GET',
-            headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-            credentials: 'include',
-            body: options.body
-        });
-    }
-
-    function fileIcon(name) {
-        const ext = (name.split('.').pop() || '').toLowerCase();
-        const map = { pdf: '📕', zip: '📦', mp4: '🎬', webm: '🎬', mov: '🎬', jpg: '🖼️', jpeg: '🖼️', png: '🖼️', epub: '📖', txt: '📄', md: '📝' };
-        return map[ext] || '📄';
-    }
-
-    function formatBytes(bytes) {
-        if (bytes === 0) return '0 B';
-        const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    function App() {
-        const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
-        const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
-        const [path, setPath] = useState('');
-        const [files, setFiles] = useState([]);
-        const [loading, setLoading] = useState(false);
-        const [mkModal, setMkModal] = useState(false);
-        const [mkName, setMkName] = useState('');
-        const [tokenModal, setTokenModal] = useState(false);
-        const [tokenFile, setTokenFile] = useState(null);
-        const [tokenResult, setTokenResult] = useState(null);
-        const [issuing, setIssuing] = useState(false);
-        const [form] = Form.useForm();
-        const isMobile = useIsMobile();
-        const [shown, setShown] = useState(50);
-
-        const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
-
-        useEffect(() => {
-            secureFetch(baseUrl + '/check-auth')
-                .then(r => r.json())
-                .then(d => {
-                    if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
-                    else window.location.href = 'index.html';
-                })
-                .catch(() => { window.location.href = 'index.html'; });
-        }, []);
-
-        const load = useCallback(async (p) => {
-            setLoading(true);
-            try {
-                const r = await secureFetch(baseUrl + '/api/files?path=' + encodeURIComponent(p));
-                const d = await r.json();
-                if (d.code === 200) {
-                    setPath(d.data.path || '');
-                    setFiles(d.data.files || []);
-                } else {
-                    message.error(d.message || '加载失败');
-                }
-            } catch (e) {
-                message.error('加载失败: ' + e.message);
-            } finally {
-                setLoading(false);
-            }
-        }, []);
-
-        useEffect(() => { if (auth.ok) load(''); }, [auth.ok, load]);
-        useEffect(() => {
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
-            document.documentElement.classList.toggle('dark', isDark);
-            document.body.classList.toggle('dark', isDark);
-            document.body.style.background = isDark ? '#141414' : '#f5f5f5';
-        }, [isDark]);
-        useEffect(() => { setShown(50); }, [path]);
-
-        if (auth.loading) {
-            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Card loading style={{ width: 320 }} />
-            </div>;
+        function useIsMobile() {
+            const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
+            useEffect(() => {
+                const q = window.matchMedia('(max-width: 768px)');
+                const h = e => setM(e.matches);
+                q.addListener(h);
+                return () => q.removeListener(h);
+            }, []);
+            return m;
         }
 
-        if (!hasPerm('files:manage')) {
-            return <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
-                <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
-                    <Card style={{ width: 380, textAlign: 'center' }}>
-                        <div style={{ fontSize: 48 }}>🚫</div>
-                        <Typography.Title level={4}>没有访问权限</Typography.Title>
-                        <Typography.Text type="secondary">当前账号没有「管理文件」权限，请联系管理员开通。</Typography.Text>
-                        <div style={{ marginTop: 16 }}>
-                            <Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>
-                        </div>
-                    </Card>
-                </div>
-            </ConfigProvider>;
+        const baseUrl = window.location.origin;
+
+        // 读取非 HttpOnly 的 csrf_token Cookie；写请求自动携带，会话 Cookie 由 credentials: include 携带
+        function getCsrfToken() { const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+        function secureFetch(url, options = {}) {
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) { const tok = getCsrfToken(); if (tok) headers['X-CSRF-Token'] = tok; }
+            return fetch(url, { method, headers, credentials: 'include', body: options.body });
         }
 
-        const parts = path ? path.split('/') : [];
-        const breadcrumbItems = [{ title: <a onClick={() => load('')}>📂 根目录</a> }];
-        let acc = '';
-        parts.forEach((p, i) => {
-            acc += (i === 0 ? '' : '/') + p;
-            const isLast = i === parts.length - 1;
-            breadcrumbItems.push({
-                title: isLast ? <span>{p}</span> : <a onClick={() => load(acc)}>{p}</a>
-            });
-        });
+        function fileIcon(name) {
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            const map = { pdf: '📕', zip: '📦', mp4: '🎬', webm: '🎬', mov: '🎬', jpg: '🖼️', jpeg: '🖼️', png: '🖼️', epub: '📖', txt: '📄', md: '📝' };
+            return map[ext] || '📄';
+        }
 
-        const columns = [
-            {
-                title: '名称', dataIndex: 'name', key: 'name',
-                render: (v, rec) => rec.is_dir
-                    ? <a onClick={() => load(rec.path)}><span style={{ marginRight: 8 }}>📁</span>{v}</a>
-                    : <span><span style={{ marginRight: 8 }}>{fileIcon(v)}</span>{v}</span>
-            },
-            { title: '大小', dataIndex: 'size', width: 120, render: (v, rec) => rec.is_dir ? '-' : formatBytes(v) },
-            {
-                title: '修改时间', dataIndex: 'mod_time', width: 180,
-                render: v => <Typography.Text type="secondary">{v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text>
-            },
-            {
-                title: '操作', key: 'op', width: 300, fixed: 'right',
-                render: (_, rec) => rec.is_dir
-                    ? <Button size="small" danger onClick={() => del(rec)}>删除目录</Button>
-                    : <Space wrap>
-                        <Button size="small" onClick={() => copyPath(rec.path)}>复制路径</Button>
-                        <Button size="small" type="primary" onClick={() => openToken(rec.path)}>🎫 签发令牌</Button>
-                        <Button size="small" danger onClick={() => del(rec)}>删除</Button>
-                    </Space>
-            }
-        ];
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
 
-        const uploadProps = {
-            multiple: true,
-            showUploadList: false,
-            customRequest: async ({ file, onSuccess, onError }) => {
-                const fd = new FormData();
-                fd.append('path', path);
-                fd.append('file', file);
+        function App() {
+            const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const [path, setPath] = useState('');
+            const [files, setFiles] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [mkModal, setMkModal] = useState(false);
+            const [mkName, setMkName] = useState('');
+            const [tokenModal, setTokenModal] = useState(false);
+            const [tokenFile, setTokenFile] = useState(null);
+            const [tokenResult, setTokenResult] = useState(null);
+            const [issuing, setIssuing] = useState(false);
+            const [form] = Form.useForm();
+            const isMobile = useIsMobile();
+            const [shown, setShown] = useState(50);
+
+            const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+
+            useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
+                        else window.location.href = 'index.html';
+                    })
+                    .catch(() => { window.location.href = 'index.html'; });
+            }, []);
+
+            const load = useCallback(async (p) => {
+                setLoading(true);
                 try {
-                    const r = await fetch(baseUrl + '/api/files/upload', { method: 'POST', body: fd, credentials: 'include' });
+                    const r = await secureFetch(baseUrl + '/api/files?path=' + encodeURIComponent(p));
                     const d = await r.json();
-                    if (d.code === 200) { message.success(`上传成功: ${file.name}`); onSuccess(); }
-                    else { message.error(d.message || '上传失败'); onError(); }
-                    load(path);
-                } catch (e) {
-                    message.error('上传失败: ' + e.message);
-                    onError();
-                }
-            }
-        };
-
-        const del = (rec) => {
-            Modal.confirm({
-                title: rec.is_dir ? '删除目录' : '删除文件',
-                content: `确定删除「${rec.path}」吗？${rec.is_dir ? '（仅限空目录）' : '此操作不可恢复。'}`,
-                okText: '删除',
-                okButtonProps: { danger: true },
-                cancelText: '取消',
-                onOk: async () => {
-                    try {
-                        const r = await secureFetch(baseUrl + '/api/files?path=' + encodeURIComponent(rec.path), { method: 'DELETE' });
-                        const d = await r.json();
-                        if (d.code === 200) { message.success('删除成功'); load(path); }
-                        else message.error(d.message || '删除失败');
-                    } catch (e) {
-                        message.error('删除失败: ' + e.message);
+                    if (d.code === 200) {
+                        setPath(d.data.path || '');
+                        setFiles(d.data.files || []);
+                    } else {
+                        message.error(d.message || '加载失败');
                     }
+                } catch (e) {
+                    message.error('加载失败: ' + e.message);
+                } finally {
+                    setLoading(false);
                 }
-            });
-        };
+            }, []);
 
-        const copyPath = (p) => {
-            const full = 'https://example.com:8081/static/' + p;
-            navigator.clipboard.writeText(full).then(() => message.success('已复制文件路径'))
-                .catch(() => { Modal.info({ title: '文件路径', content: <div className="token-url">{full}</div> }); });
-        };
+            useEffect(() => { if (auth.ok) load(''); }, [auth.ok, load]);
+            useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+            }, [isDark]);
+            useEffect(() => { setShown(50); }, [path]);
 
-        const openToken = (p) => {
-            setTokenFile(p);
-            setTokenResult(null);
-            form.resetFields();
-            setTokenModal(true);
-        };
-
-        const issue = async () => {
-            const v = await form.validateFields();
-            const body = { description: '文件: ' + tokenFile };
-            if (v.username) body.username = v.username;
-            if (v.expiry) body.expires_in = v.expiry;
-            if (v.quota) body.max_bytes = v.quota * 1024 * 1024;
-            setIssuing(true);
-            try {
-                const r = await secureFetch(baseUrl + '/generate-download-token', { method: 'POST', body: JSON.stringify(body) });
-                const d = await r.json();
-                if (d.code === 200) {
-                    const data = d.data;
-                    const url = baseUrl + '/download?token_id=' + encodeURIComponent(data.token_id) +
-                        '&token=' + encodeURIComponent(data.token) + '&file=' + encodeURIComponent(tokenFile);
-                    setTokenResult({ url, expires: data.expires_at });
-                } else {
-                    message.error(d.message || '签发失败');
-                }
-            } catch (e) {
-                message.error('签发失败: ' + e.message);
-            } finally {
-                setIssuing(false);
+            if (auth.loading) {
+                return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Card loading style={{ width: 320 }} />
+                </div>;
             }
-        };
 
-        const mkdir = async () => {
-            const name = mkName.trim();
-            if (!name) { message.warning('请输入文件夹名称'); return; }
-            const p = path ? path + '/' + name : name;
-            try {
-                const r = await secureFetch(baseUrl + '/api/files/mkdir', { method: 'POST', body: JSON.stringify({ path: p }) });
-                const d = await r.json();
-                if (d.code === 200) { message.success('目录创建成功'); setMkModal(false); setMkName(''); load(path); }
-                else message.error(d.message || '创建失败');
-            } catch (e) {
-                message.error('创建失败: ' + e.message);
-            }
-        };
-
-        return (
-            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
-                <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
-                    <div className={'topbar' + (isDark ? ' dark' : '')}>
-                        <div className="brand">
-                            <span className="logo">📁</span>
-                            <span>Server Status<span className="tb-sub"> · 文件管理</span></span>
-                        </div>
-                        <Space>
-                            <Button title="首页" onClick={() => window.location.href = 'index.html'}>🏠<span className="tb-label">首页</span></Button>
-                            <Button title="进程" onClick={() => window.location.href = 'process.html'}>⚙️<span className="tb-label">进程</span></Button>
-                            <Button title={isDark ? '浅色模式' : '深色模式'} onClick={() => setIsDark(!isDark)}>{isDark ? '🌞' : '🌙'}<span className="tb-label">{isDark ? '浅色' : '深色'}</span></Button>
-                            <Button danger title="退出登录" onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}>🚪<span className="tb-label">退出</span></Button>
-                        </Space>
-                    </div>
-
-                    <div className="page-wrap">
-                        <Card
-                            title="📂 服务器文件"
-                            extra={<Space>
-                                <Upload {...uploadProps}>
-                                    <Button type="primary" icon={<span>⬆️</span>}>上传文件</Button>
-                                </Upload>
-                                <Button onClick={() => setMkModal(true)}>📁 新建文件夹</Button>
-                                <Button onClick={() => load(path)}>🔄 刷新</Button>
-                            </Space>}
-                        >
-                            <div style={{ marginBottom: 12 }}>
-                                <Breadcrumb items={breadcrumbItems} />
+            if (!hasPerm('files:manage')) {
+                return <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <Card style={{ width: 380, textAlign: 'center' }}>
+                            <div style={{ fontSize: 48 }}>🚫</div>
+                            <Typography.Title level={4}>没有访问权限</Typography.Title>
+                            <Typography.Text type="secondary">当前账号没有「管理文件」权限，请联系管理员开通。</Typography.Text>
+                            <div style={{ marginTop: 16 }}>
+                                <Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>
                             </div>
-                            <Alert
-                                type="info"
-                                showIcon
-                                style={{ marginBottom: 12 }}
-                                message={`当前路径: /opt/server-status/media/${path}`}
-                            />
-                            {isMobile ? (
-                                <div>
-                                    {files.slice(0, shown).map(f => (
-                                        <Card key={f.path} size="small" hoverable bordered className="file-card">
-                                            <div className="file-row" style={{ alignItems: 'flex-start' }}>
-                                                <span style={{ fontSize: 22, marginRight: 8 }}>{f.is_dir ? '📁' : fileIcon(f.name)}</span>
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    {f.is_dir
-                                                        ? <a onClick={() => load(f.path)} style={{ fontWeight: 600, wordBreak: 'break-all' }}>{f.name}</a>
-                                                        : <span style={{ wordBreak: 'break-all' }}>{f.name}</span>}
-                                                </div>
-                                            </div>
-                                            <div className="file-row"><span className="label">大小</span><span>{f.is_dir ? '-' : formatBytes(f.size)}</span></div>
-                                            <div className="file-row"><span className="label">修改时间</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{f.mod_time ? new Date(f.mod_time).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text></div>
-                                            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                                                {f.is_dir
-                                                    ? <Button size="small" danger onClick={() => del(f)}>删除目录</Button>
-                                                    : <><Button size="small" onClick={() => copyPath(f.path)}>复制路径</Button>
-                                                        <Button size="small" type="primary" onClick={() => openToken(f.path)}>🎫 签发令牌</Button>
-                                                        <Button size="small" danger onClick={() => del(f)}>删除</Button></>}
-                                            </div>
-                                        </Card>
-                                    ))}
-                                    {!files.length && <Empty description="📭 空目录" style={{ padding: 30 }} />}
-                                    {files.length > shown && (
-                                        <div style={{ textAlign: 'center', marginTop: 8 }}>
-                                            <Button block onClick={() => setShown(shown + 50)}>加载更多（{files.length - shown} 项）</Button>
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                <Table
-                                    rowKey="path"
-                                    columns={columns}
-                                    dataSource={files}
-                                    loading={loading}
-                                    size="middle"
-                                    scroll={{ x: 760 }}
-                                    pagination={files.length > 20 ? { pageSize: 20, showSizeChanger: true, showTotal: t => `共 ${t} 项` } : false}
-                                    locale={{ emptyText: '📭 空目录' }}
-                                />
-                            )}
                         </Card>
                     </div>
+                </ConfigProvider>;
+            }
 
-                    <Modal title="📁 新建文件夹" open={mkModal} onOk={mkdir} onCancel={() => setMkModal(false)} okText="创建" cancelText="取消">
-                        <Input placeholder="请输入文件夹名称" value={mkName} onChange={e => setMkName(e.target.value)} onPressEnter={mkdir} />
-                    </Modal>
+            const parts = path ? path.split('/') : [];
+            const breadcrumbItems = [{ title: <a onClick={() => load('')}>📂 根目录</a> }];
+            let acc = '';
+            parts.forEach((p, i) => {
+                acc += (i === 0 ? '' : '/') + p;
+                const isLast = i === parts.length - 1;
+                breadcrumbItems.push({
+                    title: isLast ? <span>{p}</span> : <a onClick={() => load(acc)}>{p}</a>
+                });
+            });
 
-                    <Modal
-                        title={`🎫 签发下载令牌：${tokenFile || ''}`}
-                        open={tokenModal}
-                        onCancel={() => setTokenModal(false)}
-                        footer={null}
-                        width={560}
-                    >
-                        <Form form={form} layout="vertical" onFinish={issue}>
-                            <Form.Item name="username" label="签发给用户（留空 = 自己）">
-                                <Input placeholder="目标用户名" />
-                            </Form.Item>
-                            <Space size={12} style={{ display: 'flex' }}>
-                                <Form.Item name="expiry" label="有效期（分钟，留空=30）" style={{ flex: 1 }}>
-                                    <InputNumber min={1} max={43200} style={{ width: '100%' }} placeholder="60" />
-                                </Form.Item>
-                                <Form.Item name="quota" label="流量上限（MB，留空=3072）" style={{ flex: 1 }}>
-                                    <InputNumber min={1} style={{ width: '100%' }} placeholder="1024" />
-                                </Form.Item>
+            const columns = [
+                {
+                    title: '名称', dataIndex: 'name', key: 'name',
+                    render: (v, rec) => rec.is_dir
+                        ? <a onClick={() => load(rec.path)}><span style={{ marginRight: 8 }}>📁</span>{v}</a>
+                        : <span><span style={{ marginRight: 8 }}>{fileIcon(v)}</span>{v}</span>
+                },
+                { title: '大小', dataIndex: 'size', width: 120, render: (v, rec) => rec.is_dir ? '-' : formatBytes(v) },
+                {
+                    title: '修改时间', dataIndex: 'mod_time', width: 180,
+                    render: v => <Typography.Text type="secondary">{v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text>
+                },
+                {
+                    title: '操作', key: 'op', width: 300, fixed: 'right',
+                    render: (_, rec) => rec.is_dir
+                        ? <Button size="small" danger onClick={() => del(rec)}>删除目录</Button>
+                        : <Space wrap>
+                            <Button size="small" onClick={() => copyPath(rec.path)}>复制路径</Button>
+                            <Button size="small" type="primary" onClick={() => openToken(rec.path)}>🎫 签发令牌</Button>
+                            <Button size="small" danger onClick={() => del(rec)}>删除</Button>
+                        </Space>
+                }
+            ];
+
+            const uploadProps = {
+                multiple: true,
+                showUploadList: false,
+                customRequest: async ({ file, onSuccess, onError }) => {
+                    const fd = new FormData();
+                    fd.append('path', path);
+                    fd.append('file', file);
+                    try {
+                        const r = await fetch(baseUrl + '/api/files/upload', { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() }, body: fd, credentials: 'include' });
+                        const d = await r.json();
+                        if (d.code === 200) { message.success(`上传成功: ${file.name}`); onSuccess(); }
+                        else { message.error(d.message || '上传失败'); onError(); }
+                        load(path);
+                    } catch (e) {
+                        message.error('上传失败: ' + e.message);
+                        onError();
+                    }
+                }
+            };
+
+            const del = (rec) => {
+                Modal.confirm({
+                    title: rec.is_dir ? '删除目录' : '删除文件',
+                    content: `确定删除「${rec.path}」吗？${rec.is_dir ? '（仅限空目录）' : '此操作不可恢复。'}`,
+                    okText: '删除',
+                    okButtonProps: { danger: true },
+                    cancelText: '取消',
+                    onOk: async () => {
+                        try {
+                            const r = await secureFetch(baseUrl + '/api/files?path=' + encodeURIComponent(rec.path), { method: 'DELETE' });
+                            const d = await r.json();
+                            if (d.code === 200) { message.success('删除成功'); load(path); }
+                            else message.error(d.message || '删除失败');
+                        } catch (e) {
+                            message.error('删除失败: ' + e.message);
+                        }
+                    }
+                });
+            };
+
+            const copyPath = (p) => {
+                const full = 'https://example.com:8081/static/' + p;
+                navigator.clipboard.writeText(full).then(() => message.success('已复制文件路径'))
+                    .catch(() => { Modal.info({ title: '文件路径', content: <div className="token-url">{full}</div> }); });
+            };
+
+            const openToken = (p) => {
+                setTokenFile(p);
+                setTokenResult(null);
+                form.resetFields();
+                setTokenModal(true);
+            };
+
+            const issue = async () => {
+                const v = await form.validateFields();
+                const body = { description: '文件: ' + tokenFile };
+                if (v.username) body.username = v.username;
+                if (v.expiry) body.expires_in = v.expiry;
+                if (v.quota) body.max_bytes = v.quota * 1024 * 1024;
+                setIssuing(true);
+                try {
+                    const r = await secureFetch(baseUrl + '/generate-download-token', { method: 'POST', body: JSON.stringify(body) });
+                    const d = await r.json();
+                    if (d.code === 200) {
+                        const data = d.data;
+                        const url = baseUrl + '/download?token_id=' + encodeURIComponent(data.token_id) +
+                            '&token=' + encodeURIComponent(data.token) + '&file=' + encodeURIComponent(tokenFile);
+                        setTokenResult({ url, expires: data.expires_at });
+                    } else {
+                        message.error(d.message || '签发失败');
+                    }
+                } catch (e) {
+                    message.error('签发失败: ' + e.message);
+                } finally {
+                    setIssuing(false);
+                }
+            };
+
+            const mkdir = async () => {
+                const name = mkName.trim();
+                if (!name) { message.warning('请输入文件夹名称'); return; }
+                const p = path ? path + '/' + name : name;
+                try {
+                    const r = await secureFetch(baseUrl + '/api/files/mkdir', { method: 'POST', body: JSON.stringify({ path: p }) });
+                    const d = await r.json();
+                    if (d.code === 200) { message.success('目录创建成功'); setMkModal(false); setMkName(''); load(path); }
+                    else message.error(d.message || '创建失败');
+                } catch (e) {
+                    message.error('创建失败: ' + e.message);
+                }
+            };
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <div className={'topbar' + (isDark ? ' dark' : '')}>
+                            <div className="brand">
+                                <span className="logo">📁</span>
+                                <span>Server Status<span className="tb-sub"> · 文件管理</span></span>
+                            </div>
+                            <Space>
+                                <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>
+                                <Button className="tb-hide-sm" icon={<UIIcon name="SettingOutlined" />} onClick={() => window.location.href = 'process.html'}><span className="tb-text">进程</span></Button>
+                                <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                                    <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                                </Tooltip>
+                                <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}><span className="tb-text">退出</span></Button>
                             </Space>
-                            {tokenResult && (
+                        </div>
+
+                        <div className="page-wrap">
+                            <Card
+                                title="📂 服务器文件"
+                                extra={<Space>
+                                    <Upload {...uploadProps}>
+                                        <Button type="primary" icon={<span>⬆️</span>}>上传文件</Button>
+                                    </Upload>
+                                    <Button onClick={() => setMkModal(true)}>📁 新建文件夹</Button>
+                                    <Button onClick={() => load(path)}>🔄 刷新</Button>
+                                </Space>}
+                            >
+                                <div style={{ marginBottom: 12 }}>
+                                    <Breadcrumb items={breadcrumbItems} />
+                                </div>
                                 <Alert
-                                    type="success"
+                                    type="info"
                                     showIcon
                                     style={{ marginBottom: 12 }}
-                                    message="令牌生成成功"
-                                    description={
-                                        <div>
-                                            <div style={{ marginBottom: 4 }}>有效期至 {tokenResult.expires}</div>
-                                            <div className="token-url">{tokenResult.url}</div>
-                                            <Button size="small" style={{ marginTop: 8 }} onClick={() => {
-                                                navigator.clipboard.writeText(tokenResult.url).then(() => message.success('已复制下载链接'));
-                                            }}>📋 复制下载链接</Button>
-                                        </div>
-                                    }
+                                    message={`当前路径: /opt/server-status/media/${path}`}
                                 />
-                            )}
-                            <div style={{ textAlign: 'right', marginTop: 8 }}>
-                                <Space>
-                                    <Button onClick={() => setTokenModal(false)}>关闭</Button>
-                                    <Button type="primary" htmlType="submit" loading={issuing}>签发令牌</Button>
-                                </Space>
-                            </div>
-                        </Form>
-                    </Modal>
-                </div>
-            </ConfigProvider>
-        );
-    }
+                                {isMobile ? (
+                                    <div>
+                                        {files.slice(0, shown).map(f => (
+                                            <Card key={f.path} size="small" hoverable bordered className="file-card">
+                                                <div className="file-row" style={{ alignItems: 'flex-start' }}>
+                                                    <span style={{ fontSize: 22, marginRight: 8 }}>{f.is_dir ? '📁' : fileIcon(f.name)}</span>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        {f.is_dir
+                                                            ? <a onClick={() => load(f.path)} style={{ fontWeight: 600, wordBreak: 'break-all' }}>{f.name}</a>
+                                                            : <span style={{ wordBreak: 'break-all' }}>{f.name}</span>}
+                                                    </div>
+                                                </div>
+                                                <div className="file-row"><span className="label">大小</span><span>{f.is_dir ? '-' : formatBytes(f.size)}</span></div>
+                                                <div className="file-row"><span className="label">修改时间</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{f.mod_time ? new Date(f.mod_time).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text></div>
+                                                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                                                    {f.is_dir
+                                                        ? <Button size="small" danger onClick={() => del(f)}>删除目录</Button>
+                                                        : <><Button size="small" onClick={() => copyPath(f.path)}>复制路径</Button>
+                                                            <Button size="small" type="primary" onClick={() => openToken(f.path)}>🎫 签发令牌</Button>
+                                                            <Button size="small" danger onClick={() => del(f)}>删除</Button></>}
+                                                </div>
+                                            </Card>
+                                        ))}
+                                        {!files.length && <Empty description="📭 空目录" style={{ padding: 30 }} />}
+                                        {files.length > shown && (
+                                            <div style={{ textAlign: 'center', marginTop: 8 }}>
+                                                <Button block onClick={() => setShown(shown + 50)}>加载更多（{files.length - shown} 项）</Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <Table
+                                        rowKey="path"
+                                        columns={columns}
+                                        dataSource={files}
+                                        loading={loading}
+                                        size="middle"
+                                        scroll={{ x: 760 }}
+                                        pagination={files.length > 20 ? { pageSize: 20, showSizeChanger: true, showTotal: t => `共 ${t} 项` } : false}
+                                        locale={{ emptyText: '📭 空目录' }}
+                                    />
+                                )}
+                            </Card>
+                        </div>
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-</script>
-<script>
-    (function () {
-        function openPrivateSpace() {
-            try {
-                fetch('/api/private/entry', { method: 'POST', credentials: 'include' })
-                    .catch(function () {})
-                    .finally(function () { window.location.href = 'private.html'; });
-            } catch (e) { window.location.href = 'private.html'; }
+                        <Modal title="📁 新建文件夹" open={mkModal} onOk={mkdir} onCancel={() => setMkModal(false)} okText="创建" cancelText="取消">
+                            <Input placeholder="请输入文件夹名称" value={mkName} onChange={e => setMkName(e.target.value)} onPressEnter={mkdir} />
+                        </Modal>
+
+                        <Modal
+                            title={`🎫 签发下载令牌：${tokenFile || ''}`}
+                            open={tokenModal}
+                            onCancel={() => setTokenModal(false)}
+                            footer={null}
+                            width={560}
+                        >
+                            <Form form={form} layout="vertical" onFinish={issue}>
+                                <Form.Item name="username" label="签发给用户（留空 = 自己）">
+                                    <Input placeholder="目标用户名" />
+                                </Form.Item>
+                                <Space size={12} style={{ display: 'flex' }}>
+                                    <Form.Item name="expiry" label="有效期（分钟，留空=30）" style={{ flex: 1 }}>
+                                        <InputNumber min={1} max={43200} style={{ width: '100%' }} placeholder="60" />
+                                    </Form.Item>
+                                    <Form.Item name="quota" label="流量上限（MB，留空=3072）" style={{ flex: 1 }}>
+                                        <InputNumber min={1} style={{ width: '100%' }} placeholder="1024" />
+                                    </Form.Item>
+                                </Space>
+                                {tokenResult && (
+                                    <Alert
+                                        type="success"
+                                        showIcon
+                                        style={{ marginBottom: 12 }}
+                                        message="令牌生成成功"
+                                        description={
+                                            <div>
+                                                <div style={{ marginBottom: 4 }}>有效期至 {tokenResult.expires}</div>
+                                                <div className="token-url">{tokenResult.url}</div>
+                                                <Button size="small" style={{ marginTop: 8 }} onClick={() => {
+                                                    navigator.clipboard.writeText(tokenResult.url).then(() => message.success('已复制下载链接'));
+                                                }}>📋 复制下载链接</Button>
+                                            </div>
+                                        }
+                                    />
+                                )}
+                                <div style={{ textAlign: 'right', marginTop: 8 }}>
+                                    <Space>
+                                        <Button onClick={() => setTokenModal(false)}>关闭</Button>
+                                        <Button type="primary" htmlType="submit" loading={issuing}>签发令牌</Button>
+                                    </Space>
+                                </div>
+                            </Form>
+                        </Modal>
+                    </div>
+                </ConfigProvider>
+            );
         }
-        var taps = [], lastTap = 0;
-        document.addEventListener('keydown', function (e) {
-            if (e.ctrlKey && e.shiftKey && e.altKey && (e.key === 'N' || e.key === 'n')) {
-                e.preventDefault();
-                openPrivateSpace();
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+    <script>
+        (function () {
+            function getCsrfToken() { var m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+            function openPrivateSpace() {
+                try {
+                    fetch('/api/private/entry', { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() }, credentials: 'include' })
+                        .catch(function () { })
+                        .finally(function () { window.location.href = 'private.html'; });
+                } catch (e) { window.location.href = 'private.html'; }
             }
-        });
-        document.addEventListener('click', function (e) {
-            var el = e.target;
-            while (el && el !== document.documentElement) {
-                if (el.classList && (el.classList.contains('logo') || el.classList.contains('brand'))) {
-                    var now = Date.now();
-                    if (now - lastTap > 3000) taps = [];
-                    lastTap = now;
-                    taps.push(now);
-                    if (taps.length >= 5) { taps = []; openPrivateSpace(); }
-                    return;
+            var taps = [], lastTap = 0;
+            document.addEventListener('keydown', function (e) {
+                if (e.ctrlKey && e.shiftKey && e.altKey && (e.key === 'N' || e.key === 'n')) {
+                    e.preventDefault();
+                    openPrivateSpace();
                 }
-                el = el.parentElement;
-            }
-        });
-    })();
-</script>
+            });
+            document.addEventListener('click', function (e) {
+                var el = e.target;
+                while (el && el !== document.documentElement) {
+                    if (el.classList && (el.classList.contains('logo') || el.classList.contains('brand'))) {
+                        var now = Date.now();
+                        if (now - lastTap > 3000) taps = [];
+                        lastTap = now;
+                        taps.push(now);
+                        if (taps.length >= 5) { taps = []; openPrivateSpace(); }
+                        return;
+                    }
+                    el = el.parentElement;
+                }
+            });
+        })();
+    </script>
 </body>
+
 </html>

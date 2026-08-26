@@ -1,13 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -289,5 +295,623 @@ func TestTrojanClientIntegration(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("user nolimit not found")
+	}
+}
+
+// TestGenerateTrojanURI 测试 Trojan URI 生成。
+func TestGenerateTrojanURI(t *testing.T) {
+	tests := []struct {
+		name      string
+		userName  string
+		server    string
+		port      int
+		password  string
+		sni       string
+		wsPath    string
+		wsHost    string
+		tls       bool
+		udp       bool
+		wsEnabled bool
+		want      string
+	}{
+		{
+			name:     "IPv4 with WS",
+			userName: "user-001",
+			server:   "example.com", port: 8388, password: "Test@123456",
+			sni: "example.com", wsPath: "/ws", wsHost: "example.com",
+			tls: true, udp: true, wsEnabled: true,
+			want: "trojan://Test%40123456@example.com:8388?security=tls&sni=example.com&type=ws&path=%2Fws&host=example.com&udp=1#user-001",
+		},
+		{
+			name:     "password with @",
+			userName: "test", server: "example.com", port: 443, password: "test@example.com#123",
+			sni: "example.com", wsPath: "/ws", wsHost: "example.com",
+			tls: true, udp: true, wsEnabled: true,
+			want: "trojan://test%40example.com%23123@example.com:443?security=tls&sni=example.com&type=ws&path=%2Fws&host=example.com&udp=1#test",
+		},
+		{
+			name:     "password with special chars",
+			userName: "user", server: "server.com", port: 443, password: "a?b&c% d#e@f",
+			sni: "server.com", wsPath: "/ws", wsHost: "server.com",
+			tls: true, udp: false, wsEnabled: true,
+			want: "trojan://a%3Fb%26c%25%20d%23e%40f@server.com:443?security=tls&sni=server.com&type=ws&path=%2Fws&host=server.com#user",
+		},
+		{
+			name:     "IPv6 address",
+			userName: "ipv6-test", server: "2001:db8::1", port: 8388, password: "pass",
+			sni: "2001:db8::1", wsPath: "/ws", wsHost: "2001:db8::1",
+			tls: true, udp: true, wsEnabled: true,
+			want: "trojan://pass@[2001:db8::1]:8388?security=tls&sni=2001%3Adb8%3A%3A1&type=ws&path=%2Fws&host=2001%3Adb8%3A%3A1&udp=1#ipv6-test",
+		},
+		{
+			name:     "domain without WS",
+			userName: "simple", server: "example.com", port: 443, password: "mypass",
+			sni: "", wsPath: "", wsHost: "",
+			tls: true, udp: false, wsEnabled: false,
+			want: "trojan://mypass@example.com:443?security=tls#simple",
+		},
+		{
+			name:     "Chinese username",
+			userName: "中文用户", server: "cn.example.com", port: 8388, password: "chinese",
+			sni: "cn.example.com", wsPath: "/ws", wsHost: "cn.example.com",
+			tls: true, udp: true, wsEnabled: true,
+			want: "trojan://chinese@cn.example.com:8388?security=tls&sni=cn.example.com&type=ws&path=%2Fws&host=cn.example.com&udp=1#%E4%B8%AD%E6%96%87%E7%94%A8%E6%88%B7",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := generateTrojanURI(tt.userName, tt.server, tt.port, tt.password, tt.sni, tt.wsPath, tt.wsHost, tt.tls, tt.udp, tt.wsEnabled)
+			if got != tt.want {
+				t.Fatalf("generateTrojanURI() = %s\nwant %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestGenerateClashYAML 测试 Clash 配置生成。
+func TestGenerateClashYAML(t *testing.T) {
+	got := generateClashYAML("user-001", "example.com", 8388, "Test@123456", "example.com", "/ws", "example.com", "192.168.1.0/24", true, true)
+	if !strings.Contains(got, "type: trojan") {
+		t.Fatal("missing type: trojan")
+	}
+	if !strings.Contains(got, "server: example.com") {
+		t.Fatal("missing server")
+	}
+	if !strings.Contains(got, "port: 8388") {
+		t.Fatal("missing port")
+	}
+	if !strings.Contains(got, "password: \"Test@123456\"") {
+		t.Fatal("missing password")
+	}
+	if !strings.Contains(got, "network: ws") {
+		t.Fatal("missing network: ws")
+	}
+	if !strings.Contains(got, "path: /ws") {
+		t.Fatal("missing ws path")
+	}
+	if !strings.Contains(got, "Host: example.com") {
+		t.Fatal("missing ws host header")
+	}
+	if !strings.Contains(got, "udp: true") {
+		t.Fatal("missing udp")
+	}
+	if !strings.Contains(got, "sni: example.com") {
+		t.Fatal("missing sni")
+	}
+	if !strings.Contains(got, "192.168.1.0/24") {
+		t.Fatal("missing lan cidr rule")
+	}
+	if !strings.Contains(got, "IP-CIDR") {
+		t.Fatal("missing IP-CIDR rule")
+	}
+}
+
+// TestGenerateSingboxJSON 测试 sing-box 配置生成。
+func TestGenerateSingboxJSON(t *testing.T) {
+	got := generateSingboxJSON("user-001", "example.com", 8388, "Test@123456", "example.com", "/ws", "example.com", true, true)
+	if !strings.Contains(got, `"type": "trojan"`) {
+		t.Fatal("missing type: trojan")
+	}
+	if !strings.Contains(got, `"server": "example.com"`) {
+		t.Fatal("missing server")
+	}
+	if !strings.Contains(got, `"server_port": 8388`) {
+		t.Fatal("missing server_port")
+	}
+	if !strings.Contains(got, `"password": "Test@123456"`) {
+		t.Fatal("missing password")
+	}
+	if !strings.Contains(got, `"type": "ws"`) {
+		t.Fatal("missing transport type ws")
+	}
+	if !strings.Contains(got, `"path": "/ws"`) {
+		t.Fatal("missing ws path")
+	}
+	if !strings.Contains(got, `"Host": "example.com"`) {
+		t.Fatal("missing ws host header")
+	}
+	if !strings.Contains(got, `"enabled": true`) {
+		t.Fatal("missing tls enabled")
+	}
+	if !strings.Contains(got, `"server_name": "example.com"`) {
+		t.Fatal("missing tls server_name")
+	}
+}
+
+// TestTrojanCredential 测试凭据存储。
+func TestTrojanCredential(t *testing.T) {
+	// 使用临时目录
+	tmpDir := t.TempDir()
+	prevHome := os.Getenv("SERVER_STATUS_HOME")
+	os.Setenv("SERVER_STATUS_HOME", tmpDir)
+	defer os.Setenv("SERVER_STATUS_HOME", prevHome)
+
+	// 测试保存凭据
+	hash := trojanHash("testpassword")
+	if err := setTrojanCredential(hash, "testpassword"); err != nil {
+		t.Fatalf("setTrojanCredential failed: %v", err)
+	}
+
+	// 测试读取凭据
+	password, ok := getTrojanCredential(hash)
+	if !ok {
+		t.Fatal("getTrojanCredential: credential not found")
+	}
+	if password != "testpassword" {
+		t.Fatalf("getTrojanCredential: got %s, want testpassword", password)
+	}
+
+	// 测试不存在的凭据
+	_, ok = getTrojanCredential("nonexistent")
+	if ok {
+		t.Fatal("getTrojanCredential should return false for nonexistent hash")
+	}
+
+	// 测试删除凭据
+	if err := deleteTrojanCredential(hash); err != nil {
+		t.Fatalf("deleteTrojanCredential failed: %v", err)
+	}
+	_, ok = getTrojanCredential(hash)
+	if ok {
+		t.Fatal("credential should be deleted")
+	}
+}
+
+// TestTrojanURINoPasswordInLog 验证密码被正确编码，且函数不产生日志输出。
+func TestTrojanURINoPasswordInLog(t *testing.T) {
+	// 验证密码中的特殊字符被正确 URL 编码
+	uri := generateTrojanURI("test", "example.com", 443, "secret@#", "example.com", "", "", true, false, false)
+	if strings.Contains(uri, "secret@#") {
+		t.Fatal("URI should not contain unencoded password special chars")
+	}
+	if !strings.Contains(uri, "secret%40%23") {
+		t.Fatal("URI should contain URL-encoded password")
+	}
+}
+
+// TestClashCIDR 测试 CIDR 规则生成。
+func TestClashCIDR(t *testing.T) {
+	// 有 LAN CIDR
+	got := generateClashYAML("user", "server.com", 443, "pass", "", "", "", "192.168.1.0/24", true, false)
+	if !strings.Contains(got, "IP-CIDR,192.168.1.0/24,user") {
+		t.Fatal("missing LAN CIDR rule")
+	}
+	if !strings.Contains(got, "MATCH,user") {
+		t.Fatal("missing MATCH rule")
+	}
+
+	// 无 LAN CIDR（仅互联网模式）
+	got2 := generateClashYAML("user", "server.com", 443, "pass", "", "", "", "", true, false)
+	if strings.Contains(got2, "IP-CIDR") {
+		t.Fatal("should not have IP-CIDR rule when no LAN CIDR")
+	}
+	if strings.Contains(got2, "rules:") {
+		t.Fatal("should not have rules section when no LAN CIDR")
+	}
+}
+
+// ==================== Trojan 连接 / 认证 / 安全测试 ====================
+
+// trojanTestMux 注册与 main() 一致的 Trojan 路由（会话认证 + RBAC + securityMiddleware）。
+func trojanTestMux() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/trojan/status", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanStatusHandler))))
+	mux.HandleFunc("GET /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUsersHandler))))
+	mux.HandleFunc("POST /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
+	mux.HandleFunc("GET /api/trojan/users/{hash}/connection", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanConnectionHandler))))
+	mux.HandleFunc("POST /api/trojan/users/{hash}/credential", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanCredentialHandler))))
+	mux.HandleFunc("GET /api/trojan/users/{hash}/clash/download", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanClashDownloadHandler))))
+	mux.HandleFunc("GET /api/trojan/users/{hash}/singbox/download", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanSingboxDownloadHandler))))
+	return mux
+}
+
+// trojanAuthedRequest 构造带登录会话（session + CSRF）与浏览器头部的 Trojan API 请求。
+func trojanAuthedRequest(method, path, sessionID, body string) *http.Request {
+	var rdr io.Reader
+	if body != "" {
+		rdr = strings.NewReader(body)
+	}
+	r := httptest.NewRequest(method, path, rdr)
+	r.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0")
+	r.Header.Set("Accept", "application/json, text/plain, */*")
+	r.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
+	r.Header.Set("Accept-Encoding", "gzip, deflate")
+	if body != "" {
+		r.Header.Set("Content-Type", "application/json")
+	}
+	// 写请求携带会话绑定 CSRF（Double-Submit：Cookie + X-CSRF-Token 头）
+	r.Header.Set(csrfHeaderName, testCSRFToken)
+	if sessionID != "" {
+		r.Header.Set("Cookie", "session_id="+sessionID+"; csrf_token="+testCSRFToken)
+	}
+	return r
+}
+
+// trojanDo 在指定 mux 上执行请求并返回响应记录器。
+func trojanDo(mux *http.ServeMux, r *http.Request) *httptest.ResponseRecorder {
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, r)
+	return rec
+}
+
+// setupTrojanEnv 初始化测试用户、fake gRPC 服务端与全局 trojanClient，并指向临时数据目录。
+// 返回清理函数（恢复全局状态）。
+func setupTrojanEnv(t *testing.T) func() {
+	t.Helper()
+	oldUM := userManager
+	userManager = &UserManager{
+		RWMutex:   sync.RWMutex{},
+		UserInfos: map[string]*Users{"admin": {Username: "admin", IsActive: true, Permissions: []string{"*"}}},
+		Sessions:  make(map[string]*Session),
+	}
+	oldHome := os.Getenv("SERVER_STATUS_HOME")
+	os.Setenv("SERVER_STATUS_HOME", t.TempDir())
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := grpc.NewServer()
+	fake := &fakeTrojanServer{users: make(map[string]*service.UserStatus)}
+	service.RegisterTrojanServerServiceServer(srv, fake)
+	go func() { _ = srv.Serve(lis) }()
+
+	oldClient := trojanClient
+	trojanClient = &TrojanClient{cfg: TrojanConfig{
+		Enabled:         true,
+		APIAddr:         lis.Addr().String(),
+		APITimeout:      5 * time.Second,
+		RefreshInterval: time.Hour,
+		Connection: TrojanConnectionConfig{
+			Server: "example.com",
+			Port:   8388,
+			TLS:    true,
+			SNI:    "example.com",
+			WebSocket: TrojanWebSocketConfig{
+				Enabled: true,
+				Path:    "/ws",
+				Host:    "example.com",
+			},
+			UDP:     true,
+			LanCIDR: "192.168.1.0/24",
+		},
+	}}
+	return func() {
+		_ = trojanClient.close()
+		srv.Stop()
+		trojanClient = oldClient
+		userManager = oldUM
+		os.Setenv("SERVER_STATUS_HOME", oldHome)
+	}
+}
+
+// TestTrojanAPIAuth 验证连接 API 的认证与权限：未登录 401、无权限 403、登录+权限可达。
+func TestTrojanAPIAuth(t *testing.T) {
+	cleanup := setupTrojanEnv(t)
+	defer cleanup()
+	mux := trojanTestMux()
+
+	sid := "admin-session"
+	userManager.Lock()
+	userManager.Sessions[sid] = &Session{SessionID: sid, Username: "admin", CreatedAt: time.Now(), LastAccess: time.Now(), ExpiresAt: time.Now().Add(time.Hour), CSRFToken: testCSRFToken}
+	userManager.Unlock()
+
+	// 1. 未登录（无 session Cookie）→ 401
+	rec := trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users/abc/connection", "", ""))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("未登录应 401, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 2. 已登录但无 trojan:manage 权限 → 403
+	userManager.Lock()
+	userManager.UserInfos["limited"] = &Users{Username: "limited", IsActive: true, Permissions: []string{"user:view"}}
+	userManager.Sessions["limited-session"] = &Session{SessionID: "limited-session", Username: "limited", CreatedAt: time.Now(), LastAccess: time.Now(), ExpiresAt: time.Now().Add(time.Hour), CSRFToken: testCSRFToken}
+	userManager.Unlock()
+	rec = trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users/abc/connection", "limited-session", ""))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("无权限应 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 3. 已登录 + 权限 → 到达受保护连接接口（凭据缺失返回 404 而非绕过认证）
+	rec = trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users/abc/connection", sid, ""))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("登录+权限应到达连接接口(404=凭据缺失), got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestTrojanConnectionFlow 完整链路：创建用户 → 凭据保存 → 连接接口返回完整配置，
+// 且用户列表 / 状态接口不泄露密码。
+func TestTrojanConnectionFlow(t *testing.T) {
+	cleanup := setupTrojanEnv(t)
+	defer cleanup()
+	mux := trojanTestMux()
+
+	sid := "admin-session"
+	userManager.Lock()
+	userManager.Sessions[sid] = &Session{SessionID: sid, Username: "admin", CreatedAt: time.Now(), LastAccess: time.Now(), ExpiresAt: time.Now().Add(time.Hour), CSRFToken: testCSRFToken}
+	userManager.Unlock()
+
+	// 1. 创建用户（密码含特殊字符）
+	secret := "Test@123456"
+	rec := trojanDo(mux, trojanAuthedRequest("POST", "/api/trojan/users", sid, `{"password":"`+secret+`","upload_limit":10485760,"download_limit":52428800,"ip_limit":5}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("创建用户失败: %d %s", rec.Code, rec.Body.String())
+	}
+	hash := trojanHash(secret)
+
+	// 2. 用户列表接口不得包含 password
+	rec = trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users", sid, ""))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("用户列表失败: %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), secret) || strings.Contains(rec.Body.String(), `"password"`) {
+		t.Fatalf("用户列表泄露密码: %s", rec.Body.String())
+	}
+
+	// 3. 状态接口（与 WebSocket 推送相同的 TrojanStatus）不得包含 password
+	rec = trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/status", sid, ""))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("状态接口失败: %d", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), secret) || strings.Contains(rec.Body.String(), `"password"`) {
+		t.Fatalf("状态接口泄露密码: %s", rec.Body.String())
+	}
+
+	// 4. 连接接口返回完整配置（受保护 API 中才返回密码）
+	rec = trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users/"+hash+"/connection", sid, ""))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("连接接口失败: %d %s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Code int `json:"code"`
+		Data struct {
+			Password  string `json:"password"`
+			TrojanURI string `json:"trojan_uri"`
+			Clash     string `json:"clash"`
+			Singbox   string `json:"singbox"`
+			Server    string `json:"server"`
+			Port      int    `json:"port"`
+			TLS       bool   `json:"tls"`
+			SNI       string `json:"sni"`
+			WSPath    string `json:"ws_path"`
+			WSHost    string `json:"ws_host"`
+			UDP       bool   `json:"udp"`
+			LanCIDR   string `json:"lan_cidr"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Data.Password != secret {
+		t.Fatalf("连接接口密码不符: %q", payload.Data.Password)
+	}
+	if payload.Data.Server != "example.com" || payload.Data.Port != 8388 || !payload.Data.TLS || payload.Data.SNI != "example.com" {
+		t.Fatalf("连接参数错误: %+v", payload.Data)
+	}
+	if payload.Data.WSPath != "/ws" || payload.Data.WSHost != "example.com" || !payload.Data.UDP {
+		t.Fatalf("WebSocket/UDP 参数错误: %+v", payload.Data)
+	}
+	if payload.Data.LanCIDR != "192.168.1.0/24" {
+		t.Fatalf("LAN CIDR 错误: %q", payload.Data.LanCIDR)
+	}
+	if !strings.HasPrefix(payload.Data.TrojanURI, "trojan://Test%40123456@example.com:8388?") {
+		t.Fatalf("Trojan URI 错误: %s", payload.Data.TrojanURI)
+	}
+	if !strings.Contains(payload.Data.TrojanURI, "type=ws") || !strings.Contains(payload.Data.TrojanURI, "path=%2Fws") || !strings.Contains(payload.Data.TrojanURI, "host=example.com") {
+		t.Fatalf("Trojan URI 缺少 WebSocket 参数: %s", payload.Data.TrojanURI)
+	}
+	if !strings.Contains(payload.Data.Clash, "network: ws") {
+		t.Fatalf("Clash 缺少 ws: %s", payload.Data.Clash)
+	}
+	if !strings.Contains(payload.Data.Singbox, `"type": "ws"`) {
+		t.Fatalf("sing-box 缺少 ws: %s", payload.Data.Singbox)
+	}
+
+	// 5. 下载 Clash：lan=true 包含家庭局域网分流规则；lan=false 不包含
+	rec = trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users/"+hash+"/clash/download?lan=true", sid, ""))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "IP-CIDR,192.168.1.0/24,") {
+		t.Fatalf("lan=true 应包含 LAN 分流规则: %d %s", rec.Code, rec.Body.String())
+	}
+	rec = trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users/"+hash+"/clash/download?lan=false", sid, ""))
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "IP-CIDR") {
+		t.Fatalf("lan=false 不应包含 LAN 分流规则: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// 5.1 自定义 lan_cidr：优先使用请求中的网段（弹窗内自定义）
+	rec = trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users/"+hash+"/clash/download?lan=true&lan_cidr=10.0.0.0%2F24", sid, ""))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "IP-CIDR,10.0.0.0/24,") {
+		t.Fatalf("自定义 lan_cidr 应包含 10.0.0.0/24 规则: %d %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "192.168.1.0/24") {
+		t.Fatalf("自定义 lan_cidr 不应再包含配置默认网段: %s", rec.Body.String())
+	}
+	// 无效 CIDR → 400
+	rec = trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users/"+hash+"/clash/download?lan=true&lan_cidr=badcidr", sid, ""))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("无效 CIDR 应 400, got %d %s", rec.Code, rec.Body.String())
+	}
+
+	// 6. 凭据缺失的用户 hash → 404 且提示
+	rec = trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users/nonexistent/connection", sid, ""))
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "缺少连接凭据") {
+		t.Fatalf("凭据缺失应 404 并提示: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestTrojanNoPasswordInLog 验证创建用户过程中日志不记录密码或完整 Trojan URI。
+func TestTrojanNoPasswordInLog(t *testing.T) {
+	cleanup := setupTrojanEnv(t)
+	defer cleanup()
+	mux := trojanTestMux()
+
+	sid := "admin-session"
+	userManager.Lock()
+	userManager.Sessions[sid] = &Session{SessionID: sid, Username: "admin", CreatedAt: time.Now(), LastAccess: time.Now(), ExpiresAt: time.Now().Add(time.Hour), CSRFToken: testCSRFToken}
+	userManager.Unlock()
+
+	secret := "Test@123456"
+	var logged string
+	func() {
+		var buf bytes.Buffer
+		old := log.Writer()
+		log.SetOutput(&buf)
+		defer log.SetOutput(old)
+		rec := trojanDo(mux, trojanAuthedRequest("POST", "/api/trojan/users", sid, `{"password":"`+secret+`","upload_limit":0,"download_limit":0,"ip_limit":0}`))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("创建用户失败: %d %s", rec.Code, rec.Body.String())
+		}
+		logged = buf.String()
+	}()
+	if strings.Contains(logged, secret) {
+		t.Fatalf("日志泄露密码: %s", logged)
+	}
+	if strings.Contains(logged, "trojan://") {
+		t.Fatalf("日志泄露 Trojan URI: %s", logged)
+	}
+	if !strings.Contains(logged, "Trojan user created: hash=") {
+		t.Fatalf("应记录 hash 形式的创建日志: %s", logged)
+	}
+}
+
+// TestTrojanCredentialFilePermission 验证凭据文件以 0600 权限保存（非 Windows 平台）。
+func TestTrojanCredentialFilePermission(t *testing.T) {
+	oldHome := os.Getenv("SERVER_STATUS_HOME")
+	tmp := t.TempDir()
+	os.Setenv("SERVER_STATUS_HOME", tmp)
+	defer os.Setenv("SERVER_STATUS_HOME", oldHome)
+
+	hash := trojanHash("secret@123")
+	if err := setTrojanCredential(hash, "secret@123"); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		return // Windows 无 POSIX 权限语义，跳过
+	}
+	info, err := os.Stat(trojanCredentialsFilePath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0600 {
+		t.Fatalf("凭据文件权限应为 0600, got %o", perm)
+	}
+}
+
+// TestCheckLinuxRouteTable 验证 /proc/net/route 小端路由解析（家庭局域网路由检测）。
+func TestCheckLinuxRouteTable(t *testing.T) {
+	// 表头 + 默认路由 0.0.0.0/0 + 192.168.1.0/24（小端 Destination=0005A8C0 / Mask=00FFFFFF）
+	content := "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n" +
+		"eth0\t00000000\t0102A8C0\t0003\t0\t0\t0\t00000000\t0\t0\t0\n" +
+		"eth1\t0005A8C0\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0\n"
+	// 192.168.1.1 应命中 192.168.1.0/24 路由
+	if !checkLinuxRouteTable(content, net.ParseIP("192.168.1.1")) {
+		t.Fatal("应命中 192.168.1.0/24 路由")
+	}
+	// 10.0.0.1 应命中默认路由
+	if !checkLinuxRouteTable(content, net.ParseIP("10.0.0.1")) {
+		t.Fatal("应命中默认路由")
+	}
+	// 空表不命中
+	if checkLinuxRouteTable("Iface\tDestination\tGateway\tFlags\n", net.ParseIP("192.168.1.1")) {
+		t.Fatal("空路由表不应命中")
+	}
+}
+
+// TestHasRouteToLAN 验证无效 CIDR 的返回（不伪造成功）。
+func TestHasRouteToLAN(t *testing.T) {
+	ok, msg := hasRouteToLAN("not-a-cidr")
+	if ok {
+		t.Fatal("无效 CIDR 不应判定有路由")
+	}
+	if !strings.Contains(msg, "CIDR 无效") {
+		t.Fatalf("应提示 CIDR 无效: %s", msg)
+	}
+}
+
+// TestTrojanCredentialRecovery 验证补录凭据流程：
+// 历史用户缺凭据 → 连接接口 404 → 错误密码 400 → 正确密码补录成功 → 连接接口可用。
+func TestTrojanCredentialRecovery(t *testing.T) {
+	cleanup := setupTrojanEnv(t)
+	defer cleanup()
+	mux := trojanTestMux()
+
+	sid := "admin-session"
+	userManager.Lock()
+	userManager.Sessions[sid] = &Session{SessionID: sid, Username: "admin", CreatedAt: time.Now(), LastAccess: time.Now(), ExpiresAt: time.Now().Add(time.Hour), CSRFToken: testCSRFToken}
+	userManager.Unlock()
+
+	secret := "Legacy@Pass123"
+	hash := trojanHash(secret)
+
+	// 1. 模拟历史用户：凭据缺失
+	// 2. 连接接口 → 404 缺少凭据
+	rec := trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users/"+hash+"/connection", sid, ""))
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "缺少连接凭据") {
+		t.Fatalf("缺凭据应 404: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// 3. 错误密码补录 → 400（hash 与密码不匹配）
+	rec = trojanDo(mux, trojanAuthedRequest("POST", "/api/trojan/users/"+hash+"/credential", sid, `{"password":"WrongPass999"}`))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("错误密码应 400: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// 4. 正确密码补录 → 200
+	rec = trojanDo(mux, trojanAuthedRequest("POST", "/api/trojan/users/"+hash+"/credential", sid, `{"password":"`+secret+`"}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("正确密码补录应 200: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// 5. 补录后连接接口 → 200，密码正确，且含家庭局域网网段
+	rec = trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users/"+hash+"/connection", sid, ""))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("补录后连接接口应 200: %d %s", rec.Code, rec.Body.String())
+	}
+	var payload struct {
+		Data struct {
+			Password  string `json:"password"`
+			TrojanURI string `json:"trojan_uri"`
+			LanCIDR   string `json:"lan_cidr"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Data.Password != secret {
+		t.Fatalf("补录后密码不符: %q", payload.Data.Password)
+	}
+	if !strings.HasPrefix(payload.Data.TrojanURI, "trojan://Legacy%40Pass123@example.com:8388?") {
+		t.Fatalf("Trojan URI 错误: %s", payload.Data.TrojanURI)
+	}
+	if payload.Data.LanCIDR != "192.168.1.0/24" {
+		t.Fatalf("LAN CIDR 错误: %q", payload.Data.LanCIDR)
+	}
+
+	// 6. 删除凭据后连接接口恢复 404（删除用户会同步清凭据）
+	if err := deleteTrojanCredential(hash); err != nil {
+		t.Fatal(err)
+	}
+	rec = trojanDo(mux, trojanAuthedRequest("GET", "/api/trojan/users/"+hash+"/connection", sid, ""))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("删除凭据后应 404: %d %s", rec.Code, rec.Body.String())
 	}
 }

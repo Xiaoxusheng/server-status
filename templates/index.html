@@ -68,9 +68,9 @@
         src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
     <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
     <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
     <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.2.0/crypto-js.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -127,6 +127,14 @@
             font-size: 16px;
         }
 
+        .topbar .ant-btn {
+            font-size: 13px;
+        }
+
+        .topbar .tb-text {
+            margin-left: 4px;
+        }
+
         .stat-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -167,10 +175,23 @@
             color: rgba(255, 255, 255, 0.88);
         }
 
-        .trojan-ov .trojan-ov-download { color: #52c41a; }
-        .trojan-ov .trojan-ov-upload { color: #faad14; }
-        .trojan-ov .trojan-ov-api { font-size: 13px; font-weight: 500; color: #52c41a; }
-        .trojan-ov .trojan-ov-api.offline { color: #ff4d4f; }
+        .trojan-ov .trojan-ov-download {
+            color: #52c41a;
+        }
+
+        .trojan-ov .trojan-ov-upload {
+            color: #faad14;
+        }
+
+        .trojan-ov .trojan-ov-api {
+            font-size: 13px;
+            font-weight: 500;
+            color: #52c41a;
+        }
+
+        .trojan-ov .trojan-ov-api.offline {
+            color: #ff4d4f;
+        }
 
         .login-bg {
             min-height: 100vh;
@@ -289,8 +310,12 @@
                 display: none;
             }
 
-            .topbar .tb-label {
+            .topbar .tb-text {
                 display: none;
+            }
+
+            .tb-hide-sm {
+                display: none !important;
             }
 
             .page-wrap {
@@ -333,34 +358,38 @@
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        const { Card, Table, Button, Input, Form, Tag, Space, Statistic, Typography, ConfigProvider, theme, message, Descriptions, Badge, Alert } = window.antd;
+        const { Card, Table, Button, Input, Form, Tag, Space, Statistic, Typography, ConfigProvider, theme, message, Descriptions, Badge, Alert, Tooltip } = window.antd;
         const { useState, useEffect, useRef, useCallback } = React;
         const { darkAlgorithm } = theme;
+        const IconSet = window.icons || {};
+        const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
 
         const baseUrl = window.location.origin;
-        const securityToken = "redacted_anti_crawler_2024_security_key";
         const SESSION_KEY = 'server_monitor_session';
         const LOCAL_KEY = 'server_monitor_remember';
 
-        const generateSignature = (path) => {
-            const timestamp = Math.floor(Date.now() / 1000).toString();
-            const nonce = CryptoJS.lib.WordArray.random(16).toString(CryptoJS.enc.Hex);
-            const sig = CryptoJS.HmacSHA256(timestamp + '|' + nonce + '|' + path + '|' + securityToken, securityToken).toString(CryptoJS.enc.Hex);
-            return { timestamp, nonce, signature: sig };
+        // 读取指定名称的 Cookie（Double-Submit CSRF 使用非 HttpOnly 的 csrf_token，会话 Cookie 仍为 HttpOnly）
+        const getCookie = name => {
+            for (const part of document.cookie.split(';')) {
+                const eq = part.indexOf('=');
+                if (eq < 0) continue;
+                if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1));
+            }
+            return '';
         };
+        const getCsrfToken = () => getCookie('csrf_token');
 
+        // 统一携带会话的 API 请求：写操作自动附加 CSRF Token，不再由浏览器自行计算 HMAC 签名
         const secureFetch = (url, options = {}) => {
-            const path = new URL(url).pathname;
-            const sig = generateSignature(path);
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) {
+                const tok = getCsrfToken();
+                if (tok) headers['X-CSRF-Token'] = tok;
+            }
             return fetch(url, {
-                method: options.method || 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Timestamp': sig.timestamp,
-                    'X-Nonce': sig.nonce,
-                    'X-Signature': sig.signature,
-                    ...(options.headers || {})
-                },
+                method,
+                headers,
                 credentials: 'include',
                 body: options.body
             });
@@ -389,8 +418,77 @@
             const [mode, setMode] = useState('login');
             const [loading, setLoading] = useState(false);
             const [form] = Form.useForm();
+            // 前端验证码：答案仅保存在内存 state，不写入任何存储；提交前校验不过则不发请求
+            const [captcha, setCaptcha] = useState('');
+            const [captchaInput, setCaptchaInput] = useState('');
+            const captchaRef = useRef(null);
+
+            // 绘制验证码到 canvas（加入干扰线/噪点，字符随机角度）
+            const drawCaptcha = useCallback((code) => {
+                const cv = captchaRef.current;
+                if (!cv) return;
+                const ctx = cv.getContext('2d');
+                const W = cv.width, H = cv.height;
+                ctx.clearRect(0, 0, W, H);
+                const bg = document.body.getAttribute('data-theme') === 'dark' ? '#1f1f1f' : '#f5f5f5';
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, W, H);
+                const rndColor = () => 'hsl(' + Math.floor(Math.random() * 360) + ',70%,50%)';
+                // 干扰线
+                for (let i = 0; i < 4; i++) {
+                    ctx.strokeStyle = rndColor();
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.random() * W, Math.random() * H);
+                    ctx.lineTo(Math.random() * W, Math.random() * H);
+                    ctx.stroke();
+                }
+                // 噪点
+                for (let i = 0; i < 24; i++) {
+                    ctx.fillStyle = rndColor();
+                    ctx.fillRect(Math.random() * W, Math.random() * H, 1.5, 1.5);
+                }
+                // 字符
+                ctx.font = 'bold 22px "Consolas", "Courier New", monospace';
+                code.split('').forEach((ch, i) => {
+                    ctx.fillStyle = rndColor();
+                    ctx.save();
+                    ctx.translate(14 + i * 24, 26);
+                    ctx.rotate((Math.random() - 0.5) * 0.5);
+                    ctx.fillText(ch, 0, 0);
+                    ctx.restore();
+                });
+            }, []);
+
+            // 生成新验证码（4 位：去掉易混淆的 0/O/1/I）
+            const genCaptcha = useCallback(() => {
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                let s = '';
+                for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
+                setCaptcha(s);
+                drawCaptcha(s);
+            }, [drawCaptcha]);
+
+            // 初始化：生成验证码 + 记住我预填上次登录的用户名
+            useEffect(() => {
+                genCaptcha();
+                const cached = SessionManager.get();
+                if (cached && cached.user && cached.user.username) {
+                    form.setFieldsValue({ username: cached.user.username });
+                }
+            }, []);
+
             const submit = async () => {
                 const v = await form.validateFields();
+                // 登录模式必须通过前端验证码
+                if (mode === 'login') {
+                    if (!captchaInput.trim() || captchaInput.trim().toUpperCase() !== captcha) {
+                        message.error('验证码错误');
+                        genCaptcha();
+                        setCaptchaInput('');
+                        return;
+                    }
+                }
                 setLoading(true);
                 try {
                     const r = await fetch(baseUrl + '/login', {
@@ -406,9 +504,13 @@
                         onLogin(d.user);
                     } else {
                         message.error(d.message || '登录失败');
+                        genCaptcha();
+                        setCaptchaInput('');
                     }
                 } catch (e) {
                     message.error('网络错误: ' + e.message);
+                    genCaptcha();
+                    setCaptchaInput('');
                 } finally {
                     setLoading(false);
                 }
@@ -434,15 +536,27 @@
                                 <Input.Password placeholder="密码" size="large" />
                             </Form.Item>
                             {mode === 'login' && (
-                                <Form.Item name="remember" valuePropName="checked">
-                                    <antdCheckbox>记住我</antdCheckbox>
-                                </Form.Item>
+                                <>
+                                    <Form.Item label="验证码" required>
+                                        <div style={{ display: 'flex', gap: 8 }}>
+                                            <Input placeholder="请输入验证码" size="large"
+                                                value={captchaInput} onChange={e => setCaptchaInput(e.target.value)} />
+                                            <canvas ref={captchaRef} width={108} height={40}
+                                                onClick={genCaptcha}
+                                                title="点击刷新验证码"
+                                                style={{ cursor: 'pointer', border: '1px solid #d9d9d9', borderRadius: 6, height: 40 }} />
+                                        </div>
+                                    </Form.Item>
+                                    <Form.Item name="remember" valuePropName="checked" style={{ marginBottom: 8 }}>
+                                        <Checkbox>记住我</Checkbox>
+                                    </Form.Item>
+                                </>
                             )}
                             <Button type="primary" htmlType="submit" block size="large" loading={loading}>
                                 {mode === 'login' ? '登 录' : '注 册'}
                             </Button>
                             <div style={{ textAlign: 'center', marginTop: 12 }}>
-                                <Typography.Link onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); form.resetFields(); }}>
+                                <Typography.Link onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); form.resetFields(); setCaptchaInput(''); genCaptcha(); }}>
                                     {mode === 'login' ? '没有账户？注册新账户' : '已有账户？返回登录'}
                                 </Typography.Link>
                             </div>
@@ -451,7 +565,7 @@
                 </div>
             );
         }
-        const antdCheckbox = window.antd.Checkbox;
+        const Checkbox = window.antd.Checkbox;
 
         function Dashboard({ user, onLogout }) {
             const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
@@ -551,9 +665,8 @@
                 if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
                 if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
                 setConn('connecting');
-                const sig = generateSignature('/ws');
-                const url = baseUrl.replace(/^http/, 'ws') + '/ws?iface=' + encodeURIComponent(i) +
-                    '&timestamp=' + sig.timestamp + '&nonce=' + sig.nonce + '&signature=' + sig.signature;
+                // WebSocket 由服务端通过会话 Cookie + Origin 校验，浏览器不再传递 HMAC 签名参数
+                const url = baseUrl.replace(/^http/, 'ws') + '/ws?iface=' + encodeURIComponent(i);
                 const ws = new WebSocket(url);
                 wsRef.current = ws;
                 ws.onopen = () => { setConn('connected'); reconnectAttempts.current = 0; };
@@ -635,8 +748,10 @@
                                     <Badge status={conn === 'connected' ? 'success' : conn === 'connecting' ? 'processing' : 'error'} />
                                     <Typography.Text className="tb-status" type="secondary">{conn === 'connected' ? '已连接' : conn === 'connecting' ? '连接中...' : '已断开'}</Typography.Text>
                                 </span>
-                                <Button title={isDark ? '浅色模式' : '深色模式'} onClick={() => setIsDark(!isDark)}>{isDark ? '🌞' : '🌙'}<span className="tb-label">{isDark ? '浅色' : '深色'}</span></Button>
-                                <Button danger title="退出登录" onClick={onLogout}>🚪<span className="tb-label">退出</span></Button>
+                                <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                                    <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                                </Tooltip>
+                                <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={onLogout}><span className="tb-text">退出</span></Button>
                             </Space>
                         </div>
                         <div className="page-wrap">
@@ -841,9 +956,10 @@
     </script>
     <script>
         (function () {
+            function getCsrfToken() { var m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
             function openPrivateSpace() {
                 try {
-                    fetch('/api/private/entry', { method: 'POST', credentials: 'include' })
+                    fetch('/api/private/entry', { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() }, credentials: 'include' })
                         .catch(function () { })
                         .finally(function () { window.location.href = 'private.html'; });
                 } catch (e) { window.location.href = 'private.html'; }

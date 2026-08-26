@@ -1,1308 +1,1837 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>服务与端口中心 - Server Status</title>
     <link rel="icon" href="data:,">
     <style>
-        html, body, #root { margin: 0; min-height: 100%; background: #f5f5f5; }
-        html.dark, html.dark body, html.dark #root { background: #141414; }
-        html.dark body { color: rgba(255,255,255,.85); }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f5f5f5; }
-        ::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #bfbfbf; }
-        html.dark ::-webkit-scrollbar-track { background: #141414; }
-        html.dark ::-webkit-scrollbar-thumb { background: #3a3a3a; }
-        html.dark ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+        html,
+        body,
+        #root {
+            margin: 0;
+            min-height: 100%;
+            background: #f5f5f5;
+        }
+
+        html.dark,
+        html.dark body,
+        html.dark #root {
+            background: #141414;
+        }
+
+        html.dark body {
+            color: rgba(255, 255, 255, .85);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f5f5f5;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #d9d9d9;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #bfbfbf;
+        }
+
+        html.dark ::-webkit-scrollbar-track {
+            background: #141414;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb {
+            background: #3a3a3a;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb:hover {
+            background: #4a4a4a;
+        }
     </style>
     <script>
         (function () {
             try {
                 var dark = localStorage.getItem('theme') === 'dark';
                 document.documentElement.classList.toggle('dark', dark);
-            } catch (e) {}
+            } catch (e) { }
         })();
     </script>
     <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
-    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script crossorigin
+        src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
     <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
     <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
     <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
     <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts/dist/echarts.min.js"></script>
     <style>
-        body { margin: 0; background: #f5f5f5; font-size: 14px; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
-        #root { min-height: 100vh; }
-        .ant-table-content, .ant-table-body { -webkit-overflow-scrolling: touch; }
-        .page-wrap { padding: 16px; max-width: 1800px; margin: 0 auto; }
+        body {
+            margin: 0;
+            background: #f5f5f5;
+            font-size: 14px;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        #root {
+            min-height: 100vh;
+        }
+
+        .ant-table-content,
+        .ant-table-body {
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .page-wrap {
+            padding: 16px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
         .topbar {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 24px; height: 54px; background: #fff;
-            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            height: 54px;
+            background: #fff;
+            border-bottom: 1px solid #f0f0f0;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
         }
-        .topbar.dark { background: #1f1f1f; border-bottom-color: #303030; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-        .topbar .brand { display: flex; align-items: center; gap: 10px; }
-        .topbar .brand .bt-name { font-size: 18px; font-weight: 600; color: #1f1f1f; line-height: 1; }
-        .topbar.dark .brand .bt-name { color: rgba(255,255,255,0.88); }
-        .topbar .brand .bt-sub { font-size: 14px; color: rgba(0,0,0,0.45); font-weight: 400; margin-left: 2px; }
-        .topbar.dark .brand .bt-sub { color: rgba(255,255,255,0.45); }
+
+        .topbar.dark {
+            background: #1f1f1f;
+            border-bottom-color: #303030;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .topbar .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .topbar .brand .bt-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f1f1f;
+            line-height: 1;
+        }
+
+        .topbar.dark .brand .bt-name {
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .topbar .brand .bt-sub {
+            font-size: 14px;
+            color: rgba(0, 0, 0, 0.45);
+            font-weight: 400;
+            margin-left: 2px;
+        }
+
+        .topbar.dark .brand .bt-sub {
+            color: rgba(255, 255, 255, 0.45);
+        }
+
         .topbar .brand .logo {
-            width: 28px; height: 28px; border-radius: 7px; background: linear-gradient(135deg, #1677ff, #722ed1);
-            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px;
+            width: 28px;
+            height: 28px;
+            border-radius: 7px;
+            background: linear-gradient(135deg, #1677ff, #722ed1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 15px;
         }
-        .topbar .ant-btn { font-size: 13px; }
-        .topbar .tb-text { margin-left: 4px; }
+
+        .topbar .ant-btn {
+            font-size: 13px;
+        }
+
+        .topbar .tb-text {
+            margin-left: 4px;
+        }
+
         @media (max-width: 768px) {
-            .topbar { padding: 6px 10px; gap: 4px; height: auto; min-height: 52px; }
-            .topbar .brand { flex: 1; min-width: 0; }
-            .topbar .brand .bt-name { max-width: 60vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .topbar .brand .bt-sub { display: none; }
-            .topbar .tb-text { display: none; }
-            .topbar .ant-space { gap: 4px !important; }
-            .topbar .ant-btn { padding: 4px 9px; height: 32px; }
-            .page-wrap { padding: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+            .topbar {
+                padding: 6px 10px;
+                gap: 4px;
+                height: auto;
+                min-height: 52px;
+            }
+
+            .topbar .brand {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .topbar .brand .bt-name {
+                max-width: 60vw;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .topbar .brand .bt-sub {
+                display: none;
+            }
+
+            .topbar .tb-text {
+                display: none;
+            }
+
+            .topbar .ant-space {
+                gap: 4px !important;
+            }
+
+            .topbar .ant-btn {
+                padding: 4px 9px;
+                height: 32px;
+            }
+
+            .page-wrap {
+                padding: 10px;
+                padding-bottom: calc(10px + env(safe-area-inset-bottom));
+            }
         }
 
         /* 自定义视觉变量（与 AntD 暗色体系保持一致） */
-        .sp-app { --bg: #f5f5f5; --card: #ffffff; --border: #f0f0f0; --text: rgba(0,0,0,0.88); --secondary: rgba(0,0,0,0.45); color-scheme: light; }
-        .sp-app.dark { --bg: #141414; --card: #1f1f1f; --border: #303030; --text: rgba(255,255,255,0.88); --secondary: rgba(255,255,255,0.45); color-scheme: dark; }
+        .sp-app {
+            --bg: #f5f5f5;
+            --card: #ffffff;
+            --border: #f0f0f0;
+            --text: rgba(0, 0, 0, 0.88);
+            --secondary: rgba(0, 0, 0, 0.45);
+            color-scheme: light;
+        }
+
+        .sp-app.dark {
+            --bg: #141414;
+            --card: #1f1f1f;
+            --border: #303030;
+            --text: rgba(255, 255, 255, 0.88);
+            --secondary: rgba(255, 255, 255, 0.45);
+            color-scheme: dark;
+        }
 
         /* 统计卡片（紧凑 78px） */
-        .mini-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; min-width: 0; }
-        .mini-stat {
-            background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-            padding: 10px 16px; height: 78px; display: flex; flex-direction: column; justify-content: center; gap: 2px;
-            min-width: 0; overflow: hidden;
+        .mini-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+            min-width: 0;
         }
-        .mini-stat .ms-label { font-size: 12px; color: var(--secondary); display: flex; align-items: center; gap: 6px; }
-        .mini-stat .ms-label .anticon { font-size: 13px; }
-        .mini-stat .ms-value { font-size: 26px; font-weight: 600; line-height: 1.15; color: var(--text); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        .mini-stat {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 16px;
+            height: 78px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 2px;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .mini-stat .ms-label {
+            font-size: 12px;
+            color: var(--secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mini-stat .ms-label .anticon {
+            font-size: 13px;
+        }
+
+        .mini-stat .ms-value {
+            font-size: 26px;
+            font-weight: 600;
+            line-height: 1.15;
+            color: var(--text);
+            font-variant-numeric: tabular-nums;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
 
         /* 服务 / 端口 Tab 更像一级业务导航 */
-        .biz-tabs .ant-tabs-nav { margin-bottom: 14px; }
-        .biz-tabs .ant-tabs-tab { font-size: 15px; padding: 12px 6px; }
-        .biz-tabs .ant-tabs-tab .anticon { margin-right: 8px; font-size: 16px; }
+        .biz-tabs .ant-tabs-nav {
+            margin-bottom: 14px;
+        }
+
+        .biz-tabs .ant-tabs-tab {
+            font-size: 15px;
+            padding: 12px 6px;
+        }
+
+        .biz-tabs .ant-tabs-tab .anticon {
+            margin-right: 8px;
+            font-size: 16px;
+        }
 
         /* 工具栏 */
-        .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
-        .toolbar .toolbar-search { width: 280px; }
-        .toolbar .toolbar-extra { margin-left: auto; font-size: 12px; color: var(--secondary); white-space: nowrap; }
-        .filter-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; scrollbar-width: none; }
-        .filter-wrap::-webkit-scrollbar { display: none; }
-        .filter-wrap .ant-segmented { white-space: nowrap; }
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .toolbar .toolbar-search {
+            width: 280px;
+        }
+
+        .toolbar .toolbar-extra {
+            margin-left: auto;
+            font-size: 12px;
+            color: var(--secondary);
+            white-space: nowrap;
+        }
+
+        .filter-wrap {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            max-width: 100%;
+            scrollbar-width: none;
+        }
+
+        .filter-wrap::-webkit-scrollbar {
+            display: none;
+        }
+
+        .filter-wrap .ant-segmented {
+            white-space: nowrap;
+        }
+
         @media (max-width: 768px) {
-            .toolbar .toolbar-search { width: 100%; order: -1; }
-            .toolbar .toolbar-extra { margin-left: 0; }
+            .toolbar .toolbar-search {
+                width: 100%;
+                order: -1;
+            }
+
+            .toolbar .toolbar-extra {
+                margin-left: 0;
+            }
         }
 
         /* 服务卡片 */
-        .svc-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
-        @media (min-width: 1600px) { .svc-grid { grid-template-columns: repeat(5, 1fr); } }
-        @media (min-width: 1200px) and (max-width: 1599px) { .svc-grid { grid-template-columns: repeat(4, 1fr); } }
-        @media (min-width: 992px) and (max-width: 1199px) { .svc-grid { grid-template-columns: repeat(3, 1fr); } }
-        @media (min-width: 768px) and (max-width: 991px) { .svc-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (max-width: 767px) { .svc-grid { grid-template-columns: 1fr; } }
-        .svc-card {
-            border: 1px solid var(--border) !important; border-radius: 8px !important;
-            transition: border-color .2s, box-shadow .2s; overflow: hidden; min-width: 0;
+        .svc-grid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
         }
-        .svc-card:hover { border-color: #d6e4ff !important; box-shadow: 0 2px 8px rgba(22,119,255,.08); }
-        .svc-card .ant-card-body { padding: 14px 16px; min-width: 0; }
-        .svc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; min-width: 0; }
-        .svc-title { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .svc-sub { font-size: 12px; color: var(--secondary); margin: 3px 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .svc-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-bottom: 10px; min-width: 0; }
-        .svc-metric { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; min-width: 0; }
-        .svc-metric > span { color: var(--secondary); font-size: 12px; flex: 0 0 auto; }
-        .svc-metric > b { min-width: 0; color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .svc-metric > b.sec { color: var(--secondary); font-weight: 400; }
-        .svc-auto { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--text); margin-bottom: 2px; }
-        .svc-divider { margin: 10px 0 8px; }
-        .svc-actions { display: flex; align-items: center; gap: 6px; }
+
+        @media (min-width: 1600px) {
+            .svc-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+
+        @media (min-width: 1200px) and (max-width: 1599px) {
+            .svc-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+        }
+
+        @media (min-width: 992px) and (max-width: 1199px) {
+            .svc-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (min-width: 768px) and (max-width: 991px) {
+            .svc-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 767px) {
+            .svc-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .svc-card {
+            border: 1px solid var(--border) !important;
+            border-radius: 8px !important;
+            transition: border-color .2s, box-shadow .2s;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .svc-card:hover {
+            border-color: #d6e4ff !important;
+            box-shadow: 0 2px 8px rgba(22, 119, 255, .08);
+        }
+
+        .svc-card .ant-card-body {
+            padding: 14px 16px;
+            min-width: 0;
+        }
+
+        .svc-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .svc-title {
+            flex: 1;
+            min-width: 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .svc-sub {
+            font-size: 12px;
+            color: var(--secondary);
+            margin: 3px 0 10px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .svc-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 12px;
+            margin-bottom: 10px;
+            min-width: 0;
+        }
+
+        .svc-metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 13px;
+            min-width: 0;
+        }
+
+        .svc-metric>span {
+            color: var(--secondary);
+            font-size: 12px;
+            flex: 0 0 auto;
+        }
+
+        .svc-metric>b {
+            min-width: 0;
+            color: var(--text);
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .svc-metric>b.sec {
+            color: var(--secondary);
+            font-weight: 400;
+        }
+
+        .svc-auto {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            color: var(--text);
+            margin-bottom: 2px;
+        }
+
+        .svc-divider {
+            margin: 10px 0 8px;
+        }
+
+        .svc-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
 
         /* 日志框 */
         .log-box {
-            background: #0f1722; color: #d5dee9; font-family: Consolas, Monaco, monospace;
-            font-size: 12px; line-height: 1.55; border-radius: 8px; padding: 10px 12px;
-            height: 420px; overflow-y: auto; -webkit-overflow-scrolling: touch; white-space: pre-wrap; word-break: break-all;
+            background: #0f1722;
+            color: #d5dee9;
+            font-family: Consolas, Monaco, monospace;
+            font-size: 12px;
+            line-height: 1.55;
+            border-radius: 8px;
+            padding: 10px 12px;
+            height: 420px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            white-space: pre-wrap;
+            word-break: break-all;
         }
-        .log-box.light { background: #f6f8fb; color: #233; border: 1px solid #e5e8ef; }
-        @media (max-width: 768px) { .log-box { height: 320px; } }
+
+        .log-box.light {
+            background: #f6f8fb;
+            color: #233;
+            border: 1px solid #e5e8ef;
+        }
+
+        @media (max-width: 768px) {
+            .log-box {
+                height: 320px;
+            }
+        }
 
         /* 端口页 */
-        .exp-cell { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; }
-        .exp-cell .anticon { font-size: 13px; }
-        .exp-public { color: #fa541c; }
-        .exp-private { color: #2f54eb; }
-        .exp-local { color: #8c8c8c; }
-        .change-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; font-size: 13px; }
-        .tl-main { font-size: 13px; color: var(--text); }
-        .tl-sub { font-size: 12px; color: var(--secondary); margin-top: 2px; }
-        .tl-time { font-size: 12px; color: var(--secondary); margin-top: 2px; }
-        .fw-name { font-size: 18px; font-weight: 600; color: var(--text); }
-        .fw-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
-        .fw-grid > div { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; text-align: center; }
-        .fw-grid span { display: block; font-size: 12px; color: var(--secondary); }
-        .fw-grid b { font-size: 18px; font-weight: 600; color: var(--text); }
-        .rule-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid rgba(120,130,150,.15); flex-wrap: wrap; }
-        .sp-app.dark .rule-row { border-bottom-color: rgba(255,255,255,.12); }
-        .port-sect-title { font-size: 12px; color: var(--secondary); margin: 14px 0 6px; display: flex; align-items: center; gap: 6px; }
-        .port-sect-title .anticon { font-size: 13px; }
-        .env-row { display: flex; gap: 8px; width: 100%; }
-        @media (max-width: 768px) {
-            .mini-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-            .ant-card-head { padding: 0 12px !important; }
-            .ant-card-body { padding: 12px !important; }
-            .biz-tabs .ant-tabs-tab { font-size: 14px; padding: 10px 2px; }
-            .biz-tabs .ant-tabs-tab .anticon { margin-right: 6px; font-size: 15px; }
-            .biz-tabs .ant-tabs-nav { margin-bottom: 10px; }
-            .mini-stat { height: 72px; padding: 8px 12px; }
-            .mini-stat .ms-value { font-size: 24px; }
-            .svc-card .ant-card-body { padding: 12px; }
-            .svc-actions .ant-btn { padding: 1px 8px; }
-            .svc-metrics { gap: 6px 10px; }
-            .fw-grid b { font-size: 16px; }
-            .ant-drawer-footer { padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important; }
+        .exp-cell {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
         }
+
+        .exp-cell .anticon {
+            font-size: 13px;
+        }
+
+        .exp-public {
+            color: #fa541c;
+        }
+
+        .exp-private {
+            color: #2f54eb;
+        }
+
+        .exp-local {
+            color: #8c8c8c;
+        }
+
+        .change-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 6px 0;
+            font-size: 13px;
+        }
+
+        .tl-main {
+            font-size: 13px;
+            color: var(--text);
+        }
+
+        .tl-sub {
+            font-size: 12px;
+            color: var(--secondary);
+            margin-top: 2px;
+        }
+
+        .tl-time {
+            font-size: 12px;
+            color: var(--secondary);
+            margin-top: 2px;
+        }
+
+        .fw-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .fw-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin: 12px 0;
+        }
+
+        .fw-grid>div {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 8px 10px;
+            text-align: center;
+        }
+
+        .fw-grid span {
+            display: block;
+            font-size: 12px;
+            color: var(--secondary);
+        }
+
+        .fw-grid b {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .rule-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 4px;
+            border-bottom: 1px solid rgba(120, 130, 150, .15);
+            flex-wrap: wrap;
+        }
+
+        .sp-app.dark .rule-row {
+            border-bottom-color: rgba(255, 255, 255, .12);
+        }
+
+        .port-sect-title {
+            font-size: 12px;
+            color: var(--secondary);
+            margin: 14px 0 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .port-sect-title .anticon {
+            font-size: 13px;
+        }
+
+        .env-row {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .mini-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+            }
+
+            .ant-card-head {
+                padding: 0 12px !important;
+            }
+
+            .ant-card-body {
+                padding: 12px !important;
+            }
+
+            .biz-tabs .ant-tabs-tab {
+                font-size: 14px;
+                padding: 10px 2px;
+            }
+
+            .biz-tabs .ant-tabs-tab .anticon {
+                margin-right: 6px;
+                font-size: 15px;
+            }
+
+            .biz-tabs .ant-tabs-nav {
+                margin-bottom: 10px;
+            }
+
+            .mini-stat {
+                height: 72px;
+                padding: 8px 12px;
+            }
+
+            .mini-stat .ms-value {
+                font-size: 24px;
+            }
+
+            .svc-card .ant-card-body {
+                padding: 12px;
+            }
+
+            .svc-actions .ant-btn {
+                padding: 1px 8px;
+            }
+
+            .svc-metrics {
+                gap: 6px 10px;
+            }
+
+            .fw-grid b {
+                font-size: 16px;
+            }
+
+            .ant-drawer-footer {
+                padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+            }
+        }
+
         @media (max-width: 480px) {
-            .toolbar { gap: 6px; }
-            .toolbar-extra { display: none; }
-            .topbar .bt-name { font-size: 15px; }
-            .topbar .logo { width: 26px; height: 26px; font-size: 14px; }
-            .svc-title { font-size: 14px; }
-            .port-sect-title { margin-top: 12px; }
+            .toolbar {
+                gap: 6px;
+            }
+
+            .toolbar-extra {
+                display: none;
+            }
+
+            .topbar .bt-name {
+                font-size: 15px;
+            }
+
+            .topbar .logo {
+                width: 26px;
+                height: 26px;
+                font-size: 14px;
+            }
+
+            .svc-title {
+                font-size: 14px;
+            }
+
+            .port-sect-title {
+                margin-top: 12px;
+            }
         }
     </style>
 </head>
+
 <body>
-<div id="root"></div>
-<script type="text/babel">
-    const { Tabs, Card, Table, Statistic, Button, Input, InputNumber, Segmented, Tag, Space, message, Modal, Drawer,
-          Row, Col, Typography, ConfigProvider, theme, Empty, Popconfirm, Form, Switch, Select, Alert, Descriptions,
-          Collapse, Divider, Badge, Dropdown, Timeline, Tooltip } = window.antd;
-    const { useState, useEffect, useRef, useCallback } = React;
-    const { darkAlgorithm } = theme;
-    const IconSet = window.icons || {};
+    <div id="root"></div>
+    <script type="text/babel">
+        const { Tabs, Card, Table, Statistic, Button, Input, InputNumber, Segmented, Tag, Space, message, Modal, Drawer,
+            Row, Col, Typography, ConfigProvider, theme, Empty, Popconfirm, Form, Switch, Select, Alert, Descriptions,
+            Collapse, Divider, Badge, Dropdown, Timeline, Tooltip } = window.antd;
+        const { useState, useEffect, useRef, useCallback } = React;
+        const { darkAlgorithm } = theme;
+        const IconSet = window.icons || {};
 
-    function useIsMobile() {
-        const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
-        useEffect(() => {
-            const q = window.matchMedia('(max-width: 768px)');
-            const h = e => setM(e.matches);
-            q.addListener(h);
-            return () => q.removeListener(h);
-        }, []);
-        return m;
-    }
+        function useIsMobile() {
+            const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
+            useEffect(() => {
+                const q = window.matchMedia('(max-width: 768px)');
+                const h = e => setM(e.matches);
+                q.addListener(h);
+                return () => q.removeListener(h);
+            }, []);
+            return m;
+        }
 
-    const baseUrl = window.location.origin;
+        const baseUrl = window.location.origin;
 
-    function secureFetch(url, options = {}) {
-        return fetch(url, {
-            method: options.method || 'GET',
-            headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-            credentials: 'include',
-            body: options.body
-        });
-    }
+        // 读取非 HttpOnly 的 csrf_token Cookie；写请求自动携带，会话 Cookie 由 credentials: include 携带
+        function getCsrfToken() { const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+        function secureFetch(url, options = {}) {
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) { const tok = getCsrfToken(); if (tok) headers['X-CSRF-Token'] = tok; }
+            return fetch(url, { method, headers, credentials: 'include', body: options.body });
+        }
 
-    const UIIcon = ({ name, ...props }) => {
-        const C = IconSet[name];
-        return C ? <C {...props} /> : null;
-    };
-
-    const BADGE_STATUS = { RUNNING: 'success', STARTING: 'processing', STOPPED: 'default', FAILED: 'error', UNKNOWN: 'warning' };
-    const STATUS_TEXT = { RUNNING: '运行中', STARTING: '启动中', STOPPED: '已停止', FAILED: '异常', UNKNOWN: '未知' };
-    const SOURCE_LABEL = { created: '本系统创建', custom: '自定义服务', system: '系统服务' };
-    const EXPOSE_TEXT = { public: '公网', private: '内网', local: '本机' };
-
-    const fmtUptime = (e) => {
-        if (!e) return '-';
-        const m = String(e).match(/^(?:(\d+)-)?(\d+):(\d+):(\d+)$/);
-        if (!m) return String(e);
-        const d = parseInt(m[1] || 0, 10);
-        const h = parseInt(m[2], 10);
-        const min = parseInt(m[3], 10);
-        const s = parseInt(m[4], 10);
-        if (d > 0) return d + '天 ' + h + '小时';
-        if (h > 0) return h + '小时 ' + min + '分';
-        if (min > 0) return min + '分 ' + s + '秒';
-        return s + '秒';
-    };
-
-    const statusBadge = (s) => <Badge status={BADGE_STATUS[s] || 'default'} text={STATUS_TEXT[s] || s} />;
-
-    // ==================== 服务 Tab ====================
-    function ServicesTab({ isDark, canManage, canDelete, detailName, onDetail }) {
-        const [list, setList] = useState([]);
-        const [sysdAvailable, setSysdAvailable] = useState(true);
-        const [sysdError, setSysdError] = useState('');
-        const [loading, setLoading] = useState(true);
-        const [refreshing, setRefreshing] = useState(false);
-        const [loadedAt, setLoadedAt] = useState(null);
-        const [paused, setPaused] = useState(false);
-        const [view, setView] = useState(() => localStorage.getItem('svc_view') || 'card');
-        const [filter, setFilter] = useState('all');
-        const [search, setSearch] = useState('');
-        const [drawerOpen, setDrawerOpen] = useState(false);
-        const [current, setCurrent] = useState(null);
-        const [detail, setDetail] = useState(null);
-        const [detailTab, setDetailTab] = useState('overview');
-        const [logs, setLogs] = useState([]);
-        const [logFilter, setLogFilter] = useState('');
-        const [autoScroll, setAutoScroll] = useState(true);
-        const [wsConnected, setWsConnected] = useState(false);
-        const [modalOpen, setModalOpen] = useState(false);
-        const [editing, setEditing] = useState(null);
-        const [submitting, setSubmitting] = useState(false);
-        const [busy, setBusy] = useState({});
-        const [form] = Form.useForm();
-        const logBoxRef = useRef(null);
-        const wsRef = useRef(null);
-        const resRef = useRef(null);
-        const resInst = useRef(null);
-        const resHistory = useRef({ labels: [], cpu: [], mem: [] });
-        const isMobile = useIsMobile();
-
-        const load = useCallback(async (manual) => {
-            if (manual) setRefreshing(true);
-            try {
-                const r = await secureFetch(baseUrl + '/api/services');
-                const d = await r.json();
-                if (d.code === 200) {
-                    setList(d.data.services || []);
-                    setSysdAvailable(!!d.data.systemd_available);
-                    setSysdError(d.data.error || '');
-                    setLoadedAt(new Date());
-                    setPaused(false);
-                } else if (d.code === 403 || r.status === 403) {
-                    setPaused(true);
-                    message.error('访问被拦截（403），已暂停自动刷新，请稍后点击「刷新」重试');
-                } else {
-                    message.error(d.message || '加载服务列表失败');
-                }
-            } catch (e) {
-                message.error('加载服务列表失败: ' + e.message);
-            } finally {
-                setLoading(false);
-                setRefreshing(false);
-            }
-        }, []);
-
-        useEffect(() => {
-            load();
-            if (paused) return;
-            const t = setInterval(() => load(), 8000);
-            return () => clearInterval(t);
-        }, [load, paused]);
-
-        // 页面切到后台时暂停自动刷新，回到前台立即恢复
-        useEffect(() => {
-            const onVis = () => {
-                if (document.hidden) setPaused(true);
-                else { setPaused(false); load(); }
-            };
-            document.addEventListener('visibilitychange', onVis);
-            return () => document.removeEventListener('visibilitychange', onVis);
-        }, [load]);
-
-        useEffect(() => { localStorage.setItem('svc_view', view); }, [view]);
-
-        useEffect(() => {
-            if (detailName) {
-                setCurrent(detailName);
-                setDrawerOpen(true);
-                setDetailTab('overview');
-            }
-        }, [detailName]);
-
-        const loadDetail = useCallback(async (name) => {
-            try {
-                const r = await secureFetch(baseUrl + '/api/services/' + encodeURIComponent(name));
-                const d = await r.json();
-                if (d.code === 200) {
-                    setDetail(d.data);
-                    if (d.data && d.data.service) updateResChart(d.data.service);
-                }
-            } catch (e) { /* 轮询失败忽略 */ }
-        }, []);
-
-        useEffect(() => {
-            if (!drawerOpen || !current) return;
-            loadDetail(current);
-            const t = setInterval(() => loadDetail(current), 8000);
-            return () => clearInterval(t);
-        }, [drawerOpen, current, loadDetail]);
-
-        const closeDrawer = () => {
-            setDrawerOpen(false);
-            setCurrent(null);
-            setDetail(null);
-            onDetail(null);
-            if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+        const UIIcon = ({ name, ...props }) => {
+            const C = IconSet[name];
+            return C ? <C {...props} /> : null;
         };
 
-        // 实时日志 WebSocket
-        useEffect(() => {
-            if (!drawerOpen || detailTab !== 'logs' || !current) return;
-            setLogs([]);
-            const url = baseUrl.replace(/^http/, 'ws') + '/ws/service-logs?service=' + encodeURIComponent(current) + '&tail=300';
-            const s = new WebSocket(url);
-            wsRef.current = s;
-            s.onopen = () => setWsConnected(true);
-            s.onclose = () => setWsConnected(false);
-            s.onerror = () => setWsConnected(false);
-            s.onmessage = e => {
-                setLogs(prev => {
-                    const next = prev.concat(e.data);
-                    return next.length > 2000 ? next.slice(next.length - 2000) : next;
+        const BADGE_STATUS = { RUNNING: 'success', STARTING: 'processing', STOPPED: 'default', FAILED: 'error', UNKNOWN: 'warning' };
+        const STATUS_TEXT = { RUNNING: '运行中', STARTING: '启动中', STOPPED: '已停止', FAILED: '异常', UNKNOWN: '未知' };
+        const SOURCE_LABEL = { created: '本系统创建', custom: '自定义服务', system: '系统服务' };
+        const EXPOSE_TEXT = { public: '公网', private: '内网', local: '本机' };
+
+        const fmtUptime = (e) => {
+            if (!e) return '-';
+            const m = String(e).match(/^(?:(\d+)-)?(\d+):(\d+):(\d+)$/);
+            if (!m) return String(e);
+            const d = parseInt(m[1] || 0, 10);
+            const h = parseInt(m[2], 10);
+            const min = parseInt(m[3], 10);
+            const s = parseInt(m[4], 10);
+            if (d > 0) return d + '天 ' + h + '小时';
+            if (h > 0) return h + '小时 ' + min + '分';
+            if (min > 0) return min + '分 ' + s + '秒';
+            return s + '秒';
+        };
+
+        const statusBadge = (s) => <Badge status={BADGE_STATUS[s] || 'default'} text={STATUS_TEXT[s] || s} />;
+
+        // ==================== 服务 Tab ====================
+        function ServicesTab({ isDark, canManage, canDelete, detailName, onDetail }) {
+            const [list, setList] = useState([]);
+            const [sysdAvailable, setSysdAvailable] = useState(true);
+            const [sysdError, setSysdError] = useState('');
+            const [loading, setLoading] = useState(true);
+            const [refreshing, setRefreshing] = useState(false);
+            const [loadedAt, setLoadedAt] = useState(null);
+            const [paused, setPaused] = useState(false);
+            const [view, setView] = useState(() => localStorage.getItem('svc_view') || 'card');
+            const [filter, setFilter] = useState('all');
+            const [search, setSearch] = useState('');
+            const [drawerOpen, setDrawerOpen] = useState(false);
+            const [current, setCurrent] = useState(null);
+            const [detail, setDetail] = useState(null);
+            const [detailTab, setDetailTab] = useState('overview');
+            const [logs, setLogs] = useState([]);
+            const [logFilter, setLogFilter] = useState('');
+            const [autoScroll, setAutoScroll] = useState(true);
+            const [wsConnected, setWsConnected] = useState(false);
+            const [modalOpen, setModalOpen] = useState(false);
+            const [editing, setEditing] = useState(null);
+            const [submitting, setSubmitting] = useState(false);
+            const [busy, setBusy] = useState({});
+            const [form] = Form.useForm();
+            const logBoxRef = useRef(null);
+            const wsRef = useRef(null);
+            const resRef = useRef(null);
+            const resInst = useRef(null);
+            const resHistory = useRef({ labels: [], cpu: [], mem: [] });
+            const isMobile = useIsMobile();
+
+            const load = useCallback(async (manual) => {
+                if (manual) setRefreshing(true);
+                try {
+                    const r = await secureFetch(baseUrl + '/api/services');
+                    const d = await r.json();
+                    if (d.code === 200) {
+                        setList(d.data.services || []);
+                        setSysdAvailable(!!d.data.systemd_available);
+                        setSysdError(d.data.error || '');
+                        setLoadedAt(new Date());
+                        setPaused(false);
+                    } else if (d.code === 403 || r.status === 403) {
+                        setPaused(true);
+                        message.error('访问被拦截（403），已暂停自动刷新，请稍后点击「刷新」重试');
+                    } else {
+                        message.error(d.message || '加载服务列表失败');
+                    }
+                } catch (e) {
+                    message.error('加载服务列表失败: ' + e.message);
+                } finally {
+                    setLoading(false);
+                    setRefreshing(false);
+                }
+            }, []);
+
+            useEffect(() => {
+                load();
+                if (paused) return;
+                const t = setInterval(() => load(), 8000);
+                return () => clearInterval(t);
+            }, [load, paused]);
+
+            // 页面切到后台时暂停自动刷新，回到前台立即恢复
+            useEffect(() => {
+                const onVis = () => {
+                    if (document.hidden) setPaused(true);
+                    else { setPaused(false); load(); }
+                };
+                document.addEventListener('visibilitychange', onVis);
+                return () => document.removeEventListener('visibilitychange', onVis);
+            }, [load]);
+
+            useEffect(() => { localStorage.setItem('svc_view', view); }, [view]);
+
+            useEffect(() => {
+                if (detailName) {
+                    setCurrent(detailName);
+                    setDrawerOpen(true);
+                    setDetailTab('overview');
+                }
+            }, [detailName]);
+
+            const loadDetail = useCallback(async (name) => {
+                try {
+                    const r = await secureFetch(baseUrl + '/api/services/' + encodeURIComponent(name));
+                    const d = await r.json();
+                    if (d.code === 200) {
+                        setDetail(d.data);
+                        if (d.data && d.data.service) updateResChart(d.data.service);
+                    }
+                } catch (e) { /* 轮询失败忽略 */ }
+            }, []);
+
+            useEffect(() => {
+                if (!drawerOpen || !current) return;
+                loadDetail(current);
+                const t = setInterval(() => loadDetail(current), 8000);
+                return () => clearInterval(t);
+            }, [drawerOpen, current, loadDetail]);
+
+            const closeDrawer = () => {
+                setDrawerOpen(false);
+                setCurrent(null);
+                setDetail(null);
+                onDetail(null);
+                if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+            };
+
+            // 实时日志 WebSocket
+            useEffect(() => {
+                if (!drawerOpen || detailTab !== 'logs' || !current) return;
+                setLogs([]);
+                const url = baseUrl.replace(/^http/, 'ws') + '/ws/service-logs?service=' + encodeURIComponent(current) + '&tail=300';
+                const s = new WebSocket(url);
+                wsRef.current = s;
+                s.onopen = () => setWsConnected(true);
+                s.onclose = () => setWsConnected(false);
+                s.onerror = () => setWsConnected(false);
+                s.onmessage = e => {
+                    setLogs(prev => {
+                        const next = prev.concat(e.data);
+                        return next.length > 2000 ? next.slice(next.length - 2000) : next;
+                    });
+                };
+                return () => { s.close(); if (wsRef.current === s) wsRef.current = null; };
+            }, [drawerOpen, detailTab, current]);
+
+            useEffect(() => {
+                if (autoScroll && logBoxRef.current) {
+                    logBoxRef.current.scrollTop = logBoxRef.current.scrollHeight;
+                }
+            }, [logs, autoScroll, detailTab]);
+
+            // 资源图表
+            const updateResChart = (svc) => {
+                if (detailTab !== 'resources' || !resRef.current) return;
+                if (!resInst.current) resInst.current = echarts.init(resRef.current);
+                const h = resHistory.current;
+                h.labels.push(new Date().toLocaleTimeString());
+                h.cpu.push(svc.cpu || 0);
+                h.mem.push(svc.memory_mb || 0);
+                if (h.labels.length > 30) {
+                    h.labels.shift(); h.cpu.shift(); h.mem.shift();
+                }
+                const axisColor = isDark ? '#7d8798' : '#8b93a5';
+                resInst.current.setOption({
+                    tooltip: { trigger: 'axis' },
+                    legend: { data: ['CPU %', '内存 MB'], textStyle: { color: axisColor, fontSize: 11 } },
+                    grid: { left: 10, right: 10, top: 30, bottom: 4, containLabel: true },
+                    xAxis: { type: 'category', data: h.labels.slice(), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 10 } },
+                    yAxis: [
+                        { type: 'value', name: 'CPU %', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(120,130,150,0.16)', type: 'dashed' } } },
+                        { type: 'value', name: 'MB', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 10 }, splitLine: { show: false } }
+                    ],
+                    series: [
+                        { name: 'CPU %', type: 'line', smooth: 0.35, symbol: 'none', data: h.cpu.slice(), lineStyle: { width: 2, color: '#1677ff' }, itemStyle: { color: '#1677ff' } },
+                        { name: '内存 MB', type: 'line', smooth: 0.35, symbol: 'none', yAxisIndex: 1, data: h.mem.slice(), lineStyle: { width: 2, color: '#52c41a' }, itemStyle: { color: '#52c41a' } }
+                    ]
                 });
             };
-            return () => { s.close(); if (wsRef.current === s) wsRef.current = null; };
-        }, [drawerOpen, detailTab, current]);
 
-        useEffect(() => {
-            if (autoScroll && logBoxRef.current) {
-                logBoxRef.current.scrollTop = logBoxRef.current.scrollHeight;
-            }
-        }, [logs, autoScroll, detailTab]);
-
-        // 资源图表
-        const updateResChart = (svc) => {
-            if (detailTab !== 'resources' || !resRef.current) return;
-            if (!resInst.current) resInst.current = echarts.init(resRef.current);
-            const h = resHistory.current;
-            h.labels.push(new Date().toLocaleTimeString());
-            h.cpu.push(svc.cpu || 0);
-            h.mem.push(svc.memory_mb || 0);
-            if (h.labels.length > 30) {
-                h.labels.shift(); h.cpu.shift(); h.mem.shift();
-            }
-            const axisColor = isDark ? '#7d8798' : '#8b93a5';
-            resInst.current.setOption({
-                tooltip: { trigger: 'axis' },
-                legend: { data: ['CPU %', '内存 MB'], textStyle: { color: axisColor, fontSize: 11 } },
-                grid: { left: 10, right: 10, top: 30, bottom: 4, containLabel: true },
-                xAxis: { type: 'category', data: h.labels.slice(), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 10 } },
-                yAxis: [
-                    { type: 'value', name: 'CPU %', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(120,130,150,0.16)', type: 'dashed' } } },
-                    { type: 'value', name: 'MB', axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: axisColor, fontSize: 10 }, splitLine: { show: false } }
-                ],
-                series: [
-                    { name: 'CPU %', type: 'line', smooth: 0.35, symbol: 'none', data: h.cpu.slice(), lineStyle: { width: 2, color: '#1677ff' }, itemStyle: { color: '#1677ff' } },
-                    { name: '内存 MB', type: 'line', smooth: 0.35, symbol: 'none', yAxisIndex: 1, data: h.mem.slice(), lineStyle: { width: 2, color: '#52c41a' }, itemStyle: { color: '#52c41a' } }
-                ]
-            });
-        };
-
-        useEffect(() => {
-            const onR = () => resInst.current && resInst.current.resize();
-            window.addEventListener('resize', onR);
-            return () => {
-                window.removeEventListener('resize', onR);
-                if (resInst.current) { resInst.current.dispose(); resInst.current = null; }
-            };
-        }, []);
-
-        // ===== 操作 =====
-        const runAction = async (svc, action) => {
-            setBusy(b => ({ ...b, [action + ':' + svc.name]: true }));
-            try {
-                if (action === 'restart') message.loading({ content: '服务正在重启...', key: 'svc-' + svc.name, duration: 1.2 });
-                const r = await secureFetch(baseUrl + '/api/services/' + encodeURIComponent(svc.name) + '/' + action, { method: 'POST' });
-                const d = await r.json();
-                if (d.code === 200) {
-                    const msgs = { start: '服务已启动', stop: '服务已停止', restart: '服务已重启', enable: '已开启开机自启', disable: '已关闭开机自启' };
-                    if (action === 'restart') message.success({ content: msgs[action], key: 'svc-' + svc.name });
-                    else message.success(msgs[action]);
-                    setTimeout(load, 1200);
-                    if (current === svc.name) setTimeout(() => loadDetail(svc.name), 1200);
-                } else {
-                    message.error(({ start: '服务启动失败', stop: '服务停止失败', restart: '服务重启失败', enable: '开启自启失败', disable: '关闭自启失败' })[action] + '：' + (d.message || ''));
-                }
-            } catch (e) {
-                message.error('操作失败: ' + e.message);
-            } finally {
-                setBusy(b => { const n = { ...b }; delete n[action + ':' + svc.name]; return n; });
-            }
-        };
-
-        const confirmDelete = (svc) => {
-            Modal.confirm({
-                title: '删除服务？',
-                okText: '确认删除',
-                okButtonProps: { danger: true },
-                cancelText: '取消',
-                content: (
-                    <div style={{ marginTop: 8 }}>
-                        <div>服务：<b>{svc.display_name || svc.name}</b></div>
-                        <Divider style={{ margin: '12px 0' }} />
-                        <div>同时删除：</div>
-                        <div>☑ systemd service 文件</div>
-                        <div>☑ 禁用开机自启</div>
-                        <div>☑ 停止当前服务</div>
-                        <Typography.Text type="danger" style={{ display: 'block', marginTop: 10 }}>该操作不可恢复。</Typography.Text>
-                    </div>
-                ),
-                onOk: async () => {
-                    try {
-                        const r = await secureFetch(baseUrl + '/api/services/' + encodeURIComponent(svc.name), { method: 'DELETE' });
-                        const d = await r.json();
-                        if (d.code === 200) {
-                            message.success('服务已删除');
-                            if (current === svc.name) closeDrawer();
-                            load();
-                        } else {
-                            message.error(d.message || '删除失败');
-                        }
-                    } catch (e) {
-                        message.error('删除失败: ' + e.message);
-                    }
-                }
-            });
-        };
-
-        // ===== 添加 / 编辑 =====
-        const openCreate = () => {
-            setEditing(null);
-            form.resetFields();
-            form.setFieldsValue({ restart: 'on-failure', restart_sec: 5, auto_start: false, auto_restart: true, start_now: true, environment: [] });
-            setModalOpen(true);
-        };
-
-        const openEdit = () => {
-            if (!detail || !detail.config) { message.warning('仅本系统创建的服务支持编辑'); return; }
-            setEditing(detail.config);
-            const c = detail.config;
-            form.setFieldsValue({
-                name: c.name, display_name: c.display_name, description: c.description,
-                exec_start: c.exec_start, working_dir: c.working_dir,
-                args: (c.args || []).join(' '),
-                user: c.user, group: c.group,
-                auto_start: !!c.auto_start,
-                auto_restart: c.restart && c.restart !== 'no',
-                restart: c.restart || 'on-failure',
-                restart_sec: c.restart_sec || 5,
-                timeout_start_sec: c.timeout_start_sec || 0,
-                timeout_stop_sec: c.timeout_stop_sec || 0,
-                limit_nofile: c.limit_nofile || 0,
-                nice: c.nice || 0,
-                environment: c.environment || [],
-                exec_start_pre: (c.exec_start_pre || []).join('\n'),
-                exec_stop: (c.exec_stop || []).join('\n')
-            });
-            setModalOpen(true);
-        };
-
-        const submitService = async () => {
-            try {
-                const v = await form.validateFields();
-                setSubmitting(true);
-                const payload = {
-                    name: (v.name || '').trim(),
-                    display_name: (v.display_name || '').trim(),
-                    description: (v.description || '').trim(),
-                    exec_start: (v.exec_start || '').trim(),
-                    working_dir: (v.working_dir || '').trim(),
-                    args: (v.args || '').trim() ? (v.args || '').trim().split(/\s+/) : [],
-                    user: (v.user || '').trim(),
-                    group: (v.group || '').trim(),
-                    environment: (v.environment || []).filter(e => e && e.key).map(e => ({ key: e.key.trim(), value: e.value || '' })),
-                    auto_start: !!v.auto_start,
-                    restart: v.auto_restart ? v.restart : 'no',
-                    restart_sec: v.restart_sec || 0,
-                    timeout_start_sec: v.timeout_start_sec || 0,
-                    timeout_stop_sec: v.timeout_stop_sec || 0,
-                    limit_nofile: v.limit_nofile || 0,
-                    nice: v.nice || 0,
-                    exec_start_pre: (v.exec_start_pre || '').split('\n').map(s => s.trim()).filter(Boolean),
-                    exec_stop: (v.exec_stop || '').split('\n').map(s => s.trim()).filter(Boolean),
-                    start_now: !editing && !!v.start_now
+            useEffect(() => {
+                const onR = () => resInst.current && resInst.current.resize();
+                window.addEventListener('resize', onR);
+                return () => {
+                    window.removeEventListener('resize', onR);
+                    if (resInst.current) { resInst.current.dispose(); resInst.current = null; }
                 };
-                const url = editing
-                    ? baseUrl + '/api/services/' + encodeURIComponent(editing.name)
-                    : baseUrl + '/api/services';
-                const r = await secureFetch(url, { method: editing ? 'PUT' : 'POST', body: JSON.stringify(payload) });
-                const d = await r.json();
-                if (d.code === 200) {
-                    message.success(editing ? '服务已更新' : '服务创建成功');
-                    setModalOpen(false);
-                    load();
-                    if (editing) setTimeout(() => loadDetail(editing.name), 1200);
-                } else {
-                    message.error(d.message || '保存失败');
+            }, []);
+
+            // ===== 操作 =====
+            const runAction = async (svc, action) => {
+                setBusy(b => ({ ...b, [action + ':' + svc.name]: true }));
+                try {
+                    if (action === 'restart') message.loading({ content: '服务正在重启...', key: 'svc-' + svc.name, duration: 1.2 });
+                    const r = await secureFetch(baseUrl + '/api/services/' + encodeURIComponent(svc.name) + '/' + action, { method: 'POST' });
+                    const d = await r.json();
+                    if (d.code === 200) {
+                        const msgs = { start: '服务已启动', stop: '服务已停止', restart: '服务已重启', enable: '已开启开机自启', disable: '已关闭开机自启' };
+                        if (action === 'restart') message.success({ content: msgs[action], key: 'svc-' + svc.name });
+                        else message.success(msgs[action]);
+                        setTimeout(load, 1200);
+                        if (current === svc.name) setTimeout(() => loadDetail(svc.name), 1200);
+                    } else {
+                        message.error(({ start: '服务启动失败', stop: '服务停止失败', restart: '服务重启失败', enable: '开启自启失败', disable: '关闭自启失败' })[action] + '：' + (d.message || ''));
+                    }
+                } catch (e) {
+                    message.error('操作失败: ' + e.message);
+                } finally {
+                    setBusy(b => { const n = { ...b }; delete n[action + ':' + svc.name]; return n; });
                 }
-            } catch (e) {
-                if (e && e.errorFields) return;
-                message.error('保存失败: ' + (e && e.message || ''));
-            } finally {
-                setSubmitting(false);
-            }
-        };
+            };
 
-        // ===== 统计与筛选 =====
-        const running = list.filter(s => s.status === 'RUNNING').length;
-        const stopped = list.filter(s => s.status === 'STOPPED').length;
-        const failed = list.filter(s => s.status === 'FAILED').length;
-        const enabledCount = list.filter(s => s.enabled).length;
-
-        const filtered = list.filter(s => {
-            if (filter === 'running' && s.status !== 'RUNNING') return false;
-            if (filter === 'stopped' && s.status !== 'STOPPED') return false;
-            if (filter === 'failed' && s.status !== 'FAILED') return false;
-            const q = search.trim().toLowerCase();
-            if (q) {
-                return (s.name || '').toLowerCase().includes(q) ||
-                       (s.display_name || '').toLowerCase().includes(q) ||
-                       String(s.pid || '').includes(q);
-            }
-            return true;
-        });
-
-        const openDetail = (s, tab) => {
-            setCurrent(s.name);
-            setDetailTab(tab || 'overview');
-            setDrawerOpen(true);
-        };
-
-        const svcButtons = (s) => {
-            const btns = [];
-            const busyKey = (a) => busy[a + ':' + s.name];
-            if (s.status === 'RUNNING') {
-                btns.push(<Button key="stop" size="small" danger loading={busyKey('stop')} onClick={() => runAction(s, 'stop')}>停止</Button>);
-                btns.push(<Button key="restart" size="small" loading={busyKey('restart')} onClick={() => runAction(s, 'restart')}>重启</Button>);
-            } else if (s.status === 'STARTING') {
-                btns.push(<Button key="stop" size="small" danger loading={busyKey('stop')} onClick={() => runAction(s, 'stop')}>停止</Button>);
-            } else if (s.status === 'FAILED') {
-                btns.push(<Button key="restart" size="small" loading={busyKey('restart')} onClick={() => runAction(s, 'restart')}>重启</Button>);
-                btns.push(<Button key="log" size="small" icon={<UIIcon name="FileTextOutlined" />} onClick={() => openDetail(s, 'logs')}>日志</Button>);
-            } else {
-                btns.push(<Button key="start" size="small" loading={busyKey('start')} onClick={() => runAction(s, 'start')}>启动</Button>);
-            }
-            btns.push(<Button key="detail" size="small" type="text" onClick={() => openDetail(s)}>详情</Button>);
-            return btns;
-        };
-
-        const columns = [
-            { title: '名称', dataIndex: 'name', width: 200, render: (v, r) => (
-                <Space direction="vertical" size={0}>
-                    <Typography.Link strong onClick={() => openDetail(r)}>{r.display_name || v}</Typography.Link>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>{v} · {SOURCE_LABEL[r.source] || r.source}</Typography.Text>
-                </Space>
-            ) },
-            { title: '状态', dataIndex: 'status', width: 110, render: statusBadge },
-            { title: '开机自启', dataIndex: 'enabled', width: 90, render: v => v ? <Tag color="green">ON</Tag> : <Tag>OFF</Tag> },
-            { title: 'PID', dataIndex: 'pid', width: 80, render: v => v > 0 ? <Typography.Text type="secondary" code style={{ fontSize: 12 }}>{v}</Typography.Text> : '-' },
-            { title: 'CPU', dataIndex: 'cpu', width: 90, render: v => v > 0 ? v.toFixed(1) + '%' : '-' },
-            { title: '内存', dataIndex: 'memory_mb', width: 100, render: v => v > 0 ? v.toFixed(1) + ' MB' : '-' },
-            { title: '运行时间', dataIndex: 'uptime', width: 120, render: v => fmtUptime(v) },
-            { title: '操作', key: 'op', width: 200, fixed: 'right', render: (_, s) => <Space wrap size={4}>{svcButtons(s)}</Space> }
-        ];
-
-        const drawerFooter = detail && detail.service && (
-            <Space wrap>
-                {canManage && detail.service.status !== 'RUNNING' && <Button loading={!!busy['start:' + detail.service.name]} onClick={() => runAction(detail.service, 'start')}>启动</Button>}
-                {canManage && (detail.service.status === 'RUNNING' || detail.service.status === 'STARTING') && <Button danger loading={!!busy['stop:' + detail.service.name]} onClick={() => runAction(detail.service, 'stop')}>停止</Button>}
-                {canManage && detail.service.status === 'RUNNING' && <Button loading={!!busy['restart:' + detail.service.name]} onClick={() => runAction(detail.service, 'restart')}>重启</Button>}
-                {canManage && !detail.service.enabled && <Button loading={!!busy['enable:' + detail.service.name]} onClick={() => runAction(detail.service, 'enable')}>启用自启</Button>}
-                {canManage && detail.service.enabled && <Button loading={!!busy['disable:' + detail.service.name]} onClick={() => runAction(detail.service, 'disable')}>关闭自启</Button>}
-                {canManage && detail.config && <Button onClick={openEdit}>编辑</Button>}
-                {canDelete && detail.service.managed && <Button danger type="text" onClick={() => confirmDelete(detail.service)}>删除</Button>}
-            </Space>
-        );
-
-        const drawerItems = [
-            { key: 'overview', label: '概览', children: renderOverview() },
-            { key: 'logs', label: '日志', children: renderLogs() },
-            { key: 'config', label: '配置', children: renderConfig() },
-            { key: 'resources', label: '资源', children: renderResources() },
-            { key: 'ports', label: '端口', children: renderServicePorts() }
-        ];
-
-        function renderOverview() {
-            const s = detail && detail.service;
-            if (!s) return <Card loading />;
-            return (
-                <div>
-                    {s.status === 'FAILED' && (
-                        <Alert type="error" showIcon style={{ marginBottom: 12 }}
-                            message={<Space>Service failed{s.exit_code ? <Tag color="red">Exit Code: {s.exit_code}</Tag> : null}</Space>}
-                            description="服务运行异常，请查看日志定位问题。"
-                            action={<Space>
-                                <Button size="small" onClick={() => setDetailTab('logs')}>查看日志</Button>
-                                {canManage && <Button size="small" type="primary" onClick={() => runAction(s, 'restart')}>重新启动</Button>}
-                            </Space>} />
-                    )}
-                    <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Typography.Title level={4} style={{ marginBottom: 0 }}>{s.display_name || s.name}</Typography.Title>
-                        {statusBadge(s.status)}
-                        {s.managed && <Tag color="purple">{SOURCE_LABEL.created}</Tag>}
-                    </div>
-                    <Descriptions size="small" column={2} bordered items={[
-                        { key: 'pid', label: 'PID', children: s.pid > 0 ? <Typography.Text copyable code>{s.pid}</Typography.Text> : '-' },
-                        { key: 'cpu', label: 'CPU', children: s.cpu > 0 ? s.cpu.toFixed(1) + '%' : '-' },
-                        { key: 'mem', label: '内存', children: s.memory_mb > 0 ? s.memory_mb.toFixed(1) + ' MB' : '-' },
-                        { key: 'up', label: '运行时间', children: fmtUptime(s.uptime) },
-                        { key: 'enabled', label: '开机自启', children: s.enabled ? <Tag color="green">ON</Tag> : <Tag>OFF</Tag> },
-                        { key: 'restart', label: '自动重启', children: detail.config && detail.config.restart && detail.config.restart !== 'no' ? <Tag color="green">{detail.config.restart}</Tag> : <Tag>OFF</Tag> },
-                        { key: 'src', label: '来源', children: SOURCE_LABEL[s.source] || s.source },
-                        { key: 'desc', label: '描述', children: s.description || '-' }
-                    ]} />
-                </div>
-            );
-        }
-
-        function renderLogs() {
-            const filteredLogs = logFilter ? logs.filter(l => l.toLowerCase().includes(logFilter.toLowerCase())) : logs;
-            return (
-                <div>
-                    <Space wrap style={{ marginBottom: 10 }}>
-                        <Badge status={wsConnected ? 'processing' : 'default'} text={wsConnected ? '实时推送中' : '已断开'} />
-                        <Switch checked={autoScroll} onChange={setAutoScroll} checkedChildren="自动滚动" unCheckedChildren="暂停" />
-                        <Button size="small" icon={<UIIcon name="ClearOutlined" />} onClick={() => setLogs([])}>清空显示</Button>
-                        <Button size="small" icon={<UIIcon name="DownloadOutlined" />} onClick={() => {
-                            const blob = new Blob([logs.join('\n')], { type: 'text/plain;charset=utf-8' });
-                            const a = document.createElement('a');
-                            a.href = URL.createObjectURL(blob);
-                            a.download = (current || 'service') + '.log';
-                            a.click();
-                            URL.revokeObjectURL(a.href);
-                        }}>下载日志</Button>
-                        <Input allowClear placeholder="按时间/内容筛选" style={{ width: 200 }} onChange={e => setLogFilter(e.target.value)} />
-                    </Space>
-                    <div className={'log-box' + (isDark ? '' : ' light')} ref={logBoxRef}>
-                        {filteredLogs.length ? filteredLogs.join('\n') : '等待日志输出...'}
-                    </div>
-                </div>
-            );
-        }
-
-        function renderConfig() {
-            const c = detail && detail.config;
-            if (!c) {
-                return <Alert type="info" showIcon message="系统服务配置由 systemd 管理" description="该服务不是由 Server Status 创建，配置为只读，仅支持启停、自启与查看日志。" />;
-            }
-            const items = [
-                { key: 'name', label: '服务名称', children: c.name },
-                { key: 'display', label: '显示名称', children: c.display_name || '-' },
-                { key: 'desc', label: '描述', children: c.description || '-' },
-                { key: 'exec', label: '程序路径', children: <Typography.Text code>{c.exec_start}</Typography.Text> },
-                { key: 'workdir', label: '工作目录', children: c.working_dir || '-' },
-                { key: 'args', label: '启动参数', children: (c.args && c.args.length) ? <Typography.Text code>{(c.args || []).join(' ')}</Typography.Text> : '-' },
-                { key: 'user', label: '运行用户', children: c.user || 'root' },
-                { key: 'group', label: '运行组', children: c.group || '-' },
-                { key: 'restart', label: 'Restart', children: c.restart || 'no' },
-                { key: 'restart_sec', label: 'RestartSec', children: c.restart_sec ? c.restart_sec + 's' : '-' },
-                { key: 'env', label: '环境变量', children: (c.environment || []).filter(e => e.key).map(e => <div key={e.key}><Typography.Text code>{e.key}={e.value}</Typography.Text></div>) || '-' },
-                { key: 'timeout_s', label: 'TimeoutStartSec', children: c.timeout_start_sec || '-' },
-                { key: 'timeout_e', label: 'TimeoutStopSec', children: c.timeout_stop_sec || '-' },
-                { key: 'nofile', label: 'LimitNOFILE', children: c.limit_nofile || '-' },
-                { key: 'nice', label: 'Nice', children: c.nice || 0 },
-                { key: 'pre', label: 'ExecStartPre', children: (c.exec_start_pre || []).length ? c.exec_start_pre.join(' ; ') : '-' },
-                { key: 'stop', label: 'ExecStop', children: (c.exec_stop || []).length ? c.exec_stop.join(' ; ') : '-' }
-            ];
-            return (
-                <div>
-                    <Descriptions size="small" column={1} bordered items={items} />
-                    <div style={{ marginTop: 12 }}>
-                        {canManage && <Button type="primary" icon={<UIIcon name="EditOutlined" />} onClick={openEdit}>编辑配置</Button>}
-                    </div>
-                </div>
-            );
-        }
-
-        function renderResources() {
-            const s = detail && detail.service;
-            return (
-                <div>
-                    <Space style={{ marginBottom: 10 }} size="large">
-                        <Statistic title="CPU" value={s ? (s.cpu || 0).toFixed(1) : '-'} suffix="%" valueStyle={{ fontSize: 22, color: '#1677ff' }} />
-                        <Statistic title="内存" value={s ? (s.memory_mb || 0).toFixed(1) : '-'} suffix="MB" valueStyle={{ fontSize: 22, color: '#52c41a' }} />
-                        <Statistic title="运行时间" value={s && s.uptime ? fmtUptime(s.uptime) : '-'} valueStyle={{ fontSize: 22 }} />
-                    </Space>
-                    <div ref={resRef} style={{ width: '100%', height: 260 }}></div>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>最近 30 次采样（每 3 秒），仅统计有 PID 的运行中进程。</Typography.Text>
-                </div>
-            );
-        }
-
-        function renderServicePorts() {
-            const ports = (detail && detail.ports) || [];
-            return <Table size="small" rowKey={(r, i) => i} dataSource={ports} pagination={false}
-                columns={[
-                    { title: '端口', dataIndex: 'port', width: 90, render: v => <Typography.Text code>{v}</Typography.Text> },
-                    { title: '协议', dataIndex: 'protocol', width: 80, render: v => <Tag color={v === 'tcp' ? 'blue' : 'purple'}>{v.toUpperCase()}</Tag> },
-                    { title: '监听地址', dataIndex: 'address' },
-                    { title: '暴露范围', dataIndex: 'exposure', width: 110, render: e => <span className="exp-cell">{exposureIcon(e)} {EXPOSE_TEXT[e] || e}</span> },
-                    { title: '状态', dataIndex: 'status', width: 100, render: v => v === 'BLOCKED' ? <Badge status="error" text="BLOCKED" /> : <Badge status="success" text="OPEN" /> }
-                ]} locale={{ emptyText: <Empty description="该服务当前没有监听端口" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }} />;
-        }
-
-        return (
-            <div>
-                {!sysdAvailable && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="当前系统无法读取 systemd 服务列表"
-                    description={sysdError || '服务管理功能需要 Linux + systemd 环境。'} />}
-
-                <div className="mini-grid">
-                    <div className="mini-stat"><div className="ms-label"><UIIcon name="AppstoreOutlined" />服务总数</div><div className="ms-value">{list.length}</div></div>
-                    <div className="mini-stat"><div className="ms-label"><UIIcon name="CaretUpOutlined" />运行中</div><div className="ms-value" style={{ color: '#52c41a' }}>{running}</div></div>
-                    <div className="mini-stat"><div className="ms-label"><UIIcon name="PoweroffOutlined" />已停止</div><div className="ms-value">{stopped}</div></div>
-                    <div className="mini-stat"><div className="ms-label"><UIIcon name="ExclamationCircleOutlined" />异常</div><div className="ms-value" style={{ color: '#ff4d4f' }}>{failed}</div></div>
-                    <div className="mini-stat"><div className="ms-label"><UIIcon name="RocketOutlined" />开机自启</div><div className="ms-value" style={{ color: '#1677ff' }}>{enabledCount}</div></div>
-                </div>
-
-                <Card size="small" style={{ marginBottom: 12 }}>
-                    <div className="toolbar">
-                        <div className="filter-wrap">
-                            <Segmented value={filter} onChange={setFilter} options={[
-                                { label: '全部 ' + list.length, value: 'all' },
-                                { label: '运行中 ' + running, value: 'running' },
-                                { label: '已停止 ' + stopped, value: 'stopped' },
-                                { label: '异常 ' + failed, value: 'failed' }
-                            ]} />
+            const confirmDelete = (svc) => {
+                Modal.confirm({
+                    title: '删除服务？',
+                    okText: '确认删除',
+                    okButtonProps: { danger: true },
+                    cancelText: '取消',
+                    content: (
+                        <div style={{ marginTop: 8 }}>
+                            <div>服务：<b>{svc.display_name || svc.name}</b></div>
+                            <Divider style={{ margin: '12px 0' }} />
+                            <div>同时删除：</div>
+                            <div>☑ systemd service 文件</div>
+                            <div>☑ 禁用开机自启</div>
+                            <div>☑ 停止当前服务</div>
+                            <Typography.Text type="danger" style={{ display: 'block', marginTop: 10 }}>该操作不可恢复。</Typography.Text>
                         </div>
-                        <Input.Search allowClear placeholder="搜索服务名 / PID" className="toolbar-search" onChange={e => setSearch(e.target.value)} />
-                        <Segmented value={view} onChange={setView} options={[
-                            { label: <span><UIIcon name="AppstoreOutlined" /> 卡片</span>, value: 'card' },
-                            { label: <span><UIIcon name="UnorderedListOutlined" /> 列表</span>, value: 'list' }
+                    ),
+                    onOk: async () => {
+                        try {
+                            const r = await secureFetch(baseUrl + '/api/services/' + encodeURIComponent(svc.name), { method: 'DELETE' });
+                            const d = await r.json();
+                            if (d.code === 200) {
+                                message.success('服务已删除');
+                                if (current === svc.name) closeDrawer();
+                                load();
+                            } else {
+                                message.error(d.message || '删除失败');
+                            }
+                        } catch (e) {
+                            message.error('删除失败: ' + e.message);
+                        }
+                    }
+                });
+            };
+
+            // ===== 添加 / 编辑 =====
+            const openCreate = () => {
+                setEditing(null);
+                form.resetFields();
+                form.setFieldsValue({ restart: 'on-failure', restart_sec: 5, auto_start: false, auto_restart: true, start_now: true, environment: [] });
+                setModalOpen(true);
+            };
+
+            const openEdit = () => {
+                if (!detail || !detail.config) { message.warning('仅本系统创建的服务支持编辑'); return; }
+                setEditing(detail.config);
+                const c = detail.config;
+                form.setFieldsValue({
+                    name: c.name, display_name: c.display_name, description: c.description,
+                    exec_start: c.exec_start, working_dir: c.working_dir,
+                    args: (c.args || []).join(' '),
+                    user: c.user, group: c.group,
+                    auto_start: !!c.auto_start,
+                    auto_restart: c.restart && c.restart !== 'no',
+                    restart: c.restart || 'on-failure',
+                    restart_sec: c.restart_sec || 5,
+                    timeout_start_sec: c.timeout_start_sec || 0,
+                    timeout_stop_sec: c.timeout_stop_sec || 0,
+                    limit_nofile: c.limit_nofile || 0,
+                    nice: c.nice || 0,
+                    environment: c.environment || [],
+                    exec_start_pre: (c.exec_start_pre || []).join('\n'),
+                    exec_stop: (c.exec_stop || []).join('\n')
+                });
+                setModalOpen(true);
+            };
+
+            const submitService = async () => {
+                try {
+                    const v = await form.validateFields();
+                    setSubmitting(true);
+                    const payload = {
+                        name: (v.name || '').trim(),
+                        display_name: (v.display_name || '').trim(),
+                        description: (v.description || '').trim(),
+                        exec_start: (v.exec_start || '').trim(),
+                        working_dir: (v.working_dir || '').trim(),
+                        args: (v.args || '').trim() ? (v.args || '').trim().split(/\s+/) : [],
+                        user: (v.user || '').trim(),
+                        group: (v.group || '').trim(),
+                        environment: (v.environment || []).filter(e => e && e.key).map(e => ({ key: e.key.trim(), value: e.value || '' })),
+                        auto_start: !!v.auto_start,
+                        restart: v.auto_restart ? v.restart : 'no',
+                        restart_sec: v.restart_sec || 0,
+                        timeout_start_sec: v.timeout_start_sec || 0,
+                        timeout_stop_sec: v.timeout_stop_sec || 0,
+                        limit_nofile: v.limit_nofile || 0,
+                        nice: v.nice || 0,
+                        exec_start_pre: (v.exec_start_pre || '').split('\n').map(s => s.trim()).filter(Boolean),
+                        exec_stop: (v.exec_stop || '').split('\n').map(s => s.trim()).filter(Boolean),
+                        start_now: !editing && !!v.start_now
+                    };
+                    const url = editing
+                        ? baseUrl + '/api/services/' + encodeURIComponent(editing.name)
+                        : baseUrl + '/api/services';
+                    const r = await secureFetch(url, { method: editing ? 'PUT' : 'POST', body: JSON.stringify(payload) });
+                    const d = await r.json();
+                    if (d.code === 200) {
+                        message.success(editing ? '服务已更新' : '服务创建成功');
+                        setModalOpen(false);
+                        load();
+                        if (editing) setTimeout(() => loadDetail(editing.name), 1200);
+                    } else {
+                        message.error(d.message || '保存失败');
+                    }
+                } catch (e) {
+                    if (e && e.errorFields) return;
+                    message.error('保存失败: ' + (e && e.message || ''));
+                } finally {
+                    setSubmitting(false);
+                }
+            };
+
+            // ===== 统计与筛选 =====
+            const running = list.filter(s => s.status === 'RUNNING').length;
+            const stopped = list.filter(s => s.status === 'STOPPED').length;
+            const failed = list.filter(s => s.status === 'FAILED').length;
+            const enabledCount = list.filter(s => s.enabled).length;
+
+            const filtered = list.filter(s => {
+                if (filter === 'running' && s.status !== 'RUNNING') return false;
+                if (filter === 'stopped' && s.status !== 'STOPPED') return false;
+                if (filter === 'failed' && s.status !== 'FAILED') return false;
+                const q = search.trim().toLowerCase();
+                if (q) {
+                    return (s.name || '').toLowerCase().includes(q) ||
+                        (s.display_name || '').toLowerCase().includes(q) ||
+                        String(s.pid || '').includes(q);
+                }
+                return true;
+            });
+
+            const openDetail = (s, tab) => {
+                setCurrent(s.name);
+                setDetailTab(tab || 'overview');
+                setDrawerOpen(true);
+            };
+
+            const svcButtons = (s) => {
+                const btns = [];
+                const busyKey = (a) => busy[a + ':' + s.name];
+                if (s.status === 'RUNNING') {
+                    btns.push(<Button key="stop" size="small" danger loading={busyKey('stop')} onClick={() => runAction(s, 'stop')}>停止</Button>);
+                    btns.push(<Button key="restart" size="small" loading={busyKey('restart')} onClick={() => runAction(s, 'restart')}>重启</Button>);
+                } else if (s.status === 'STARTING') {
+                    btns.push(<Button key="stop" size="small" danger loading={busyKey('stop')} onClick={() => runAction(s, 'stop')}>停止</Button>);
+                } else if (s.status === 'FAILED') {
+                    btns.push(<Button key="restart" size="small" loading={busyKey('restart')} onClick={() => runAction(s, 'restart')}>重启</Button>);
+                    btns.push(<Button key="log" size="small" icon={<UIIcon name="FileTextOutlined" />} onClick={() => openDetail(s, 'logs')}>日志</Button>);
+                } else {
+                    btns.push(<Button key="start" size="small" loading={busyKey('start')} onClick={() => runAction(s, 'start')}>启动</Button>);
+                }
+                btns.push(<Button key="detail" size="small" type="text" onClick={() => openDetail(s)}>详情</Button>);
+                return btns;
+            };
+
+            const columns = [
+                {
+                    title: '名称', dataIndex: 'name', width: 200, render: (v, r) => (
+                        <Space direction="vertical" size={0}>
+                            <Typography.Link strong onClick={() => openDetail(r)}>{r.display_name || v}</Typography.Link>
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>{v} · {SOURCE_LABEL[r.source] || r.source}</Typography.Text>
+                        </Space>
+                    )
+                },
+                { title: '状态', dataIndex: 'status', width: 110, render: statusBadge },
+                { title: '开机自启', dataIndex: 'enabled', width: 90, render: v => v ? <Tag color="green">ON</Tag> : <Tag>OFF</Tag> },
+                { title: 'PID', dataIndex: 'pid', width: 80, render: v => v > 0 ? <Typography.Text type="secondary" code style={{ fontSize: 12 }}>{v}</Typography.Text> : '-' },
+                { title: 'CPU', dataIndex: 'cpu', width: 90, render: v => v > 0 ? v.toFixed(1) + '%' : '-' },
+                { title: '内存', dataIndex: 'memory_mb', width: 100, render: v => v > 0 ? v.toFixed(1) + ' MB' : '-' },
+                { title: '运行时间', dataIndex: 'uptime', width: 120, render: v => fmtUptime(v) },
+                { title: '操作', key: 'op', width: 200, fixed: 'right', render: (_, s) => <Space wrap size={4}>{svcButtons(s)}</Space> }
+            ];
+
+            const drawerFooter = detail && detail.service && (
+                <Space wrap>
+                    {canManage && detail.service.status !== 'RUNNING' && <Button loading={!!busy['start:' + detail.service.name]} onClick={() => runAction(detail.service, 'start')}>启动</Button>}
+                    {canManage && (detail.service.status === 'RUNNING' || detail.service.status === 'STARTING') && <Button danger loading={!!busy['stop:' + detail.service.name]} onClick={() => runAction(detail.service, 'stop')}>停止</Button>}
+                    {canManage && detail.service.status === 'RUNNING' && <Button loading={!!busy['restart:' + detail.service.name]} onClick={() => runAction(detail.service, 'restart')}>重启</Button>}
+                    {canManage && !detail.service.enabled && <Button loading={!!busy['enable:' + detail.service.name]} onClick={() => runAction(detail.service, 'enable')}>启用自启</Button>}
+                    {canManage && detail.service.enabled && <Button loading={!!busy['disable:' + detail.service.name]} onClick={() => runAction(detail.service, 'disable')}>关闭自启</Button>}
+                    {canManage && detail.config && <Button onClick={openEdit}>编辑</Button>}
+                    {canDelete && detail.service.managed && <Button danger type="text" onClick={() => confirmDelete(detail.service)}>删除</Button>}
+                </Space>
+            );
+
+            const drawerItems = [
+                { key: 'overview', label: '概览', children: renderOverview() },
+                { key: 'logs', label: '日志', children: renderLogs() },
+                { key: 'config', label: '配置', children: renderConfig() },
+                { key: 'resources', label: '资源', children: renderResources() },
+                { key: 'ports', label: '端口', children: renderServicePorts() }
+            ];
+
+            function renderOverview() {
+                const s = detail && detail.service;
+                if (!s) return <Card loading />;
+                return (
+                    <div>
+                        {s.status === 'FAILED' && (
+                            <Alert type="error" showIcon style={{ marginBottom: 12 }}
+                                message={<Space>Service failed{s.exit_code ? <Tag color="red">Exit Code: {s.exit_code}</Tag> : null}</Space>}
+                                description="服务运行异常，请查看日志定位问题。"
+                                action={<Space>
+                                    <Button size="small" onClick={() => setDetailTab('logs')}>查看日志</Button>
+                                    {canManage && <Button size="small" type="primary" onClick={() => runAction(s, 'restart')}>重新启动</Button>}
+                                </Space>} />
+                        )}
+                        <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <Typography.Title level={4} style={{ marginBottom: 0 }}>{s.display_name || s.name}</Typography.Title>
+                            {statusBadge(s.status)}
+                            {s.managed && <Tag color="purple">{SOURCE_LABEL.created}</Tag>}
+                        </div>
+                        <Descriptions size="small" column={2} bordered items={[
+                            { key: 'pid', label: 'PID', children: s.pid > 0 ? <Typography.Text copyable code>{s.pid}</Typography.Text> : '-' },
+                            { key: 'cpu', label: 'CPU', children: s.cpu > 0 ? s.cpu.toFixed(1) + '%' : '-' },
+                            { key: 'mem', label: '内存', children: s.memory_mb > 0 ? s.memory_mb.toFixed(1) + ' MB' : '-' },
+                            { key: 'up', label: '运行时间', children: fmtUptime(s.uptime) },
+                            { key: 'enabled', label: '开机自启', children: s.enabled ? <Tag color="green">ON</Tag> : <Tag>OFF</Tag> },
+                            { key: 'restart', label: '自动重启', children: detail.config && detail.config.restart && detail.config.restart !== 'no' ? <Tag color="green">{detail.config.restart}</Tag> : <Tag>OFF</Tag> },
+                            { key: 'src', label: '来源', children: SOURCE_LABEL[s.source] || s.source },
+                            { key: 'desc', label: '描述', children: s.description || '-' }
                         ]} />
-                        <Button icon={<UIIcon name="ReloadOutlined" />} loading={loading || refreshing} onClick={() => { setPaused(false); load(true); }}>刷新</Button>
-                        {canManage && <Button type="primary" icon={<UIIcon name="PlusOutlined" />} onClick={openCreate}>添加服务</Button>}
-                        <span className="toolbar-extra">{loadedAt ? '更新于 ' + loadedAt.toLocaleTimeString() : ''}</span>
+                    </div>
+                );
+            }
+
+            function renderLogs() {
+                const filteredLogs = logFilter ? logs.filter(l => l.toLowerCase().includes(logFilter.toLowerCase())) : logs;
+                return (
+                    <div>
+                        <Space wrap style={{ marginBottom: 10 }}>
+                            <Badge status={wsConnected ? 'processing' : 'default'} text={wsConnected ? '实时推送中' : '已断开'} />
+                            <Switch checked={autoScroll} onChange={setAutoScroll} checkedChildren="自动滚动" unCheckedChildren="暂停" />
+                            <Button size="small" icon={<UIIcon name="ClearOutlined" />} onClick={() => setLogs([])}>清空显示</Button>
+                            <Button size="small" icon={<UIIcon name="DownloadOutlined" />} onClick={() => {
+                                const blob = new Blob([logs.join('\n')], { type: 'text/plain;charset=utf-8' });
+                                const a = document.createElement('a');
+                                a.href = URL.createObjectURL(blob);
+                                a.download = (current || 'service') + '.log';
+                                a.click();
+                                URL.revokeObjectURL(a.href);
+                            }}>下载日志</Button>
+                            <Input allowClear placeholder="按时间/内容筛选" style={{ width: 200 }} onChange={e => setLogFilter(e.target.value)} />
+                        </Space>
+                        <div className={'log-box' + (isDark ? '' : ' light')} ref={logBoxRef}>
+                            {filteredLogs.length ? filteredLogs.join('\n') : '等待日志输出...'}
+                        </div>
+                    </div>
+                );
+            }
+
+            function renderConfig() {
+                const c = detail && detail.config;
+                if (!c) {
+                    return <Alert type="info" showIcon message="系统服务配置由 systemd 管理" description="该服务不是由 Server Status 创建，配置为只读，仅支持启停、自启与查看日志。" />;
+                }
+                const items = [
+                    { key: 'name', label: '服务名称', children: c.name },
+                    { key: 'display', label: '显示名称', children: c.display_name || '-' },
+                    { key: 'desc', label: '描述', children: c.description || '-' },
+                    { key: 'exec', label: '程序路径', children: <Typography.Text code>{c.exec_start}</Typography.Text> },
+                    { key: 'workdir', label: '工作目录', children: c.working_dir || '-' },
+                    { key: 'args', label: '启动参数', children: (c.args && c.args.length) ? <Typography.Text code>{(c.args || []).join(' ')}</Typography.Text> : '-' },
+                    { key: 'user', label: '运行用户', children: c.user || 'root' },
+                    { key: 'group', label: '运行组', children: c.group || '-' },
+                    { key: 'restart', label: 'Restart', children: c.restart || 'no' },
+                    { key: 'restart_sec', label: 'RestartSec', children: c.restart_sec ? c.restart_sec + 's' : '-' },
+                    { key: 'env', label: '环境变量', children: (c.environment || []).filter(e => e.key).map(e => <div key={e.key}><Typography.Text code>{e.key}={e.value}</Typography.Text></div>) || '-' },
+                    { key: 'timeout_s', label: 'TimeoutStartSec', children: c.timeout_start_sec || '-' },
+                    { key: 'timeout_e', label: 'TimeoutStopSec', children: c.timeout_stop_sec || '-' },
+                    { key: 'nofile', label: 'LimitNOFILE', children: c.limit_nofile || '-' },
+                    { key: 'nice', label: 'Nice', children: c.nice || 0 },
+                    { key: 'pre', label: 'ExecStartPre', children: (c.exec_start_pre || []).length ? c.exec_start_pre.join(' ; ') : '-' },
+                    { key: 'stop', label: 'ExecStop', children: (c.exec_stop || []).length ? c.exec_stop.join(' ; ') : '-' }
+                ];
+                return (
+                    <div>
+                        <Descriptions size="small" column={1} bordered items={items} />
+                        <div style={{ marginTop: 12 }}>
+                            {canManage && <Button type="primary" icon={<UIIcon name="EditOutlined" />} onClick={openEdit}>编辑配置</Button>}
+                        </div>
+                    </div>
+                );
+            }
+
+            function renderResources() {
+                const s = detail && detail.service;
+                return (
+                    <div>
+                        <Space style={{ marginBottom: 10 }} size="large">
+                            <Statistic title="CPU" value={s ? (s.cpu || 0).toFixed(1) : '-'} suffix="%" valueStyle={{ fontSize: 22, color: '#1677ff' }} />
+                            <Statistic title="内存" value={s ? (s.memory_mb || 0).toFixed(1) : '-'} suffix="MB" valueStyle={{ fontSize: 22, color: '#52c41a' }} />
+                            <Statistic title="运行时间" value={s && s.uptime ? fmtUptime(s.uptime) : '-'} valueStyle={{ fontSize: 22 }} />
+                        </Space>
+                        <div ref={resRef} style={{ width: '100%', height: 260 }}></div>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>最近 30 次采样（每 3 秒），仅统计有 PID 的运行中进程。</Typography.Text>
+                    </div>
+                );
+            }
+
+            function renderServicePorts() {
+                const ports = (detail && detail.ports) || [];
+                return <Table size="small" rowKey={(r, i) => i} dataSource={ports} pagination={false}
+                    columns={[
+                        { title: '端口', dataIndex: 'port', width: 90, render: v => <Typography.Text code>{v}</Typography.Text> },
+                        { title: '协议', dataIndex: 'protocol', width: 80, render: v => <Tag color={v === 'tcp' ? 'blue' : 'purple'}>{v.toUpperCase()}</Tag> },
+                        { title: '监听地址', dataIndex: 'address' },
+                        { title: '暴露范围', dataIndex: 'exposure', width: 110, render: e => <span className="exp-cell">{exposureIcon(e)} {EXPOSE_TEXT[e] || e}</span> },
+                        { title: '状态', dataIndex: 'status', width: 100, render: v => v === 'BLOCKED' ? <Badge status="error" text="BLOCKED" /> : <Badge status="success" text="OPEN" /> }
+                    ]} locale={{ emptyText: <Empty description="该服务当前没有监听端口" image={Empty.PRESENTED_IMAGE_SIMPLE} /> }} />;
+            }
+
+            return (
+                <div>
+                    {!sysdAvailable && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="当前系统无法读取 systemd 服务列表"
+                        description={sysdError || '服务管理功能需要 Linux + systemd 环境。'} />}
+
+                    <div className="mini-grid">
+                        <div className="mini-stat"><div className="ms-label"><UIIcon name="AppstoreOutlined" />服务总数</div><div className="ms-value">{list.length}</div></div>
+                        <div className="mini-stat"><div className="ms-label"><UIIcon name="CaretUpOutlined" />运行中</div><div className="ms-value" style={{ color: '#52c41a' }}>{running}</div></div>
+                        <div className="mini-stat"><div className="ms-label"><UIIcon name="PoweroffOutlined" />已停止</div><div className="ms-value">{stopped}</div></div>
+                        <div className="mini-stat"><div className="ms-label"><UIIcon name="ExclamationCircleOutlined" />异常</div><div className="ms-value" style={{ color: '#ff4d4f' }}>{failed}</div></div>
+                        <div className="mini-stat"><div className="ms-label"><UIIcon name="RocketOutlined" />开机自启</div><div className="ms-value" style={{ color: '#1677ff' }}>{enabledCount}</div></div>
                     </div>
 
-                    {view === 'card' ? (
-                        filtered.length ? (
-                            <div className="svc-grid">
-                                {filtered.map(s => (
-                                    <Card key={s.name} size="small" bordered className="svc-card" onClick={() => openDetail(s)}>
-                                        <div className="svc-head">
-                                            <div className="svc-title">{s.display_name || s.name}</div>
-                                            {statusBadge(s.status)}
-                                        </div>
-                                        <div className="svc-sub">{s.name}{s.managed ? ' · ' + SOURCE_LABEL.created : ' · ' + (SOURCE_LABEL[s.source] || s.source)}</div>
-                                        <div className="svc-metrics">
-                                            <div className="svc-metric"><span>PID</span><b className="sec">{s.pid > 0 ? s.pid : '-'}</b></div>
-                                            <div className="svc-metric"><span>CPU</span><b>{s.cpu > 0 ? s.cpu.toFixed(1) + '%' : '-'}</b></div>
-                                            <div className="svc-metric"><span>内存</span><b>{s.memory_mb > 0 ? s.memory_mb.toFixed(1) + ' MB' : '-'}</b></div>
-                                            <div className="svc-metric"><span>运行时间</span><b>{fmtUptime(s.uptime)}</b></div>
-                                        </div>
-                                        <div className="svc-auto" onClick={e => e.stopPropagation()}>
-                                            <span>开机自启</span>
-                                            <Switch size="small" checked={!!s.enabled} disabled={!canManage}
-                                                loading={!!busy['enable:' + s.name] || !!busy['disable:' + s.name]}
-                                                onChange={v => runAction(s, v ? 'enable' : 'disable')} />
-                                        </div>
-                                        <Divider className="svc-divider" />
-                                        <div className="svc-actions" onClick={e => e.stopPropagation()}>
-                                            {svcButtons(s)}
-                                        </div>
-                                    </Card>
-                                ))}
+                    <Card size="small" style={{ marginBottom: 12 }}>
+                        <div className="toolbar">
+                            <div className="filter-wrap">
+                                <Segmented value={filter} onChange={setFilter} options={[
+                                    { label: '全部 ' + list.length, value: 'all' },
+                                    { label: '运行中 ' + running, value: 'running' },
+                                    { label: '已停止 ' + stopped, value: 'stopped' },
+                                    { label: '异常 ' + failed, value: 'failed' }
+                                ]} />
                             </div>
-                        ) : <Empty description={list.length ? '没有匹配的服务' : '暂无服务'} image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                    ) : (
-                        <Table size="small" rowKey="name" dataSource={filtered} columns={columns} loading={loading || refreshing}
-                               pagination={{ pageSize: 20, showSizeChanger: false }} scroll={{ x: 'max-content' }} />
-                    )}
-                </Card>
+                            <Input.Search allowClear placeholder="搜索服务名 / PID" className="toolbar-search" onChange={e => setSearch(e.target.value)} />
+                            <Segmented value={view} onChange={setView} options={[
+                                { label: <span><UIIcon name="AppstoreOutlined" /> 卡片</span>, value: 'card' },
+                                { label: <span><UIIcon name="UnorderedListOutlined" /> 列表</span>, value: 'list' }
+                            ]} />
+                            <Button icon={<UIIcon name="ReloadOutlined" />} loading={loading || refreshing} onClick={() => { setPaused(false); load(true); }}>刷新</Button>
+                            {canManage && <Button type="primary" icon={<UIIcon name="PlusOutlined" />} onClick={openCreate}>添加服务</Button>}
+                            <span className="toolbar-extra">{loadedAt ? '更新于 ' + loadedAt.toLocaleTimeString() : ''}</span>
+                        </div>
 
-                <Drawer title={detail ? (detail.service.display_name || detail.service.name) : '服务详情'} width={isMobile ? '100%' : 720}
+                        {view === 'card' ? (
+                            filtered.length ? (
+                                <div className="svc-grid">
+                                    {filtered.map(s => (
+                                        <Card key={s.name} size="small" bordered className="svc-card" onClick={() => openDetail(s)}>
+                                            <div className="svc-head">
+                                                <div className="svc-title">{s.display_name || s.name}</div>
+                                                {statusBadge(s.status)}
+                                            </div>
+                                            <div className="svc-sub">{s.name}{s.managed ? ' · ' + SOURCE_LABEL.created : ' · ' + (SOURCE_LABEL[s.source] || s.source)}</div>
+                                            <div className="svc-metrics">
+                                                <div className="svc-metric"><span>PID</span><b className="sec">{s.pid > 0 ? s.pid : '-'}</b></div>
+                                                <div className="svc-metric"><span>CPU</span><b>{s.cpu > 0 ? s.cpu.toFixed(1) + '%' : '-'}</b></div>
+                                                <div className="svc-metric"><span>内存</span><b>{s.memory_mb > 0 ? s.memory_mb.toFixed(1) + ' MB' : '-'}</b></div>
+                                                <div className="svc-metric"><span>运行时间</span><b>{fmtUptime(s.uptime)}</b></div>
+                                            </div>
+                                            <div className="svc-auto" onClick={e => e.stopPropagation()}>
+                                                <span>开机自启</span>
+                                                <Switch size="small" checked={!!s.enabled} disabled={!canManage}
+                                                    loading={!!busy['enable:' + s.name] || !!busy['disable:' + s.name]}
+                                                    onChange={v => runAction(s, v ? 'enable' : 'disable')} />
+                                            </div>
+                                            <Divider className="svc-divider" />
+                                            <div className="svc-actions" onClick={e => e.stopPropagation()}>
+                                                {svcButtons(s)}
+                                            </div>
+                                        </Card>
+                                    ))}
+                                </div>
+                            ) : <Empty description={list.length ? '没有匹配的服务' : '暂无服务'} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                        ) : (
+                            <Table size="small" rowKey="name" dataSource={filtered} columns={columns} loading={loading || refreshing}
+                                pagination={{ pageSize: 20, showSizeChanger: false }} scroll={{ x: 'max-content' }} />
+                        )}
+                    </Card>
+
+                    <Drawer title={detail ? (detail.service.display_name || detail.service.name) : '服务详情'} width={isMobile ? '100%' : 720}
                         open={drawerOpen} onClose={closeDrawer} footer={drawerFooter}
                         styles={{ body: { paddingTop: 8 } }}>
-                    {detail && <Tabs activeKey={detailTab} onChange={setDetailTab} items={drawerItems} />}
-                </Drawer>
+                        {detail && <Tabs activeKey={detailTab} onChange={setDetailTab} items={drawerItems} />}
+                    </Drawer>
 
-                <Modal title={editing ? '编辑服务' : '添加服务'} open={modalOpen} width={isMobile ? '100%' : 680}
-                       onCancel={() => setModalOpen(false)} onOk={submitService} confirmLoading={submitting}
-                       okText={editing ? '保存' : '创建并启动'} cancelText="取消" destroyOnClose>
-                    <Form form={form} layout="vertical" style={{ marginTop: 12 }}>
-                        <Divider orientation="left" style={{ marginTop: 0 }}>基础信息</Divider>
-                        <Row gutter={12}>
-                            <Col span={12}>
-                                <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
-                                    <Input disabled={!!editing} placeholder="douyin-upload" />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="display_name" label="显示名称">
-                                    <Input placeholder="Douyin Upload" />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                        <Form.Item name="description" label="描述">
-                            <Input placeholder="服务用途说明（可选）" />
-                        </Form.Item>
-                        <Row gutter={12}>
-                            <Col span={12}>
-                                <Form.Item name="exec_start" label="程序路径" rules={[{ required: true, message: '请输入程序路径' }]}>
-                                    <Input placeholder="/opt/server-status/douyin-upload" />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="working_dir" label="工作目录">
-                                    <Input placeholder="/opt/server-status/douyin" />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                        <Form.Item name="args" label="启动参数">
-                            <Input placeholder="--config /opt/server-status/config.yaml" />
-                        </Form.Item>
-                        <Row gutter={12}>
-                            <Col span={12}>
-                                <Form.Item name="user" label="运行用户">
-                                    <Input placeholder="root" />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="group" label="运行组">
-                                    <Input placeholder="root" />
-                                </Form.Item>
-                            </Col>
-                        </Row>
+                    <Modal title={editing ? '编辑服务' : '添加服务'} open={modalOpen} width={isMobile ? '100%' : 680}
+                        onCancel={() => setModalOpen(false)} onOk={submitService} confirmLoading={submitting}
+                        okText={editing ? '保存' : '创建并启动'} cancelText="取消" destroyOnClose>
+                        <Form form={form} layout="vertical" style={{ marginTop: 12 }}>
+                            <Divider orientation="left" style={{ marginTop: 0 }}>基础信息</Divider>
+                            <Row gutter={12}>
+                                <Col span={12}>
+                                    <Form.Item name="name" label="服务名称" rules={[{ required: true, message: '请输入服务名称' }]}>
+                                        <Input disabled={!!editing} placeholder="douyin-upload" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="display_name" label="显示名称">
+                                        <Input placeholder="Douyin Upload" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Form.Item name="description" label="描述">
+                                <Input placeholder="服务用途说明（可选）" />
+                            </Form.Item>
+                            <Row gutter={12}>
+                                <Col span={12}>
+                                    <Form.Item name="exec_start" label="程序路径" rules={[{ required: true, message: '请输入程序路径' }]}>
+                                        <Input placeholder="/opt/server-status/douyin-upload" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="working_dir" label="工作目录">
+                                        <Input placeholder="/opt/server-status/douyin" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Form.Item name="args" label="启动参数">
+                                <Input placeholder="--config /opt/server-status/config.yaml" />
+                            </Form.Item>
+                            <Row gutter={12}>
+                                <Col span={12}>
+                                    <Form.Item name="user" label="运行用户">
+                                        <Input placeholder="root" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="group" label="运行组">
+                                        <Input placeholder="root" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
 
-                        <Divider orientation="left">环境变量</Divider>
-                        <Form.List name="environment">
-                            {(fields, { add, remove }) => (
-                                <div>
-                                    {fields.map(field => (
-                                        <div key={field.key} style={{ marginBottom: 8 }}>
-                                            <Space.Compact style={{ width: '100%' }}>
-                                                <Form.Item name={[field.name, 'key']} noStyle rules={[{ required: true, message: '键名' }]}>
-                                                    <Input placeholder="KEY" style={{ width: '35%' }} />
-                                                </Form.Item>
-                                                <Form.Item name={[field.name, 'value']} noStyle>
-                                                    <Input placeholder="VALUE" style={{ width: '55%' }} />
-                                                </Form.Item>
-                                                <Button danger icon={<UIIcon name="DeleteOutlined" />} onClick={() => remove(field.name)} style={{ width: '10%' }} />
-                                            </Space.Compact>
-                                        </div>
-                                    ))}
-                                    <Button type="dashed" block icon={<UIIcon name="PlusOutlined" />} onClick={() => add({ key: '', value: '' })}>添加环境变量</Button>
-                                </div>
-                            )}
-                        </Form.List>
+                            <Divider orientation="left">环境变量</Divider>
+                            <Form.List name="environment">
+                                {(fields, { add, remove }) => (
+                                    <div>
+                                        {fields.map(field => (
+                                            <div key={field.key} style={{ marginBottom: 8 }}>
+                                                <Space.Compact style={{ width: '100%' }}>
+                                                    <Form.Item name={[field.name, 'key']} noStyle rules={[{ required: true, message: '键名' }]}>
+                                                        <Input placeholder="KEY" style={{ width: '35%' }} />
+                                                    </Form.Item>
+                                                    <Form.Item name={[field.name, 'value']} noStyle>
+                                                        <Input placeholder="VALUE" style={{ width: '55%' }} />
+                                                    </Form.Item>
+                                                    <Button danger icon={<UIIcon name="DeleteOutlined" />} onClick={() => remove(field.name)} style={{ width: '10%' }} />
+                                                </Space.Compact>
+                                            </div>
+                                        ))}
+                                        <Button type="dashed" block icon={<UIIcon name="PlusOutlined" />} onClick={() => add({ key: '', value: '' })}>添加环境变量</Button>
+                                    </div>
+                                )}
+                            </Form.List>
 
-                        <Divider orientation="left">启动策略</Divider>
-                        <Row gutter={12}>
-                            <Col span={8}>
-                                <Form.Item name="auto_start" label="开机自启" valuePropName="checked">
-                                    <Switch checkedChildren="ON" unCheckedChildren="OFF" />
-                                </Form.Item>
-                            </Col>
-                            <Col span={8}>
-                                <Form.Item name="auto_restart" label="自动重启" valuePropName="checked">
-                                    <Switch checkedChildren="ON" unCheckedChildren="OFF" />
-                                </Form.Item>
-                            </Col>
-                            <Col span={8}>
-                                <Form.Item name="start_now" label="创建后立即启动" valuePropName="checked" hidden={!!editing}>
-                                    <Switch checkedChildren="ON" unCheckedChildren="OFF" />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                        <Row gutter={12}>
-                            <Col span={12}>
-                                <Form.Item name="restart" label="Restart 策略" rules={[{ required: true }]}>
-                                    <Select options={[
-                                        { label: 'always - 总是重启', value: 'always' },
-                                        { label: 'on-failure - 失败时重启', value: 'on-failure' },
-                                        { label: 'no - 不自动重启', value: 'no' }
-                                    ]} />
-                                </Form.Item>
-                            </Col>
-                            <Col span={12}>
-                                <Form.Item name="restart_sec" label="RestartSec（秒）">
-                                    <InputNumber min={0} max={3600} style={{ width: '100%' }} />
-                                </Form.Item>
-                            </Col>
-                        </Row>
+                            <Divider orientation="left">启动策略</Divider>
+                            <Row gutter={12}>
+                                <Col span={8}>
+                                    <Form.Item name="auto_start" label="开机自启" valuePropName="checked">
+                                        <Switch checkedChildren="ON" unCheckedChildren="OFF" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="auto_restart" label="自动重启" valuePropName="checked">
+                                        <Switch checkedChildren="ON" unCheckedChildren="OFF" />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="start_now" label="创建后立即启动" valuePropName="checked" hidden={!!editing}>
+                                        <Switch checkedChildren="ON" unCheckedChildren="OFF" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Row gutter={12}>
+                                <Col span={12}>
+                                    <Form.Item name="restart" label="Restart 策略" rules={[{ required: true }]}>
+                                        <Select options={[
+                                            { label: 'always - 总是重启', value: 'always' },
+                                            { label: 'on-failure - 失败时重启', value: 'on-failure' },
+                                            { label: 'no - 不自动重启', value: 'no' }
+                                        ]} />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={12}>
+                                    <Form.Item name="restart_sec" label="RestartSec（秒）">
+                                        <InputNumber min={0} max={3600} style={{ width: '100%' }} />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
 
-                        <Collapse items={[{
-                            key: 'adv',
-                            label: '高级设置',
-                            children: (
-                                <Row gutter={12}>
-                                    <Col span={12}>
-                                        <Form.Item name="timeout_start_sec" label="TimeoutStartSec">
-                                            <InputNumber min={0} max={86400} style={{ width: '100%' }} placeholder="默认 90s" />
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Form.Item name="timeout_stop_sec" label="TimeoutStopSec">
-                                            <InputNumber min={0} max={86400} style={{ width: '100%' }} placeholder="默认 90s" />
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Form.Item name="limit_nofile" label="LimitNOFILE">
-                                            <InputNumber min={0} max={1048576} style={{ width: '100%' }} placeholder="默认 1024" />
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={12}>
-                                        <Form.Item name="nice" label="Nice">
-                                            <InputNumber min={-20} max={19} style={{ width: '100%' }} />
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={24}>
-                                        <Form.Item name="exec_start_pre" label="ExecStartPre（每行一条，绝对路径开头）">
-                                            <Input.TextArea rows={2} placeholder={'/bin/mkdir -p /run/app\n/bin/chown root:root /run/app'} />
-                                        </Form.Item>
-                                    </Col>
-                                    <Col span={24}>
-                                        <Form.Item name="exec_stop" label="ExecStop（每行一条，绝对路径开头）">
-                                            <Input.TextArea rows={2} placeholder={'/bin/kill -TERM $MAINPID'} />
-                                        </Form.Item>
-                                    </Col>
-                                </Row>
-                            )
-                        }]} />
-                    </Form>
-                </Modal>
-            </div>
-        );
-    }
-
-    // ==================== 端口 Tab ====================
-    const exposureIcon = (e) => {
-        const map = { public: <UIIcon name="GlobalOutlined" />, private: <UIIcon name="HomeOutlined" />, local: <UIIcon name="LockOutlined" /> };
-        return map[e] || null;
-    };
-
-    function PortsTab({ isDark, canManage, onViewService, deepPort }) {
-        const [data, setData] = useState({ ports: [], firewall: { provider: '', available: false, blocked: [], rules: [] }, changes: [] });
-        const [loading, setLoading] = useState(true);
-        const [refreshing, setRefreshing] = useState(false);
-        const [loadedAt, setLoadedAt] = useState(null);
-        const [paused, setPaused] = useState(false);
-        const [filter, setFilter] = useState('all');
-        const [search, setSearch] = useState('');
-        const [drawerOpen, setDrawerOpen] = useState(false);
-        const [portDetail, setPortDetail] = useState(null);
-        const [fwBusy, setFwBusy] = useState(false);
-        const [ruleModal, setRuleModal] = useState(false);
-        const [ruleSubmitting, setRuleSubmitting] = useState(false);
-        const [ruleForm] = Form.useForm();
-        const isMobile = useIsMobile();
-
-        const load = useCallback(async (manual) => {
-            if (manual) setRefreshing(true);
-            try {
-                const r = await secureFetch(baseUrl + '/api/ports');
-                const d = await r.json();
-                if (d.code === 200) {
-                    setData(d.data || { ports: [], firewall: { blocked: [], rules: [] }, changes: [] });
-                    setLoadedAt(new Date());
-                    setPaused(false);
-                } else if (d.code === 403 || r.status === 403) {
-                    setPaused(true);
-                    message.error('访问被拦截（403），已暂停自动刷新，请稍后点击「刷新」重试');
-                } else {
-                    message.error(d.message || '加载端口失败');
-                }
-            } catch (e) {
-                message.error('加载端口失败: ' + e.message);
-            } finally {
-                setLoading(false);
-                setRefreshing(false);
-            }
-        }, []);
-
-        useEffect(() => {
-            load();
-            if (paused) return;
-            const t = setInterval(() => load(), 20000);
-            return () => clearInterval(t);
-        }, [load, paused]);
-
-        // 页面切到后台时暂停自动刷新，回到前台立即恢复
-        useEffect(() => {
-            const onVis = () => {
-                if (document.hidden) setPaused(true);
-                else { setPaused(false); load(); }
-            };
-            document.addEventListener('visibilitychange', onVis);
-            return () => document.removeEventListener('visibilitychange', onVis);
-        }, [load]);
-
-        const loadPortDetail = async (port, proto) => {
-            try {
-                const r = await secureFetch(baseUrl + '/api/ports/' + port + '?protocol=' + proto);
-                const d = await r.json();
-                if (d.code === 200) {
-                    setPortDetail(d.data);
-                    setDrawerOpen(true);
-                } else {
-                    message.error(d.message || '端口详情加载失败');
-                }
-            } catch (e) {
-                message.error('端口详情加载失败: ' + e.message);
-            }
-        };
-
-        // 深链：从进程页跳转打开端口详情
-        useEffect(() => {
-            if (deepPort && deepPort.port > 0) {
-                loadPortDetail(deepPort.port, deepPort.proto || 'tcp');
-            }
-        }, [deepPort]);
-
-        const confirmFirewall = (p) => {
-            const blocked = (data.firewall.blocked || []).includes(p.port + '/' + p.protocol);
-            Modal.confirm({
-                title: blocked ? '开放公网访问？' : '关闭公网访问？',
-                okText: blocked ? '确认开放' : '确认',
-                okButtonProps: { danger: !blocked },
-                cancelText: '取消',
-                content: (
-                    <div style={{ marginTop: 8 }}>
-                        <div>当前：<Typography.Text code>{p.address + ':' + p.port}</Typography.Text></div>
-                        <div style={{ marginTop: 8 }}>动作：防火墙{blocked ? '放行' : '阻止'} {String(p.protocol || 'tcp').toUpperCase()} {p.port}</div>
-                        <div style={{ marginTop: 4 }}>应用：立即生效</div>
-                        <Divider style={{ margin: '12px 0' }} />
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                            注意：这是防火墙层面的操作，程序仍会继续运行并监听端口。如需彻底停止端口，请停止对应服务。
-                        </Typography.Text>
-                    </div>
-                ),
-                onOk: () => doFirewall(p, blocked ? 'open' : 'close')
-            });
-        };
-
-        const doFirewall = async (p, action) => {
-            setFwBusy(true);
-            try {
-                const r = await secureFetch(baseUrl + '/api/ports/' + p.port + '/' + action, {
-                    method: 'POST', body: JSON.stringify({ protocol: p.protocol })
-                });
-                const d = await r.json();
-                if (d.code === 200) {
-                    message.success(action === 'close' ? '已阻断公网访问' : '已开放公网访问');
-                    load();
-                    if (portDetail && portDetail.port === p.port && portDetail.protocol === p.protocol) {
-                        setPortDetail({ ...portDetail, status: action === 'close' ? 'BLOCKED' : 'OPEN' });
-                    }
-                } else {
-                    message.error(d.message || '操作失败');
-                }
-            } catch (e) {
-                message.error('操作失败: ' + e.message);
-            } finally {
-                setFwBusy(false);
-            }
-        };
-
-        const createRule = async () => {
-            try {
-                const v = await ruleForm.validateFields();
-                setRuleSubmitting(true);
-                const r = await secureFetch(baseUrl + '/api/ports/rules', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        port: v.port, protocol: v.protocol, source: v.source,
-                        source_value: v.source_value || '', action: v.action, enabled: true
-                    })
-                });
-                const d = await r.json();
-                if (d.code === 200) {
-                    message.success('规则已添加');
-                    setRuleModal(false);
-                    ruleForm.resetFields();
-                    load();
-                } else {
-                    message.error(d.message || '添加规则失败');
-                }
-            } catch (e) {
-                if (e && e.errorFields) return;
-                message.error('添加规则失败: ' + (e && e.message || ''));
-            } finally {
-                setRuleSubmitting(false);
-            }
-        };
-
-        const deleteRule = async (rule) => {
-            try {
-                const r = await secureFetch(baseUrl + '/api/ports/rules/' + rule.id, { method: 'DELETE' });
-                const d = await r.json();
-                if (d.code === 200) {
-                    message.success('规则已删除');
-                    load();
-                } else {
-                    message.error(d.message || '删除规则失败');
-                }
-            } catch (e) {
-                message.error('删除规则失败: ' + e.message);
-            }
-        };
-
-        const ports = data.ports || [];
-        const tcpCount = ports.filter(p => p.protocol === 'tcp').length;
-        const udpCount = ports.filter(p => p.protocol === 'udp').length;
-        const publicCount = ports.filter(p => p.exposure === 'public').length;
-        const privateCount = ports.filter(p => p.exposure === 'private').length;
-        const localCount = ports.filter(p => p.exposure === 'local').length;
-        const fw = data.firewall || {};
-        const changes = data.changes || [];
-        const rules = fw.rules || [];
-        const blockedKeys = fw.blocked || [];
-
-        const filtered = ports.filter(p => {
-            if (filter === 'public' && p.exposure !== 'public') return false;
-            if (filter === 'private' && p.exposure !== 'private') return false;
-            if (filter === 'tcp' && p.protocol !== 'tcp') return false;
-            if (filter === 'udp' && p.protocol !== 'udp') return false;
-            const q = search.trim().toLowerCase();
-            if (q) {
-                return String(p.port).includes(q) ||
-                       (p.process || '').toLowerCase().includes(q) ||
-                       (p.service || '').toLowerCase().includes(q) ||
-                       (p.address || '').toLowerCase().includes(q);
-            }
-            return true;
-        });
-
-        const handlePortMenu = ({ key }, p) => {
-            const blocked = blockedKeys.includes(p.port + '/' + p.protocol);
-            if (key === 'detail') loadPortDetail(p.port, p.protocol);
-            else if (key === 'process') window.open(baseUrl + '/process.html', '_blank');
-            else if (key === 'service' && p.service) onViewService(p.service);
-            else if (key === 'close' || key === 'open') confirmFirewall(p);
-            else if (key === 'blocked') message.info(blocked ? '该端口已被防火墙阻断' : '该端口当前开放');
-        };
-
-        const moreMenu = (p) => {
-            const blocked = blockedKeys.includes(p.port + '/' + p.protocol);
-            const items = [
-                { key: 'detail', label: '详情', icon: <UIIcon name="ProfileOutlined" /> },
-                { key: 'process', label: '查看进程', icon: <UIIcon name="DesktopOutlined" /> }
-            ];
-            if (p.service) items.push({ key: 'service', label: '查看服务', icon: <UIIcon name="AppstoreOutlined" /> });
-            if (canManage && fw.available) {
-                items.push({ type: 'divider' });
-                items.push(blocked
-                    ? { key: 'open', label: '开放公网访问', icon: <UIIcon name="CloudUploadOutlined" /> }
-                    : { key: 'close', label: '关闭公网访问', danger: true, icon: <UIIcon name="CloudOffOutlined" /> });
-            }
-            return { items, onClick: ({ key }) => handlePortMenu({ key }, p) };
-        };
-
-        const columns = [
-            { title: '端口', dataIndex: 'port', width: 90, render: (v, r) => <Typography.Link code onClick={() => loadPortDetail(v, r.protocol)}>{v}</Typography.Link> },
-            { title: '协议', dataIndex: 'protocol', width: 80, render: v => <Tag color={v === 'tcp' ? 'blue' : 'purple'} style={{ marginRight: 0 }}>{v.toUpperCase()}</Tag> },
-            { title: '监听地址', dataIndex: 'address', width: 150, render: v => <Typography.Text code style={{ fontSize: 12 }}>{v || '-'}</Typography.Text> },
-            { title: '服务', dataIndex: 'service', width: 140, render: (v) => v
-                ? <Button type="link" size="small" style={{ padding: 0 }} onClick={() => onViewService(v)}>{v}</Button>
-                : <Typography.Text type="secondary">未知</Typography.Text> },
-            { title: '进程', dataIndex: 'process', width: 130, ellipsis: true, render: v => v || '-' },
-            { title: 'PID', dataIndex: 'pid', width: 80, render: v => v > 0 ? <Typography.Text type="secondary" code style={{ fontSize: 12 }}>{v}</Typography.Text> : '-' },
-            { title: '暴露范围', dataIndex: 'exposure', width: 110, render: (e) => (
-                <span className={'exp-cell exp-' + e} style={{ color: e === 'public' ? '#fa541c' : e === 'private' ? '#2f54eb' : '#8c8c8c' }}>
-                    {exposureIcon(e)} {EXPOSE_TEXT[e] || e}
-                </span>
-            ) },
-            { title: '状态', dataIndex: 'status', width: 100, render: v => v === 'BLOCKED' ? <Badge status="error" text="BLOCKED" /> : <Badge status="success" text="OPEN" /> },
-            { title: '操作', key: 'op', width: 80, fixed: 'right', render: (_, p) => (
-                <Dropdown menu={moreMenu(p)} trigger={['click']}>
-                    <Button size="small" icon={<UIIcon name="MoreOutlined" />} />
-                </Dropdown>
-            ) }
-        ];
-
-        const latestChangeTime = changes.length ? new Date(changes[0].time).toLocaleTimeString() : null;
-
-        return (
-            <div>
-                {!fw.available && <Alert type="info" showIcon style={{ marginBottom: 12 }}
-                    message="未检测到受支持的防火墙"
-                    description="端口开放/关闭功能需要 firewalld、nftables 或 iptables（当前仅展示监听信息）。" />}
-
-                <div className="mini-grid">
-                    <div className="mini-stat"><div className="ms-label"><UIIcon name="ApiOutlined" />监听端口</div><div className="ms-value">{ports.length}</div></div>
-                    <div className="mini-stat"><div className="ms-label"><UIIcon name="BarsOutlined" />TCP</div><div className="ms-value" style={{ color: '#1677ff' }}>{tcpCount}</div></div>
-                    <div className="mini-stat"><div className="ms-label"><UIIcon name="ShareAltOutlined" />UDP</div><div className="ms-value" style={{ color: '#722ed1' }}>{udpCount}</div></div>
-                    <div className="mini-stat"><div className="ms-label"><UIIcon name="GlobalOutlined" />公网</div><div className="ms-value" style={{ color: publicCount > 0 ? '#fa8c16' : undefined }}>{publicCount}</div></div>
-                    <div className="mini-stat"><div className="ms-label"><UIIcon name="HomeOutlined" />内网</div><div className="ms-value">{privateCount}</div></div>
-                    <div className="mini-stat"><div className="ms-label"><UIIcon name="LockOutlined" />本机</div><div className="ms-value">{localCount}</div></div>
+                            <Collapse items={[{
+                                key: 'adv',
+                                label: '高级设置',
+                                children: (
+                                    <Row gutter={12}>
+                                        <Col span={12}>
+                                            <Form.Item name="timeout_start_sec" label="TimeoutStartSec">
+                                                <InputNumber min={0} max={86400} style={{ width: '100%' }} placeholder="默认 90s" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item name="timeout_stop_sec" label="TimeoutStopSec">
+                                                <InputNumber min={0} max={86400} style={{ width: '100%' }} placeholder="默认 90s" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item name="limit_nofile" label="LimitNOFILE">
+                                                <InputNumber min={0} max={1048576} style={{ width: '100%' }} placeholder="默认 1024" />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={12}>
+                                            <Form.Item name="nice" label="Nice">
+                                                <InputNumber min={-20} max={19} style={{ width: '100%' }} />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={24}>
+                                            <Form.Item name="exec_start_pre" label="ExecStartPre（每行一条，绝对路径开头）">
+                                                <Input.TextArea rows={2} placeholder={'/bin/mkdir -p /run/app\n/bin/chown root:root /run/app'} />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col span={24}>
+                                            <Form.Item name="exec_stop" label="ExecStop（每行一条，绝对路径开头）">
+                                                <Input.TextArea rows={2} placeholder={'/bin/kill -TERM $MAINPID'} />
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                )
+                            }]} />
+                        </Form>
+                    </Modal>
                 </div>
+            );
+        }
 
-                <Row gutter={12}>
-                    <Col xs={24} lg={17}>
-                        <Card title={<Space size={6}><UIIcon name="BarsOutlined" />端口列表（{filtered.length}）</Space>} size="small" style={{ marginBottom: 12 }}>
-                            <div className="toolbar">
-                                <div className="filter-wrap">
-                                    <Segmented value={filter} onChange={setFilter} options={[
-                                        { label: '全部', value: 'all' },
-                                        { label: '公网', value: 'public' },
-                                        { label: '内网', value: 'private' },
-                                        { label: 'TCP', value: 'tcp' },
-                                        { label: 'UDP', value: 'udp' }
-                                    ]} />
+        // ==================== 端口 Tab ====================
+        const exposureIcon = (e) => {
+            const map = { public: <UIIcon name="GlobalOutlined" />, private: <UIIcon name="HomeOutlined" />, local: <UIIcon name="LockOutlined" /> };
+            return map[e] || null;
+        };
+
+        function PortsTab({ isDark, canManage, onViewService, deepPort }) {
+            const [data, setData] = useState({ ports: [], firewall: { provider: '', available: false, blocked: [], rules: [] }, changes: [] });
+            const [loading, setLoading] = useState(true);
+            const [refreshing, setRefreshing] = useState(false);
+            const [loadedAt, setLoadedAt] = useState(null);
+            const [paused, setPaused] = useState(false);
+            const [filter, setFilter] = useState('all');
+            const [search, setSearch] = useState('');
+            const [drawerOpen, setDrawerOpen] = useState(false);
+            const [portDetail, setPortDetail] = useState(null);
+            const [fwBusy, setFwBusy] = useState(false);
+            const [ruleModal, setRuleModal] = useState(false);
+            const [ruleSubmitting, setRuleSubmitting] = useState(false);
+            const [ruleForm] = Form.useForm();
+            const isMobile = useIsMobile();
+
+            const load = useCallback(async (manual) => {
+                if (manual) setRefreshing(true);
+                try {
+                    const r = await secureFetch(baseUrl + '/api/ports');
+                    const d = await r.json();
+                    if (d.code === 200) {
+                        setData(d.data || { ports: [], firewall: { blocked: [], rules: [] }, changes: [] });
+                        setLoadedAt(new Date());
+                        setPaused(false);
+                    } else if (d.code === 403 || r.status === 403) {
+                        setPaused(true);
+                        message.error('访问被拦截（403），已暂停自动刷新，请稍后点击「刷新」重试');
+                    } else {
+                        message.error(d.message || '加载端口失败');
+                    }
+                } catch (e) {
+                    message.error('加载端口失败: ' + e.message);
+                } finally {
+                    setLoading(false);
+                    setRefreshing(false);
+                }
+            }, []);
+
+            useEffect(() => {
+                load();
+                if (paused) return;
+                const t = setInterval(() => load(), 20000);
+                return () => clearInterval(t);
+            }, [load, paused]);
+
+            // 页面切到后台时暂停自动刷新，回到前台立即恢复
+            useEffect(() => {
+                const onVis = () => {
+                    if (document.hidden) setPaused(true);
+                    else { setPaused(false); load(); }
+                };
+                document.addEventListener('visibilitychange', onVis);
+                return () => document.removeEventListener('visibilitychange', onVis);
+            }, [load]);
+
+            const loadPortDetail = async (port, proto) => {
+                try {
+                    const r = await secureFetch(baseUrl + '/api/ports/' + port + '?protocol=' + proto);
+                    const d = await r.json();
+                    if (d.code === 200) {
+                        setPortDetail(d.data);
+                        setDrawerOpen(true);
+                    } else {
+                        message.error(d.message || '端口详情加载失败');
+                    }
+                } catch (e) {
+                    message.error('端口详情加载失败: ' + e.message);
+                }
+            };
+
+            // 深链：从进程页跳转打开端口详情
+            useEffect(() => {
+                if (deepPort && deepPort.port > 0) {
+                    loadPortDetail(deepPort.port, deepPort.proto || 'tcp');
+                }
+            }, [deepPort]);
+
+            const confirmFirewall = (p) => {
+                const blocked = (data.firewall.blocked || []).includes(p.port + '/' + p.protocol);
+                Modal.confirm({
+                    title: blocked ? '开放公网访问？' : '关闭公网访问？',
+                    okText: blocked ? '确认开放' : '确认',
+                    okButtonProps: { danger: !blocked },
+                    cancelText: '取消',
+                    content: (
+                        <div style={{ marginTop: 8 }}>
+                            <div>当前：<Typography.Text code>{p.address + ':' + p.port}</Typography.Text></div>
+                            <div style={{ marginTop: 8 }}>动作：防火墙{blocked ? '放行' : '阻止'} {String(p.protocol || 'tcp').toUpperCase()} {p.port}</div>
+                            <div style={{ marginTop: 4 }}>应用：立即生效</div>
+                            <Divider style={{ margin: '12px 0' }} />
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                注意：这是防火墙层面的操作，程序仍会继续运行并监听端口。如需彻底停止端口，请停止对应服务。
+                            </Typography.Text>
+                        </div>
+                    ),
+                    onOk: () => doFirewall(p, blocked ? 'open' : 'close')
+                });
+            };
+
+            const doFirewall = async (p, action) => {
+                setFwBusy(true);
+                try {
+                    const r = await secureFetch(baseUrl + '/api/ports/' + p.port + '/' + action, {
+                        method: 'POST', body: JSON.stringify({ protocol: p.protocol })
+                    });
+                    const d = await r.json();
+                    if (d.code === 200) {
+                        message.success(action === 'close' ? '已阻断公网访问' : '已开放公网访问');
+                        load();
+                        if (portDetail && portDetail.port === p.port && portDetail.protocol === p.protocol) {
+                            setPortDetail({ ...portDetail, status: action === 'close' ? 'BLOCKED' : 'OPEN' });
+                        }
+                    } else {
+                        message.error(d.message || '操作失败');
+                    }
+                } catch (e) {
+                    message.error('操作失败: ' + e.message);
+                } finally {
+                    setFwBusy(false);
+                }
+            };
+
+            const createRule = async () => {
+                try {
+                    const v = await ruleForm.validateFields();
+                    setRuleSubmitting(true);
+                    const r = await secureFetch(baseUrl + '/api/ports/rules', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            port: v.port, protocol: v.protocol, source: v.source,
+                            source_value: v.source_value || '', action: v.action, enabled: true
+                        })
+                    });
+                    const d = await r.json();
+                    if (d.code === 200) {
+                        message.success('规则已添加');
+                        setRuleModal(false);
+                        ruleForm.resetFields();
+                        load();
+                    } else {
+                        message.error(d.message || '添加规则失败');
+                    }
+                } catch (e) {
+                    if (e && e.errorFields) return;
+                    message.error('添加规则失败: ' + (e && e.message || ''));
+                } finally {
+                    setRuleSubmitting(false);
+                }
+            };
+
+            const deleteRule = async (rule) => {
+                try {
+                    const r = await secureFetch(baseUrl + '/api/ports/rules/' + rule.id, { method: 'DELETE' });
+                    const d = await r.json();
+                    if (d.code === 200) {
+                        message.success('规则已删除');
+                        load();
+                    } else {
+                        message.error(d.message || '删除规则失败');
+                    }
+                } catch (e) {
+                    message.error('删除规则失败: ' + e.message);
+                }
+            };
+
+            const ports = data.ports || [];
+            const tcpCount = ports.filter(p => p.protocol === 'tcp').length;
+            const udpCount = ports.filter(p => p.protocol === 'udp').length;
+            const publicCount = ports.filter(p => p.exposure === 'public').length;
+            const privateCount = ports.filter(p => p.exposure === 'private').length;
+            const localCount = ports.filter(p => p.exposure === 'local').length;
+            const fw = data.firewall || {};
+            const changes = data.changes || [];
+            const rules = fw.rules || [];
+            const blockedKeys = fw.blocked || [];
+
+            const filtered = ports.filter(p => {
+                if (filter === 'public' && p.exposure !== 'public') return false;
+                if (filter === 'private' && p.exposure !== 'private') return false;
+                if (filter === 'tcp' && p.protocol !== 'tcp') return false;
+                if (filter === 'udp' && p.protocol !== 'udp') return false;
+                const q = search.trim().toLowerCase();
+                if (q) {
+                    return String(p.port).includes(q) ||
+                        (p.process || '').toLowerCase().includes(q) ||
+                        (p.service || '').toLowerCase().includes(q) ||
+                        (p.address || '').toLowerCase().includes(q);
+                }
+                return true;
+            });
+
+            const handlePortMenu = ({ key }, p) => {
+                const blocked = blockedKeys.includes(p.port + '/' + p.protocol);
+                if (key === 'detail') loadPortDetail(p.port, p.protocol);
+                else if (key === 'process') window.open(baseUrl + '/process.html', '_blank');
+                else if (key === 'service' && p.service) onViewService(p.service);
+                else if (key === 'close' || key === 'open') confirmFirewall(p);
+                else if (key === 'blocked') message.info(blocked ? '该端口已被防火墙阻断' : '该端口当前开放');
+            };
+
+            const moreMenu = (p) => {
+                const blocked = blockedKeys.includes(p.port + '/' + p.protocol);
+                const items = [
+                    { key: 'detail', label: '详情', icon: <UIIcon name="ProfileOutlined" /> },
+                    { key: 'process', label: '查看进程', icon: <UIIcon name="DesktopOutlined" /> }
+                ];
+                if (p.service) items.push({ key: 'service', label: '查看服务', icon: <UIIcon name="AppstoreOutlined" /> });
+                if (canManage && fw.available) {
+                    items.push({ type: 'divider' });
+                    items.push(blocked
+                        ? { key: 'open', label: '开放公网访问', icon: <UIIcon name="CloudUploadOutlined" /> }
+                        : { key: 'close', label: '关闭公网访问', danger: true, icon: <UIIcon name="CloudOffOutlined" /> });
+                }
+                return { items, onClick: ({ key }) => handlePortMenu({ key }, p) };
+            };
+
+            const columns = [
+                { title: '端口', dataIndex: 'port', width: 90, render: (v, r) => <Typography.Link code onClick={() => loadPortDetail(v, r.protocol)}>{v}</Typography.Link> },
+                { title: '协议', dataIndex: 'protocol', width: 80, render: v => <Tag color={v === 'tcp' ? 'blue' : 'purple'} style={{ marginRight: 0 }}>{v.toUpperCase()}</Tag> },
+                { title: '监听地址', dataIndex: 'address', width: 150, render: v => <Typography.Text code style={{ fontSize: 12 }}>{v || '-'}</Typography.Text> },
+                {
+                    title: '服务', dataIndex: 'service', width: 140, render: (v) => v
+                        ? <Button type="link" size="small" style={{ padding: 0 }} onClick={() => onViewService(v)}>{v}</Button>
+                        : <Typography.Text type="secondary">未知</Typography.Text>
+                },
+                { title: '进程', dataIndex: 'process', width: 130, ellipsis: true, render: v => v || '-' },
+                { title: 'PID', dataIndex: 'pid', width: 80, render: v => v > 0 ? <Typography.Text type="secondary" code style={{ fontSize: 12 }}>{v}</Typography.Text> : '-' },
+                {
+                    title: '暴露范围', dataIndex: 'exposure', width: 110, render: (e) => (
+                        <span className={'exp-cell exp-' + e} style={{ color: e === 'public' ? '#fa541c' : e === 'private' ? '#2f54eb' : '#8c8c8c' }}>
+                            {exposureIcon(e)} {EXPOSE_TEXT[e] || e}
+                        </span>
+                    )
+                },
+                { title: '状态', dataIndex: 'status', width: 100, render: v => v === 'BLOCKED' ? <Badge status="error" text="BLOCKED" /> : <Badge status="success" text="OPEN" /> },
+                {
+                    title: '操作', key: 'op', width: 80, fixed: 'right', render: (_, p) => (
+                        <Dropdown menu={moreMenu(p)} trigger={['click']}>
+                            <Button size="small" icon={<UIIcon name="MoreOutlined" />} />
+                        </Dropdown>
+                    )
+                }
+            ];
+
+            const latestChangeTime = changes.length ? new Date(changes[0].time).toLocaleTimeString() : null;
+
+            return (
+                <div>
+                    {!fw.available && <Alert type="info" showIcon style={{ marginBottom: 12 }}
+                        message="未检测到受支持的防火墙"
+                        description="端口开放/关闭功能需要 firewalld、nftables 或 iptables（当前仅展示监听信息）。" />}
+
+                    <div className="mini-grid">
+                        <div className="mini-stat"><div className="ms-label"><UIIcon name="ApiOutlined" />监听端口</div><div className="ms-value">{ports.length}</div></div>
+                        <div className="mini-stat"><div className="ms-label"><UIIcon name="BarsOutlined" />TCP</div><div className="ms-value" style={{ color: '#1677ff' }}>{tcpCount}</div></div>
+                        <div className="mini-stat"><div className="ms-label"><UIIcon name="ShareAltOutlined" />UDP</div><div className="ms-value" style={{ color: '#722ed1' }}>{udpCount}</div></div>
+                        <div className="mini-stat"><div className="ms-label"><UIIcon name="GlobalOutlined" />公网</div><div className="ms-value" style={{ color: publicCount > 0 ? '#fa8c16' : undefined }}>{publicCount}</div></div>
+                        <div className="mini-stat"><div className="ms-label"><UIIcon name="HomeOutlined" />内网</div><div className="ms-value">{privateCount}</div></div>
+                        <div className="mini-stat"><div className="ms-label"><UIIcon name="LockOutlined" />本机</div><div className="ms-value">{localCount}</div></div>
+                    </div>
+
+                    <Row gutter={12}>
+                        <Col xs={24} lg={17}>
+                            <Card title={<Space size={6}><UIIcon name="BarsOutlined" />端口列表（{filtered.length}）</Space>} size="small" style={{ marginBottom: 12 }}>
+                                <div className="toolbar">
+                                    <div className="filter-wrap">
+                                        <Segmented value={filter} onChange={setFilter} options={[
+                                            { label: '全部', value: 'all' },
+                                            { label: '公网', value: 'public' },
+                                            { label: '内网', value: 'private' },
+                                            { label: 'TCP', value: 'tcp' },
+                                            { label: 'UDP', value: 'udp' }
+                                        ]} />
+                                    </div>
+                                    <Input.Search allowClear placeholder="搜索端口 / 服务 / 进程 / 地址" className="toolbar-search" onChange={e => setSearch(e.target.value)} />
+                                    <Button icon={<UIIcon name="ReloadOutlined" />} loading={loading || refreshing} onClick={() => { setPaused(false); load(true); }}>刷新</Button>
+                                    <span className="toolbar-extra">{loadedAt ? '更新于 ' + loadedAt.toLocaleTimeString() : ''}</span>
                                 </div>
-                                <Input.Search allowClear placeholder="搜索端口 / 服务 / 进程 / 地址" className="toolbar-search" onChange={e => setSearch(e.target.value)} />
-                                <Button icon={<UIIcon name="ReloadOutlined" />} loading={loading || refreshing} onClick={() => { setPaused(false); load(true); }}>刷新</Button>
-                                <span className="toolbar-extra">{loadedAt ? '更新于 ' + loadedAt.toLocaleTimeString() : ''}</span>
-                            </div>
-                            <Table size="small" rowKey={(r, i) => i} dataSource={filtered} columns={columns} loading={loading || refreshing}
-                                   pagination={{ pageSize: 15, showSizeChanger: false }} scroll={{ x: 'max-content' }} />
-                        </Card>
+                                <Table size="small" rowKey={(r, i) => i} dataSource={filtered} columns={columns} loading={loading || refreshing}
+                                    pagination={{ pageSize: 15, showSizeChanger: false }} scroll={{ x: 'max-content' }} />
+                            </Card>
 
-                        <Card id="port-rules" title={<Space size={6}><UIIcon name="SafetyCertificateOutlined" />端口规则</Space>}
-                              size="small" extra={canManage && <Button type="primary" size="small" icon={<UIIcon name="PlusOutlined" />} onClick={() => setRuleModal(true)}>添加规则</Button>}
-                              style={{ marginBottom: 12 }}>
-                            {rules.length ? rules.map(r => (
-                                <div key={r.id} className="rule-row">
-                                    <Typography.Text code>{r.port}/{r.protocol}</Typography.Text>
-                                    <Tag style={{ marginRight: 0 }}>{({ public: '公网', private: '局域网', local: '本机', ip: 'IP ' + r.source_value, network: '网段 ' + r.source_value })[r.source] || r.source}</Tag>
-                                    <Tag color={r.action === 'accept' ? 'green' : 'red'} style={{ marginRight: 0 }}>{r.action === 'accept' ? 'ACCEPT' : 'BLOCK'}</Tag>
-                                    <div style={{ flex: 1 }} />
-                                    {canManage && <Popconfirm title="删除规则？" description="将从防火墙移除该规则。" okText="删除" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => deleteRule(r)}>
-                                        <Button size="small" danger type="text" icon={<UIIcon name="DeleteOutlined" />}>删除</Button>
-                                    </Popconfirm>}
+                            <Card id="port-rules" title={<Space size={6}><UIIcon name="SafetyCertificateOutlined" />端口规则</Space>}
+                                size="small" extra={canManage && <Button type="primary" size="small" icon={<UIIcon name="PlusOutlined" />} onClick={() => setRuleModal(true)}>添加规则</Button>}
+                                style={{ marginBottom: 12 }}>
+                                {rules.length ? rules.map(r => (
+                                    <div key={r.id} className="rule-row">
+                                        <Typography.Text code>{r.port}/{r.protocol}</Typography.Text>
+                                        <Tag style={{ marginRight: 0 }}>{({ public: '公网', private: '局域网', local: '本机', ip: 'IP ' + r.source_value, network: '网段 ' + r.source_value })[r.source] || r.source}</Tag>
+                                        <Tag color={r.action === 'accept' ? 'green' : 'red'} style={{ marginRight: 0 }}>{r.action === 'accept' ? 'ACCEPT' : 'BLOCK'}</Tag>
+                                        <div style={{ flex: 1 }} />
+                                        {canManage && <Popconfirm title="删除规则？" description="将从防火墙移除该规则。" okText="删除" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => deleteRule(r)}>
+                                            <Button size="small" danger type="text" icon={<UIIcon name="DeleteOutlined" />}>删除</Button>
+                                        </Popconfirm>}
+                                    </div>
+                                )) : <Empty description="暂无端口规则" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
+                            </Card>
+                        </Col>
+
+                        <Col xs={24} lg={7}>
+                            <Card title={<Space size={6}><UIIcon name="HistoryOutlined" />最近变化</Space>}
+                                size="small" extra={<Button size="small" type="text" icon={<UIIcon name="ReloadOutlined" />} onClick={load} />}
+                                style={{ marginBottom: 12 }}>
+                                {changes.length ? (
+                                    <Timeline items={changes.slice(0, 10).map(c => ({
+                                        color: c.type === 'added' ? 'green' : 'red',
+                                        children: (
+                                            <div>
+                                                <div className="tl-main"><b>{c.type === 'added' ? '+' : '-'}</b> {c.port} {String(c.protocol || '').toUpperCase()} {c.type === 'added' ? '开放' : '关闭'}</div>
+                                                <div className="tl-sub">{c.process || c.address || '未知进程'}</div>
+                                                <div className="tl-time">{new Date(c.time).toLocaleTimeString()}</div>
+                                            </div>
+                                        )
+                                    }))} />
+                                ) : (
+                                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span>暂无变化<br />最近一次检查：{loadedAt ? loadedAt.toLocaleTimeString() : '—'}</span>} style={{ margin: '18px 0' }} />
+                                )}
+                            </Card>
+
+                            <Card title={<Space size={6}><UIIcon name="SafetyOutlined" />防火墙</Space>} size="small">
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span className="fw-name">{fw.provider || '未知'}</span>
+                                    <Badge status={fw.available ? 'success' : 'default'} text={fw.available ? 'Active' : '不可用'} />
                                 </div>
-                            )) : <Empty description="暂无端口规则" image={Empty.PRESENTED_IMAGE_SIMPLE} />}
-                        </Card>
-                    </Col>
+                                <div className="fw-grid">
+                                    <div><span>已阻断</span><b>{(blockedKeys || []).length}</b></div>
+                                    <div><span>允许规则</span><b>{(rules || []).length}</b></div>
+                                    <div><span>最近变化</span><b style={{ fontSize: 14 }}>{latestChangeTime || '—'}</b></div>
+                                </div>
+                                <Button block icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => {
+                                    const el = document.getElementById('port-rules');
+                                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                }}>查看规则</Button>
+                            </Card>
+                        </Col>
+                    </Row>
 
-                    <Col xs={24} lg={7}>
-                        <Card title={<Space size={6}><UIIcon name="HistoryOutlined" />最近变化</Space>}
-                              size="small" extra={<Button size="small" type="text" icon={<UIIcon name="ReloadOutlined" />} onClick={load} />}
-                              style={{ marginBottom: 12 }}>
-                            {changes.length ? (
-                                <Timeline items={changes.slice(0, 10).map(c => ({
-                                    color: c.type === 'added' ? 'green' : 'red',
-                                    children: (
-                                        <div>
-                                            <div className="tl-main"><b>{c.type === 'added' ? '+' : '-'}</b> {c.port} {String(c.protocol || '').toUpperCase()} {c.type === 'added' ? '开放' : '关闭'}</div>
-                                            <div className="tl-sub">{c.process || c.address || '未知进程'}</div>
-                                            <div className="tl-time">{new Date(c.time).toLocaleTimeString()}</div>
-                                        </div>
-                                    )
-                                }))} />
-                            ) : (
-                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span>暂无变化<br />最近一次检查：{loadedAt ? loadedAt.toLocaleTimeString() : '—'}</span>} style={{ margin: '18px 0' }} />
-                            )}
-                        </Card>
-
-                        <Card title={<Space size={6}><UIIcon name="SafetyOutlined" />防火墙</Space>} size="small">
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <span className="fw-name">{fw.provider || '未知'}</span>
-                                <Badge status={fw.available ? 'success' : 'default'} text={fw.available ? 'Active' : '不可用'} />
-                            </div>
-                            <div className="fw-grid">
-                                <div><span>已阻断</span><b>{(blockedKeys || []).length}</b></div>
-                                <div><span>允许规则</span><b>{(rules || []).length}</b></div>
-                                <div><span>最近变化</span><b style={{ fontSize: 14 }}>{latestChangeTime || '—'}</b></div>
-                            </div>
-                            <Button block icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => {
-                                const el = document.getElementById('port-rules');
-                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            }}>查看规则</Button>
-                        </Card>
-                    </Col>
-                </Row>
-
-                <Drawer title={portDetail ? portDetail.port + ' / ' + (portDetail.protocol || 'tcp').toUpperCase() : '端口详情'}
+                    <Drawer title={portDetail ? portDetail.port + ' / ' + (portDetail.protocol || 'tcp').toUpperCase() : '端口详情'}
                         width={isMobile ? '100%' : 560} open={drawerOpen} onClose={() => setDrawerOpen(false)}
                         footer={portDetail && (
                             <Space wrap>
@@ -1312,247 +1841,251 @@
                                     portDetail.status === 'BLOCKED'
                                         ? <Button icon={<UIIcon name="CloudUploadOutlined" />} loading={fwBusy} onClick={() => doFirewall(portDetail, 'open')}>开放公网访问</Button>
                                         : <Popconfirm title="关闭公网访问？"
-                                              description={'通过防火墙阻止 ' + String(portDetail.protocol || 'tcp').toUpperCase() + ' ' + portDetail.port + '，程序仍会运行，立即生效。'}
-                                              okText="确认" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => doFirewall(portDetail, 'close')}>
-                                              <Button danger icon={<UIIcon name="CloudOffOutlined" />} loading={fwBusy}>关闭公网访问</Button>
-                                          </Popconfirm>
+                                            description={'通过防火墙阻止 ' + String(portDetail.protocol || 'tcp').toUpperCase() + ' ' + portDetail.port + '，程序仍会运行，立即生效。'}
+                                            okText="确认" okButtonProps={{ danger: true }} cancelText="取消" onConfirm={() => doFirewall(portDetail, 'close')}>
+                                            <Button danger icon={<UIIcon name="CloudOffOutlined" />} loading={fwBusy}>关闭公网访问</Button>
+                                        </Popconfirm>
                                 )}
                             </Space>
                         )}>
-                    {portDetail && (
-                        <div>
-                            <div style={{ marginBottom: 4 }}>
-                                {portDetail.status === 'BLOCKED' ? <Badge status="error" text="BLOCKED（防火墙阻断）" /> : <Badge status="success" text="OPEN" />}
+                        {portDetail && (
+                            <div>
+                                <div style={{ marginBottom: 4 }}>
+                                    {portDetail.status === 'BLOCKED' ? <Badge status="error" text="BLOCKED（防火墙阻断）" /> : <Badge status="success" text="OPEN" />}
+                                </div>
+
+                                <div className="port-sect-title"><UIIcon name="AppstoreOutlined" />服务信息</div>
+                                <Descriptions size="small" column={1} items={[
+                                    {
+                                        key: 'svc', label: '所属服务', children: portDetail.service
+                                            ? <Button type="link" size="small" style={{ padding: 0 }} onClick={() => { setDrawerOpen(false); onViewService(portDetail.service); }}>{portDetail.service}</Button>
+                                            : '未知'
+                                    },
+                                    { key: 'unit', label: 'Systemd', children: portDetail.service ? <Typography.Text code style={{ fontSize: 12 }}>{portDetail.service + '.service'}</Typography.Text> : '-' }
+                                ]} />
+
+                                <div className="port-sect-title"><UIIcon name="DesktopOutlined" />进程信息</div>
+                                <Descriptions size="small" column={1} items={[
+                                    { key: 'proc', label: '进程', children: portDetail.process || '-' },
+                                    { key: 'pid', label: 'PID', children: portDetail.pid > 0 ? <Typography.Text copyable code>{portDetail.pid}</Typography.Text> : '-' },
+                                    { key: 'exe', label: '程序路径', children: <Typography.Text code style={{ fontSize: 12 }}>{portDetail.executable || '-'}</Typography.Text> },
+                                    { key: 'cmd', label: '命令行', children: <Typography.Text code style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{portDetail.command || '-'}</Typography.Text> }
+                                ]} />
+
+                                <div className="port-sect-title"><UIIcon name="GlobalOutlined" />网络信息</div>
+                                <Descriptions size="small" column={1} items={[
+                                    { key: 'listen', label: '监听地址', children: <Typography.Text code>{(portDetail.address || '0.0.0.0') + ':' + portDetail.port}</Typography.Text> },
+                                    { key: 'exp', label: '暴露范围', children: <span className={'exp-cell exp-' + portDetail.exposure} style={{ color: portDetail.exposure === 'public' ? '#fa541c' : portDetail.exposure === 'private' ? '#2f54eb' : '#8c8c8c' }}>{exposureIcon(portDetail.exposure)} {EXPOSE_TEXT[portDetail.exposure] || portDetail.exposure}</span> },
+                                    { key: 'conn', label: '当前连接', children: portDetail.connections || 0 }
+                                ]} />
+
+                                <div className="port-sect-title"><UIIcon name="SafetyOutlined" />防火墙信息</div>
+                                <Descriptions size="small" column={1} items={[
+                                    { key: 'st', label: '端口状态', children: portDetail.status === 'BLOCKED' ? <Badge status="error" text="BLOCKED" /> : <Badge status="success" text="OPEN" /> },
+                                    { key: 'prov', label: '防火墙提供者', children: fw.provider || '-' },
+                                    { key: 'tip', label: '说明', children: <Typography.Text type="secondary" style={{ fontSize: 12 }}>防火墙阻断 ≠ 停止服务，程序仍在运行并监听端口。</Typography.Text> }
+                                ]} />
+
+                                <Alert type="warning" showIcon style={{ marginTop: 14 }} message="关闭公网访问的三种方式"
+                                    description={<div style={{ fontSize: 12, lineHeight: 1.8 }}>
+                                        ① 停止服务：程序停止，端口自然不再监听。<br />
+                                        ② 防火墙阻断：程序继续运行，但外部流量被防火墙丢弃（本页面操作）。<br />
+                                        ③ 修改监听地址：如从 0.0.0.0 改为 192.168.x.x，仅局域网可访问。
+                                    </div>} />
                             </div>
+                        )}
+                    </Drawer>
 
-                            <div className="port-sect-title"><UIIcon name="AppstoreOutlined" />服务信息</div>
-                            <Descriptions size="small" column={1} items={[
-                                { key: 'svc', label: '所属服务', children: portDetail.service
-                                    ? <Button type="link" size="small" style={{ padding: 0 }} onClick={() => { setDrawerOpen(false); onViewService(portDetail.service); }}>{portDetail.service}</Button>
-                                    : '未知' },
-                                { key: 'unit', label: 'Systemd', children: portDetail.service ? <Typography.Text code style={{ fontSize: 12 }}>{portDetail.service + '.service'}</Typography.Text> : '-' }
-                            ]} />
-
-                            <div className="port-sect-title"><UIIcon name="DesktopOutlined" />进程信息</div>
-                            <Descriptions size="small" column={1} items={[
-                                { key: 'proc', label: '进程', children: portDetail.process || '-' },
-                                { key: 'pid', label: 'PID', children: portDetail.pid > 0 ? <Typography.Text copyable code>{portDetail.pid}</Typography.Text> : '-' },
-                                { key: 'exe', label: '程序路径', children: <Typography.Text code style={{ fontSize: 12 }}>{portDetail.executable || '-'}</Typography.Text> },
-                                { key: 'cmd', label: '命令行', children: <Typography.Text code style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{portDetail.command || '-'}</Typography.Text> }
-                            ]} />
-
-                            <div className="port-sect-title"><UIIcon name="GlobalOutlined" />网络信息</div>
-                            <Descriptions size="small" column={1} items={[
-                                { key: 'listen', label: '监听地址', children: <Typography.Text code>{(portDetail.address || '0.0.0.0') + ':' + portDetail.port}</Typography.Text> },
-                                { key: 'exp', label: '暴露范围', children: <span className={'exp-cell exp-' + portDetail.exposure} style={{ color: portDetail.exposure === 'public' ? '#fa541c' : portDetail.exposure === 'private' ? '#2f54eb' : '#8c8c8c' }}>{exposureIcon(portDetail.exposure)} {EXPOSE_TEXT[portDetail.exposure] || portDetail.exposure}</span> },
-                                { key: 'conn', label: '当前连接', children: portDetail.connections || 0 }
-                            ]} />
-
-                            <div className="port-sect-title"><UIIcon name="SafetyOutlined" />防火墙信息</div>
-                            <Descriptions size="small" column={1} items={[
-                                { key: 'st', label: '端口状态', children: portDetail.status === 'BLOCKED' ? <Badge status="error" text="BLOCKED" /> : <Badge status="success" text="OPEN" /> },
-                                { key: 'prov', label: '防火墙提供者', children: fw.provider || '-' },
-                                { key: 'tip', label: '说明', children: <Typography.Text type="secondary" style={{ fontSize: 12 }}>防火墙阻断 ≠ 停止服务，程序仍在运行并监听端口。</Typography.Text> }
-                            ]} />
-
-                            <Alert type="warning" showIcon style={{ marginTop: 14 }} message="关闭公网访问的三种方式"
-                                description={<div style={{ fontSize: 12, lineHeight: 1.8 }}>
-                                    ① 停止服务：程序停止，端口自然不再监听。<br />
-                                    ② 防火墙阻断：程序继续运行，但外部流量被防火墙丢弃（本页面操作）。<br />
-                                    ③ 修改监听地址：如从 0.0.0.0 改为 192.168.x.x，仅局域网可访问。
-                                </div>} />
-                        </div>
-                    )}
-                </Drawer>
-
-                <Modal title="添加端口规则" open={ruleModal} onCancel={() => setRuleModal(false)} onOk={createRule}
-                       confirmLoading={ruleSubmitting} okText="添加规则" cancelText="取消">
-                    <Form form={ruleForm} layout="vertical" style={{ marginTop: 12 }}>
-                        <Row gutter={12}>
-                            <Col span={8}>
-                                <Form.Item name="port" label="端口" rules={[{ required: true, message: '请输入端口' }]}>
-                                    <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-                                </Form.Item>
-                            </Col>
-                            <Col span={8}>
-                                <Form.Item name="protocol" label="协议" initialValue="tcp" rules={[{ required: true }]}>
-                                    <Select options={[{ label: 'TCP', value: 'tcp' }, { label: 'UDP', value: 'udp' }]} />
-                                </Form.Item>
-                            </Col>
-                            <Col span={8}>
-                                <Form.Item name="action" label="动作" initialValue="block" rules={[{ required: true }]}>
-                                    <Select options={[{ label: 'ACCEPT 放行', value: 'accept' }, { label: 'BLOCK 阻断', value: 'block' }]} />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                        <Form.Item name="source" label="访问来源" initialValue="public" rules={[{ required: true }]}>
-                            <Select options={[
-                                { label: '公网', value: 'public' },
-                                { label: '仅局域网（10/8、172.16/12、192.168/16）', value: 'private' },
-                                { label: '仅本机', value: 'local' },
-                                { label: '指定 IP', value: 'ip' },
-                                { label: '指定网段', value: 'network' }
-                            ]} />
-                        </Form.Item>
-                        <Form.Item noStyle shouldUpdate={(p, c) => p.source !== c.source}>
-                            {({ getFieldValue }) => (getFieldValue('source') === 'ip' || getFieldValue('source') === 'network') ? (
-                                <Form.Item name="source_value" label={getFieldValue('source') === 'ip' ? 'IP 地址' : '网段（CIDR）'}
-                                           rules={[{ required: true, message: '请输入' }]}>
-                                    <Input placeholder={getFieldValue('source') === 'ip' ? '1.2.3.4' : '192.168.1.0/24'} />
-                                </Form.Item>
-                            ) : null}
-                        </Form.Item>
-                    </Form>
-                </Modal>
-            </div>
-        );
-    }
-
-    // ==================== 页面 ====================
-    function App() {
-        const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
-        const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
-        const [tab, setTab] = useState('services');
-        const [svcDetail, setSvcDetail] = useState(null);
-        const [deepPort, setDeepPort] = useState(null);
-
-        const hasPerm = p => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
-        const canViewServices = hasPerm('service:view');
-        const canManageServices = hasPerm('service:manage');
-        const canDeleteServices = hasPerm('service:delete');
-        const canViewPorts = hasPerm('port:view');
-        const canManagePorts = hasPerm('port:manage');
-
-        useEffect(() => {
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
-            document.documentElement.classList.toggle('dark', isDark);
-            document.body.classList.toggle('dark', isDark);
-            document.body.style.background = isDark ? '#141414' : '#f5f5f5';
-        }, [isDark]);
-
-        // 深链：?svc=服务名 / ?port=端口&proto=tcp
-        useEffect(() => {
-            const p = new URLSearchParams(window.location.search);
-            const svc = p.get('svc');
-            const port = p.get('port');
-            if (svc) { setTab('services'); setSvcDetail(svc); }
-            if (port) {
-                setTab('ports');
-                setDeepPort({ port: parseInt(port, 10) || 0, proto: p.get('proto') || 'tcp' });
-            }
-        }, []);
-
-        useEffect(() => {
-            secureFetch(baseUrl + '/check-auth')
-                .then(r => r.json())
-                .then(d => {
-                    if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
-                    else window.location.href = 'index.html';
-                })
-                .catch(() => { window.location.href = 'index.html'; });
-        }, []);
-
-        if (auth.loading) {
-            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
-                <Card loading style={{ width: 320 }} />
-            </div>;
-        }
-
-        if (!canViewServices && !canViewPorts) {
-            return <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
-                <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
-                    <Card style={{ width: 400, textAlign: 'center' }}>
-                        <div style={{ fontSize: 40, marginBottom: 8 }}><UIIcon name="StopOutlined" /></div>
-                        <Typography.Title level={4}>没有访问权限</Typography.Title>
-                        <Typography.Text type="secondary">当前账号没有「查看服务与端口」相关权限，请联系管理员开通。</Typography.Text>
-                        <div style={{ marginTop: 16 }}>
-                            <Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>
-                        </div>
-                    </Card>
+                    <Modal title="添加端口规则" open={ruleModal} onCancel={() => setRuleModal(false)} onOk={createRule}
+                        confirmLoading={ruleSubmitting} okText="添加规则" cancelText="取消">
+                        <Form form={ruleForm} layout="vertical" style={{ marginTop: 12 }}>
+                            <Row gutter={12}>
+                                <Col span={8}>
+                                    <Form.Item name="port" label="端口" rules={[{ required: true, message: '请输入端口' }]}>
+                                        <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="protocol" label="协议" initialValue="tcp" rules={[{ required: true }]}>
+                                        <Select options={[{ label: 'TCP', value: 'tcp' }, { label: 'UDP', value: 'udp' }]} />
+                                    </Form.Item>
+                                </Col>
+                                <Col span={8}>
+                                    <Form.Item name="action" label="动作" initialValue="block" rules={[{ required: true }]}>
+                                        <Select options={[{ label: 'ACCEPT 放行', value: 'accept' }, { label: 'BLOCK 阻断', value: 'block' }]} />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
+                            <Form.Item name="source" label="访问来源" initialValue="public" rules={[{ required: true }]}>
+                                <Select options={[
+                                    { label: '公网', value: 'public' },
+                                    { label: '仅局域网（10/8、172.16/12、192.168/16）', value: 'private' },
+                                    { label: '仅本机', value: 'local' },
+                                    { label: '指定 IP', value: 'ip' },
+                                    { label: '指定网段', value: 'network' }
+                                ]} />
+                            </Form.Item>
+                            <Form.Item noStyle shouldUpdate={(p, c) => p.source !== c.source}>
+                                {({ getFieldValue }) => (getFieldValue('source') === 'ip' || getFieldValue('source') === 'network') ? (
+                                    <Form.Item name="source_value" label={getFieldValue('source') === 'ip' ? 'IP 地址' : '网段（CIDR）'}
+                                        rules={[{ required: true, message: '请输入' }]}>
+                                        <Input placeholder={getFieldValue('source') === 'ip' ? '1.2.3.4' : '192.168.1.0/24'} />
+                                    </Form.Item>
+                                ) : null}
+                            </Form.Item>
+                        </Form>
+                    </Modal>
                 </div>
-            </ConfigProvider>;
+            );
         }
 
-        const tabItems = [];
-        if (canViewServices) {
-            tabItems.push({
-                key: 'services',
-                label: <span><UIIcon name="AppstoreOutlined" />服务</span>,
-                children: <ServicesTab isDark={isDark} canManage={canManageServices} canDelete={canDeleteServices}
-                                       detailName={svcDetail} onDetail={setSvcDetail} />
-            });
-        }
-        if (canViewPorts) {
-            tabItems.push({
-                key: 'ports',
-                label: <span><UIIcon name="ApiOutlined" />端口</span>,
-                children: <PortsTab isDark={isDark} canManage={canManagePorts}
-                                    deepPort={deepPort}
-                                    onViewService={(name) => { if (canViewServices) { setTab('services'); setSvcDetail(name); } }} />
-            });
-        }
+        // ==================== 页面 ====================
+        function App() {
+            const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const [tab, setTab] = useState('services');
+            const [svcDetail, setSvcDetail] = useState(null);
+            const [deepPort, setDeepPort] = useState(null);
 
-        return (
-            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
-                <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', background: 'var(--bg)' }}>
-                    <div className={'topbar' + (isDark ? ' dark' : '')}>
-                        <div className="brand">
-                            <span className="logo"><UIIcon name="ControlOutlined" /></span>
-                            <span>
-                                <span className="bt-name">Server Status</span>
-                                <span className="bt-sub">/ 服务与端口</span>
-                            </span>
-                        </div>
-                        <Space>
-                            <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>
-                            <Button icon={<UIIcon name="GlobalOutlined" />} onClick={() => window.location.href = 'ip-panel.html'}><span className="tb-text">IP 流量</span></Button>
-                            <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
-                                <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
-                            </Tooltip>
-                            <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}><span className="tb-text">退出</span></Button>
-                        </Space>
-                    </div>
-                    <div className="page-wrap">
-                        <Tabs className="biz-tabs" activeKey={tab} onChange={setTab} items={tabItems} />
-                    </div>
-                </div>
-            </ConfigProvider>
-        );
-    }
+            const hasPerm = p => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+            const canViewServices = hasPerm('service:view');
+            const canManageServices = hasPerm('service:manage');
+            const canDeleteServices = hasPerm('service:delete');
+            const canViewPorts = hasPerm('port:view');
+            const canManagePorts = hasPerm('port:manage');
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-</script>
-<script>
-    (function () {
-        function openPrivateSpace() {
-            try {
-                fetch('/api/private/entry', { method: 'POST', credentials: 'include' })
-                    .catch(function () {})
-                    .finally(function () { window.location.href = 'private.html'; });
-            } catch (e) { window.location.href = 'private.html'; }
-        }
-        var taps = [], lastTap = 0;
-        document.addEventListener('keydown', function (e) {
-            if (e.ctrlKey && e.shiftKey && e.altKey && (e.key === 'N' || e.key === 'n')) {
-                e.preventDefault();
-                openPrivateSpace();
-            }
-        });
-        document.addEventListener('click', function (e) {
-            var el = e.target;
-            while (el && el !== document.documentElement) {
-                if (el.classList && (el.classList.contains('logo') || el.classList.contains('brand'))) {
-                    var now = Date.now();
-                    if (now - lastTap > 3000) taps = [];
-                    lastTap = now;
-                    taps.push(now);
-                    if (taps.length >= 5) { taps = []; openPrivateSpace(); }
-                    return;
+            useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+            }, [isDark]);
+
+            // 深链：?svc=服务名 / ?port=端口&proto=tcp
+            useEffect(() => {
+                const p = new URLSearchParams(window.location.search);
+                const svc = p.get('svc');
+                const port = p.get('port');
+                if (svc) { setTab('services'); setSvcDetail(svc); }
+                if (port) {
+                    setTab('ports');
+                    setDeepPort({ port: parseInt(port, 10) || 0, proto: p.get('proto') || 'tcp' });
                 }
-                el = el.parentElement;
+            }, []);
+
+            useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
+                        else window.location.href = 'index.html';
+                    })
+                    .catch(() => { window.location.href = 'index.html'; });
+            }, []);
+
+            if (auth.loading) {
+                return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
+                    <Card loading style={{ width: 320 }} />
+                </div>;
             }
-        });
-    })();
-</script>
+
+            if (!canViewServices && !canViewPorts) {
+                return <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <Card style={{ width: 400, textAlign: 'center' }}>
+                            <div style={{ fontSize: 40, marginBottom: 8 }}><UIIcon name="StopOutlined" /></div>
+                            <Typography.Title level={4}>没有访问权限</Typography.Title>
+                            <Typography.Text type="secondary">当前账号没有「查看服务与端口」相关权限，请联系管理员开通。</Typography.Text>
+                            <div style={{ marginTop: 16 }}>
+                                <Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>
+                            </div>
+                        </Card>
+                    </div>
+                </ConfigProvider>;
+            }
+
+            const tabItems = [];
+            if (canViewServices) {
+                tabItems.push({
+                    key: 'services',
+                    label: <span><UIIcon name="AppstoreOutlined" />服务</span>,
+                    children: <ServicesTab isDark={isDark} canManage={canManageServices} canDelete={canDeleteServices}
+                        detailName={svcDetail} onDetail={setSvcDetail} />
+                });
+            }
+            if (canViewPorts) {
+                tabItems.push({
+                    key: 'ports',
+                    label: <span><UIIcon name="ApiOutlined" />端口</span>,
+                    children: <PortsTab isDark={isDark} canManage={canManagePorts}
+                        deepPort={deepPort}
+                        onViewService={(name) => { if (canViewServices) { setTab('services'); setSvcDetail(name); } }} />
+                });
+            }
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+                        <div className={'topbar' + (isDark ? ' dark' : '')}>
+                            <div className="brand">
+                                <span className="logo"><UIIcon name="ControlOutlined" /></span>
+                                <span>
+                                    <span className="bt-name">Server Status</span>
+                                    <span className="bt-sub">/ 服务与端口</span>
+                                </span>
+                            </div>
+                            <Space>
+                                <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>
+                                <Button icon={<UIIcon name="GlobalOutlined" />} onClick={() => window.location.href = 'ip-panel.html'}><span className="tb-text">IP 流量</span></Button>
+                                <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                                    <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                                </Tooltip>
+                                <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}><span className="tb-text">退出</span></Button>
+                            </Space>
+                        </div>
+                        <div className="page-wrap">
+                            <Tabs className="biz-tabs" activeKey={tab} onChange={setTab} items={tabItems} />
+                        </div>
+                    </div>
+                </ConfigProvider>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+    <script>
+        (function () {
+            function getCsrfToken() { var m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+            function openPrivateSpace() {
+                try {
+                    fetch('/api/private/entry', { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() }, credentials: 'include' })
+                        .catch(function () { })
+                        .finally(function () { window.location.href = 'private.html'; });
+                } catch (e) { window.location.href = 'private.html'; }
+            }
+            var taps = [], lastTap = 0;
+            document.addEventListener('keydown', function (e) {
+                if (e.ctrlKey && e.shiftKey && e.altKey && (e.key === 'N' || e.key === 'n')) {
+                    e.preventDefault();
+                    openPrivateSpace();
+                }
+            });
+            document.addEventListener('click', function (e) {
+                var el = e.target;
+                while (el && el !== document.documentElement) {
+                    if (el.classList && (el.classList.contains('logo') || el.classList.contains('brand'))) {
+                        var now = Date.now();
+                        if (now - lastTap > 3000) taps = [];
+                        lastTap = now;
+                        taps.push(now);
+                        if (taps.length >= 5) { taps = []; openPrivateSpace(); }
+                        return;
+                    }
+                    el = el.parentElement;
+                }
+            });
+        })();
+    </script>
 </body>
+
 </html>

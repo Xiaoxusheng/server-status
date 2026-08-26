@@ -45,6 +45,7 @@ func TestPrivateHTTPFlow(t *testing.T) {
 	userManager.Sessions[sid] = &Session{
 		SessionID: sid, Username: "admin", CreatedAt: time.Now(),
 		LastAccess: time.Now(), ExpiresAt: time.Now().Add(time.Hour),
+		CSRFToken: testCSRFToken,
 	}
 	userManager.Unlock()
 
@@ -62,13 +63,9 @@ func TestPrivateHTTPFlow(t *testing.T) {
 		if body != "" {
 			r.Header.Set("Content-Type", "application/json")
 		}
-		ts := strconv.FormatInt(time.Now().Unix(), 10)
-		nonce := "testnonce" + ts
-		pathOnly := strings.Split(path, "?")[0]
-		r.Header.Set("X-Timestamp", ts)
-		r.Header.Set("X-Nonce", nonce)
-		r.Header.Set("X-Signature", generateHMACSignature(ts+"|"+nonce+"|"+pathOnly+"|"+securityToken))
-		cookies = append(cookies, "session_id="+sid)
+		// 会话 + CSRF（Double-Submit：携 csrf_token Cookie 与 X-CSRF-Token 头）
+		r.Header.Set(csrfHeaderName, testCSRFToken)
+		cookies = append(cookies, "session_id="+sid, "csrf_token="+testCSRFToken)
 		if privateCookie != "" {
 			cookies = append(cookies, "private_session="+privateCookie)
 		}
@@ -97,10 +94,6 @@ func TestPrivateHTTPFlow(t *testing.T) {
 	r.Header.Set("Accept", "application/json")
 	r.Header.Set("Accept-Language", "zh-CN")
 	r.Header.Set("Accept-Encoding", "gzip")
-	ts := strconv.FormatInt(time.Now().Unix(), 10)
-	r.Header.Set("X-Timestamp", ts)
-	r.Header.Set("X-Nonce", "n")
-	r.Header.Set("X-Signature", generateHMACSignature(ts+"|n|/api/private/session|"+securityToken))
 	if rec := do(r); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("未登录应返回 401, got %d", rec.Code)
 	}
@@ -167,11 +160,8 @@ func TestPrivateHTTPFlow(t *testing.T) {
 	upReq.Header.Set("Accept", "*/*")
 	upReq.Header.Set("Accept-Language", "zh-CN")
 	upReq.Header.Set("Accept-Encoding", "gzip")
-	upReq.Header.Set("Cookie", "session_id="+sid+"; private_session="+privateCookie)
-	ts2 := strconv.FormatInt(time.Now().Unix(), 10)
-	upReq.Header.Set("X-Timestamp", ts2)
-	upReq.Header.Set("X-Nonce", "up1")
-	upReq.Header.Set("X-Signature", generateHMACSignature(ts2+"|up1|/api/private/notes/"+noteID+"/images|"+securityToken))
+	upReq.Header.Set("Cookie", "session_id="+sid+"; csrf_token="+testCSRFToken+"; private_session="+privateCookie)
+	upReq.Header.Set(csrfHeaderName, testCSRFToken)
 	rec = do(upReq)
 	d = decode(rec)
 	if d["code"].(float64) != 200 {
@@ -321,7 +311,7 @@ func TestPrivateAPINeedsDoubleAuth(t *testing.T) {
 
 	sid := "auth-test-session"
 	userManager.Lock()
-	userManager.Sessions[sid] = &Session{SessionID: sid, Username: "admin", CreatedAt: time.Now(), LastAccess: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}
+	userManager.Sessions[sid] = &Session{SessionID: sid, Username: "admin", CreatedAt: time.Now(), LastAccess: time.Now(), ExpiresAt: time.Now().Add(time.Hour), CSRFToken: testCSRFToken}
 	userManager.Unlock()
 
 	r := httptest.NewRequest("GET", "/api/private/notes", nil)
@@ -330,10 +320,6 @@ func TestPrivateAPINeedsDoubleAuth(t *testing.T) {
 	r.Header.Set("Accept-Language", "zh-CN")
 	r.Header.Set("Accept-Encoding", "gzip")
 	r.Header.Set("Cookie", "session_id="+sid)
-	ts := strconv.FormatInt(time.Now().Unix(), 10)
-	r.Header.Set("X-Timestamp", ts)
-	r.Header.Set("X-Nonce", "n1")
-	r.Header.Set("X-Signature", generateHMACSignature(ts+"|n1|/api/private/notes|"+securityToken))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, r)
 	if rec.Code != http.StatusForbidden {
@@ -388,10 +374,6 @@ func TestPrivatePageEntryGate(t *testing.T) {
 	r3.Header.Set("Accept", "application/json")
 	r3.Header.Set("Accept-Language", "zh-CN")
 	r3.Header.Set("Accept-Encoding", "gzip")
-	ts := strconv.FormatInt(time.Now().Unix(), 10)
-	r3.Header.Set("X-Timestamp", ts)
-	r3.Header.Set("X-Nonce", "n2")
-	r3.Header.Set("X-Signature", generateHMACSignature(ts+"|n2|/api/private/entry|"+securityToken))
 	rec3 := httptest.NewRecorder()
 	mux.ServeHTTP(rec3, r3)
 	if rec3.Code != http.StatusUnauthorized {

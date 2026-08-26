@@ -601,9 +601,9 @@ func decodeBase64Image(data string) ([]byte, error) {
 	return raw, nil
 }
 
-// hmacSign 分享密码校验 Cookie 签名
+// hmacSign 分享密码校验 Cookie 签名（仅服务端持有密钥，绝不暴露给浏览器）
 func hmacSign(payload string) string {
-	m := hmac.New(sha256.New, []byte(securityToken))
+	m := hmac.New(sha256.New, []byte(serverSigningKey))
 	m.Write([]byte(payload))
 	return hex.EncodeToString(m.Sum(nil))
 }

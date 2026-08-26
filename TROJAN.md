@@ -139,51 +139,49 @@ go test -v ./...
 
 ## 7. 如何测试 Web API
 
-所有接口都要求登录 + `trojan:manage` 权限 + HMAC 签名头（前端 `secureFetch` 自动附加）。
-带 Cookie 的 curl 示例（先登录拿到 `session_id`）：
+所有接口都要求登录 session + `trojan:manage` 权限；写操作（POST/PUT/DELETE）还需 CSRF
+校验（Double-Submit：请求头 `X-CSRF-Token` 必须等于登录会话绑定的 `csrf_token` Cookie）。
+> 不再使用浏览器端 HMAC 签名头（X-Timestamp/X-Nonce/X-Signature 已被移除，服务端不再校验）。
+
+带 Cookie 的 curl 示例（先登录拿到 `session_id` 与 `csrf_token`）：
 
 ```bash
-# 1. 登录
+# 1. 登录（同时下发 HttpOnly 的 session_id 与 JS 可读的 csrf_token Cookie）
 curl -k -c /tmp/ss.jar -X POST https://192.168.1.10:9000/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"你的密码"}'
 
-# 2. 生成签名头（示例，前端用 CryptoJS.HmacSHA256(timestamp|nonce|path|securityToken, securityToken)）
-TS=$(date +%s); NONCE=$(head -c16 /dev/urandom | xxd -p)
-SIG=$(echo -n "${TS}|${NONCE}|/api/trojan/status|redacted_anti_crawler_2024_security_key" \
-  | openssl dgst -sha256 -hmac "redacted_anti_crawler_2024_security_key" | awk '{print $2}')
+# 2. 从 Cookie 中取 CSRF Token（Double-Submit：头 = Cookie）
+CSRF=$(grep csrf_token /tmp/ss.jar | awk '{print $7}')
 
-# 3. 状态
-curl -k -b /tmp/ss.jar "https://192.168.1.10:9000/api/trojan/status" \
-  -H "X-Timestamp: $TS" -H "X-Nonce: $NONCE" -H "X-Signature: $SIG"
+# 3. 状态（GET，无需 CSRF）
+curl -k -b /tmp/ss.jar "https://192.168.1.10:9000/api/trojan/status"
 
-# 4. 用户列表
-curl -k -b /tmp/ss.jar "https://192.168.1.10:9000/api/trojan/users" \
-  -H "X-Timestamp: $TS" -H "X-Nonce: $NONCE" -H "X-Signature: $SIG"
+# 4. 用户列表（GET，无需 CSRF）
+curl -k -b /tmp/ss.jar "https://192.168.1.10:9000/api/trojan/users"
 
-# 5. 添加用户（限速单位 B/s：10 MB/s = 10485760）
+# 5. 添加用户（POST，需 CSRF 头；限速单位 B/s：10 MB/s = 10485760）
 curl -k -b /tmp/ss.jar -X POST "https://192.168.1.10:9000/api/trojan/users" \
   -H "Content-Type: application/json" \
-  -H "X-Timestamp: $TS" -H "X-Nonce: $NONCE" -H "X-Signature: $SIG" \
+  -H "X-CSRF-Token: $CSRF" \
   -d '{"password":"MyPass123","upload_limit":10485760,"download_limit":52428800,"ip_limit":5}'
 
-# 6. 修改用户（用列表里返回的 hash）
+# 6. 修改用户（PUT，需 CSRF 头；用列表里返回的 hash）
 curl -k -b /tmp/ss.jar -X PUT "https://192.168.1.10:9000/api/trojan/users" \
   -H "Content-Type: application/json" \
-  -H "X-Timestamp: $TS" -H "X-Nonce: $NONCE" -H "X-Signature: $SIG" \
+  -H "X-CSRF-Token: $CSRF" \
   -d '{"hash":"<用户hash>","upload_limit":10485760,"download_limit":104857600,"ip_limit":8}'
 
-# 7. 删除用户
+# 7. 删除用户（DELETE，需 CSRF 头）
 curl -k -b /tmp/ss.jar -X DELETE "https://192.168.1.10:9000/api/trojan/users" \
   -H "Content-Type: application/json" \
-  -H "X-Timestamp: $TS" -H "X-Nonce: $NONCE" -H "X-Signature: $SIG" \
+  -H "X-CSRF-Token: $CSRF" \
   -d '{"hash":"<用户hash>"}'
 ```
 
-注意：每个请求的时间戳/随机数/签名需要重新生成；上面示例便于说明流程，
-实际操作建议直接使用面板 UI。
+注意：上面示例便于说明流程，实际操作建议直接使用面板 UI（前端会自动携带 CSRF Token）。
 
-未登录访问任一接口会返回 `401`；无 `trojan:manage` 权限返回 `403`。
+未登录访问任一接口会返回 `401`；无 `trojan:manage` 权限返回 `403`；写请求缺/错 CSRF 返回 `403`。
 
 ## 8. 浏览器访问地址
 
@@ -264,6 +262,40 @@ sudo systemctl start trojan-go
 - Trojan-Go v0.10.6 的 `SetUsers/Modify` **不支持修改密码**，编辑弹窗不提供密码字段；
 - `Add` 使用密码 SHA-224 作为用户 Hash，与 Trojan-Go 服务端计算规则一致；
 - API 地址默认仅 `127.0.0.1`，请勿暴露到公网。
+
+## 14.5 连接配置（Trojan URI / 二维码 / Clash / sing-box）
+
+每个用户行有 `连接` 按钮，点击后弹出连接 Modal（需登录 + `trojan:manage` 权限 + HMAC secureFetch）：
+
+- 展示服务器 `example.com:8388`、TLS、SNI、WebSocket Path/Host、UDP、家庭局域网 `192.168.1.0/24`；
+- 密码默认隐藏，点 `显示` 才显示明文，`复制密码` 复制到剪贴板；
+- `复制 URI` / `复制 Clash` / `复制 sing-box` / `下载 Clash` / `下载 sing-box` / `显示二维码` / `下载二维码`；
+- 连接模式默认 `互联网 + 家庭局域网`（生成 `IP-CIDR,<网段>,<proxy>` + `MATCH` 规则），可切换 `仅互联网`；
+- 连接弹窗内可直接修改家庭局域网网段（默认预填 `config.json` 的 `trojan.connection.lan_cidr`，如 `192.168.1.0/24`），Clash 规则、连接测试路由检查均使用弹窗内自定义网段；
+- `测试连接`：检测 Trojan-Go gRPC API、服务状态、`8388` 端口监听（IPv4/IPv6 回环）、到家庭局域网的路由。
+
+### 连接 API（均受认证与 RBAC 保护）
+
+```
+GET  /api/trojan/users/{hash}/connection             # 完整连接信息（密码/URI/Clash/sing-box）
+POST /api/trojan/users/{hash}/credential             # 补录/更新密码凭据（历史用户缺凭据时使用）
+GET  /api/trojan/users/{hash}/connection/test        # 连接测试结果
+GET  /api/trojan/users/{hash}/clash/download?lan=1   # 下载 Clash（?lan=true 附加家庭局域网分流规则）
+GET  /api/trojan/users/{hash}/singbox/download       # 下载 sing-box
+```
+
+### 凭据存储
+
+- 创建用户时，`server-status` 在 `trojan_credentials.json`（与 `private_notes.json` 同目录，权限 `0600`）保存 `hash → 明文密码` 的安全映射；
+- 密码**绝不**进入普通用户列表、Dashboard WebSocket、日志、URL 参数或 HTML 源码；仅在上述受保护连接 API 中返回；
+- 删除用户同步删除对应凭据；编辑限速不触碰凭据；
+- 若凭据丢失，连接接口返回 `404 该用户缺少连接凭据`，连接弹窗会引导补录该用户创建时设置的密码（`POST /api/trojan/users/{hash}/credential`，校验密码 hash 与用户匹配，仅保存到凭据文件、不调用 Trojan-Go），无需删除重建、不丢流量数据；
+
+### 连接测试的路由提示
+
+连接测试对家庭局域网执行真实路由检测（本地网卡是否位于该网段、Linux `/proc/net/route` 是否有覆盖路由）。
+若服务器没有到 `192.168.1.0/24` 的路由，页面会明确提示
+`当前服务器没有发现到家庭局域网 192.168.1.0/24 的可用路由`，不会伪造成功。
 
 ## 15. Trojan-Go v0.10.6 已知问题与已应用的补丁
 

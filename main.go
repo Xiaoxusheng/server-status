@@ -4,9 +4,9 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/hmac"
 	rand2 "crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
@@ -47,23 +47,64 @@ const (
 	mediaDir          = "/opt/server-status/media"
 	indexPath         = "/opt/server-status/templates" //index.html 文件所在目录
 	urls              = "https://example.com:8081/static/"
-	authToken         = "123456"
-	dataFile          = "/opt/server-status/server_data.json"             //服务器数据保存路径
-	rateLimit         = 10                                      // 每分钟最大请求数
-	rateLimitDuration = time.Minute                             // 速率限制时间窗口
-	securityToken     = "redacted_anti_crawler_2024_security_key" // 反爬安全令牌
-	signatureTimeout  = 30 * time.Second                        // 签名超时时间
-	usersFile         = "/opt/server-status/users.json"                   // 用户数据文件
-	sessionTimeout    = 24 * time.Hour                          // 会话超时时间
-	encryptionKey     = "redacted_user_data_encryption_key_2024"  // 用户数据加密密钥
+	dataFile          = "/opt/server-status/server_data.json" //服务器数据保存路径
+	rateLimit         = 10                          // 每分钟最大请求数
+	rateLimitDuration = time.Minute                 // 速率限制时间窗口
+	usersFile         = "/opt/server-status/users.json"       // 用户数据文件
+	sessionTimeout    = 24 * time.Hour              // 会话超时时间
 
 	dir = "/opt/server-status/media" // EPUB 文件所在目录
 	// 新增下载密钥配置
-	downloadTokenExpiry = 30 * time.Minute                    // 下载令牌有效期
-	downloadLimitBytes  = 3 * 1024 * 1024 * 1024              // 2GB 下载限制
-	downloadTokenSecret = "redacted_download_token_secret_2024" // 下载令牌密钥
-	downloadTokensFile  = "/opt/server-status/download_tokens.json"     // 下载令牌存储文件
+	downloadTokenExpiry = 30 * time.Minute                // 下载令牌有效期
+	downloadLimitBytes  = 3 * 1024 * 1024 * 1024          // 2GB 下载限制
+	downloadTokensFile  = "/opt/server-status/download_tokens.json" // 下载令牌存储文件
 )
+
+// CSRF 相关标识
+const (
+	csrfCookieName = "csrf_token" // 会话绑定 CSRF Token 的 Cookie（JS 可读）
+	csrfHeaderName = "X-CSRF-Token"
+)
+
+// 仅服务端持有的密钥与签名材料。
+// 说明：以下值属于密码学密钥（不是浏览器可见的普通配置），不得硬编码为固定密钥。
+// 生产环境请通过环境变量注入；默认值仅为向后兼容旧部署，一旦配置应尽量保持不变。
+var (
+	// encryptionKey 用户数据（私人手记等）AES-GCM 加密密钥。环境变量：SERVER_STATUS_ENCRYPT_KEY
+	encryptionKey = getEnvOr("SERVER_STATUS_ENCRYPT_KEY", "redacted_user_data_encryption_key_2024")
+	// downloadTokenSecret 下载令牌签名密钥。环境变量：SERVER_STATUS_DOWNLOAD_TOKEN_SECRET
+	downloadTokenSecret = getEnvOr("SERVER_STATUS_DOWNLOAD_TOKEN_SECRET", "redacted_download_token_secret_2024")
+	// serverSigningKey 仅服务端持有的 HMAC 签名密钥（私有入口 Cookie、分享密码 Cookie、下载令牌）。
+	// 优先取环境变量 SERVER_STATUS_SIGNING_KEY；未设置时用 crypto/rand 随机生成并告警。
+	serverSigningKey = initSigningKey()
+)
+
+// getEnvOr 读取环境变量，若为空则返回 fallback 默认值。
+func getEnvOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// initSigningKey 初始化仅服务端持有的签名密钥：优先取环境变量，否则用 crypto/rand 随机生成。
+func initSigningKey() string {
+	if v := os.Getenv("SERVER_STATUS_SIGNING_KEY"); v != "" {
+		return v
+	}
+	b := make([]byte, 32)
+	if _, err := rand2.Read(b); err == nil {
+		return hex.EncodeToString(b)
+	}
+	// crypto/rand 几乎不会失败；此处仅作极端兜底，绝不回落到任何固定字符串。
+	return fmt.Sprintf("%s:rand-fallback", fallbackSigningDigest(time.Now().UnixNano()+int64(os.Getpid())))
+}
+
+// fallbackSigningDigest 对整数做 SHA-256 散列，仅用于签名密钥的极端兜底场景。
+func fallbackSigningDigest(n int64) string {
+	h := sha256.Sum256([]byte(fmt.Sprintf("%d:%d", n, runtime.NumGoroutine())))
+	return hex.EncodeToString(h[:])
+}
 
 // logDir 日志目录（生产默认 /opt/server-status/log，可用 SERVER_STATUS_HOME 覆盖便于本地测试/开发）
 var logDir = defaultLogDir()
@@ -1744,6 +1785,7 @@ type Session struct {
 	CreatedAt  time.Time `json:"created_at"`
 	LastAccess time.Time `json:"last_access"`
 	ExpiresAt  time.Time `json:"expires_at"`
+	CSRFToken  string    `json:"csrf_token,omitempty"` // 会话绑定的随机 CSRF Token（不与浏览器共享密钥）
 }
 
 type UserManager struct {
@@ -2187,10 +2229,11 @@ func cleanupExpiredDownloadTokens() {
 
 // saveDownloadTokens 将系统中的下载令牌安全加密序列化后写入文件系统
 func saveDownloadTokens() error {
-	// 先复制数据，尽快释放锁
-	downloadTokenManager.RLock()
-	data, err := json.Marshal(downloadTokenManager)
-	downloadTokenManager.RUnlock()
+	// 先复制数据，尽快释放锁（局部引用，避免锁与序列化期间全局指针被替换导致 RUnlock 失配）
+	mgr := downloadTokenManager
+	mgr.RLock()
+	data, err := json.Marshal(mgr)
+	mgr.RUnlock()
 
 	if err != nil {
 		return fmt.Errorf("序列化下载令牌数据失败: %v", err)
@@ -2774,10 +2817,11 @@ func loadUsers() {
 
 // saveUsers 将驻留内存的用户数据经过原子操作与加密机制写入本地文件
 func saveUsers() error {
-	// 先复制数据，尽快释放锁
-	userManager.RLock()
-	data, err := json.Marshal(userManager)
-	userManager.RUnlock()
+	// 先复制数据，尽快释放锁。捕获同一实例，避免并发替换 userManager 时 RLock/RUnlock 不一致。
+	um := userManager
+	um.RLock()
+	data, err := json.Marshal(um)
+	um.RUnlock()
 
 	if err != nil {
 		return fmt.Errorf("序列化用户数据失败: %v", err)
@@ -2892,6 +2936,8 @@ func createSession(username string, r *http.Request) string {
 	sessionID := generateSessionID()
 	now := time.Now()
 
+	// 生成会话绑定的高强度随机 CSRF Token（crypto/rand）
+	csrf, _ := generateSecureToken(32)
 	session := &Session{
 		SessionID:  sessionID,
 		Username:   username,
@@ -2900,6 +2946,7 @@ func createSession(username string, r *http.Request) string {
 		CreatedAt:  now,
 		LastAccess: now,
 		ExpiresAt:  now.Add(sessionTimeout),
+		CSRFToken:  csrf,
 	}
 
 	userManager.Lock()
@@ -2913,6 +2960,72 @@ func createSession(username string, r *http.Request) string {
 	go scheduleSaveUsers()
 
 	return sessionID
+}
+
+// generateSecureToken 用 crypto/rand 生成 bytes 字节的高强度随机令牌（hex 编码）。
+func generateSecureToken(bytes int) (string, error) {
+	b := make([]byte, bytes)
+	if _, err := rand2.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// ensureSessionCSRFToken 确保会话持有随机 CSRF Token（缺失时生成），返回该 Token。
+func ensureSessionCSRFToken(session *Session) string {
+	if session == nil || session.CSRFToken != "" {
+		if session != nil {
+			return session.CSRFToken
+		}
+		return ""
+	}
+	tok, err := generateSecureToken(32)
+	if err != nil {
+		return ""
+	}
+	userManager.Lock()
+	session.CSRFToken = tok
+	userManager.Unlock()
+	return tok
+}
+
+// setCSRFCookie 下发会话绑定 CSRF Token 的 Cookie（非 HttpOnly，JS 可读，供 Double-Submit 携带）。
+func setCSRFCookie(w http.ResponseWriter, session *Session) {
+	tok := ensureSessionCSRFToken(session)
+	if tok == "" {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     csrfCookieName,
+		Value:    tok,
+		HttpOnly: false, // JS 需读取以作为 X-CSRF-Token 请求头（Double-Submit）
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+		Expires:  time.Now().Add(sessionTimeout), // 与会话 Cookie 对齐，避免浏览器重启后写请求因缺 CSRF Cookie 而误 403
+	})
+}
+
+// isWriteMethod 判断是否为会产生状态变更的 HTTP 方法（需 CSRF 保护）。
+func isWriteMethod(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
+}
+
+// validCSRFToken 校验请求头 X-CSRF-Token 是否与会话绑定的 Token 一致（恒定时间比较）。
+func validCSRFToken(session *Session, r *http.Request) bool {
+	if session == nil || session.CSRFToken == "" {
+		return false
+	}
+	tok := r.Header.Get(csrfHeaderName)
+	if tok == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(tok), []byte(session.CSRFToken)) == 1
 }
 
 // deleteSession 强行销毁一个处于活动范围内的指定会话令牌
@@ -3007,6 +3120,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 创建会话
 	sessionID := createSession(req.Username, r)
+	if s, ok := validateSession(sessionID); ok {
+		setCSRFCookie(w, s)
+	}
 
 	// 设置会话Cookie
 	http.SetCookie(w, &http.Cookie{
@@ -3086,6 +3202,9 @@ func checkAuthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 确保 CSRF Cookie 已就绪（Double-Submit Token 来源）
+	setCSRFCookie(w, session)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
@@ -3139,6 +3258,20 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				"message": "请先登录",
 			})
 			return
+		}
+
+		// CSRF 防护：仅针对会产生状态变更的写请求（POST/PUT/PATCH/DELETE）。
+		// 使用会话绑定的随机 CSRF Token（Double-Submit Cookie），恒定时间比较。
+		if isWriteMethod(r.Method) {
+			if !validCSRFToken(session, r) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"code":    http.StatusForbidden,
+					"message": "CSRF 校验失败，请刷新页面后重试",
+				})
+				return
+			}
 		}
 
 		// 将会话信息添加到请求上下文
@@ -3262,6 +3395,9 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 创建会话并自动登录
 	sessionID := createSession(newUser.Username, r)
+	if s, ok := validateSession(sessionID); ok {
+		setCSRFCookie(w, s)
+	}
 
 	// 设置会话Cookie
 	http.SetCookie(w, &http.Cookie{
@@ -3363,41 +3499,6 @@ func generateClientFingerprint(r *http.Request) string {
 	data := fmt.Sprintf("%s|%s|%s|%s|%s", ip, userAgent, accept, acceptLanguage, acceptEncoding)
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:16])
-}
-
-// verifyRequestSignature 防护跨站及非授信调用，验证通讯参数的 HMAC 正确度
-func verifyRequestSignature(r *http.Request) bool {
-	timestamp := r.Header.Get("X-Timestamp")
-	nonce := r.Header.Get("X-Nonce")
-	signature := r.Header.Get("X-Signature")
-	if timestamp == "" || nonce == "" || signature == "" {
-		return false
-	}
-
-	// 检查时间戳是否在合理范围内（防止重放攻击）
-	ts, err := strconv.ParseInt(timestamp, 10, 64)
-	if err != nil {
-		return false
-	}
-
-	requestTime := time.Unix(ts, 0)
-	if time.Since(requestTime).Abs() > signatureTimeout {
-		return false
-	}
-
-	// 生成期望的签名
-	path := r.URL.Path
-	data := fmt.Sprintf("%s|%s|%s|%s", timestamp, nonce, path, securityToken)
-	expectedSignature := generateHMACSignature(data)
-
-	return hmac.Equal([]byte(signature), []byte(expectedSignature))
-}
-
-// generateHMACSignature 采用 SHA256 对参数块混淆产生一致性强检验体
-func generateHMACSignature(data string) string {
-	h := hmac.New(sha256.New, []byte(securityToken))
-	h.Write([]byte(data))
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 // checkUserAgent 检测浏览器标识符以驳回显眼的恶意探查器与爬虫
@@ -3632,17 +3733,8 @@ func verifySecurityHeaders(r *http.Request) bool {
 		return false
 	}
 
-	// 6. 对于敏感端点，强制签名验证
-	sensitiveEndpoints := []string{"/exec", "/status-ifaces"}
-	currentPath := r.URL.Path
-	for _, endpoint := range sensitiveEndpoints {
-		if currentPath == endpoint {
-			if !verifyRequestSignature(r) {
-				log.Printf("🚫 签名验证失败 from %s for %s", ip, currentPath)
-				return false
-			}
-		}
-	}
+	// 6. 状态修改类写请求由 authMiddleware 完成会话绑定 CSRF 校验（见 validCSRFToken），
+	//    此处不再依赖浏览器可读取的共享 HMAC Secret。
 
 	return true
 }
@@ -3780,7 +3872,7 @@ func enableCORSh(h http.Handler) http.HandlerFunc {
 			w.Header().Set("Vary", "Origin")
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Timestamp, X-Nonce, X-Signature, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -4090,13 +4182,8 @@ func listEpubs(w http.ResponseWriter, r *http.Request) {
 
 		// 只处理 .epub 文件
 		if !info.IsDir() && strings.HasSuffix(strings.ToLower(info.Name()), ".epub") {
-			// 确保 URLs 有正确的路径分隔符
-			fullURL := urls
-			if !strings.HasSuffix(urls, "/") {
-				fullURL += "/"
-			}
-			fullURL += info.Name()
-			epubURLs = append(epubURLs, fullURL)
+			// 返回本服务受保护的同源下载路径（不再暴露外部静态服务地址，且 epub 需登录后才能读取）
+			epubURLs = append(epubURLs, "/epub?name="+url.QueryEscape(info.Name()))
 			fmt.Printf("找到 EPUB 文件: %s\n", info.Name()) // 添加日志
 		}
 		return nil
@@ -4112,6 +4199,30 @@ func listEpubs(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(epubURLs) // 修正变量名
+}
+
+// epubFileHandler GET /epub?name=xxx.epub
+// 登录 + files:view 权限保护下从 EPUB 目录流式返回电子书文件（同源访问，epub.js 可正常拉取）。
+func epubFileHandler(w http.ResponseWriter, r *http.Request) {
+	name := strings.Trim(filepath.Base(r.URL.Query().Get("name")), "/")
+	if name == "" || name == "." || !strings.HasSuffix(strings.ToLower(name), ".epub") {
+		http.NotFound(w, r)
+		return
+	}
+	fullPath := filepath.Join(dir, name)
+	if !isSafeFilePath(fullPath, dir) {
+		http.Error(w, "路径不合法", http.StatusForbidden)
+		return
+	}
+	info, err := os.Stat(fullPath)
+	if err != nil || info.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/epub+zip")
+	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	http.ServeFile(w, r, fullPath)
 }
 
 // ---------------- 在线用户处理 ----------------
@@ -4815,12 +4926,6 @@ func execHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := r.URL.Query().Get("token")
-	if token != authToken {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
 	cmdName := r.URL.Query().Get("command")
 	if cmdName == "" {
 		http.Error(w, "Missing command parameter", http.StatusBadRequest)
@@ -4976,6 +5081,8 @@ func main() {
 				return
 			}
 		}
+		// 模板页面禁止缓存：认证/CSRF 逻辑随版本演进，旧模板 JS 会导致写请求缺 X-CSRF-Token 而 403
+		w.Header().Set("Cache-Control", "no-store")
 		http.FileServer(http.Dir(indexPath)).ServeHTTP(w, r)
 	}))
 	http.HandleFunc("/ws", authMiddleware(requirePermission("system:view", securityMiddleware(wsHandler))))
@@ -4985,6 +5092,7 @@ func main() {
 	http.HandleFunc("/access-stats", authMiddleware(requirePermission("system:view", securityMiddleware(accessStatsHandler))))
 	http.HandleFunc("/exec", authMiddleware(requirePermission("system:exec", securityMiddleware(execHandler))))
 	http.HandleFunc("/epubs", enableCORSh(authMiddleware(requirePermission("files:view", securityMiddleware(listEpubs)))))
+	http.HandleFunc("GET /epub", authMiddleware(requirePermission("files:view", securityMiddleware(epubFileHandler))))
 
 	// Trojan-Go 状态与用户管理接口
 	http.HandleFunc("GET /api/trojan/status", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanStatusHandler))))
@@ -4992,6 +5100,11 @@ func main() {
 	http.HandleFunc("POST /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
 	http.HandleFunc("PUT /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
 	http.HandleFunc("DELETE /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
+	http.HandleFunc("GET /api/trojan/users/{hash}/connection", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanConnectionHandler))))
+	http.HandleFunc("POST /api/trojan/users/{hash}/credential", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanCredentialHandler))))
+	http.HandleFunc("GET /api/trojan/users/{hash}/connection/test", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanConnectionTestHandler))))
+	http.HandleFunc("GET /api/trojan/users/{hash}/clash/download", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanClashDownloadHandler))))
+	http.HandleFunc("GET /api/trojan/users/{hash}/singbox/download", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanSingboxDownloadHandler))))
 	http.HandleFunc("/trojan", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanPageHandler))))
 
 	// RBAC 权限管理接口
@@ -5054,6 +5167,16 @@ func main() {
 
 	// ==================== 隐藏私人空间路由 ====================
 	registerPrivateRoutes(http.DefaultServeMux)
+
+	// 密钥配置健康提示（不输出实际密钥值）
+	if os.Getenv("SERVER_STATUS_SIGNING_KEY") == "" {
+		log.Println("⚠️ 未设置 SERVER_STATUS_SIGNING_KEY，服务端签名密钥为启动时随机生成（重启后旧 Cookie 签名将失效）。")
+	}
+	if os.Getenv("SERVER_STATUS_ENCRYPT_KEY") != "" || os.Getenv("SERVER_STATUS_DOWNLOAD_TOKEN_SECRET") != "" {
+		// OK：由环境变量显式注入
+	} else {
+		log.Println("⚠️ 建议通过环境变量 SERVER_STATUS_ENCRYPT_KEY / SERVER_STATUS_DOWNLOAD_TOKEN_SECRET 注入加密密钥，避免使用内置默认值。")
+	}
 
 	fmt.Println("Server running at https://localhost:9000")
 	log.Printf("服务器启动时间: %s", serverStartTime.Format("2006-01-02 15:04:05"))

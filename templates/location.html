@@ -942,9 +942,10 @@
 </script>
 <script>
     (function () {
+        function getCsrfToken() { var m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
         function openPrivateSpace() {
             try {
-                fetch('/api/private/entry', { method: 'POST', credentials: 'include' })
+                fetch('/api/private/entry', { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() }, credentials: 'include' })
                     .catch(function () {})
                     .finally(function () { window.location.href = 'private.html'; });
             } catch (e) { window.location.href = 'private.html'; }

@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,18 +27,38 @@ import (
 
 // TrojanConfig 定义 Trojan-Go API 客户端运行参数。
 type TrojanConfig struct {
-	Enabled         bool          `json:"enabled"`
-	APIAddr         string        `json:"api_addr"`
-	APITimeout      time.Duration `json:"-"`
-	RefreshInterval time.Duration `json:"-"`
+	Enabled         bool                   `json:"enabled"`
+	APIAddr         string                 `json:"api_addr"`
+	APITimeout      time.Duration          `json:"-"`
+	RefreshInterval time.Duration          `json:"-"`
+	Connection      TrojanConnectionConfig `json:"-"`
+}
+
+// TrojanConnectionConfig 客户端连接配置（对外暴露给用户生成配置）。
+type TrojanConnectionConfig struct {
+	Server    string                `json:"server"`
+	Port      int                   `json:"port"`
+	TLS       bool                  `json:"tls"`
+	SNI       string                `json:"sni"`
+	WebSocket TrojanWebSocketConfig `json:"websocket"`
+	UDP       bool                  `json:"udp"`
+	LanCIDR   string                `json:"lan_cidr"`
+}
+
+// TrojanWebSocketConfig WebSocket 传输配置。
+type TrojanWebSocketConfig struct {
+	Enabled bool   `json:"enabled"`
+	Path    string `json:"path"`
+	Host    string `json:"host"`
 }
 
 // TrojanFileConfig 对应 config.json 中 "trojan" 段（超时/间隔以秒为单位）。
 type TrojanFileConfig struct {
-	Enabled         *bool  `json:"enabled"`
-	APIAddr         string `json:"api_addr"`
-	APITimeout      int    `json:"api_timeout"`
-	RefreshInterval int    `json:"refresh_interval"`
+	Enabled         *bool                   `json:"enabled"`
+	APIAddr         string                  `json:"api_addr"`
+	APITimeout      int                     `json:"api_timeout"`
+	RefreshInterval int                     `json:"refresh_interval"`
+	Connection      *TrojanConnectionConfig `json:"connection"`
 }
 
 // TrojanJSON 与项目现有 JSON 配置文件风格一致（类似 private_notes.json）。
@@ -94,6 +117,103 @@ type TrojanClient struct {
 
 var trojanClient *TrojanClient
 
+// TrojanCredential 存储 Trojan 用户明文密码（仅在本地安全文件中，不向外部泄露）
+type TrojanCredential struct {
+	Hash     string `json:"hash"`
+	Password string `json:"password"`
+}
+
+// TrojanCredentialStore 凭据存储文件结构
+type TrojanCredentialStore struct {
+	Credentials []TrojanCredential `json:"credentials"`
+}
+
+// trojanCredentialsFilePath 返回凭据存储文件路径
+func trojanCredentialsFilePath() string {
+	return filepath.Join(privateRoot(), "trojan_credentials.json")
+}
+
+// loadTrojanCredentials 加载存储的凭据
+func loadTrojanCredentials() (*TrojanCredentialStore, error) {
+	path := trojanCredentialsFilePath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return &TrojanCredentialStore{Credentials: []TrojanCredential{}}, nil
+		}
+		return nil, err
+	}
+	var store TrojanCredentialStore
+	if err := json.Unmarshal(data, &store); err != nil {
+		return nil, err
+	}
+	return &store, nil
+}
+
+// saveTrojanCredentials 保存凭据到文件（设置 0600 权限保证安全）
+func saveTrojanCredentials(store *TrojanCredentialStore) error {
+	path := trojanCredentialsFilePath()
+	jsonData, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, jsonData, 0600); err != nil {
+		return err
+	}
+	return nil
+}
+
+// getTrojanCredential 根据 hash 获取密码
+func getTrojanCredential(hash string) (string, bool) {
+	store, err := loadTrojanCredentials()
+	if err != nil {
+		return "", false
+	}
+	for _, cred := range store.Credentials {
+		if cred.Hash == hash {
+			return cred.Password, true
+		}
+	}
+	return "", false
+}
+
+// setTrojanCredential 添加/更新凭据
+func setTrojanCredential(hash, password string) error {
+	store, err := loadTrojanCredentials()
+	if err != nil {
+		return err
+	}
+	// 查找并替换
+	found := false
+	for i := range store.Credentials {
+		if store.Credentials[i].Hash == hash {
+			store.Credentials[i].Password = password
+			found = true
+			break
+		}
+	}
+	if !found {
+		store.Credentials = append(store.Credentials, TrojanCredential{Hash: hash, Password: password})
+	}
+	return saveTrojanCredentials(store)
+}
+
+// deleteTrojanCredential 删除凭据
+func deleteTrojanCredential(hash string) error {
+	store, err := loadTrojanCredentials()
+	if err != nil {
+		return err
+	}
+	newCreds := make([]TrojanCredential, 0, len(store.Credentials))
+	for _, cred := range store.Credentials {
+		if cred.Hash != hash {
+			newCreds = append(newCreds, cred)
+		}
+	}
+	store.Credentials = newCreds
+	return saveTrojanCredentials(store)
+}
+
 // loadTrojanConfig 依次从默认值、config.json、环境变量加载 Trojan-Go 配置。
 // config.json 与 private_notes.json 使用同一根目录（SERVER_STATUS_HOME 或 /opt/server-status）。
 func loadTrojanConfig() TrojanConfig {
@@ -102,6 +222,19 @@ func loadTrojanConfig() TrojanConfig {
 		APIAddr:         "127.0.0.1:10000",
 		APITimeout:      5 * time.Second,
 		RefreshInterval: 2 * time.Second,
+		Connection: TrojanConnectionConfig{
+			Server: "example.com",
+			Port:   8388,
+			TLS:    true,
+			SNI:    "example.com",
+			WebSocket: TrojanWebSocketConfig{
+				Enabled: true,
+				Path:    "/ws",
+				Host:    "example.com",
+			},
+			UDP:     true,
+			LanCIDR: "192.168.1.0/24",
+		},
 	}
 	loadTrojanJSON(privateRoot(), &cfg)
 
@@ -148,6 +281,33 @@ func loadTrojanJSON(baseDir string, cfg *TrojanConfig) {
 	}
 	if fileCfg.Trojan.RefreshInterval > 0 {
 		cfg.RefreshInterval = time.Duration(fileCfg.Trojan.RefreshInterval) * time.Second
+	}
+	// 加载连接配置（覆盖默认值）
+	if fileCfg.Trojan.Connection != nil {
+		cc := fileCfg.Trojan.Connection
+		if cc.Server != "" {
+			cfg.Connection.Server = cc.Server
+		}
+		if cc.Port > 0 {
+			cfg.Connection.Port = cc.Port
+		}
+		cfg.Connection.TLS = cc.TLS
+		if cc.SNI != "" {
+			cfg.Connection.SNI = cc.SNI
+		}
+		if cc.WebSocket.Enabled {
+			cfg.Connection.WebSocket.Enabled = true
+		}
+		if cc.WebSocket.Path != "" {
+			cfg.Connection.WebSocket.Path = cc.WebSocket.Path
+		}
+		if cc.WebSocket.Host != "" {
+			cfg.Connection.WebSocket.Host = cc.WebSocket.Host
+		}
+		cfg.Connection.UDP = cc.UDP
+		if cc.LanCIDR != "" {
+			cfg.Connection.LanCIDR = cc.LanCIDR
+		}
 	}
 }
 
@@ -439,6 +599,481 @@ func trojanUserMutationHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadGateway, "更新 Trojan-Go 用户失败: "+err.Error())
 		return
 	}
+	// 保存凭据（仅创建用户时保存密码）
+	if operation == service.SetUsersRequest_Add && req.Password != "" {
+		hash := trojanHash(req.Password)
+		if err := setTrojanCredential(hash, req.Password); err != nil {
+			log.Printf("Trojan credential save failed: %v", err)
+		} else {
+			log.Printf("Trojan user created: hash=%s", hash)
+		}
+	}
+	// 删除用户时同步删除凭据
+	if operation == service.SetUsersRequest_Delete {
+		hash := req.Hash
+		if hash == "" {
+			hash = trojanHash(req.Password)
+		}
+		if err := deleteTrojanCredential(hash); err != nil {
+			log.Printf("Trojan credential delete failed: %v", err)
+		} else {
+			log.Printf("Trojan user deleted: hash=%s", hash)
+		}
+	}
 	trojanClient.refresh()
 	writeJSON(w, http.StatusOK, "Trojan-Go 用户更新成功", nil)
+}
+
+// TrojanConnectionInfo 返回给前端展示的连接信息。
+type TrojanConnectionInfo struct {
+	Name      string `json:"name"`
+	Server    string `json:"server"`
+	Port      int    `json:"port"`
+	Password  string `json:"password"`
+	TLS       bool   `json:"tls"`
+	SNI       string `json:"sni"`
+	Transport string `json:"transport"`
+	WSPath    string `json:"ws_path"`
+	WSHost    string `json:"ws_host"`
+	UDP       bool   `json:"udp"`
+	LanCIDR   string `json:"lan_cidr"`
+	TrojanURI string `json:"trojan_uri"`
+	Clash     string `json:"clash"`
+	Singbox   string `json:"singbox"`
+}
+
+// generateTrojanURI 生成符合客户端兼容格式的 Trojan URI。
+// 密码中的特殊字符（@#?&% 空格中文等）需要 URL 编码。
+func generateTrojanURI(name, server string, port int, password, sni, wsPath, wsHost string, tls, udp, wsEnabled bool) string {
+	encodedPassword := url.QueryEscape(password)
+	// QueryEscape 会把空格编码为 +，Trojan URI 需要 %20
+	encodedPassword = strings.ReplaceAll(encodedPassword, "+", "%20")
+
+	var uri strings.Builder
+	uri.WriteString("trojan://")
+	uri.WriteString(encodedPassword)
+	uri.WriteString("@")
+
+	// IPv6 地址需要加方括号
+	if strings.Contains(server, ":") {
+		uri.WriteString("[")
+		uri.WriteString(server)
+		uri.WriteString("]")
+	} else {
+		uri.WriteString(server)
+	}
+	uri.WriteString(":")
+	uri.WriteString(strconv.Itoa(port))
+
+	// 查询参数
+	params := make([]string, 0, 6)
+	if tls {
+		params = append(params, "security=tls")
+	}
+	if sni != "" {
+		params = append(params, "sni="+url.QueryEscape(sni))
+	}
+	if wsEnabled {
+		params = append(params, "type=ws")
+		if wsPath != "" {
+			params = append(params, "path="+url.QueryEscape(wsPath))
+		}
+		if wsHost != "" {
+			params = append(params, "host="+url.QueryEscape(wsHost))
+		}
+	}
+	if udp {
+		params = append(params, "udp=1")
+	}
+
+	if len(params) > 0 {
+		uri.WriteString("?")
+		uri.WriteString(strings.Join(params, "&"))
+	}
+
+	// fragment（名称）
+	if name != "" {
+		uri.WriteString("#")
+		uri.WriteString(url.QueryEscape(name))
+	}
+
+	return uri.String()
+}
+
+// generateClashYAML 生成 Clash/Meta 兼容的 YAML 配置片段。
+func generateClashYAML(name, server string, port int, password, sni, wsPath, wsHost, lanCIDR string, udp, wsEnabled bool) string {
+	var buf strings.Builder
+	buf.WriteString("proxies:\n")
+	buf.WriteString(fmt.Sprintf("  - name: %q\n", name))
+	buf.WriteString("    type: trojan\n")
+	buf.WriteString(fmt.Sprintf("    server: %s\n", server))
+	buf.WriteString(fmt.Sprintf("    port: %d\n", port))
+	buf.WriteString(fmt.Sprintf("    password: %q\n", password))
+	if sni != "" {
+		buf.WriteString(fmt.Sprintf("    sni: %s\n", sni))
+	}
+	if udp {
+		buf.WriteString("    udp: true\n")
+	}
+	if wsEnabled {
+		buf.WriteString("    network: ws\n")
+		buf.WriteString("    ws-opts:\n")
+		if wsPath != "" {
+			buf.WriteString(fmt.Sprintf("      path: %s\n", wsPath))
+		}
+		if wsHost != "" {
+			buf.WriteString("      headers:\n")
+			buf.WriteString(fmt.Sprintf("        Host: %s\n", wsHost))
+		}
+	}
+	// 添加家庭局域网分流规则
+	if lanCIDR != "" {
+		buf.WriteString("\nrules:\n")
+		buf.WriteString(fmt.Sprintf("  - IP-CIDR,%s,%s\n", lanCIDR, name))
+		buf.WriteString(fmt.Sprintf("  - MATCH,%s\n", name))
+	}
+	return buf.String()
+}
+
+// generateSingboxJSON 生成 sing-box 兼容的 JSON 配置片段。
+func generateSingboxJSON(name, server string, port int, password, sni, wsPath, wsHost string, udp, wsEnabled bool) string {
+	outbound := map[string]interface{}{
+		"type":        "trojan",
+		"tag":         name,
+		"server":      server,
+		"server_port": port,
+		"password":    password,
+	}
+	if udp {
+		outbound["udp"] = true
+	}
+	tlsConfig := map[string]interface{}{}
+	if tlsConfig["enabled"] = true; sni != "" {
+		tlsConfig["server_name"] = sni
+	}
+	outbound["tls"] = tlsConfig
+	if wsEnabled {
+		wsConfig := map[string]interface{}{
+			"type": "ws",
+		}
+		if wsPath != "" {
+			wsConfig["path"] = wsPath
+		}
+		if wsHost != "" {
+			wsConfig["headers"] = map[string]interface{}{
+				"Host": wsHost,
+			}
+		}
+		outbound["transport"] = wsConfig
+	}
+	jsonData, err := json.MarshalIndent(outbound, "", "  ")
+	if err != nil {
+		return "{}"
+	}
+	return string(jsonData)
+}
+
+// trojanConnectionHandler 返回指定用户的完整连接信息（受 RBAC 保护）。
+// 密码仅在此受保护 API 中返回，不出现在用户列表和 WebSocket 中。
+func trojanConnectionHandler(w http.ResponseWriter, r *http.Request) {
+	if trojanClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "Trojan-Go 客户端未初始化")
+		return
+	}
+	hash := r.PathValue("hash")
+	if hash == "" {
+		writeJSONError(w, http.StatusBadRequest, "缺少用户 hash 参数")
+		return
+	}
+
+	// 获取密码凭据
+	password, ok := getTrojanCredential(hash)
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "该用户缺少连接凭据，请重新创建用户")
+		return
+	}
+
+	// 获取用户名（从缓存中找 hash）
+	status := trojanClient.snapshot()
+	userName := hash
+	for _, u := range status.Users {
+		if u.Hash == hash {
+			userName = u.Hash
+			break
+		}
+	}
+
+	cfg := trojanClient.cfg.Connection
+	conn := TrojanConnectionInfo{
+		Name:      userName,
+		Server:    cfg.Server,
+		Port:      cfg.Port,
+		Password:  password,
+		TLS:       cfg.TLS,
+		SNI:       cfg.SNI,
+		Transport: "ws",
+		WSPath:    cfg.WebSocket.Path,
+		WSHost:    cfg.WebSocket.Host,
+		UDP:       cfg.UDP,
+		LanCIDR:   cfg.LanCIDR,
+	}
+
+	// 生成 Trojan URI
+	conn.TrojanURI = generateTrojanURI(
+		userName, cfg.Server, cfg.Port, password, cfg.SNI,
+		cfg.WebSocket.Path, cfg.WebSocket.Host,
+		cfg.TLS, cfg.UDP, cfg.WebSocket.Enabled,
+	)
+
+	// 生成 Clash 配置
+	conn.Clash = generateClashYAML(
+		userName, cfg.Server, cfg.Port, password, cfg.SNI,
+		cfg.WebSocket.Path, cfg.WebSocket.Host, cfg.LanCIDR,
+		cfg.UDP, cfg.WebSocket.Enabled,
+	)
+
+	// 生成 sing-box 配置
+	conn.Singbox = generateSingboxJSON(
+		userName, cfg.Server, cfg.Port, password, cfg.SNI,
+		cfg.WebSocket.Path, cfg.WebSocket.Host,
+		cfg.UDP, cfg.WebSocket.Enabled,
+	)
+
+	writeJSON(w, http.StatusOK, "获取连接信息成功", conn)
+}
+
+// trojanCredentialHandler 补录/更新用户密码凭据。
+// 仅写入 server-status 的凭据存储（trojan_credentials.json），不调用 Trojan-Go。
+// 用于解决历史用户缺少凭据、无法生成连接配置的问题，避免删除重建丢流量数据。
+func trojanCredentialHandler(w http.ResponseWriter, r *http.Request) {
+	hash := r.PathValue("hash")
+	if hash == "" {
+		writeJSONError(w, http.StatusBadRequest, "缺少用户 hash 参数")
+		return
+	}
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "请求体解析失败")
+		return
+	}
+	if req.Password == "" {
+		writeJSONError(w, http.StatusBadRequest, "密码不能为空")
+		return
+	}
+	// 校验 hash 与该密码匹配（Trojan-Go 用户 hash = SHA224(密码)），防止给错误用户写入错误密码
+	if trojanHash(req.Password) != hash {
+		writeJSONError(w, http.StatusBadRequest, "密码与用户不匹配，请填写该用户创建时设置的密码")
+		return
+	}
+	if err := setTrojanCredential(hash, req.Password); err != nil {
+		log.Printf("Trojan credential save failed: %v", err)
+		writeJSONError(w, http.StatusInternalServerError, "凭据保存失败")
+		return
+	}
+	log.Printf("Trojan credential updated: hash=%s", hash)
+	writeJSON(w, http.StatusOK, "凭据已保存", nil)
+}
+
+// hasRouteToLAN 判断服务器是否存在到达 lanCIDR 的可用路由。
+// 1) 本地网卡地址直接位于该网段（server-status/Trojan-Go 就在家庭局域网内）；
+// 2) Linux /proc/net/route（IPv4）存在覆盖该网段的路由表项（含默认路由）。
+// 返回 (是否有路由, 说明)。不伪造成功：未发现路由时返回明确提示句。
+func hasRouteToLAN(lanCIDR string) (bool, string) {
+	_, lanNet, err := net.ParseCIDR(lanCIDR)
+	if err != nil {
+		return false, "CIDR 无效: " + lanCIDR
+	}
+	// 1. 本地网卡是否直接位于该网段
+	if ifaces, err := net.Interfaces(); err == nil {
+		for _, iface := range ifaces {
+			if iface.Flags&net.FlagUp == 0 {
+				continue
+			}
+			addrs, err := iface.Addrs()
+			if err != nil {
+				continue
+			}
+			for _, addr := range addrs {
+				var ip net.IP
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				if ip != nil && lanNet.Contains(ip) {
+					return true, "主机位于该网段"
+				}
+			}
+		}
+	}
+	// 2. Linux IPv4 路由表（/proc/net/route）
+	if data, err := os.ReadFile("/proc/net/route"); err == nil {
+		if checkLinuxRouteTable(string(data), lanNet.IP) {
+			return true, "存在路由表项"
+		}
+	}
+	return false, "当前服务器没有发现到家庭局域网 " + lanCIDR + " 的可用路由"
+}
+
+// checkLinuxRouteTable 解析 /proc/net/route 文本，判断是否存在覆盖 targetIP 的路由表项。
+// 字段均为小端十六进制：Destination(1)、Mask(7)。默认路由 0.0.0.0/0 也视为存在路由。
+func checkLinuxRouteTable(content string, targetIP net.IP) bool {
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		if i == 0 {
+			continue // 表头
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 8 {
+			continue
+		}
+		dest, err := strconv.ParseUint(fields[1], 16, 32)
+		if err != nil {
+			continue
+		}
+		maskVal, err := strconv.ParseUint(fields[7], 16, 32)
+		if err != nil {
+			continue
+		}
+		destIP := net.IPv4(byte(dest), byte(dest>>8), byte(dest>>16), byte(dest>>24))
+		maskBytes := net.IPv4Mask(byte(maskVal), byte(maskVal>>8), byte(maskVal>>16), byte(maskVal>>24))
+		routeNet := &net.IPNet{IP: destIP.Mask(maskBytes), Mask: maskBytes}
+		if routeNet.Contains(targetIP) {
+			return true
+		}
+	}
+	return false
+}
+
+// trojanConnectionTestHandler 测试 Trojan-Go 连接状态。
+func trojanConnectionTestHandler(w http.ResponseWriter, r *http.Request) {
+	if trojanClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "Trojan-Go 客户端未初始化")
+		return
+	}
+
+	results := make([]map[string]interface{}, 0)
+
+	// 1. 检查 Trojan-Go API 状态
+	status := trojanClient.snapshot()
+	apiOK := status.Connected
+	results = append(results, map[string]interface{}{
+		"name":    "Trojan-Go API",
+		"status":  apiOK,
+		"message": fmt.Sprintf("Trojan-Go API %s", map[bool]string{true: "正常", false: "离线"}[apiOK]),
+	})
+
+	// 2. 检查 Trojan-Go 服务状态
+	serviceOK := status.Enabled
+	results = append(results, map[string]interface{}{
+		"name":    "Trojan-Go 服务",
+		"status":  serviceOK,
+		"message": fmt.Sprintf("Trojan-Go 服务 %s", map[bool]string{true: "运行中", false: "未启用"}[serviceOK]),
+	})
+
+	// 3. 检查端口监听（本地回环同时尝试 IPv4 与 IPv6，兼容 local_addr 绑定 "::" 的情况）
+	portCheckOK := false
+	port := trojanClient.cfg.Connection.Port
+	for _, addr := range []string{"127.0.0.1", "[::1]"} {
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", addr, port), 3*time.Second)
+		if err == nil {
+			conn.Close()
+			portCheckOK = true
+			break
+		}
+	}
+	results = append(results, map[string]interface{}{
+		"name":    "端口监听",
+		"status":  portCheckOK,
+		"message": fmt.Sprintf("端口 %d %s", port, map[bool]string{true: "正在监听", false: "未监听"}[portCheckOK]),
+	})
+
+	// 4. 检查到家庭局域网的路由（不伪造成功：未发现路由时明确提示）
+	// 优先使用请求中的 lan_cidr（弹窗内自定义网段），否则回退到配置值
+	lanCIDR := trojanClient.cfg.Connection.LanCIDR
+	if cidr := r.URL.Query().Get("lan_cidr"); cidr != "" {
+		if _, _, err := net.ParseCIDR(cidr); err == nil {
+			lanCIDR = cidr
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "家庭局域网 CIDR 无效")
+			return
+		}
+	}
+	lanOK := false
+	lanMsg := "未配置家庭局域网"
+	if lanCIDR != "" {
+		lanOK, lanMsg = hasRouteToLAN(lanCIDR)
+		if lanOK {
+			lanMsg = "家庭局域网 " + lanCIDR + " 路由正常（" + lanMsg + "）"
+		}
+	}
+	results = append(results, map[string]interface{}{
+		"name":    "家庭局域网路由",
+		"status":  lanOK,
+		"message": lanMsg,
+	})
+
+	writeJSON(w, http.StatusOK, "连接测试完成", results)
+}
+
+// trojanClashDownloadHandler 下载 Clash 配置。
+func trojanClashDownloadHandler(w http.ResponseWriter, r *http.Request) {
+	hash := r.PathValue("hash")
+	if hash == "" {
+		writeJSONError(w, http.StatusBadRequest, "缺少用户 hash 参数")
+		return
+	}
+	password, ok := getTrojanCredential(hash)
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "该用户缺少连接凭据")
+		return
+	}
+	cfg := trojanClient.cfg.Connection
+	// 根据连接模式决定是否附加家庭局域网分流规则。
+	// 优先使用请求中的 lan_cidr（弹窗内自定义网段），否则回退到配置 lan=true 逻辑。
+	lanCIDR := ""
+	if cidr := r.URL.Query().Get("lan_cidr"); cidr != "" {
+		if _, _, err := net.ParseCIDR(cidr); err == nil {
+			lanCIDR = cidr
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "家庭局域网 CIDR 无效")
+			return
+		}
+	} else if r.URL.Query().Get("lan") == "true" {
+		lanCIDR = cfg.LanCIDR
+	}
+	clash := generateClashYAML(
+		hash, cfg.Server, cfg.Port, password, cfg.SNI,
+		cfg.WebSocket.Path, cfg.WebSocket.Host, lanCIDR,
+		cfg.UDP, cfg.WebSocket.Enabled,
+	)
+	w.Header().Set("Content-Type", "application/x-yaml")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-clash.yaml"`, hash))
+	_, _ = w.Write([]byte(clash))
+}
+
+// trojanSingboxDownloadHandler 下载 sing-box 配置。
+func trojanSingboxDownloadHandler(w http.ResponseWriter, r *http.Request) {
+	hash := r.PathValue("hash")
+	if hash == "" {
+		writeJSONError(w, http.StatusBadRequest, "缺少用户 hash 参数")
+		return
+	}
+	password, ok := getTrojanCredential(hash)
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "该用户缺少连接凭据")
+		return
+	}
+	cfg := trojanClient.cfg.Connection
+	singbox := generateSingboxJSON(
+		hash, cfg.Server, cfg.Port, password, cfg.SNI,
+		cfg.WebSocket.Path, cfg.WebSocket.Host,
+		cfg.UDP, cfg.WebSocket.Enabled,
+	)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-singbox.json"`, hash))
+	_, _ = w.Write([]byte(singbox))
 }

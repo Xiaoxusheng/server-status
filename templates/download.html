@@ -1,437 +1,611 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>安全下载 - Server Status</title>
     <link rel="icon" href="data:,">
     <style>
-        html, body, #root { margin: 0; min-height: 100%; background: #f5f5f5; }
-        html.dark, html.dark body, html.dark #root { background: #141414; }
-        html.dark body { color: rgba(255,255,255,.85); }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f5f5f5; }
-        ::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #bfbfbf; }
-        html.dark ::-webkit-scrollbar-track { background: #141414; }
-        html.dark ::-webkit-scrollbar-thumb { background: #3a3a3a; }
-        html.dark ::-webkit-scrollbar-thumb:hover { background: #4a4a4a; }
+        html,
+        body,
+        #root {
+            margin: 0;
+            min-height: 100%;
+            background: #f5f5f5;
+        }
+
+        html.dark,
+        html.dark body,
+        html.dark #root {
+            background: #141414;
+        }
+
+        html.dark body {
+            color: rgba(255, 255, 255, .85);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f5f5f5;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #d9d9d9;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #bfbfbf;
+        }
+
+        html.dark ::-webkit-scrollbar-track {
+            background: #141414;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb {
+            background: #3a3a3a;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb:hover {
+            background: #4a4a4a;
+        }
     </style>
     <script>
         (function () {
             try {
                 var dark = localStorage.getItem('theme') === 'dark';
                 document.documentElement.classList.toggle('dark', dark);
-            } catch (e) {}
+            } catch (e) { }
         })();
     </script>
     <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
-    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script crossorigin
+        src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
     <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
     <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
     <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
     <style>
-        body { margin: 0; background: #f5f5f5; }
-        #root { min-height: 100vh; }
-        .page-wrap { padding: 16px; }
+        body {
+            margin: 0;
+            background: #f5f5f5;
+        }
+
+        #root {
+            min-height: 100vh;
+        }
+
+        .page-wrap {
+            padding: 16px;
+        }
+
         .topbar {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 0 24px; height: 56px; background: #fff;
-            border-bottom: 1px solid #f0f0f0; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            height: 56px;
+            background: #fff;
+            border-bottom: 1px solid #f0f0f0;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
         }
-        .topbar .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 17px; color: #1677ff; }
-        .topbar.dark { background: #1f1f1f; border-bottom-color: #303030; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-        .topbar.dark .brand { color: #4096ff; }
+
+        .topbar .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 17px;
+            color: #1677ff;
+        }
+
+        .topbar.dark {
+            background: #1f1f1f;
+            border-bottom-color: #303030;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .topbar.dark .brand {
+            color: #4096ff;
+        }
+
         .topbar .brand .logo {
-            width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #1677ff, #722ed1);
-            display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px;
+            width: 30px;
+            height: 30px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #1677ff, #722ed1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 16px;
         }
-        .token-url { word-break: break-all; background: #f5f5f5; padding: 8px 12px; border-radius: 6px; font-size: 12px; }
-        .token-card { margin-bottom: 10px; }
-        .token-card .ant-card-body { padding: 14px; }
-        .token-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-size: 13px; }
-        .token-row .label { color: #999; font-size: 12px; }
+
+        .topbar .ant-btn {
+            font-size: 13px;
+        }
+
+        .topbar .tb-text {
+            margin-left: 4px;
+        }
+
+        .token-url {
+            word-break: break-all;
+            background: #f5f5f5;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .token-card {
+            margin-bottom: 10px;
+        }
+
+        .token-card .ant-card-body {
+            padding: 14px;
+        }
+
+        .token-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 3px 0;
+            font-size: 13px;
+        }
+
+        .token-row .label {
+            color: #999;
+            font-size: 12px;
+        }
+
         @media (max-width: 768px) {
-            .topbar { padding: 8px 12px; flex-wrap: wrap; gap: 6px 8px; }
-            .topbar .brand { font-size: 14px; gap: 6px; }
-            .topbar .brand .logo { width: 26px; height: 26px; font-size: 14px; border-radius: 6px; }
-            .topbar .ant-space { flex-wrap: wrap; gap: 6px !important; }
-            .topbar .ant-btn { padding: 4px 8px; font-size: 12px; height: 30px; }
-            .topbar .tb-sub { display: none; }
-            .topbar .tb-label { display: none; }
-            .page-wrap { padding: 10px; }
-            .ant-form-item { margin-bottom: 10px !important; }
-            .ant-card-head { padding: 0 12px !important; }
-            .ant-card-head-wrapper { flex-wrap: wrap; gap: 6px; }
-            .ant-card-body { padding: 12px !important; }
+            .topbar {
+                padding: 8px 12px;
+                flex-wrap: wrap;
+                gap: 6px 8px;
+            }
+
+            .topbar .brand {
+                font-size: 14px;
+                gap: 6px;
+            }
+
+            .topbar .brand .logo {
+                width: 26px;
+                height: 26px;
+                font-size: 14px;
+                border-radius: 6px;
+            }
+
+            .topbar .ant-space {
+                flex-wrap: wrap;
+                gap: 6px !important;
+            }
+
+            .topbar .ant-btn {
+                padding: 4px 8px;
+                font-size: 12px;
+                height: 30px;
+            }
+
+            .topbar .tb-sub {
+                display: none;
+            }
+
+            .topbar .tb-text {
+                display: none;
+            }
+
+            .tb-hide-sm {
+                display: none !important;
+            }
+
+            .page-wrap {
+                padding: 10px;
+            }
+
+            .ant-form-item {
+                margin-bottom: 10px !important;
+            }
+
+            .ant-card-head {
+                padding: 0 12px !important;
+            }
+
+            .ant-card-head-wrapper {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            .ant-card-body {
+                padding: 12px !important;
+            }
         }
     </style>
 </head>
+
 <body>
-<div id="root"></div>
-<script type="text/babel">
-    const { Card, Table, Button, Input, Modal, message, Space, Tag, Form, InputNumber, Select, Progress, Alert, ConfigProvider, theme, Typography, Popconfirm, Statistic, Empty } = window.antd;
-    const { useState, useEffect, useCallback } = React;
-    const { darkAlgorithm } = theme;
+    <div id="root"></div>
+    <script type="text/babel">
+        const { Card, Table, Button, Input, Modal, message, Space, Tag, Form, InputNumber, Select, Progress, Alert, ConfigProvider, theme, Typography, Popconfirm, Statistic, Empty, Tooltip } = window.antd;
+        const { useState, useEffect, useCallback } = React;
+        const { darkAlgorithm } = theme;
+        const IconSet = window.icons || {};
+        const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
 
-    function useIsMobile() {
-        const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
-        useEffect(() => {
-            const q = window.matchMedia('(max-width: 768px)');
-            const h = e => setM(e.matches);
-            q.addListener(h);
-            return () => q.removeListener(h);
-        }, []);
-        return m;
-    }
-
-    const baseUrl = window.location.origin;
-
-    function secureFetch(url, options = {}) {
-        return fetch(url, {
-            method: options.method || 'GET',
-            headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-            credentials: 'include',
-            body: options.body
-        });
-    }
-    async function api(path, method, body) {
-        const r = await secureFetch(baseUrl + path, { method: method || 'GET', body: body ? JSON.stringify(body) : undefined });
-        const d = await r.json();
-        if (!r.ok || d.code !== 200) throw new Error(d.message || ('请求失败 (' + r.status + ')'));
-        return d.data;
-    }
-
-    function formatBytes(bytes) {
-        if (!bytes) return '0 B';
-        const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    function App() {
-        const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
-        const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
-        const [tokens, setTokens] = useState([]);
-        const [loading, setLoading] = useState(false);
-        const [genForm] = Form.useForm();
-        const [newToken, setNewToken] = useState(null);
-        const [dlForm] = Form.useForm();
-        const [dlProgress, setDlProgress] = useState(null);
-        const isMobile = useIsMobile();
-
-        const hasPerm = p => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
-        const canIssue = hasPerm('token:issue');
-        const canDownload = hasPerm('files:download') || canIssue;
-
-        useEffect(() => {
-            secureFetch(baseUrl + '/check-auth')
-                .then(r => r.json())
-                .then(d => {
-                    if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
-                    else window.location.href = 'index.html';
-                })
-                .catch(() => { window.location.href = 'index.html'; });
-        }, []);
-        useEffect(() => {
-            localStorage.setItem('theme', isDark ? 'dark' : 'light');
-            document.documentElement.classList.toggle('dark', isDark);
-            document.body.classList.toggle('dark', isDark);
-            document.body.style.background = isDark ? '#141414' : '#f5f5f5';
-        }, [isDark]);
-
-        const loadTokens = useCallback(async () => {
-            setLoading(true);
-            try { setTokens(await api('/list-download-tokens')); } catch (e) { message.error('加载令牌失败: ' + e.message); } finally { setLoading(false); }
-        }, []);
-        useEffect(() => { if (auth.ok) loadTokens(); }, [auth.ok, loadTokens]);
-
-        if (auth.loading) {
-            return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Card loading style={{ width: 320 }} /></div>;
-        }
-        if (!canDownload) {
-            return <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
-                <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
-                    <Card style={{ width: 380, textAlign: 'center' }}>
-                        <div style={{ fontSize: 48 }}>🚫</div>
-                        <Typography.Title level={4}>没有下载权限</Typography.Title>
-                        <Typography.Text type="secondary">请联系管理员开通「下载文件」权限或获取下载令牌。</Typography.Text>
-                        <div style={{ marginTop: 16 }}><Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button></div>
-                    </Card>
-                </div>
-            </ConfigProvider>;
+        function useIsMobile() {
+            const [m, setM] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches);
+            useEffect(() => {
+                const q = window.matchMedia('(max-width: 768px)');
+                const h = e => setM(e.matches);
+                q.addListener(h);
+                return () => q.removeListener(h);
+            }, []);
+            return m;
         }
 
-        const generate = async () => {
-            const v = await genForm.validateFields();
-            const body = { description: v.description || '临时下载令牌' };
-            if (v.username) body.username = v.username;
-            if (v.expiry) body.expires_in = v.expiry;
-            if (v.quota) body.max_bytes = v.quota * 1024 * 1024;
-            try {
-                const data = await api('/generate-download-token', 'POST', body);
-                setNewToken(data);
-                message.success('令牌生成成功');
-                loadTokens();
-            } catch (e) { message.error(e.message); }
-        };
+        const baseUrl = window.location.origin;
 
-        const parseDownloadUrl = (url) => {
-            try {
-                const u = new URL(url);
-                const tid = u.searchParams.get('token_id');
-                const tv = u.searchParams.get('token');
-                if (tid || tv) {
-                    const patch = {};
-                    if (tid) patch.token_id = tid;
-                    if (tv) patch.token_value = tv;
-                    dlForm.setFieldsValue(patch);
-                    if (tid && tv) message.success('已从链接解析出令牌ID和令牌值');
-                }
-            } catch (e) { /* 忽略非URL输入 */ }
-        };
+        // 读取非 HttpOnly 的 csrf_token Cookie；写请求自动携带，会话 Cookie 由 credentials: include 携带
+        function getCsrfToken() { const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+        function secureFetch(url, options = {}) {
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) { const tok = getCsrfToken(); if (tok) headers['X-CSRF-Token'] = tok; }
+            return fetch(url, { method, headers, credentials: 'include', body: options.body });
+        }
+        async function api(path, method, body) {
+            const r = await secureFetch(baseUrl + path, { method: method || 'GET', body: body ? JSON.stringify(body) : undefined });
+            const d = await r.json();
+            if (!r.ok || d.code !== 200) throw new Error(d.message || ('请求失败 (' + r.status + ')'));
+            return d.data;
+        }
 
-        const startDownload = async () => {
-            const v = await dlForm.validateFields();
-            let filePath = '';
-            try {
-                const u = new URL(v.fileUrl);
-                if (u.pathname.replace(/\/+$/, '').endsWith('/download') || u.searchParams.has('file')) {
-                    filePath = u.searchParams.get('file') || '';
-                }
-            } catch (e) { /* 普通文件链接走下面逻辑 */ }
-            if (!filePath) {
-                filePath = v.fileUrl.replace(/^https?:\/\/[^/]+\/static\//, '').replace(/^\//, '');
+        function formatBytes(bytes) {
+            if (!bytes) return '0 B';
+            const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function App() {
+            const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const [tokens, setTokens] = useState([]);
+            const [loading, setLoading] = useState(false);
+            const [genForm] = Form.useForm();
+            const [newToken, setNewToken] = useState(null);
+            const [dlForm] = Form.useForm();
+            const [dlProgress, setDlProgress] = useState(null);
+            const isMobile = useIsMobile();
+
+            const hasPerm = p => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+            const canIssue = hasPerm('token:issue');
+            const canDownload = hasPerm('files:download') || canIssue;
+
+            useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
+                        else window.location.href = 'index.html';
+                    })
+                    .catch(() => { window.location.href = 'index.html'; });
+            }, []);
+            useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+            }, [isDark]);
+
+            const loadTokens = useCallback(async () => {
+                setLoading(true);
+                try { setTokens(await api('/list-download-tokens')); } catch (e) { message.error('加载令牌失败: ' + e.message); } finally { setLoading(false); }
+            }, []);
+            useEffect(() => { if (auth.ok) loadTokens(); }, [auth.ok, loadTokens]);
+
+            if (auth.loading) {
+                return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Card loading style={{ width: 320 }} /></div>;
             }
-            if (!filePath) { message.warning('无法解析文件路径'); return; }
-            const url = baseUrl + '/download?token_id=' + encodeURIComponent(v.token_id) +
-                '&token=' + encodeURIComponent(v.token_value) + '&file=' + encodeURIComponent(filePath);
-            setDlProgress({ percent: 0, loaded: 0, total: 0, speed: 0, filename: filePath.split('/').pop() });
-            try {
-                const resp = await fetch(url, { credentials: 'include' });
-                if (!resp.ok) {
-                    const d = await resp.json().catch(() => ({}));
-                    throw new Error(d.message || ('HTTP ' + resp.status));
-                }
-                const total = parseInt(resp.headers.get('Content-Length') || '0', 10);
-                const reader = resp.body.getReader();
-                const chunks = [];
-                let loaded = 0, start = Date.now();
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    chunks.push(value);
-                    loaded += value.length;
-                    const secs = (Date.now() - start) / 1000 || 1;
-                    setDlProgress({ percent: total ? Math.min(100, loaded / total * 100) : 0, loaded, total, speed: loaded / secs, filename: filePath.split('/').pop() });
-                }
-                const blob = new Blob(chunks);
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = filePath.split('/').pop() || 'download';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(a.href);
-                setDlProgress({ percent: 100, loaded, total, speed: 0, filename: filePath.split('/').pop() });
-                message.success('下载完成');
-                loadTokens();
-            } catch (e) {
-                message.error('下载失败: ' + e.message);
-                setDlProgress(null);
-            }
-        };
-
-        const tokenColumns = [
-            { title: '令牌ID', dataIndex: 'token_id', width: 200, render: v => <Typography.Text code copyable>{v}</Typography.Text> },
-            { title: '令牌值', dataIndex: 'token', width: 240, render: v => <Typography.Text code copyable style={{ wordBreak: 'break-all' }}>{v || '-'}</Typography.Text> },
-            ...(canIssue ? [{ title: '归属用户', dataIndex: 'username', width: 110, render: v => <Tag color="blue">{v || '-'}</Tag> }] : []),
-            { title: '描述', dataIndex: 'description', ellipsis: true },
-            { title: '到期时间', dataIndex: 'expires_at', width: 170, render: v => <Typography.Text type="secondary">{v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text> },
-            {
-                title: '流量', key: 'quota', width: 160,
-                render: (_, t) => {
-                    const pct = t.max_bytes ? Math.max(0, Math.min(100, (t.max_bytes - t.used_bytes) / t.max_bytes * 100)) : 0;
-                    return <div>
-                        <Progress percent={pct} size="small" format={() => formatBytes(t.max_bytes - t.used_bytes) + ' / ' + formatBytes(t.max_bytes)} />
-                    </div>;
-                }
-            },
-            { title: '状态', dataIndex: 'is_active', width: 80, render: (v, t) => {
-                const expired = t.expires_at && new Date(t.expires_at) < new Date();
-                if (!v) return <Tag color="red">已撤销</Tag>;
-                if (expired) return <Tag color="default">已过期</Tag>;
-                return <Tag color="green">有效</Tag>;
-            } },
-            {
-                title: '操作', key: 'op', width: 130, fixed: 'right',
-                render: (_, t) => <Space>
-                    <Button size="small" onClick={() => {
-                        Modal.info({
-                            title: '令牌信息',
-                            content: <div>
-                                <div>令牌ID: <Typography.Text code>{t.token_id}</Typography.Text></div>
-                                <div style={{ marginTop: 4 }}>令牌值: <Typography.Text code>{t.token}</Typography.Text></div>
-                            </div>
-                        });
-                    }}>查看</Button>
-                    {t.is_active && <Popconfirm title="撤销该令牌？" onConfirm={async () => {
-                        try { await api('/revoke-download-token?token_id=' + encodeURIComponent(t.token_id), 'POST'); message.success('已撤销'); loadTokens(); } catch (e) { message.error(e.message); }
-                    }}><Button size="small" danger>撤销</Button></Popconfirm>}
-                </Space>
-            }
-        ];
-
-        return (
-            <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
-                <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
-                    <div className={'topbar' + (isDark ? ' dark' : '')}>
-                        <div className="brand"><span className="logo">📥</span><span>Server Status<span className="tb-sub"> · 安全下载</span></span></div>
-                        <Space>
-                            <Button title="首页" onClick={() => window.location.href = 'index.html'}>🏠<span className="tb-label">首页</span></Button>
-                            <Button title={isDark ? '浅色模式' : '深色模式'} onClick={() => setIsDark(!isDark)}>{isDark ? '🌞' : '🌙'}<span className="tb-label">{isDark ? '浅色' : '深色'}</span></Button>
-                            <Button danger title="退出登录" onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}>🚪<span className="tb-label">退出</span></Button>
-                        </Space>
+            if (!canDownload) {
+                return <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <Card style={{ width: 380, textAlign: 'center' }}>
+                            <div style={{ fontSize: 48 }}>🚫</div>
+                            <Typography.Title level={4}>没有下载权限</Typography.Title>
+                            <Typography.Text type="secondary">请联系管理员开通「下载文件」权限或获取下载令牌。</Typography.Text>
+                            <div style={{ marginTop: 16 }}><Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button></div>
+                        </Card>
                     </div>
-                    <div className="page-wrap">
-                        {canIssue && (
-                            <Card title="🔑 生成新下载令牌" style={{ marginBottom: 12 }}>
-                                <Form form={genForm} layout="vertical">
+                </ConfigProvider>;
+            }
+
+            const generate = async () => {
+                const v = await genForm.validateFields();
+                const body = { description: v.description || '临时下载令牌' };
+                if (v.username) body.username = v.username;
+                if (v.expiry) body.expires_in = v.expiry;
+                if (v.quota) body.max_bytes = v.quota * 1024 * 1024;
+                try {
+                    const data = await api('/generate-download-token', 'POST', body);
+                    setNewToken(data);
+                    message.success('令牌生成成功');
+                    loadTokens();
+                } catch (e) { message.error(e.message); }
+            };
+
+            const parseDownloadUrl = (url) => {
+                try {
+                    const u = new URL(url);
+                    const tid = u.searchParams.get('token_id');
+                    const tv = u.searchParams.get('token');
+                    if (tid || tv) {
+                        const patch = {};
+                        if (tid) patch.token_id = tid;
+                        if (tv) patch.token_value = tv;
+                        dlForm.setFieldsValue(patch);
+                        if (tid && tv) message.success('已从链接解析出令牌ID和令牌值');
+                    }
+                } catch (e) { /* 忽略非URL输入 */ }
+            };
+
+            const startDownload = async () => {
+                const v = await dlForm.validateFields();
+                let filePath = '';
+                try {
+                    const u = new URL(v.fileUrl);
+                    if (u.pathname.replace(/\/+$/, '').endsWith('/download') || u.searchParams.has('file')) {
+                        filePath = u.searchParams.get('file') || '';
+                    }
+                } catch (e) { /* 普通文件链接走下面逻辑 */ }
+                if (!filePath) {
+                    filePath = v.fileUrl.replace(/^https?:\/\/[^/]+\/static\//, '').replace(/^\//, '');
+                }
+                if (!filePath) { message.warning('无法解析文件路径'); return; }
+                const url = baseUrl + '/download?token_id=' + encodeURIComponent(v.token_id) +
+                    '&token=' + encodeURIComponent(v.token_value) + '&file=' + encodeURIComponent(filePath);
+                setDlProgress({ percent: 0, loaded: 0, total: 0, speed: 0, filename: filePath.split('/').pop() });
+                try {
+                    const resp = await fetch(url, { credentials: 'include' });
+                    if (!resp.ok) {
+                        const d = await resp.json().catch(() => ({}));
+                        throw new Error(d.message || ('HTTP ' + resp.status));
+                    }
+                    const total = parseInt(resp.headers.get('Content-Length') || '0', 10);
+                    const reader = resp.body.getReader();
+                    const chunks = [];
+                    let loaded = 0, start = Date.now();
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                        loaded += value.length;
+                        const secs = (Date.now() - start) / 1000 || 1;
+                        setDlProgress({ percent: total ? Math.min(100, loaded / total * 100) : 0, loaded, total, speed: loaded / secs, filename: filePath.split('/').pop() });
+                    }
+                    const blob = new Blob(chunks);
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = filePath.split('/').pop() || 'download';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(a.href);
+                    setDlProgress({ percent: 100, loaded, total, speed: 0, filename: filePath.split('/').pop() });
+                    message.success('下载完成');
+                    loadTokens();
+                } catch (e) {
+                    message.error('下载失败: ' + e.message);
+                    setDlProgress(null);
+                }
+            };
+
+            const tokenColumns = [
+                { title: '令牌ID', dataIndex: 'token_id', width: 200, render: v => <Typography.Text code copyable>{v}</Typography.Text> },
+                { title: '令牌值', dataIndex: 'token', width: 240, render: v => <Typography.Text code copyable style={{ wordBreak: 'break-all' }}>{v || '-'}</Typography.Text> },
+                ...(canIssue ? [{ title: '归属用户', dataIndex: 'username', width: 110, render: v => <Tag color="blue">{v || '-'}</Tag> }] : []),
+                { title: '描述', dataIndex: 'description', ellipsis: true },
+                { title: '到期时间', dataIndex: 'expires_at', width: 170, render: v => <Typography.Text type="secondary">{v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text> },
+                {
+                    title: '流量', key: 'quota', width: 160,
+                    render: (_, t) => {
+                        const pct = t.max_bytes ? Math.max(0, Math.min(100, (t.max_bytes - t.used_bytes) / t.max_bytes * 100)) : 0;
+                        return <div>
+                            <Progress percent={pct} size="small" format={() => formatBytes(t.max_bytes - t.used_bytes) + ' / ' + formatBytes(t.max_bytes)} />
+                        </div>;
+                    }
+                },
+                {
+                    title: '状态', dataIndex: 'is_active', width: 80, render: (v, t) => {
+                        const expired = t.expires_at && new Date(t.expires_at) < new Date();
+                        if (!v) return <Tag color="red">已撤销</Tag>;
+                        if (expired) return <Tag color="default">已过期</Tag>;
+                        return <Tag color="green">有效</Tag>;
+                    }
+                },
+                {
+                    title: '操作', key: 'op', width: 130, fixed: 'right',
+                    render: (_, t) => <Space>
+                        <Button size="small" onClick={() => {
+                            Modal.info({
+                                title: '令牌信息',
+                                content: <div>
+                                    <div>令牌ID: <Typography.Text code>{t.token_id}</Typography.Text></div>
+                                    <div style={{ marginTop: 4 }}>令牌值: <Typography.Text code>{t.token}</Typography.Text></div>
+                                </div>
+                            });
+                        }}>查看</Button>
+                        {t.is_active && <Popconfirm title="撤销该令牌？" onConfirm={async () => {
+                            try { await api('/revoke-download-token?token_id=' + encodeURIComponent(t.token_id), 'POST'); message.success('已撤销'); loadTokens(); } catch (e) { message.error(e.message); }
+                        }}><Button size="small" danger>撤销</Button></Popconfirm>}
+                    </Space>
+                }
+            ];
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <div className={'topbar' + (isDark ? ' dark' : '')}>
+                            <div className="brand"><span className="logo">📥</span><span>Server Status<span className="tb-sub"> · 安全下载</span></span></div>
+                            <Space>
+                                <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>
+                                <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                                    <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                                </Tooltip>
+                                <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}><span className="tb-text">退出</span></Button>
+                            </Space>
+                        </div>
+                        <div className="page-wrap">
+                            {canIssue && (
+                                <Card title="🔑 生成新下载令牌" style={{ marginBottom: 12 }}>
+                                    <Form form={genForm} layout="vertical">
+                                        <Space size={12} wrap style={{ display: 'flex' }}>
+                                            <Form.Item name="description" label="令牌描述（可选）" style={{ flex: 2, minWidth: 220 }}>
+                                                <Input placeholder="例如：项目文件下载" />
+                                            </Form.Item>
+                                            <Form.Item name="username" label="签发给用户（留空 = 自己）" style={{ flex: 1, minWidth: 180 }}>
+                                                <Input placeholder="目标用户名" />
+                                            </Form.Item>
+                                            <Form.Item name="expiry" label="有效期（分钟，留空=30）" style={{ flex: 1, minWidth: 160 }}>
+                                                <InputNumber min={1} max={43200} style={{ width: '100%' }} placeholder="60" />
+                                            </Form.Item>
+                                            <Form.Item name="quota" label="流量上限（MB，留空=3072）" style={{ flex: 1, minWidth: 160 }}>
+                                                <InputNumber min={1} style={{ width: '100%' }} placeholder="1024" />
+                                            </Form.Item>
+                                        </Space>
+                                        <Button type="primary" onClick={generate}>🎫 生成下载令牌</Button>
+                                    </Form>
+                                    {newToken && (
+                                        <Alert type="success" showIcon style={{ marginTop: 12 }} message="令牌生成成功"
+                                            description={<div>
+                                                <div>令牌ID: <Typography.Text code>{newToken.token_id}</Typography.Text></div>
+                                                <div style={{ margin: '4px 0' }}>令牌值: <Typography.Text code>{newToken.token}</Typography.Text></div>
+                                                <div style={{ marginBottom: 6 }}>有效期至 {newToken.expires_at} · 流量 {formatBytes(newToken.max_bytes)}</div>
+                                                <Button size="small" onClick={() => {
+                                                    const txt = '令牌ID: ' + newToken.token_id + '\n令牌值: ' + newToken.token;
+                                                    navigator.clipboard.writeText(txt).then(() => message.success('已复制令牌'));
+                                                }}>📋 复制令牌</Button>
+                                            </div>} />
+                                    )}
+                                </Card>
+                            )}
+
+                            <Card title="🚀 文件下载" style={{ marginBottom: 12 }}>
+                                <Form form={dlForm} layout="vertical">
                                     <Space size={12} wrap style={{ display: 'flex' }}>
-                                        <Form.Item name="description" label="令牌描述（可选）" style={{ flex: 2, minWidth: 220 }}>
-                                            <Input placeholder="例如：项目文件下载" />
+                                        <Form.Item name="fileUrl" label="文件链接" rules={[{ required: true, message: '请输入文件链接' }]} style={{ flex: 2, minWidth: 260 }}>
+                                            <Input placeholder="文件链接或下载链接（粘贴后自动解析令牌ID/令牌值）" onChange={e => parseDownloadUrl(e.target.value)} />
                                         </Form.Item>
-                                        <Form.Item name="username" label="签发给用户（留空 = 自己）" style={{ flex: 1, minWidth: 180 }}>
-                                            <Input placeholder="目标用户名" />
+                                        <Form.Item name="token_id" label="令牌ID" rules={[{ required: true, message: '请输入令牌ID' }]} style={{ flex: 1, minWidth: 180 }}>
+                                            <Input placeholder="令牌ID" />
                                         </Form.Item>
-                                        <Form.Item name="expiry" label="有效期（分钟，留空=30）" style={{ flex: 1, minWidth: 160 }}>
-                                            <InputNumber min={1} max={43200} style={{ width: '100%' }} placeholder="60" />
-                                        </Form.Item>
-                                        <Form.Item name="quota" label="流量上限（MB，留空=3072）" style={{ flex: 1, minWidth: 160 }}>
-                                            <InputNumber min={1} style={{ width: '100%' }} placeholder="1024" />
+                                        <Form.Item name="token_value" label="令牌值" rules={[{ required: true, message: '请输入令牌值' }]} style={{ flex: 1, minWidth: 180 }}>
+                                            <Input placeholder="令牌值" />
                                         </Form.Item>
                                     </Space>
-                                    <Button type="primary" onClick={generate}>🎫 生成下载令牌</Button>
+                                    <Button type="primary" onClick={startDownload}>🚀 开始下载</Button>
                                 </Form>
-                                {newToken && (
-                                    <Alert type="success" showIcon style={{ marginTop: 12 }} message="令牌生成成功"
-                                           description={<div>
-                                               <div>令牌ID: <Typography.Text code>{newToken.token_id}</Typography.Text></div>
-                                               <div style={{ margin: '4px 0' }}>令牌值: <Typography.Text code>{newToken.token}</Typography.Text></div>
-                                               <div style={{ marginBottom: 6 }}>有效期至 {newToken.expires_at} · 流量 {formatBytes(newToken.max_bytes)}</div>
-                                               <Button size="small" onClick={() => {
-                                                   const txt = '令牌ID: ' + newToken.token_id + '\n令牌值: ' + newToken.token;
-                                                   navigator.clipboard.writeText(txt).then(() => message.success('已复制令牌'));
-                                               }}>📋 复制令牌</Button>
-                                           </div>} />
+                                {dlProgress && (
+                                    <div style={{ marginTop: 12 }}>
+                                        <Progress percent={dlProgress.percent} status={dlProgress.percent >= 100 ? 'success' : 'active'} />
+                                        <Typography.Text type="secondary">
+                                            已下载 {formatBytes(dlProgress.loaded)} / {dlProgress.total ? formatBytes(dlProgress.total) : '未知'}
+                                            {dlProgress.speed > 0 && ` · ${formatBytes(dlProgress.speed)}/s`}
+                                        </Typography.Text>
+                                    </div>
                                 )}
                             </Card>
-                        )}
 
-                        <Card title="🚀 文件下载" style={{ marginBottom: 12 }}>
-                            <Form form={dlForm} layout="vertical">
-                                <Space size={12} wrap style={{ display: 'flex' }}>
-                                    <Form.Item name="fileUrl" label="文件链接" rules={[{ required: true, message: '请输入文件链接' }]} style={{ flex: 2, minWidth: 260 }}>
-                                        <Input placeholder="文件链接或下载链接（粘贴后自动解析令牌ID/令牌值）" onChange={e => parseDownloadUrl(e.target.value)} />
-                                    </Form.Item>
-                                    <Form.Item name="token_id" label="令牌ID" rules={[{ required: true, message: '请输入令牌ID' }]} style={{ flex: 1, minWidth: 180 }}>
-                                        <Input placeholder="令牌ID" />
-                                    </Form.Item>
-                                    <Form.Item name="token_value" label="令牌值" rules={[{ required: true, message: '请输入令牌值' }]} style={{ flex: 1, minWidth: 180 }}>
-                                        <Input placeholder="令牌值" />
-                                    </Form.Item>
-                                </Space>
-                                <Button type="primary" onClick={startDownload}>🚀 开始下载</Button>
-                            </Form>
-                            {dlProgress && (
-                                <div style={{ marginTop: 12 }}>
-                                    <Progress percent={dlProgress.percent} status={dlProgress.percent >= 100 ? 'success' : 'active'} />
-                                    <Typography.Text type="secondary">
-                                        已下载 {formatBytes(dlProgress.loaded)} / {dlProgress.total ? formatBytes(dlProgress.total) : '未知'}
-                                        {dlProgress.speed > 0 && ` · ${formatBytes(dlProgress.speed)}/s`}
-                                    </Typography.Text>
-                                </div>
-                            )}
-                        </Card>
-
-                        <Card title={canIssue ? `📋 全部下载令牌（${tokens.length}）` : `📋 我的下载令牌（${tokens.length}）`}>
-                            {isMobile ? (
-                                <div>
-                                    {tokens.map(t => {
-                                        const expired = t.expires_at && new Date(t.expires_at) < new Date();
-                                        const status = !t.is_active ? <Tag color="red">已撤销</Tag> : expired ? <Tag>已过期</Tag> : <Tag color="green">有效</Tag>;
-                                        const pct = t.max_bytes ? Math.max(0, Math.min(100, (t.max_bytes - t.used_bytes) / t.max_bytes * 100)) : 0;
-                                        return <Card key={t.token_id} size="small" hoverable bordered className="token-card">
-                                            <div className="token-row"><span className="label">令牌ID</span><Typography.Text code style={{ fontSize: 12 }}>{t.token_id}</Typography.Text></div>
-                                            <div className="token-row"><span className="label">令牌值</span><Typography.Text code style={{ fontSize: 12, wordBreak: 'break-all' }}>{t.token}</Typography.Text></div>
-                                            {canIssue && <div className="token-row"><span className="label">归属用户</span><Tag color="blue">{t.username || '-'}</Tag></div>}
-                                            <div className="token-row"><span className="label">到期时间</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.expires_at ? new Date(t.expires_at).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text></div>
-                                            <div className="token-row"><span className="label">剩余流量</span><span style={{ fontSize: 12 }}>{formatBytes(t.max_bytes - t.used_bytes)} / {formatBytes(t.max_bytes)}</span></div>
-                                            <Progress percent={pct} size="small" style={{ margin: '4px 0 8px' }} />
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <span>{status}</span>
-                                                <Space size={4}>
-                                                    <Button size="small" onClick={() => {
-                                                        Modal.info({ title: '令牌信息', content: <div>
-                                                            <div>令牌ID: <Typography.Text code>{t.token_id}</Typography.Text></div>
-                                                            <div style={{ marginTop: 4 }}>令牌值: <Typography.Text code>{t.token}</Typography.Text></div>
-                                                        </div> });
-                                                    }}>查看</Button>
-                                                    {t.is_active && <Button size="small" danger onClick={() => {
-                                                        Modal.confirm({ title: '撤销令牌', content: '确定撤销该令牌吗？', okText: '撤销', okButtonProps: { danger: true }, onOk: async () => {
-                                                            try { await api('/revoke-download-token?token_id=' + encodeURIComponent(t.token_id), 'POST'); message.success('已撤销'); loadTokens(); } catch (e) { message.error(e.message); }
-                                                        } });
-                                                    }}>撤销</Button>}
-                                                </Space>
-                                            </div>
-                                        </Card>;
-                                    })}
-                                    {!tokens.length && <Empty description="暂无下载令牌" style={{ padding: 30 }} />}
-                                </div>
-                            ) : (
-                                <Table rowKey="token_id" columns={tokenColumns} dataSource={tokens} loading={loading} size="middle"
-                                       scroll={{ x: 900 }} pagination={{ pageSize: 10, showSizeChanger: true, showTotal: t => `共 ${t} 条` }} />
-                            )}
-                        </Card>
+                            <Card title={canIssue ? `📋 全部下载令牌（${tokens.length}）` : `📋 我的下载令牌（${tokens.length}）`}>
+                                {isMobile ? (
+                                    <div>
+                                        {tokens.map(t => {
+                                            const expired = t.expires_at && new Date(t.expires_at) < new Date();
+                                            const status = !t.is_active ? <Tag color="red">已撤销</Tag> : expired ? <Tag>已过期</Tag> : <Tag color="green">有效</Tag>;
+                                            const pct = t.max_bytes ? Math.max(0, Math.min(100, (t.max_bytes - t.used_bytes) / t.max_bytes * 100)) : 0;
+                                            return <Card key={t.token_id} size="small" hoverable bordered className="token-card">
+                                                <div className="token-row"><span className="label">令牌ID</span><Typography.Text code style={{ fontSize: 12 }}>{t.token_id}</Typography.Text></div>
+                                                <div className="token-row"><span className="label">令牌值</span><Typography.Text code style={{ fontSize: 12, wordBreak: 'break-all' }}>{t.token}</Typography.Text></div>
+                                                {canIssue && <div className="token-row"><span className="label">归属用户</span><Tag color="blue">{t.username || '-'}</Tag></div>}
+                                                <div className="token-row"><span className="label">到期时间</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{t.expires_at ? new Date(t.expires_at).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text></div>
+                                                <div className="token-row"><span className="label">剩余流量</span><span style={{ fontSize: 12 }}>{formatBytes(t.max_bytes - t.used_bytes)} / {formatBytes(t.max_bytes)}</span></div>
+                                                <Progress percent={pct} size="small" style={{ margin: '4px 0 8px' }} />
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span>{status}</span>
+                                                    <Space size={4}>
+                                                        <Button size="small" onClick={() => {
+                                                            Modal.info({
+                                                                title: '令牌信息', content: <div>
+                                                                    <div>令牌ID: <Typography.Text code>{t.token_id}</Typography.Text></div>
+                                                                    <div style={{ marginTop: 4 }}>令牌值: <Typography.Text code>{t.token}</Typography.Text></div>
+                                                                </div>
+                                                            });
+                                                        }}>查看</Button>
+                                                        {t.is_active && <Button size="small" danger onClick={() => {
+                                                            Modal.confirm({
+                                                                title: '撤销令牌', content: '确定撤销该令牌吗？', okText: '撤销', okButtonProps: { danger: true }, onOk: async () => {
+                                                                    try { await api('/revoke-download-token?token_id=' + encodeURIComponent(t.token_id), 'POST'); message.success('已撤销'); loadTokens(); } catch (e) { message.error(e.message); }
+                                                                }
+                                                            });
+                                                        }}>撤销</Button>}
+                                                    </Space>
+                                                </div>
+                                            </Card>;
+                                        })}
+                                        {!tokens.length && <Empty description="暂无下载令牌" style={{ padding: 30 }} />}
+                                    </div>
+                                ) : (
+                                    <Table rowKey="token_id" columns={tokenColumns} dataSource={tokens} loading={loading} size="middle"
+                                        scroll={{ x: 900 }} pagination={{ pageSize: 10, showSizeChanger: true, showTotal: t => `共 ${t} 条` }} />
+                                )}
+                            </Card>
+                        </div>
                     </div>
-                </div>
-            </ConfigProvider>
-        );
-    }
-
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-</script>
-<script>
-    (function () {
-        function openPrivateSpace() {
-            try {
-                fetch('/api/private/entry', { method: 'POST', credentials: 'include' })
-                    .catch(function () {})
-                    .finally(function () { window.location.href = 'private.html'; });
-            } catch (e) { window.location.href = 'private.html'; }
+                </ConfigProvider>
+            );
         }
-        var taps = [], lastTap = 0;
-        document.addEventListener('keydown', function (e) {
-            if (e.ctrlKey && e.shiftKey && e.altKey && (e.key === 'N' || e.key === 'n')) {
-                e.preventDefault();
-                openPrivateSpace();
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+    <script>
+        (function () {
+            function getCsrfToken() { var m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+            function openPrivateSpace() {
+                try {
+                    fetch('/api/private/entry', { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() }, credentials: 'include' })
+                        .catch(function () { })
+                        .finally(function () { window.location.href = 'private.html'; });
+                } catch (e) { window.location.href = 'private.html'; }
             }
-        });
-        document.addEventListener('click', function (e) {
-            var el = e.target;
-            while (el && el !== document.documentElement) {
-                if (el.classList && (el.classList.contains('logo') || el.classList.contains('brand'))) {
-                    var now = Date.now();
-                    if (now - lastTap > 3000) taps = [];
-                    lastTap = now;
-                    taps.push(now);
-                    if (taps.length >= 5) { taps = []; openPrivateSpace(); }
-                    return;
+            var taps = [], lastTap = 0;
+            document.addEventListener('keydown', function (e) {
+                if (e.ctrlKey && e.shiftKey && e.altKey && (e.key === 'N' || e.key === 'n')) {
+                    e.preventDefault();
+                    openPrivateSpace();
                 }
-                el = el.parentElement;
-            }
-        });
-    })();
-</script>
+            });
+            document.addEventListener('click', function (e) {
+                var el = e.target;
+                while (el && el !== document.documentElement) {
+                    if (el.classList && (el.classList.contains('logo') || el.classList.contains('brand'))) {
+                        var now = Date.now();
+                        if (now - lastTap > 3000) taps = [];
+                        lastTap = now;
+                        taps.push(now);
+                        if (taps.length >= 5) { taps = []; openPrivateSpace(); }
+                        return;
+                    }
+                    el = el.parentElement;
+                }
+            });
+        })();
+    </script>
 </body>
+
 </html>
