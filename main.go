@@ -109,6 +109,13 @@ func fallbackSigningDigest(n int64) string {
 // logDir 日志目录（生产默认 /opt/server-status/log，可用 SERVER_STATUS_HOME 覆盖便于本地测试/开发）
 var logDir = defaultLogDir()
 
+// 版本信息（由 CI 通过 -ldflags "-X" 注入，本地构建时为 dev）
+var (
+	version   = "dev"
+	commit    = "none"
+	buildDate = "unknown"
+)
+
 func defaultLogDir() string {
 	if root := os.Getenv("SERVER_STATUS_HOME"); root != "" {
 		return filepath.Join(root, "log")
@@ -5503,6 +5510,8 @@ func execHandler(w http.ResponseWriter, r *http.Request) {
 
 // main 主宰整个程序的挂载，驱动所有路由装配及守望守护协程开启
 func main() {
+	log.Printf("🚀 server-status 启动 version=%s commit=%s buildDate=%s", version, commit, buildDate)
+
 	// 初始化用户系统
 	loadUsers()
 
