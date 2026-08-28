@@ -97,7 +97,12 @@ jobs:
       - name: Create checksum
         run: |
           cd dist
-          shasum -a 256 ${{ env.BINARY_NAME }}${{ matrix.ext || '' }} > ${{ env.BINARY_NAME }}-${{ matrix.target }}-${{ env.BUILD_VERSION }}.sha256
+          # macOS 只有 shasum，Linux/Windows(Git Bash) 只有 sha256sum，做兼容回退
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum ${{ env.BINARY_NAME }}${{ matrix.ext || '' }} > ${{ env.BINARY_NAME }}-${{ matrix.target }}-${{ env.BUILD_VERSION }}.sha256
+          else
+            shasum -a 256 ${{ env.BINARY_NAME }}${{ matrix.ext || '' }} > ${{ env.BINARY_NAME }}-${{ matrix.target }}-${{ env.BUILD_VERSION }}.sha256
+          fi
 
       - name: Create archive
         run: |
