@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+    <title>Web Shell - Server Status</title>
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3C/svg%3E">
+    <style>
+        /* ===== 基础 ===== */
+        html,
+        body,
+        #root {
+            margin: 0;
+            min-height: 100%;
+        }
+
+        html.dark body {
+            color: rgba(255, 255, 255, .85);
+        }
+
+        /* 全局细滚动条（页面级） */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cfd4da;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #aeb6bf;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb {
+            background: #3a4149;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb:hover {
+            background: #4a535e;
+        }
+    </style>
+    <script>
+        // 主题：在渲染前应用，避免闪烁
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) { }
+        })();
+    </script>
+    <!-- 前端依赖全部本地托管（templates/lib/），避免外部 CDN 在部分网络(尤其手机)加载失败导致白屏 -->
+    <script src="lib/react.production.min.js"></script>
+    <script src="lib/react-dom.production.min.js"></script>
+    <script src="lib/dayjs.min.js"></script>
+    <script src="lib/antd.min.js"></script>
+    <script src="lib/icons.umd.js"></script>
+    <script src="lib/babel.min.js"></script>
+    <link rel="stylesheet" href="lib/xterm.min.css">
+    <script src="lib/xterm.min.js"></script>
+    <script src="lib/addon-fit.min.js"></script>
+</head>
+
+<body>
+    <!-- React 根容器：createRoot 依赖的 #root，缺失会导致 React error #299 白屏 -->
+    <div id="root"></div>
+    <style>
+        /* ========== 设计令牌（与项目 Light/Dark 一致，不引入独立主题系统） ========== */
+        .sp-app {
+            --bg: #f5f6f8;
+            --panel: #ffffff;
+            --panel2: #f8fafc;
+            --line: #e6e9ed;
+            --txt: #1f2328;
+            --muted: #6b7178;
+            --accent: #1677ff;
+            --accent-weak: #eaf2ff;
+            --green: #16a34a;
+            --yellow: #d69e2e;
+            --red: #dc2626;
+            --term-bg: #1e2430;
+            /* Light 模式终端用柔和深灰，非纯黑 */
+            background: var(--bg);
+            color: var(--txt);
+        }
+
+        .sp-app.dark {
+            --bg: #14171b;
+            --panel: #1b1f24;
+            --panel2: #21262d;
+            --line: #2a313a;
+            --txt: #e7eaee;
+            --muted: #8b939c;
+            --accent-weak: #162a46;
+            --term-bg: #0d1117;
+        }
+
+        /* ========== 页面骨架 ========== */
+        body {
+            margin: 0;
+            background: var(--bg, #f5f6f8);
+            font-size: 14px;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            overflow: hidden;
+        }
+
+        #root {
+            min-height: 100vh;
+        }
+
+        .sp-app {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        /* ========== 顶层 Header ========== */
+        .ws-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 0 16px;
+            height: 54px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--line);
+            flex: none;
+        }
+
+        .ws-h-left {
+            display: flex;
+            align-items: center;
+            min-width: 0;
+            gap: 10px;
+        }
+
+        .ws-brand {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+        }
+
+        .ws-brand .ws-mark {
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            display: grid;
+            place-items: center;
+            background: var(--accent-weak);
+            color: var(--accent);
+            font-weight: 700;
+            flex: none;
+        }
+
+        .ws-brand .ws-name {
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        .ws-brand .ws-sub {
+            font-size: 12px;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .ws-head-sep {
+            width: 1px;
+            height: 22px;
+            background: var(--line);
+        }
+
+        .ws-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 3px 10px;
+            border-radius: 999px;
+            background: var(--panel2);
+            border: 1px solid var(--line);
+            white-space: nowrap;
+        }
+
+        .ws-badge i {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            background: #c2c8d0;
+        }
+
+        .ws-badge.ok {
+            color: var(--green);
+            border-color: rgba(22, 163, 74, .35);
+            background: rgba(22, 163, 74, .08);
+        }
+
+        .ws-badge.ok i {
+            background: var(--green);
+        }
+
+        .ws-badge.proc {
+            color: var(--yellow);
+            border-color: rgba(214, 158, 46, .4);
+            background: rgba(214, 158, 46, .1);
+        }
+
+        .ws-badge.proc i {
+            background: var(--yellow);
+            animation: ws-blink 1.2s infinite;
+        }
+
+        .ws-badge.err {
+            color: var(--red);
+            border-color: rgba(220, 38, 38, .35);
+            background: rgba(220, 38, 38, .08);
+        }
+
+        .ws-badge.err i {
+            background: var(--red);
+        }
+
+        .ws-badge.idle i {
+            background: #c2c8d0;
+        }
+
+        @keyframes ws-blink {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: .3
+            }
+        }
+
+        .ws-h-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .ws-hint {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--muted);
+            padding: 3px 9px;
+            border: 1px dashed var(--line);
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+
+        /* ========== 工具/状态栏 ========== */
+        .ws-toolstrip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 12px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--line);
+            flex: none;
+            flex-wrap: wrap;
+        }
+
+        .ws-toolgroups {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .ws-tg-label {
+            font-size: 12px;
+            color: var(--muted);
+            padding-right: 2px;
+        }
+
+        .ws-right-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* ========== 终端主机区域 ========== */
+        .ws-stage {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            gap: 8px;
+            padding-bottom: calc(12px + env(safe-area-inset-bottom));
+        }
+
+        .ws-term {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .05);
+        }
+
+        .ws-termhead {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 6px 12px;
+            background: #f1f3f6;
+            border-bottom: 1px solid #e2e6eb;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            font-size: 12px;
+            color: #434b54;
+            flex: none;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .sp-app.dark .ws-termhead {
+            background: #1c2128;
+            border-bottom-color: #2b323b;
+            color: #9aa4af;
+        }
+
+        .ws-dots {
+            display: inline-flex;
+            gap: 5px;
+        }
+
+        .ws-dots i {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #d0d6dd;
+        }
+
+        .sp-app.dark .ws-dots i {
+            background: #3a434d;
+        }
+
+        .ws-th-host {
+            font-weight: 600;
+            color: var(--txt);
+        }
+
+        .ws-th-meta {
+            color: #7a828c;
+        }
+
+        .sp-app.dark .ws-th-meta {
+            color: #7e8892;
+        }
+
+        .ws-th-right {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .ws-th-meta b {
+            font-weight: 600;
+            color: #4b5563;
+        }
+
+        .sp-app.dark .ws-th-meta b {
+            color: #aab4bf;
+        }
+
+        .ws-th-st {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: 600;
+        }
+
+        .ws-th-st::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #c2c8d0;
+        }
+
+        .ws-th-st.ok {
+            color: var(--green);
+        }
+
+        .ws-th-st.ok::before {
+            background: var(--green);
+        }
+
+        .ws-th-st.proc {
+            color: var(--yellow);
+        }
+
+        .ws-th-st.proc::before {
+            background: var(--yellow);
+            animation: ws-blink 1.2s infinite;
+        }
+
+        .ws-th-st.err {
+            color: var(--red);
+        }
+
+        .ws-th-st.err::before {
+            background: var(--red);
+        }
+
+        .ws-viewport {
+            position: relative;
+            flex: 1;
+            min-height: 0;
+            padding: 8px;
+            background: var(--term-bg);
+        }
+
+        .terminal-host {
+            width: 100%;
+            height: 100%;
+        }
+
+        .terminal-host .xterm {
+            height: 100%;
+        }
+
+        /* 回到底部悬浮按钮 */
+        .ws-scroll-btn {
+            position: absolute;
+            right: 14px;
+            bottom: 14px;
+            z-index: 5;
+            font-size: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .25);
+        }
+
+        .ws-termstatus {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            z-index: 4;
+            background: var(--term-bg);
+            color: #c8d0d8;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        }
+
+        .ws-empty {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            padding: 24px;
+        }
+
+        .ws-empty .ws-empty-ico {
+            width: 44px;
+            height: 44px;
+            display: grid;
+            place-items: center;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, .06);
+            color: #7fd99e;
+            margin-bottom: 2px;
+        }
+
+        .ws-empty .t {
+            font-size: 15px;
+            font-weight: 600;
+            color: #e6edf3;
+        }
+
+        .ws-empty .m {
+            font-size: 12px;
+            color: #8b949e;
+            max-width: 320px;
+        }
+
+        .ws-spinner {
+            width: 22px;
+            height: 22px;
+            border: 2px solid rgba(255, 255, 255, .18);
+            border-top-color: #7fd99e;
+            border-radius: 50%;
+            animation: ws-rot .8s linear infinite;
+            margin: 0 auto 4px;
+        }
+
+        /* ===== antd 组件在深色终端（Terminal）覆盖层上的适配 ===== */
+        .ws-termstatus .ant-empty {
+            color: #c8d0d8;
+        }
+
+        .ws-termstatus .ant-empty-img-simple-ellipse,
+        .ws-termstatus .ant-empty-img-simple-path,
+        .ws-termstatus .ant-empty-img-simple-g {
+            fill: rgba(255, 255, 255, .15) !important;
+            stroke: rgba(255, 255, 255, .25) !important;
+        }
+
+        .ws-empty-antd-body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            text-align: center;
+        }
+
+        .ws-empty-antd-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #e6edf3;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        }
+
+        .ws-termstatus.dark .ws-empty-antd-title,
+        .sp-app.dark .ws-empty-antd-title {
+            color: #e6edf3;
+        }
+
+        .ws-empty-antd-desc {
+            font-size: 12px;
+            color: #8b949e;
+            max-width: 320px;
+        }
+
+        .ws-termloading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            text-align: center;
+        }
+
+        .ws-termloading .t {
+            font-size: 15px;
+            font-weight: 600;
+            color: #e6edf3;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+        }
+
+        .ws-termloading .m {
+            font-size: 12px;
+            color: #8b949e;
+            max-width: 320px;
+        }
+
+        @keyframes ws-rot {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .sp-app.dark .ws-termstatus {
+            background: #0d1117;
+        }
+
+        /* ========== 底部 Session 状态栏 ========== */
+        .ws-footer {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px 16px;
+            font-size: 12px;
+            color: var(--muted);
+            padding: 8px 12px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            flex: none;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+            min-height: 34px;
+        }
+
+        .ws-footer .k {
+            color: var(--muted);
+        }
+
+        .ws-footer .v {
+            color: var(--txt);
+            font-weight: 600;
+        }
+
+        .ws-ft-st {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+        }
+
+        .ws-ft-st i {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #c2c8d0;
+        }
+
+        .ws-ft-st.ok {
+            color: var(--green);
+        }
+
+        .ws-ft-st.ok i {
+            background: var(--green);
+        }
+
+        .ws-ft-st.proc {
+            color: var(--yellow);
+        }
+
+        .ws-ft-st.proc i {
+            background: var(--yellow);
+        }
+
+        .ws-ft-st.err {
+            color: var(--red);
+        }
+
+        .ws-ft-st.err i {
+            background: var(--red);
+        }
+
+        .ws-ft-st.idle i {
+            background: #c2c8d0;
+        }
+
+        .ws-ft-sep {
+            width: 1px;
+            height: 14px;
+            background: var(--line);
+        }
+
+        /* ========== 移动端快捷键盘 ========== */
+        .pad {
+            display: none;
+            flex-wrap: wrap;
+            gap: 6px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px;
+        }
+
+        .pad .btn {
+            flex: 1 1 auto;
+            min-width: 44px;
+            padding: 8px 6px;
+            text-align: center;
+            font-size: 12px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--panel2);
+            color: var(--txt);
+            cursor: pointer;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .pad .btn:active {
+            opacity: .6;
+        }
+
+        .pad .btn.accent {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+
+        /* ========== CapsLock 提示 ========== */
+        .ws-caps {
+            font-size: 12px;
+            color: var(--yellow);
+            margin-top: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* ========== 弹窗安全提示条 ========== */
+        .ws-authsec {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+
+        /* ========== 响应式 ========== */
+        @media (max-width: 768px) {
+            .ws-header {
+                padding: 0 10px;
+                height: auto;
+                min-height: 52px;
+            }
+
+            .ws-sub,
+            .ws-head-sep,
+            .ws-hint {
+                display: none;
+            }
+
+            .ws-stage {
+                padding: 8px;
+                padding-bottom: calc(8px + env(safe-area-inset-bottom));
+            }
+
+            .ws-toolstrip {
+                padding: 6px 8px;
+            }
+
+            .ws-termhead {
+                gap: 8px;
+                font-size: 11px;
+                padding: 5px 10px;
+                overflow-x: auto;
+            }
+
+            .ws-th-meta {
+                display: none;
+            }
+
+            .pad {
+                display: flex;
+            }
+
+            .ws-footer {
+                gap: 4px 10px;
+                font-size: 11px;
+            }
+
+            .ws-right-actions .ws-hint {
+                display: none;
+            }
+        }
+    </style>
+
+    <script type="text/babel">
+        const { ConfigProvider, theme, Button, Typography, Modal, Input, Form, Tag, message, Alert, Dropdown, Tooltip, Space, Badge, Empty, Spin } = window.antd;
+        const { darkAlgorithm } = theme;
+        // antd 图标库（window.icons），与项目其他页面保持一致
+        const I = window.icons || {};
+        const IConnect = I['LinkOutlined'];
+        const IClear = I['ClearOutlined'];
+        const IReload = I['ReloadOutlined'];
+        const IHome = I['HomeOutlined'];
+        const ISun = I['SunOutlined'];
+        const IMoon = I['MoonOutlined'];
+        const ICommand = I['CodeOutlined'];
+        const IMonitor = I['DesktopOutlined'];
+        const INetwork = I['ApiOutlined'];
+        const IService = I['AppstoreOutlined'];
+        const IFolder = I['FolderOutlined'];
+        const ILock = I['LockOutlined'];
+        const ICaretDown = I['DownOutlined'];
+        const ITerminal = I['ConsoleSqlOutlined'] || I['CodeOutlined'];
+        const ICopy = I['CopyOutlined'];
+        const IPaste = I['SnippetsOutlined'];
+
+        const baseUrl = window.location.origin;
+        const WS_BASE = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host;
+
+        // 读取非 HttpOnly 的 csrf_token Cookie；写请求自动携带，会话 Cookie 由 credentials: include 携带
+        function getCsrfToken() {
+            const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
+            return m ? decodeURIComponent(m[1]) : '';
+        }
+        function secureFetch(url, options = {}) {
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) { const tok = getCsrfToken(); if (tok) headers['X-CSRF-Token'] = tok; }
+            return fetch(url, { method, headers, credentials: 'include', body: options.body });
+        }
+
+        function App() {
+            const [auth, setAuth] = React.useState({ loading: true, ok: false, user: null });
+            const [isDark, setIsDark] = React.useState(() => localStorage.getItem('theme') === 'dark');
+            const [terminalDark, setTerminalDark] = React.useState(() => (localStorage.getItem('theme') !== 'light'));
+            const [conn, setConn] = React.useState('idle'); // idle | connecting | connected | disconnected
+            const [connBad, setConnBad] = React.useState(false); // 是否曾发生真实连接错误
+            const [authOpen, setAuthOpen] = React.useState(false);
+            const [authLoading, setAuthLoading] = React.useState(false);
+            const [authReason, setAuthReason] = React.useState('');
+            const [authErrKind, setAuthErrKind] = React.useState(''); // auth | conn
+            const [elapsed, setElapsed] = React.useState(0);
+            const [caps, setCaps] = React.useState(false);
+            const [showScrollBottom, setShowScrollBottom] = React.useState(false);
+            const [termMeta, setTermMeta] = React.useState({ pid: 0, sid: '' });
+
+            const termRef = React.useRef(null);
+            const termInst = React.useRef(null);
+            const fitRef = React.useRef(null);
+            const wsRef = React.useRef(null);
+            const tokenRef = React.useRef('');
+            const wsOpenRef = React.useRef(false);
+            const authedRef = React.useRef(false); // 本次连接是否已发送 auth（token 已一次性消费）
+            const reconnectTimer = React.useRef(null);
+            const reconnectAttempts = React.useRef(0);
+            const connectedAtRef = React.useRef(null);
+            const heartbeatRef = React.useRef(null); // 应用层心跳定时器：避免后台/静默导致 WS 空闲被断开
+            const autoscrollRef = React.useRef(true); // 是否自动滚动到底部
+            const sessionInfoRef = React.useRef({ id: '', pid: 0 });
+            const authForm = Form.useForm()[0]; // 二次认证表单实例（密码错误时清空重输）
+            const authFormRef = React.useRef(null);
+            const pwdInputRef = React.useRef(null); // 密码输入框 ref（错误后聚焦全选）
+
+            const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+            const execOk = auth.user && hasPerm('system:exec');
+            const hostname = window.location.hostname || 'server';
+            const termUser = auth.user ? auth.user.username : '';
+
+            React.useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200 && (d.user.permissions || []).some(x => x === '*' || x === 'system:exec')) {
+                            setAuth({ loading: false, ok: true, user: d.user });
+                            setAuthOpen(true); // 每次进入都先要求二次认证
+                        } else {
+                            window.location.href = 'index.html';
+                        }
+                    })
+                    .catch(() => { window.location.href = 'index.html'; });
+            }, []);
+
+            React.useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#14171b' : '#f5f6f8';
+            }, [isDark]);
+
+            // 计时器：仅连接成功时运行，真实时长
+            React.useEffect(() => {
+                let t;
+                if (conn === 'connected') {
+                    connectedAtRef.current = Date.now();
+                    t = setInterval(() => setElapsed(Math.floor((Date.now() - connectedAtRef.current) / 1000)), 1000);
+                }
+                return () => t && clearInterval(t);
+            }, [conn]);
+
+            // CapsLock 状态监听（不读取密码，仅提示）
+            React.useEffect(() => {
+                const onKd = (e) => { try { if (e.getModifierState) setCaps(!!e.getModifierState('CapsLock')); } catch (err) { } };
+                window.addEventListener('keydown', onKd);
+                return () => window.removeEventListener('keydown', onKd);
+            }, []);
+
+            // 销毁时彻底关闭 WS 与终端，删除临时认证 Token
+            React.useEffect(() => () => {
+                if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+                stopHeartbeat();
+                if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
+                if (termInst.current) termInst.current.dispose();
+            }, []);
+
+            // ===== 剪贴板：复制 / 粘贴 =====
+            // 将文本写入剪贴板：优先同步 execCommand（按键手势期间最可靠），失败回退 Clipboard API；完成后归还终端焦点
+            function copyText(text) {
+                if (!text) return;
+                let copied = false;
+                // 1) 同步 execCommand：需要临时 textarea 承载选区
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    copied = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                } catch (err) { }
+                // 2) 异步 Clipboard API（需安全上下文）；两条路都失败时提示用户手动方式
+                if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).catch(() => {
+                        message.info('复制失败，请用 Ctrl+Shift+C 或右键菜单复制');
+                    });
+                } else if (!copied) {
+                    message.info('复制失败，请用 Ctrl+Shift+C 或右键菜单复制');
+                }
+                // 3) 关键：execCommand 的 textarea.focus() 会抢走终端焦点，
+                //    不还焦会导致随后的 Ctrl+V 粘贴失效
+                try { if (termInst.current) termInst.current.focus(); } catch (err) { }
+            }
+
+            // 复制终端当前选中文本；无选区时轻提示。返回是否实际执行了复制
+            function copySelection() {
+                const term = termInst.current;
+                if (!term || !term.hasSelection()) {
+                    message.info('请先在终端中用鼠标选中要复制的文本');
+                    return false;
+                }
+                copyText(term.getSelection());
+                term.clearSelection();
+                return true;
+            }
+
+            // 粘贴：从剪贴板读取文本并作为输入写入 Shell；仅在 WebSocket 就绪时发送
+            async function pasteFromClipboard() {
+                if (!wsOpenRef.current) {
+                    message.info('请先连接 Shell，再进行粘贴');
+                    return;
+                }
+                let text = '';
+                try {
+                    if (navigator.clipboard && navigator.clipboard.readText) {
+                        text = await navigator.clipboard.readText(); // 可能触发浏览器“允许粘贴”授权弹窗
+                    }
+                } catch (err) { /* 授权被拒绝或非安全上下文 */ }
+                if (!text) {
+                    message.info('无法读取剪贴板内容，可尝试长按终端或使用输入法剪贴板');
+                    return;
+                }
+                sendWS({ type: 'input', data: text });
+            }
+
+            // 初始化 / 重建 xterm 实例（切换终端主题时也重建）
+            React.useEffect(() => {
+                if (!auth.ok || !termRef.current) return;
+                if (termInst.current) { try { termInst.current.dispose(); } catch (e) { } termInst.current = null; }
+                const themeObj = terminalDark ? {
+                    background: '#0d1117', foreground: '#d5dce4',
+                    cursor: '#7fd99e', cursorAccent: '#0d1117',
+                    selectionBackground: 'rgba(127,217,158,0.28)',
+                    black: '#3b4048', red: '#e06c75', green: '#98c379', yellow: '#e5c07b',
+                    blue: '#61afef', magenta: '#c678dd', cyan: '#56b6c2', white: '#d5dce4',
+                } : {
+                    background: '#1e2430', foreground: '#d8dee6',
+                    cursor: '#a3b3c8', cursorAccent: '#1e2430',
+                    selectionBackground: 'rgba(163,179,200,0.3)',
+                    black: '#2d333b', red: '#e06c75', green: '#8cc57a', yellow: '#d9b45b',
+                    blue: '#5d9bd4', magenta: '#bf7fd6', cyan: '#5bb8c4', white: '#d8dee6',
+                };
+                const term = new window.Terminal({
+                    fontSize: 14,
+                    lineHeight: 1.25,
+                    cursorBlink: true,
+                    scrollback: 5000,
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
+                    theme: themeObj,
+                    convertEol: false,
+                });
+                const fit = new window.FitAddon.FitAddon();
+                term.loadAddon(fit);
+                term.open(termRef.current);
+                fit.fit();
+                term.focus();
+
+                term.onData((data) => { sendWS({ type: 'input', data }); });
+                // 复制/粘贴支持：
+                // - Ctrl+C：有选中文本时复制到剪贴板（不发送 ^C）；无选中时照常发送中断信号
+                // - Ctrl+V：必须先 e.preventDefault() 再走自定义粘贴！
+                //   关键坑：attachCustomKeyEventHandler 返回 false 时 xterm 不会阻止浏览器默认行为，
+                //   原生 paste 照样触发 → 与自定义读取各发一次 → 出现 “lsls” 双份输入。
+                //   主动 preventDefault 后浏览器原生路径被掐断，仅剩自定义单一通路，
+                //   且不依赖焦点是否落在 xterm 隐藏 textarea 上。
+                // - Shift+Insert：同上走自定义粘贴；Ctrl+Insert 复制选区（经典终端习惯）
+                term.attachCustomKeyEventHandler((e) => {
+                    if (e.type !== 'keydown') return true;
+                    if (!(e.ctrlKey || e.metaKey) || e.altKey) return true;
+                    const k = (e.key || '').toLowerCase();
+                    const code = e.keyCode;
+                    // Ctrl+Shift+C 放行给浏览器原生复制
+                    if (e.ctrlKey && e.shiftKey) return true;
+                    if ((k === 'c' || code === 67) && term.hasSelection()) {
+                        e.preventDefault();
+                        copyText(term.getSelection());
+                        term.clearSelection();
+                        return false;
+                    }
+                    // Ctrl+Insert 复制选区（经典终端习惯）
+                    if ((k === 'insert' || code === 45) && !e.shiftKey && term.hasSelection()) {
+                        e.preventDefault();
+                        copyText(term.getSelection());
+                        term.clearSelection();
+                        return false;
+                    }
+                    // Ctrl+V / Shift+Insert 粘贴：单一来源
+                    if ((k === 'v' || code === 86) && !e.shiftKey) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        pasteFromClipboard();
+                        return false;
+                    }
+                    if ((k === 'insert' || code === 45) && e.shiftKey) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        pasteFromClipboard();
+                        return false;
+                    }
+                    return true;
+                });
+                // 右键：有选中先复制；无选中直接粘贴剪贴板
+                // （保存处理器引用，卸载时移除；否则切换终端主题重建 effect 后会重复注册导致双重粘贴）
+                const termEl = termRef.current;
+                const onContextMenu = (ev) => {
+                    ev.preventDefault();
+                    if (term.hasSelection()) {
+                        copyText(term.getSelection());
+                        term.clearSelection();
+                    } else {
+                        pasteFromClipboard();
+                    }
+                };
+                const onFocusClick = () => term.focus();
+                termEl.addEventListener('contextmenu', onContextMenu);
+                term.onScroll(() => {
+                    try {
+                        const b = term.buffer.active;
+                        const atBottom = (b.length - b.baseY) <= (term.rows + 1);
+                        autoscrollRef.current = atBottom;
+                        setShowScrollBottom(!atBottom);
+                    } catch (e) { }
+                });
+                termEl.addEventListener('click', onFocusClick);
+
+                const dispatchResize = () => {
+                    try {
+                        fit.fit();
+                        const dims = term.dimensions ? { rows: term.rows, cols: term.cols } : null;
+                        if (dims) sendWS({ type: 'resize', rows: dims.rows, cols: dims.cols });
+                    } catch (e) { }
+                };
+                const ro = new ResizeObserver(dispatchResize);
+                ro.observe(termRef.current);
+
+                termInst.current = term;
+                fitRef.current = fit;
+                term.fit = () => fit.fit();
+                // 暴露发送接口给外层
+                window.__termHook = { term, send: (data) => sendWS({ type: 'input', data }) };
+
+                dispatchResize();
+                return () => {
+                    ro.disconnect();
+                    // 同步移除终端区域监听器，防止主题切换重建后重复触发
+                    termEl.removeEventListener('contextmenu', onContextMenu);
+                    termEl.removeEventListener('click', onFocusClick);
+                };
+            }, [auth.ok, terminalDark]);
+
+            function sendWS(msg) {
+                const ws = wsRef.current;
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify(msg));
+                }
+            }
+
+            // 写入终端数据（服务端二进制帧）；位于底部时自动滚动
+            function writeOutput(bytes) {
+                if (termInst.current) {
+                    try {
+                        termInst.current.write(bytes);
+                        if (autoscrollRef.current) termInst.current.scrollToBottom();
+                    } catch (e) { }
+                }
+            }
+
+            function resetTerminalView() {
+                if (termInst.current) { termInst.current.reset(); }
+            }
+
+            function cleanupWS() {
+                if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; }
+                stopHeartbeat();
+                if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); wsRef.current = null; }
+                wsOpenRef.current = false;
+                authedRef.current = false;
+                tokenRef.current = '';
+                // 不落盘，无残留 Token
+            }
+
+            // 停止应用层心跳
+            function stopHeartbeat() {
+                if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+            }
+
+            // 启动应用层心跳：每 20s 发一次 ping，服务端回 pong 以保活连接，
+            // 防止标签页后台或短暂静默时连接因空闲被浏览器/代理断开而触发重新认证
+            function startHeartbeat(ws) {
+                stopHeartbeat();
+                heartbeatRef.current = setInterval(() => {
+                    try {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({ type: 'ping' }));
+                        }
+                    } catch (e) { /* ignore */ }
+                }, 20000);
+            }
+
+            // 建立 WebSocket，携带一次性 Token，首帧为 auth
+            function openShell(token) {
+                cleanupWS();
+                tokenRef.current = token;
+                reconnectAttempts.current = 0;
+                setConnBad(false);
+                setConn('connecting');
+                dial();
+
+                function dial() {
+                    setConn('connecting');
+                    let ws;
+                    try {
+                        ws = new WebSocket(WS_BASE + '/ws/shell');
+                    } catch (e) { scheduleRetry(); return; }
+                    wsRef.current = ws;
+                    ws.binaryType = 'arraybuffer';
+                    ws.onopen = () => {
+                        wsOpenRef.current = true;
+                        setConn('connected');
+                        const dims = termInst.current ? { rows: termInst.current.rows, cols: termInst.current.cols } : { rows: 24, cols: 80 };
+                        ws.send(JSON.stringify({ type: 'auth', token: tokenRef.current, rows: dims.rows, cols: dims.cols }));
+                        // 一次性 Token 发送后即被服务端消费，后续重连必须重新认证
+                        authedRef.current = true;
+                        startHeartbeat(ws);
+                        fetchSessionInfo();
+                    };
+                    ws.onmessage = (ev) => {
+                        if (typeof ev.data === 'string') {
+                            try {
+                                const frame = JSON.parse(ev.data);
+                                if (frame.type === 'error') { message.error(frame.message || 'Shell 连接失败'); }
+                                if (frame.type === 'pong') { return; }
+                            } catch (e) { /* ignore */ }
+                        } else {
+                            // 二进制帧：直接写终端
+                            writeOutput(new Uint8Array(ev.data));
+                        }
+                    };
+                    ws.onerror = () => { /* onclose 统一处理 */ };
+                    ws.onclose = () => {
+                        stopHeartbeat();
+                        wsOpenRef.current = false;
+                        if (wsRef.current === ws) wsRef.current = null;
+                        // 一次性 Token 已被消费，再次重连必然认证失败，须引导重新认证而非复用旧 Token
+                        if (authedRef.current) {
+                            authedRef.current = false;
+                            cleanupWS();
+                            setConn('disconnected');
+                            setConnBad(false);
+                            setAuthErrKind('conn');
+                            setAuthReason('连接已断开，请重新进行二次认证');
+                            setAuthOpen(true);
+                            return;
+                        }
+                        // 尚未成功认证：仅在连接阶段短暂重试（同 Token 仍未被消费，重试有效）
+                        scheduleRetry();
+                    };
+                }
+
+                function scheduleRetry() {
+                    if (reconnectAttempts.current >= 5) {
+                        setConn('disconnected');
+                        setConnBad(true);
+                        tokenRef.current = '';
+                        message.error('连接失败，已达到最大重试次数。请重新验证 Shell 密码。');
+                        setAuthErrKind('conn');
+                        setAuthReason('无法连接 Web Shell，请检查网络后重试');
+                        setAuthOpen(true);
+                        return;
+                    }
+                    const delay = [1, 2, 4, 8, 16][reconnectAttempts.current] * 1000;
+                    reconnectAttempts.current++;
+                    reconnectTimer.current = setTimeout(() => { dial(); }, delay);
+                }
+            }
+
+            // 认证提交：POST /api/shell/auth → 得到一次性 Token → 连接
+            async function doAuth(values) {
+                setAuthLoading(true);
+                setAuthReason('');
+                setAuthErrKind('');
+                try {
+                    const r = await secureFetch(baseUrl + '/api/shell/auth', { method: 'POST', body: JSON.stringify({ password: values.password }) });
+                    const d = await r.json();
+                    // 401=密码错误/锁定，403=无权限，其余非 200 为服务器异常
+                    if (d.code === 401) throw { kind: 'auth', msg: '密码错误或认证被拒绝，请重试' };
+                    if (d.code === 403) throw { kind: 'auth', msg: d.message || '没有权限执行此操作' };
+                    if (d.code !== 200) throw { kind: 'auth', msg: d.message || '认证失败' };
+                    const token = d.data.shell_token;
+                    setAuthOpen(false);
+                    // 正常关闭后再次启动需要重新认证；这里建立新会话
+                    if (wsRef.current && wsRef.current.readyState <= 1 && !reconnectAttempts.current) { wsRef.current.close(); }
+                    cleanupWS();
+                    setConnBad(false);
+                    openShell(token);
+                } catch (e) {
+                    const kind = e && e.kind ? e.kind : 'auth';
+                    const msg = e && e.msg ? e.msg : (e && e.message ? e.message : '认证失败');
+                    setAuthErrKind(kind);
+                    setAuthReason(msg);
+                    // 密码错误：清空输入框并聚焦全选，便于直接重输（错误只经 Alert 展示，不与表单校验叠加）
+                    try {
+                        authForm.resetFields(['password']);
+                        // 清除上一次空提交残留的校验红字，保证同一时刻只有一处错误提示
+                        authForm.setFields([{ name: 'password', errors: [] }]);
+                        const el = pwdInputRef.current && pwdInputRef.current.input ? pwdInputRef.current.input : null;
+                        if (el) { el.focus(); if (el.select) el.select(); }
+                    } catch (err) { }
+                } finally {
+                    setAuthLoading(false);
+                }
+            }
+
+            // 请求主动断开：关闭 PTY，下次需重新认证
+            function doClose() {
+                sendWS({ type: 'close' });
+                setTimeout(() => {
+                    if (wsRef.current) { wsRef.current.close(); }
+                    setConn('disconnected');
+                    setConnBad(false);
+                    setAuthErrKind('conn');
+                    setAuthOpen(true);
+                    setAuthReason('Shell 已关闭，重新连接需再次认证');
+                }, 60);
+            }
+
+            // 重新连接：必须重新二次认证（不复用旧 Token）
+            function doReconnect() {
+                setAuthReason('');
+                setAuthErrKind('');
+                setAuthOpen(true);
+            }
+
+            // 快捷指令：直接向终端输入命令 + 回车
+            function quickCmd(text) {
+                if (conn !== 'connected') { message.info('请先完成二次认证并连接 Shell'); return; }
+                if (termInst.current) { termInst.current.write(text); }
+                sendWS({ type: 'input', data: text + '\r' });
+            }
+
+            function clearScreen() {
+                if (termInst.current) termInst.current.clear();
+                sendWS({ type: 'input', data: '\x0c' });
+            }
+
+            // 回到底部并恢复自动滚动
+            function scrollToBottom() {
+                if (termInst.current) termInst.current.scrollToBottom();
+                autoscrollRef.current = true;
+                setShowScrollBottom(false);
+            }
+
+            // 移动端快捷键：向终端写入控制字节
+            const padKeys = [
+                { k: 'ESC', v: '\x1b' }, { k: 'TAB', v: '\x09' },
+                { k: '↑', v: '\x1b[A' }, { k: '↓', v: '\x1b[B' }, { k: '←', v: '\x1b[D' }, { k: '→', v: '\x1b[C' },
+                { k: 'HOME', v: '\x1b[1~' }, { k: 'END', v: '\x1b[4~' },
+                { k: 'CTRL+C', v: '\x03', accent: true }, { k: 'CTRL+L', v: '\x0c' },
+                { k: 'CTRL+Z', v: '\x1a', accent: true }, { k: 'CTRL+D', v: '\x04', accent: true },
+            ];
+
+            function sendPad(v) { sendWS({ type: 'input', data: v }); }
+
+            function fetchSessionInfo() {
+                // 连接成功后拉取一次会话信息（仅用于状态栏展示）
+                setTimeout(() => {
+                    secureFetch(baseUrl + '/api/shell/sessions')
+                        .then(r => r.json())
+                        .then(d => {
+                            if (d.code === 200 && d.data && d.data.sessions && d.data.sessions.length) {
+                                const my = d.data.sessions.filter(s => s.username === (auth.user || {}).username).pop();
+                                if (my) {
+                                    sessionInfoRef.current = { id: my.id, pid: my.pid };
+                                    setTermMeta({ pid: my.pid || 0, sid: my.id || '' });
+                                }
+                            }
+                        })
+                        .catch(() => { });
+                }, 300);
+            }
+
+            const fmtDur = (s) => {
+                const m = Math.floor(s / 60), sec = s % 60;
+                const mm = m < 10 ? '0' + m : '' + m;
+                return mm + ':' + (sec < 10 ? '0' + sec : '' + sec);
+            };
+            const fmtClock = (s) => {
+                const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+                return (h > 0 ? h + 'h ' : '') + (m < 10 ? '0' + m : '' + m) + 'm ' + (sec < 10 ? '0' + sec : '' + sec) + 's';
+            };
+
+            // 连接状态四态（真实状态映射，不出现假状态）
+            const connState = conn === 'connected' ? 'ok' : conn === 'connecting' ? 'proc' : (conn === 'disconnected' && connBad) ? 'err' : 'idle';
+            const statusText = connState === 'ok' ? '已连接' : connState === 'proc' ? '连接中' : connState === 'err' ? '连接失败' : '未连接';
+
+            // 快捷命令分组（保留全部原命令：uname -a / df -h / free -h / ps aux / ss -lntup / systemctl / pwd）
+            const qGroups = [
+                { title: '系统', icon: ICommand, cmds: [{ l: '系统信息', c: 'uname -a' }] },
+                { title: '资源', icon: IMonitor, cmds: [{ l: '磁盘', c: 'df -h' }, { l: '内存', c: 'free -h' }, { l: '进程', c: 'ps aux' }] },
+                { title: '网络', icon: INetwork, cmds: [{ l: '端口', c: 'ss -lntup' }] },
+                { title: '服务', icon: IService, cmds: [{ l: '运行中服务', c: 'systemctl --type=service --state=running' }] },
+                { title: '文件', icon: IFolder, cmds: [{ l: '当前目录', c: 'pwd' }] },
+            ];
+
+            const shellTypeText = 'bash/sh';
+            const pidNow = termMeta.pid || sessionInfoRef.current.pid || 0;
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#14171b' : '#f5f6f8', colorBgContainer: isDark ? '#1b1f24' : '#ffffff', colorPrimary: '#1677ff' } }}>
+                    <div className={'sp-app' + (isDark ? ' dark' : '')}>
+
+                        {/* ===== 顶部 Header（antd 组件统一） ===== */}
+                        <header className="ws-header">
+                            <div className="ws-h-left">
+                                <div className="ws-brand">
+                                    <span className="ws-mark">{ITerminal ? <ITerminal /> : '▱'}</span>
+                                    <div>
+                                        <div className="ws-name">Web Shell</div>
+                                        <div className="ws-sub">{termUser || ''}{termUser ? '@' : ''}{hostname}</div>
+                                    </div>
+                                </div>
+                                <span className="ws-head-sep"></span>
+                                <Badge status={connState === 'ok' ? 'success' : connState === 'proc' ? 'processing' : connState === 'err' ? 'error' : 'default'} text={statusText} />
+                                <Tag color={execOk ? 'blue' : 'orange'} style={{ marginInlineEnd: 0 }}>system:exec</Tag>
+                            </div>
+                            <div className="ws-h-right">
+                                <Tooltip title="清空终端显示（不影响连接）">
+                                    <Button type="text" size="small" icon={IClear ? <IClear /> : undefined} onClick={clearScreen}>清屏</Button>
+                                </Tooltip>
+                                <Tooltip title="重新连接，需重新二次认证">
+                                    <Button type="primary" size="small" icon={IReload ? <IReload /> : undefined} onClick={doReconnect}>重新连接</Button>
+                                </Tooltip>
+                                <Tooltip title="返回首页">
+                                    <Button size="small" icon={IHome ? <IHome /> : undefined} onClick={() => window.location.href = 'index.html'}>返回首页</Button>
+                                </Tooltip>
+                                <Tooltip title={isDark ? '切换到浅色' : '切换到深色'}>
+                                    <Button type="text" size="small" icon={isDark ? (ISun ? <ISun /> : undefined) : (IMoon ? <IMoon /> : undefined)} onClick={() => setIsDark(!isDark)} />
+                                </Tooltip>
+                            </div>
+                        </header>
+
+                        {!execOk ? (
+                            <div style={{ padding: 24 }}>
+                                <Alert type="warning" showIcon message="您没有 system:exec 权限，无法使用 Web Shell。" action={<Button size="small" onClick={() => window.location.href = 'index.html'}>返回首页</Button>} />
+                            </div>
+                        ) : (
+                            <div className="ws-stage">
+                                {/* ===== 快捷操作栏（分组） ===== */}
+                                <div className="ws-toolstrip">
+                                    <div className="ws-toolgroups">
+                                        <span className="ws-tg-label">快捷命令</span>
+                                        {qGroups.map(g => (
+                                            <Dropdown key={g.title}
+                                                trigger={auth && auth.ok ? ['click'] : []}
+                                                menu={{
+                                                    items: g.cmds.map((c, i) => ({ key: g.title + '-' + i, label: c.l })),
+                                                    onClick: ({ key }) => {
+                                                        const idx = Number(key.split('-').pop());
+                                                        const c = g.cmds[idx];
+                                                        if (c) quickCmd(c.c);
+                                                    },
+                                                }}>
+                                                <Button size="small" icon={g.icon ? <g.icon /> : undefined}>{g.title}{ICaretDown ? <ICaretDown style={{ fontSize: 10 }} /> : ' ▾'}</Button>
+                                            </Dropdown>
+                                        ))}
+                                    </div>
+                                    <div className="ws-right-actions">
+                                        <span className="ws-hint">点击终端聚焦 · Ctrl+C 复制 / Ctrl+V 粘贴</span>
+                                        <Tooltip title="复制终端选中内容（也可 Ctrl+C）">
+                                            <Button size="small" icon={ICopy ? <ICopy /> : undefined} onClick={copySelection}>复制</Button>
+                                        </Tooltip>
+                                        <Tooltip title="将剪贴板内容粘贴到终端（也可 Ctrl+V）">
+                                            <Button size="small" icon={IPaste ? <IPaste /> : undefined} onClick={pasteFromClipboard}>粘贴</Button>
+                                        </Tooltip>
+                                        <Tooltip title={terminalDark ? '切换终端为浅色' : '切换终端为深色'}>
+                                            <Button size="small" onClick={() => setTerminalDark(!terminalDark)}>终端:{terminalDark ? '深' : '浅'}</Button>
+                                        </Tooltip>
+                                    </div>
+                                </div>
+
+                                {/* ===== 终端主机 ===== */}
+                                <div className="ws-term">
+                                    <div className="ws-termhead">
+                                        <span className="ws-dots"><i></i><i></i><i></i></span>
+                                        <span className="ws-th-host">{termUser ? termUser + '@' + hostname : hostname}</span>
+                                        {pidNow > 0 ? <span className="ws-th-meta">PID: <b>{pidNow}</b></span> : null}
+                                        <span className="ws-th-meta">{shellTypeText}</span>
+                                        <span className="ws-th-right">
+                                            <span className="ws-th-meta">编码: <b>UTF-8</b></span>
+                                        </span>
+                                    </div>
+                                    <div className="ws-viewport">
+                                        {/* xterm 挂载点 */}
+                                        <div className="terminal-host" ref={termRef}></div>
+
+                                        {/* 空状态 / 连接中 / 断开覆盖层（仅未进入命令态时显示；连接成功即隐藏，展示真实 Shell Prompt） */}
+                                        {conn === 'idle' && (
+                                            <div className="ws-termstatus">
+                                                <Empty description={null} className="ws-empty-antd"
+                                                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                                >
+                                                    <div className="ws-empty-antd-body">
+                                                        <div className="ws-empty-antd-title">Shell 未连接</div>
+                                                        <div className="ws-empty-antd-desc">完成二次认证后开始使用 Web Terminal</div>
+                                                        {/* 认证弹窗打开时隐藏此按钮，避免与弹窗内"验证并连接"重复 */}
+                                                        {!authOpen && <Button type="primary" icon={IConnect ? <IConnect /> : undefined} onClick={() => { setAuthErrKind(''); setAuthReason(''); setAuthOpen(true); }}>验证并连接</Button>}
+                                                    </div>
+                                                </Empty>
+                                            </div>
+                                        )}
+                                        {conn === 'connecting' && (
+                                            <div className="ws-termstatus">
+                                                <div className="ws-termloading">
+                                                    <Spin size="large" />
+                                                    <div className="t">正在连接 Shell…</div>
+                                                    <div className="m">正在建立加密通道并验证身份</div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        {conn === 'disconnected' && (
+                                            <div className="ws-termstatus">
+                                                <Empty description={null} image={Empty.PRESENTED_IMAGE_SIMPLE} className="ws-empty-antd">
+                                                    <div className="ws-empty-antd-body">
+                                                        <div className="ws-empty-antd-title">{connBad ? '连接失败' : '连接已断开'}</div>
+                                                        <div className="ws-empty-antd-desc">{connBad ? '无法连接 Web Shell，请检查网络后重试' : '需要重新进行二次认证'}</div>
+                                                        {!authOpen && <Button type="primary" icon={IConnect ? <IConnect /> : undefined} onClick={() => { setAuthErrKind(''); setAuthReason(''); setAuthOpen(true); }}>验证并连接</Button>}
+                                                    </div>
+                                                </Empty>
+                                            </div>
+                                        )}
+
+                                        {/* 回到底部悬浮按钮 */}
+                                        {showScrollBottom && conn === 'connected' ? (
+                                            <Button size="small" className="ws-scroll-btn" onClick={scrollToBottom}>↓ 回到底部</Button>
+                                        ) : null}
+                                    </div>
+                                </div>
+
+                                {/* ===== 底部 Session 状态栏：仅已连接时显示（连接状态以 Header Badge 为唯一来源，避免三处重复） ===== */}
+                                {conn === 'connected' && (
+                                    <footer className="ws-footer">
+                                        <Tag color="success"><b>Session Active</b></Tag>
+                                        <span className="k">PID</span><span className="v">{pidNow || '—'}</span>
+                                        <span className="k">用户</span><span className="v">{termUser || '—'}</span>
+                                        <span className="k">主机</span><span className="v">{hostname}</span>
+                                        <span className="k">时长</span><span className="v">{fmtClock(elapsed)}</span>
+                                    </footer>
+                                )}
+
+                                {/* 移动端底部快捷键 */}
+                                <div className="pad">
+                                    {padKeys.map(b => (
+                                        <button key={b.k} className={'btn' + (b.accent ? ' accent' : '')} onClick={() => sendPad(b.v)}>{b.k}</button>
+                                    ))}
+                                    {/* 移动端复制/粘贴入口（粘贴走 Clipboard API，需浏览器授权） */}
+                                    <button className="btn" onClick={copySelection}>复制</button>
+                                    <button className="btn" onClick={pasteFromClipboard}>粘贴</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ===== 二次认证弹窗 ===== */}
+                        <Modal
+                            open={authOpen}
+                            closable={false}
+                            maskClosable={false}
+                            footer={null}
+                            width="min(92vw, 420px)"
+                            title={<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{ILock ? <ILock style={{ color: 'var(--accent)' }} /> : <span>🔐</span>}Web Shell 二次认证</span>}
+                        >
+                            <Alert type="info" showIcon style={{ marginBottom: 12 }} message="启动 Shell 前需要再次验证身份。密码仅用于本次验证，不会保存。" />
+                            <Form layout="vertical" onFinish={doAuth} onFinishFailed={() => { setAuthReason(''); setAuthErrKind(''); }} form={authForm} ref={authFormRef}>
+                                <Form.Item name="password" label="Shell 密码" rules={[{ required: true, message: '请输入 Shell 密码' }]}>
+                                    <Input.Password
+                                        ref={pwdInputRef}
+                                        autoFocus
+                                        placeholder="输入独立 Shell 密码"
+                                        onKeyDown={(e) => { try { if (e.getModifierState) setCaps(!!e.getModifierState('CapsLock')); } catch (err) { } }}
+                                    />
+                                </Form.Item>
+                                {caps ? <div className="ws-caps"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 13h-2v-2h2v2zm0-4h-2V8h2v3z" /></svg>&nbsp;Caps Lock 已开启</div> : null}
+                                {authReason ? (
+                                    <Alert
+                                        type={authErrKind === 'conn' ? 'warning' : 'error'}
+                                        showIcon
+                                        style={{ marginBottom: 12 }}
+                                        message={authReason}
+                                    />
+                                ) : null}
+                                <Button type="primary" block htmlType="submit" loading={authLoading} style={{ height: 38 }}>
+                                    {authLoading ? '正在验证…' : '验证并连接'}
+                                </Button>
+                            </Form>
+                            <div className="ws-authsec">
+                                {ILock ? <ILock style={{ color: 'var(--muted)' }} /> : <span>🔒</span>}
+                                密码使用加密通道传输，仅本次有效，绝不保存或写入日志
+                            </div>
+                        </Modal>
+                    </div>
+                </ConfigProvider>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>

@@ -12,7 +12,8 @@ import (
 	"time"
 )
 
-const auditLogFile = "/opt/server-status/audit.log"
+// auditLogFile 审计日志路径（可通过环境变量 AUDIT_LOG_FILE 覆盖，便于测试与部署调整）
+var auditLogFile = getEnvOr("AUDIT_LOG_FILE", "/opt/server-status/audit.log")
 
 // auditAction 记录高风险操作到审计日志（服务变更、防火墙修改等）
 func auditAction(r *http.Request, action, detail string) {
@@ -24,6 +25,22 @@ func auditAction(r *http.Request, action, detail string) {
 		}
 		clientIP = getClientIP(r)
 	}
+	writeAuditEntry(username, clientIP, action, detail)
+}
+
+// auditActionAs 记录审计并显式指定操作者。
+// 适用于会话尚未建立或已销毁的场景（登录/登出/Shell 会话关闭等），
+// 避免因反查不到 session 导致日志缺少操作人。
+func auditActionAs(r *http.Request, username, action, detail string) {
+	clientIP := ""
+	if r != nil {
+		clientIP = getClientIP(r)
+	}
+	writeAuditEntry(username, clientIP, action, detail)
+}
+
+// writeAuditEntry 写入一条审计记录（JSON 文件 + 系统日志），username/ip 由调用方决定
+func writeAuditEntry(username, clientIP, action, detail string) {
 	entry := map[string]interface{}{
 		"time":   time.Now().Format(time.RFC3339),
 		"user":   username,

@@ -205,7 +205,9 @@ func addAutoBlock(b *BlockedIP, r *http.Request) {
 		"trigger":       b.Trigger,
 		"blocked_until": b.BlockedUntil.Format(time.RFC3339),
 	})
-	auditAction(r, "ip.block.auto",
+	// 系统自动封禁，无操作者会话，操作人记为 system
+	writeAuditEntry("system", "",
+		"ip.block.auto",
 		fmt.Sprintf("系统自动封禁 IP=%s 原因=%s 触发=%s 请求数=%d 评分=%d", b.IP, b.Reason, b.Trigger, b.RequestCount, b.Score))
 	log.Printf("🚫 系统自动封禁 IP %s（%s / %s）", b.IP, b.Reason, b.Trigger)
 }
@@ -226,7 +228,8 @@ func expireBlockedIP(ip string) {
 	antiCrawler.Unlock()
 	saveIPSecurity()
 	if b != nil && b.Source == "auto" {
-		auditAction(nil, "ip.unblock.auto", "自动封禁到期解封 IP="+ip)
+		// 系统自动解封，无请求上下文，操作人记为 system
+		writeAuditEntry("system", "", "ip.unblock.auto", "自动封禁到期解封 IP="+ip)
 		log.Printf("⏳ 自动封禁到期，IP %s 已恢复访问", ip)
 	}
 }

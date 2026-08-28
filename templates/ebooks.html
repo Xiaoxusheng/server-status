@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Book ✅</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201024%201024'%20fill%3D'%231677ff'%3E%3Cpath%20d%3D'M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z'%2F%3E%3Cpath%20d%3D'M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z'%2F%3E%3Cpath%20d%3D'M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z'%2F%3E%3C%2Fsvg%3E">
     <style>
         html,
         body,
@@ -75,27 +76,32 @@
     <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
     <style>
         :root {
-            --bg-color: #f8f9fa;
-            --text-color: #212529;
+            --bg-color: #f5f5f5;
+            --text-color: rgba(0, 0, 0, 0.88);
             --card-bg: #ffffff;
-            --primary-color: #4a6ee0;
-            --secondary-color: #6c757d;
-            --border-color: #dee2e6;
-            --hover-color: #e9ecef;
-            --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-            --radius: 12px;
-            --success-color: #28a745;
+            --primary-color: #1677ff;
+            --primary-hover: #4096ff;
+            --secondary-color: rgba(0, 0, 0, 0.45);
+            --border-color: #f0f0f0;
+            --btn-border: #d9d9d9;
+            --hover-color: rgba(0, 0, 0, 0.04);
+            --selected-bg: #e6f4ff;
+            --radius: 8px;
+            --success-color: #52c41a;
         }
 
         [data-theme="dark"] {
-            --bg-color: #1a1d21;
-            --text-color: #e4e6eb;
-            --card-bg: #242526;
-            --primary-color: #5c7cfa;
-            --secondary-color: #b0b3b8;
-            --border-color: #3e4042;
-            --hover-color: #3a3b3c;
-            --success-color: #3ad15d;
+            --bg-color: #141414;
+            --text-color: rgba(255, 255, 255, 0.85);
+            --card-bg: #1f1f1f;
+            --primary-color: #1668dc;
+            --primary-hover: #4096ff;
+            --secondary-color: rgba(255, 255, 255, 0.45);
+            --border-color: #303030;
+            --btn-border: #424242;
+            --hover-color: rgba(255, 255, 255, 0.06);
+            --selected-bg: rgba(22, 119, 255, 0.15);
+            --success-color: #49aa19;
         }
 
         /* 暗色顶栏由 .topbar.dark 处理（与其他分页面 antd topbar 一致：#1f1f1f） */
@@ -172,46 +178,79 @@
             margin-left: 4px;
         }
 
+        /* 顶栏左上角当前页面名指示 */
+        .tb-page {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(0, 0, 0, 0.88);
+            white-space: nowrap;
+        }
+
+        .topbar.dark .tb-page {
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .tb-page .anticon {
+            color: #1677ff;
+        }
+
+        .topbar.dark .tb-page .anticon {
+            color: #4096ff;
+        }
+
         .tb-mobile-menu {
             display: none;
         }
 
         .btn {
-            padding: 4px 14px;
+            padding: 4px 15px;
             height: 32px;
             background: var(--card-bg);
             color: var(--text-color);
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--btn-border);
             border-radius: 6px;
             cursor: pointer;
             font-weight: 400;
-            font-size: 13px;
-            display: flex;
+            font-size: 14px;
+            display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 6px;
-            transition: all 0.2s;
+            transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
         }
 
         .btn:hover {
-            border-color: #1677ff;
-            color: #1677ff;
+            border-color: var(--primary-color);
+            color: var(--primary-color);
             opacity: 1;
             transform: none;
         }
 
+        /* antd primary 风格按钮 */
+        .btn-primary {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            border-color: var(--primary-hover);
+            color: #fff;
+        }
+
         .btn-outline {
             background: var(--card-bg);
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--btn-border);
             color: var(--text-color);
         }
 
         .btn-icon {
             padding: 8px 12px;
             border-radius: 50%;
-        }
-
-        .btn-success {
-            background-color: var(--success-color);
         }
 
         .btn-danger {
@@ -280,8 +319,9 @@
         }
 
         .sidebar li.active {
-            background-color: var(--primary-color);
-            color: white;
+            background-color: var(--selected-bg);
+            color: var(--primary-color);
+            font-weight: 500;
         }
 
         .main {
@@ -295,12 +335,11 @@
 
         .book-card {
             background: var(--card-bg);
-            padding: 15px;
+            padding: 16px;
             border-radius: var(--radius);
-            text-align: center;
-            box-shadow: var(--shadow);
+            text-align: left;
             border: 1px solid var(--border-color);
-            transition: transform 0.3s, box-shadow 0.3s;
+            transition: transform 0.2s, box-shadow 0.2s;
             display: flex;
             flex-direction: column;
             height: auto;
@@ -308,47 +347,72 @@
         }
 
         .book-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            transform: translateY(-2px);
+            box-shadow: 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 9px 28px 8px rgba(0, 0, 0, 0.05);
         }
 
+        /* 无封面时的占位封面（与品牌渐变一致，居中书籍图标） */
         .book-cover {
             width: 100%;
-            height: 180px;
-            object-fit: cover;
-            border-radius: 8px;
+            height: 160px;
+            border-radius: 6px;
             margin-bottom: 12px;
-            background: linear-gradient(135deg, rgba(74, 110, 224, .25), rgba(114, 46, 209, .25));
+            background: linear-gradient(135deg, rgba(22, 119, 255, .12), rgba(114, 46, 209, .12));
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 42px;
+            color: var(--primary-color);
         }
 
         .book-title {
-            font-weight: 700;
-            margin: 8px 0 5px;
-            font-size: 15px;
-            flex-grow: 1;
+            font-weight: 600;
+            margin: 0 0 10px;
+            font-size: 14px;
+            line-height: 1.5;
             color: var(--text-color);
-        }
-
-        .book-desc {
-            font-size: 13px;
-            color: var(--secondary-color);
-            margin-bottom: 12px;
+            flex-grow: 1;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-break: break-all;
         }
 
         .book-meta {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             font-size: 12px;
             color: var(--secondary-color);
-            margin-top: auto;
+            margin-bottom: 10px;
+        }
+
+        /* antd Tag 风格分类标签 */
+        .book-tag {
+            display: inline-block;
+            padding: 0 8px;
+            line-height: 20px;
+            font-size: 12px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            background: var(--hover-color);
+            color: var(--secondary-color);
+            white-space: nowrap;
+        }
+
+        .book-card .btn {
+            width: 100%;
+            margin-top: 12px;
         }
 
         .progress-container {
             width: 100%;
             height: 6px;
-            background-color: var(--border-color);
+            background-color: var(--hover-color);
             border-radius: 3px;
-            margin-top: 10px;
+            margin-top: 0;
             overflow: hidden;
         }
 
@@ -819,11 +883,8 @@
                     return {
                         id: bookId,
                         title: title,
-                        desc: '电子书资源',
-                        cover: '',
                         category: getCategoryFromTitle(title, index),
                         file: url,
-                        pages: Math.floor(Math.random() * 300) + 100,
                         progress: bookLocations[bookId] ? Math.floor(bookLocations[bookId].progress * 100) : 0
                     };
                 });
@@ -896,17 +957,16 @@
                 const div = document.createElement('div');
                 div.className = 'book-card';
                 div.innerHTML = `
-                <img src="${esc(book.cover)}" alt="${esc(book.title)}" class="book-cover" onerror="this.style.display='none'">
-                <div class="book-title">${esc(book.title)}</div>
-                <div class="book-desc">${esc(book.desc)}</div>
+                <div class="book-cover"><i class="fas fa-book"></i></div>
+                <div class="book-title" title="${esc(book.title)}">${esc(book.title)}</div>
                 <div class="book-meta">
-                    <span><i class="fas fa-file"></i> ${esc(book.pages)}页</span>
+                    <span class="book-tag">${esc(getCategoryName(book.category))}</span>
                     <span><i class="fas fa-tasks"></i> ${esc(book.progress)}%</span>
                 </div>
                 <div class="progress-container">
                     <div class="progress-bar" style="width: ${esc(book.progress)}%"></div>
                 </div>
-                <button class="btn ${book.progress > 0 ? '' : 'btn-success'}" data-open data-file="${esc(book.file)}" data-title="${esc(book.title)}" data-id="${esc(book.id)}">
+                <button class="btn btn-primary" data-open data-file="${esc(book.file)}" data-title="${esc(book.title)}" data-id="${esc(book.id)}">
                     <i class="fas fa-book-open"></i> ${book.progress > 0 ? '继续阅读' : '开始阅读'}
                 </button>
             `;
@@ -955,8 +1015,8 @@
             const dark = currentTheme === 'dark';
             rendition.themes.default({
                 'body': {
-                    'color': dark ? '#e4e6eb' : '#212529',
-                    'background': dark ? '#1a1d21' : '#ffffff',
+                    'color': dark ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 0, 0, 0.88)',
+                    'background': dark ? '#1f1f1f' : '#ffffff',
                     'font-family': 'Noto Sans SC, sans-serif',
                     'line-height': '1.6',
                     'padding': '20px',
@@ -1453,11 +1513,8 @@
                 // ConfigProvider 让 antd 按钮在暗色主题下也使用暗色算法（与其他分页面一致）
                 <ConfigProvider theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
                     <div className={'topbar' + (dark ? ' dark' : '')}>
-                        <div className="brand">
-                            <span className="logo">{IBook ? <IBook /> : '📕'}</span>
-                            <span>Server Status<span className="bt-sub"> / 电子书阅读</span></span>
-                        </div>
-                        <Space>
+                        <span className="tb-page">{IBook ? <IBook /> : '📕'}电子书</span>
+                        <Space style={{ marginLeft: 'auto' }}>
                             <Button onClick={() => window.location.href = 'index.html'}>
                                 {IHome ? <IHome /> : '🏠'}<span className="tb-text">首页</span>
                             </Button>

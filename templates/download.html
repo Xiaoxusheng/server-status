@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>安全下载 - Server Status</title>
-    <link rel="icon" href="data:,">
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M547.5%20693.6l138.2-138.2c12.5-12.5%2032.8-12.5%2045.3%200s12.5%2032.8%200%2045.3L534.7%20907c-12.5%2012.5-32.8%2012.5-45.3%200L293%20710.7c-12.5-12.5-12.5-32.8%200-45.3s32.8-12.5%2045.3%200l138.2%20138.2V203.4c0-17.7%2014.3-32%2032-32s32%2014.3%2032%2032v490.2z%22%2F%3E%3C%2Fsvg%3E">
     <style>
         html,
         body,
@@ -54,6 +55,31 @@
         html.dark ::-webkit-scrollbar-thumb:hover {
             background: #4a4a4a;
         }
+
+        /* 统一视觉变量（与其他页面一致的 Design Token） */
+        .sp-app {
+            --bg: #f5f5f5;
+            --card: #ffffff;
+            --border: #f0f0f0;
+            --text: rgba(0, 0, 0, 0.88);
+            --secondary: rgba(0, 0, 0, 0.45);
+            color-scheme: light;
+        }
+
+        .sp-app.dark {
+            --bg: #141414;
+            --card: #1f1f1f;
+            --border: #303030;
+            --text: rgba(255, 255, 255, 0.88);
+            --secondary: rgba(255, 255, 255, 0.45);
+            color-scheme: dark;
+        }
+
+        /* 数值等宽：令牌/大小等数字刷新不跳动 */
+        .sp-app .ant-table td,
+        .sp-app .ant-statistic-content-value {
+            font-variant-numeric: tabular-nums;
+        }
     </style>
     <script>
         (function () {
@@ -82,6 +108,8 @@
 
         .page-wrap {
             padding: 16px;
+            max-width: 1800px;
+            margin: 0 auto;
         }
 
         .topbar {
@@ -89,7 +117,7 @@
             align-items: center;
             justify-content: space-between;
             padding: 0 24px;
-            height: 56px;
+            height: 54px;
             background: #fff;
             border-bottom: 1px solid #f0f0f0;
             box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
@@ -132,6 +160,29 @@
 
         .topbar .tb-text {
             margin-left: 4px;
+        }
+
+        /* 顶栏左上角当前页面名指示 */
+        .tb-page {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(0, 0, 0, 0.88);
+            white-space: nowrap;
+        }
+
+        html.dark .tb-page {
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .tb-page .anticon {
+            color: #1677ff;
+        }
+
+        html.dark .tb-page .anticon {
+            color: #4096ff;
         }
 
         .token-url {
@@ -450,10 +501,10 @@
 
             return (
                 <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
-                    <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                    <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
                         <div className={'topbar' + (isDark ? ' dark' : '')}>
-                            <div className="brand"><span className="logo">📥</span><span>Server Status<span className="tb-sub"> · 安全下载</span></span></div>
-                            <Space>
+                            <span className="tb-page"><UIIcon name="DownloadOutlined" />安全下载</span>
+                            <Space style={{ marginLeft: 'auto' }}>
                                 <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>
                                 <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
                                     <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
@@ -479,7 +530,7 @@
                                                 <InputNumber min={1} style={{ width: '100%' }} placeholder="1024" />
                                             </Form.Item>
                                         </Space>
-                                        <Button type="primary" onClick={generate}>🎫 生成下载令牌</Button>
+                                        <Button type="primary" icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={generate}>生成下载令牌</Button>
                                     </Form>
                                     {newToken && (
                                         <Alert type="success" showIcon style={{ marginTop: 12 }} message="令牌生成成功"

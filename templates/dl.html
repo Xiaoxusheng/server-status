@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件下载</title>
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%232563eb%22%3E%3Cpath%20d%3D%22M547.5%20693.6l138.2-138.2c12.5-12.5%2032.8-12.5%2045.3%200s12.5%2032.8%200%2045.3L534.7%20907c-12.5%2012.5-32.8%2012.5-45.3%200L293%20710.7c-12.5-12.5-12.5-32.8%200-45.3s32.8-12.5%2045.3%200l138.2%20138.2V203.4c0-17.7%2014.3-32%2032-32s32%2014.3%2032%2032v490.2zM864%20832c0%2017.7-14.3%2032-32%2032s-32-14.3-32-32%2014.3-32%2032-32%2032%2014.3%2032%2032z%22%2F%3E%3C%2Fsvg%3E">
+    <style>
+        /* ===== 设计令牌：扁平简约 / 蓝色主调（亮暗双模式） ===== */
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --on-primary: #ffffff;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #475569;
+            --faint: #94a3b8;
+            --border: #e4ecfc;
+            --danger: #dc2626;
+            --warn: #d97706;
+            --warn-bg: #fffbeb;
+            --track: #eef2f9;
+            --ok-bg: #f0fdf4;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary: #3b82f6;
+                --primary-hover: #60a5fa;
+                --on-primary: #0b1220;
+                --bg: #0b1220;
+                --card: #131c2e;
+                --text: #e2e8f0;
+                --muted: #94a3b8;
+                --faint: #64748b;
+                --border: #243044;
+                --danger: #f87171;
+                --warn: #fbbf24;
+                --warn-bg: #2a230d;
+                --track: #1c2739;
+                --ok-bg: #10231a;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            min-height: 100%;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* 主卡片 */
+        .dl-card {
+            width: 100%;
+            max-width: 440px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px 28px 28px;
+        }
+
+        /* 品牌行 */
+        .dl-brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--muted);
+            letter-spacing: .02em;
+            margin-bottom: 24px;
+        }
+
+        .dl-brand svg {
+            color: var(--primary);
+        }
+
+        /* 文件图标区 */
+        .dl-icon {
+            width: 72px;
+            height: 72px;
+            border-radius: 16px;
+            background: var(--track);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+        }
+
+        .dl-icon svg {
+            width: 40px;
+            height: 40px;
+            color: var(--primary);
+        }
+
+        /* 文件名：最多 2 行省略 */
+        .dl-name {
+            font-size: 17px;
+            font-weight: 600;
+            line-height: 1.45;
+            text-align: center;
+            word-break: break-all;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin: 0 0 6px;
+        }
+
+        .dl-sub {
+            text-align: center;
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 20px;
+        }
+
+        /* 元信息区 */
+        .dl-meta {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 20px;
+        }
+
+        .dl-meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+            padding: 5px 0;
+        }
+
+        .dl-meta-row .k {
+            color: var(--muted);
+            flex-shrink: 0;
+        }
+
+        .dl-meta-row .v {
+            text-align: right;
+            word-break: break-all;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* 配额进度条 */
+        .dl-progress {
+            height: 6px;
+            background: var(--track);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .dl-progress i {
+            display: block;
+            height: 100%;
+            background: var(--primary);
+            border-radius: 3px;
+            transition: width .3s ease;
+        }
+
+        /* 即将过期提醒条 */
+        .dl-warn {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            background: var(--warn-bg);
+            color: var(--warn);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .dl-warn.show {
+            display: flex;
+        }
+
+        /* 下载按钮：≥44px 触控高度 */
+        .dl-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            min-height: 48px;
+            background: var(--primary);
+            color: var(--on-primary);
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: inherit;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background-color .18s ease, transform .12s ease;
+        }
+
+        .dl-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .dl-btn:active {
+            transform: scale(.985);
+        }
+
+        .dl-btn:disabled {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        /* 键盘可见焦点环 */
+        .dl-btn:focus-visible,
+        a:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        .dl-hint {
+            text-align: center;
+            font-size: 12px;
+            color: var(--faint);
+            margin: 14px 0 0;
+        }
+
+        /* 底部安全说明 */
+        .dl-footer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin-top: 22px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--faint);
+        }
+
+        /* 加载骨架 */
+        .dl-loading {
+            text-align: center;
+            padding: 28px 0 10px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .dl-spinner {
+            width: 28px;
+            height: 28px;
+            border: 3px solid var(--track);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            margin: 0 auto 14px;
+            animation: dlspin .8s linear infinite;
+        }
+
+        @keyframes dlspin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 错误状态 */
+        .dl-error {
+            display: none;
+            text-align: center;
+            padding: 12px 0 6px;
+        }
+
+        /* 表单元素（手动输入模式） */
+        .dl-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .dl-input {
+            width: 100%;
+            min-height: 44px;
+            background: var(--bg);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color .18s ease;
+        }
+
+        .dl-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .dl-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            background: none;
+            border: none;
+            color: var(--muted);
+            font-size: 13px;
+            font-family: inherit;
+            padding: 12px 0 0;
+            cursor: pointer;
+        }
+
+        .dl-toggle:hover {
+            color: var(--primary);
+        }
+
+        .dl-toggle:focus-visible,
+        .dl-input:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+
+        .dl-err-inline {
+            display: none;
+            text-align: center;
+            font-size: 13px;
+            color: var(--danger);
+            margin: 12px 0 0;
+        }
+
+        .dl-err-inline.show {
+            display: block;
+        }
+
+        /* 返回重新输入 */
+        .dl-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: none;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--muted);
+            font-size: 13px;
+            font-family: inherit;
+            padding: 9px 18px;
+            cursor: pointer;
+            transition: border-color .18s ease, color .18s ease;
+        }
+
+        .dl-back:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .dl-error.show {
+            display: block;
+        }
+
+        .dl-error .dl-icon {
+            color: var(--danger);
+            background: var(--warn-bg);
+        }
+
+        .dl-error .dl-icon svg {
+            color: var(--danger);
+        }
+
+        .dl-error-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0 0 6px;
+        }
+
+        .dl-error-msg {
+            font-size: 13px;
+            color: var(--muted);
+            margin: 0 0 18px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            .dl-progress i,
+            .dl-btn {
+                transition: none;
+            }
+
+            .dl-spinner {
+                animation-duration: 1.6s;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="dl-card">
+        <div class="dl-brand">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            安全下载
+        </div>
+
+        <!-- 加载中 -->
+        <div class="dl-loading" id="dl-loading">
+            <div class="dl-spinner" role="status" aria-label="加载中"></div>
+            正在验证下载链接...
+        </div>
+
+        <!-- 错误状态 -->
+        <div class="dl-error" id="dl-error">
+            <div class="dl-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="15" y1="9" x2="9" y2="15" />
+                    <line x1="9" y1="9" x2="15" y2="15" />
+                </svg>
+            </div>
+            <h1 class="dl-error-title" id="err-title">链接不可用</h1>
+            <p class="dl-error-msg" id="err-msg">下载令牌无效或已过期，请联系分享者重新获取链接。</p>
+            <button class="dl-back" id="btn-back" type="button">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="19" y1="12" x2="5" y2="12" />
+                    <polyline points="12 19 5 12 12 5" />
+                </svg>
+                重新输入
+            </button>
+        </div>
+
+        <!-- 手动输入模式：无链接参数时展示 -->
+        <div id="dl-form" style="display:none">
+            <div class="dl-icon" id="form-icon"></div>
+            <h1 class="dl-name" style="font-size:19px">安全下载</h1>
+            <p class="dl-sub">粘贴分享者提供的下载链接，验证后即可下载</p>
+
+            <div style="margin-bottom:12px">
+                <label class="dl-label" for="inp-link">下载链接</label>
+                <textarea id="inp-link" class="dl-input" rows="3" placeholder="https://...  粘贴完整下载链接"></textarea>
+            </div>
+
+            <button class="dl-btn" id="btn-parse" type="button">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                验证链接
+            </button>
+
+            <button class="dl-toggle" id="btn-manual" type="button" aria-expanded="false">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="6 9 12 15 18 9" />
+                </svg>
+                手动填写配置
+            </button>
+
+            <div id="manual-fields" style="display:none">
+                <div style="margin-bottom:12px">
+                    <label class="dl-label" for="inp-tid">令牌 ID（token_id）</label>
+                    <input id="inp-tid" class="dl-input" autocomplete="off" placeholder="例如 aB3xY9kQ2mN8pR4s" />
+                </div>
+                <div style="margin-bottom:12px">
+                    <label class="dl-label" for="inp-tok">下载令牌（token）</label>
+                    <input id="inp-tok" class="dl-input" autocomplete="off" placeholder="32 位令牌字符串" />
+                </div>
+                <div style="margin-bottom:16px">
+                    <label class="dl-label" for="inp-file">文件路径（file）</label>
+                    <input id="inp-file" class="dl-input" autocomplete="off" placeholder="例如 stream/xxx.mp4" />
+                </div>
+                <button class="dl-btn" id="btn-submit" type="button">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="11" cy="11" r="8" />
+                        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    验证配置
+                </button>
+            </div>
+
+            <p class="dl-err-inline" id="form-err"></p>
+
+            <div class="dl-footer">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                令牌加密传输 · 有效期外自动失效 · 流量限额保护
+            </div>
+        </div>
+
+        <!-- 正常内容 -->
+        <div id="dl-content" style="display:none">
+            <div class="dl-icon" id="file-icon"></div>
+            <h1 class="dl-name" id="file-name">文件名</h1>
+            <p class="dl-sub" id="file-size">-</p>
+
+            <div class="dl-warn" id="dl-warn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>下载链接即将过期，建议尽快下载</span>
+            </div>
+
+            <div class="dl-meta">
+                <div class="dl-meta-row">
+                    <span class="k">文件大小</span>
+                    <span class="v" id="meta-size">-</span>
+                </div>
+                <div class="dl-meta-row">
+                    <span class="k">链接有效期至</span>
+                    <span class="v" id="meta-expire">-</span>
+                </div>
+                <div class="dl-meta-row" style="display:block">
+                    <div class="dl-meta-row" style="padding-bottom:0">
+                        <span class="k">剩余可下载流量</span>
+                        <span class="v" id="meta-quota">-</span>
+                    </div>
+                    <div class="dl-progress" aria-hidden="true">
+                        <i id="meta-bar" style="width:0%"></i>
+                    </div>
+                </div>
+            </div>
+
+            <a class="dl-btn" id="dl-btn" href="#" download>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                下载文件
+            </a>
+            <p class="dl-hint">点击按钮开始下载，浏览器将保存到默认下载目录</p>
+
+            <div class="dl-footer">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                令牌加密传输 · 有效期外自动失效 · 流量限额保护
+            </div>
+        </div>
+    </main>
+
+    <script>
+        (function () {
+            'use strict';
+
+            // 根据扩展名返回对应的文件分类（用于选择图标）
+            function fileCategory(name) {
+                var ext = (name.split('.').pop() || '').toLowerCase();
+                if (['mp4', 'webm', 'mov', 'mkv', 'avi', 'flv', 'm4v', 'ts', 'mts', 'm2ts', 'wmv', 'mpg', 'mpeg', '3gp'].indexOf(ext) >= 0) return 'video';
+                if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].indexOf(ext) >= 0) return 'image';
+                if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a'].indexOf(ext) >= 0) return 'audio';
+                if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].indexOf(ext) >= 0) return 'archive';
+                if (['pdf', 'txt', 'md', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'epub'].indexOf(ext) >= 0) return 'doc';
+                if (['json', 'html', 'htm', 'css', 'js', 'jsx', 'ts', 'tsx', 'go', 'py', 'java', 'c', 'cpp', 'h', 'sh', 'yml', 'yaml', 'xml', 'sql'].indexOf(ext) >= 0) return 'code';
+                return 'other';
+            }
+
+            // 内联 SVG 图标（分类 / 通用文件）
+            var ICONS = {
+                video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
+                image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>',
+                audio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+                archive: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>',
+                doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
+                code: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+                other: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+            };
+
+            // 格式化字节数为可读大小
+            function formatBytes(bytes) {
+                if (!bytes || bytes <= 0) return '0 B';
+                var k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                var i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            // 当前使用的下载凭证参数（token_id / token / file）
+            var currentParams = null;
+
+            // 展示手动输入表单
+            function showForm() {
+                document.getElementById('dl-loading').style.display = 'none';
+                document.getElementById('dl-error').classList.remove('show');
+                document.getElementById('dl-content').style.display = 'none';
+                document.getElementById('dl-form').style.display = 'block';
+                document.getElementById('form-icon').innerHTML = ICONS.other;
+            }
+
+            // 展示行内表单错误提示
+            function showFormError(msg) {
+                var el = document.getElementById('form-err');
+                el.textContent = msg;
+                el.classList.add('show');
+            }
+
+            // 从粘贴文本中解析出 token_id / token / file 参数
+            function parseLinkText(text) {
+                var raw = (text || '').trim();
+                if (!raw) return null;
+                var params = null;
+                try {
+                    params = new URL(raw.trim()).searchParams;
+                } catch (e) {
+                    // 不是完整 URL 时，尝试按纯 query 或补全协议后解析
+                    var candidate = raw.indexOf('token_id=') === 0 ? '?' + raw : 'https://x/?' + raw.split('?').pop();
+                    try {
+                        params = new URL(candidate).searchParams;
+                    } catch (e2) {
+                        return null;
+                    }
+                }
+                var tid = params.get('token_id'), tok = params.get('token'), file = params.get('file');
+                if (!tid || !tok || !file) return null;
+                var out = new URLSearchParams();
+                out.set('token_id', tid);
+                out.set('token', tok);
+                out.set('file', file);
+                return out;
+            }
+
+            // 校验参数并展示文件信息
+            function verify(params) {
+                currentParams = params;
+                document.getElementById('dl-form').style.display = 'none';
+                document.getElementById('dl-error').classList.remove('show');
+                document.getElementById('form-err').classList.remove('show');
+                document.getElementById('dl-loading').style.display = 'block';
+
+                fetch('/download-info?' + params.toString())
+                    .then(function (r) {
+                        return r.json().then(function (d) { return { ok: r.ok, data: d }; });
+                    })
+                    .then(function (res) {
+                        document.getElementById('dl-loading').style.display = 'none';
+                        if (res.ok && res.data && res.data.code === 200) {
+                            render(res.data.data);
+                        } else {
+                            var status = res.data && res.data.code;
+                            document.getElementById('dl-error').classList.add('show');
+                            if (status === 404) {
+                                document.getElementById('err-title').textContent = '文件不存在';
+                                document.getElementById('err-msg').textContent = '文件可能已被移动或删除，请联系分享者。';
+                            } else if (status === 429) {
+                                document.getElementById('err-title').textContent = '尝试过于频繁';
+                                document.getElementById('err-msg').textContent = '失败次数过多，请 15 分钟后再试。';
+                            } else if (status === 400) {
+                                document.getElementById('err-title').textContent = '链接不完整';
+                                document.getElementById('err-msg').textContent = '请检查输入的链接或配置是否完整。';
+                            } else {
+                                document.getElementById('err-title').textContent = '链接不可用';
+                                document.getElementById('err-msg').textContent = (res.data && res.data.message) || '下载令牌无效或已过期，请重新获取。';
+                            }
+                        }
+                    })
+                    .catch(function () {
+                        document.getElementById('dl-loading').style.display = 'none';
+                        document.getElementById('dl-error').classList.add('show');
+                        document.getElementById('err-title').textContent = '网络错误';
+                        document.getElementById('err-msg').textContent = '无法连接下载服务，请稍后重试。';
+                    });
+            }
+
+            // 渲染文件信息与下载按钮
+            function render(info) {
+                document.getElementById('dl-loading').style.display = 'none';
+                document.getElementById('dl-content').style.display = 'block';
+
+                var name = info.file_name || '未知文件';
+                document.getElementById('file-icon').innerHTML = ICONS[fileCategory(name)] || ICONS.other;
+                document.getElementById('file-name').textContent = name;
+                document.getElementById('file-size').textContent = formatBytes(info.size);
+                document.getElementById('meta-size').textContent = formatBytes(info.size);
+
+                var expires = info.expires_at ? new Date(info.expires_at) : null;
+                if (expires) {
+                    document.getElementById('meta-expire').textContent = expires.toLocaleString('zh-CN', { hour12: false });
+                    // 剩余不足 1 小时时展示「即将过期」提醒
+                    if (expires.getTime() - Date.now() < 3600 * 1000) {
+                        document.getElementById('dl-warn').classList.add('show');
+                    }
+                }
+
+                var used = info.used_bytes || 0, max = info.max_bytes || 0;
+                var remaining = Math.max(0, (info.remaining_bytes != null ? info.remaining_bytes : max - used));
+                document.getElementById('meta-quota').textContent = formatBytes(remaining) + ' / ' + formatBytes(max);
+                var pct = max > 0 ? Math.min(100, Math.round(used / max * 100)) : 0;
+                document.getElementById('meta-bar').style.width = pct + '%';
+
+                // 下载按钮指向令牌校验下载接口（Content-Disposition attachment 直接触发保存）
+                document.getElementById('dl-btn').href = '/download?' + currentParams.toString();
+            }
+
+            // 入口：链接带完整参数时自动验证，否则展示手动输入表单
+            function init() {
+                var params = new URLSearchParams(window.location.search);
+                if (params.get('token_id') && params.get('token') && params.get('file')) {
+                    verify(params);
+                    return;
+                }
+                showForm();
+
+                // 「验证链接」：解析粘贴的完整链接
+                document.getElementById('btn-parse').addEventListener('click', function () {
+                    document.getElementById('form-err').classList.remove('show');
+                    var parsed = parseLinkText(document.getElementById('inp-link').value);
+                    if (!parsed) {
+                        showFormError('无法识别链接，请粘贴包含 token_id、token、file 参数的完整链接。');
+                        return;
+                    }
+                    verify(parsed);
+                });
+
+                // 「手动填写配置」折叠区
+                document.getElementById('btn-manual').addEventListener('click', function () {
+                    var box = document.getElementById('manual-fields');
+                    var open = box.style.display !== 'none';
+                    box.style.display = open ? 'none' : 'block';
+                    this.setAttribute('aria-expanded', String(!open));
+                });
+
+                // 「验证配置」：读取三个输入框
+                document.getElementById('btn-submit').addEventListener('click', function () {
+                    document.getElementById('form-err').classList.remove('show');
+                    var tid = document.getElementById('inp-tid').value.trim();
+                    var tok = document.getElementById('inp-tok').value.trim();
+                    var file = document.getElementById('inp-file').value.trim();
+                    if (!tid || !tok || !file) {
+                        showFormError('请填写完整的令牌 ID、下载令牌和文件路径。');
+                        return;
+                    }
+                    var out = new URLSearchParams();
+                    out.set('token_id', tid);
+                    out.set('token', tok);
+                    out.set('file', file);
+                    verify(out);
+                });
+
+                // 错误页「重新输入」
+                document.getElementById('btn-back').addEventListener('click', function () {
+                    document.getElementById('dl-error').classList.remove('show');
+                    showForm();
+                });
+            }
+
+            init();
+        })();
+    </script>
+</body>
+
+</html>

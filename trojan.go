@@ -621,6 +621,9 @@ func trojanUserMutationHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	trojanClient.refresh()
+	// Trojan 用户变更高危操作，记录审计（detail 中不包含密码明文）
+	auditAction(r, "trojan.user."+strings.ToLower(operation.String()),
+		fmt.Sprintf("hash=%s ip_limit=%d", req.Hash, req.IPLimit))
 	writeJSON(w, http.StatusOK, "Trojan-Go 用户更新成功", nil)
 }
 
@@ -873,6 +876,7 @@ func trojanCredentialHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("Trojan credential updated: hash=%s", hash)
+	auditAction(r, "trojan.credential.update", "hash="+hash)
 	writeJSON(w, http.StatusOK, "凭据已保存", nil)
 }
 

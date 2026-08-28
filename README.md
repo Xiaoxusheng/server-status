@@ -11,6 +11,7 @@
 - 📁 **文件管理**：浏览、上传、新建目录、删除（含移动端卡片视图）
 - ⚙️ **进程监控**：实时进程列表、CPU/内存 TOP10、结束进程
 - 🧰 **服务与端口中心**：systemd 服务创建/启停/自启/实时日志、监听端口识别与分类、防火墙开放/关闭与端口规则
+- 🖥️ **Web Shell（Web 终端）**：真正的 Linux PTY 交互终端（xterm.js + WebSocket），每次启动均需独立 Shell 二次认证 + 一次性 Token，`system:exec` 权限
 - 🚀 **Trojan-Go 监控与管理**：状态/在线用户/IP/实时流量图表，用户增删改、限速与 IP 限制（gRPC → 后端 → WebSocket）
 - 🔑 **授权下载**：令牌签发/撤销，支持粘贴下载链接自动解析令牌，配额与有效期控制
 - 🛡️ **RBAC 权限管理**：用户/角色/权限管理，细粒度访问控制
@@ -246,6 +247,82 @@ POST /exec?command=<命令名>
 
 支持的安全命令（白名单 + 固定参数）：`uptime`、`df`、`free`、`who`、`uname`、`ls`
 
+## Web Shell（Web 终端）
+
+真正的 Linux PTY 交互终端，适用于需要执行任意命令的运维场景。
+
+### 使用流程
+
+```
+登录 Server Status → RBAC system:exec → 点击 Web Shell
+→ 🔐 二次认证（输入独立 Shell 密码）→ 一次性 Token → WebSocket → PTY → 真正 Linux Shell
+```
+
+**每次新建 Shell 都必须重新输入 Shell 密码二次认证**（即使已登录、即使刚开过一个 Shell、即使拥有 `system:exec`）。浏览器不会保存密码或 Token。
+
+### 关键机制
+
+- **PTY**：`github.com/creack/pty` 创建真实交互 PTY，`$SHELL` → `/bin/bash` → `/bin/sh` 自动选择；支持 ANSI、颜色、光标、命令历史，以及 `top`/`htop`/`vim`/`nano`/`less`/`tail -f`/`journalctl -f`/`ping`/`systemctl` 等交互程序。
+- **WebSocket**：`/ws/shell`，服务端输出用 Binary Frame，输入消息上限 64KB，输出走有界队列背压，防止输出洪水。
+- **二次认证与一次性 Token**：Shell 密码 bcrypt 校验，成功后颁发 60 秒一次性 Token；服务端只存 `sha256(token)`，WebSocket 首帧 `auth` 消费后立即失效（防重放/防枚举）。
+- **并发限制**：每用户 ≤3 个 Shell、全局 ≤10 个 Shell。
+- **超时与清理**：空闲 30 分钟自动关闭；最长生命周期 12 小时；连接断开/`Ctrl+C`/`exit`/登出/管理端强制关闭时完整回收 PTY、进程树、FD、goroutine，不遗留孤儿进程。
+- **安全边界**：
+  - 复用 Server Status 登录 Session + RBAC `system:exec` + Origin 校验 + WebSocket 首帧认证，**先认证后建 PTY**；
+  - Shell 密码只存 bcrypt Hash（环境变量 `SHELL_PASSWORD_HASH` 或加密文件），不进入日志/API/WS/HTML/JS/存储；
+  - 防爆破：同用户/IP 连续失败 5 次锁定 60 秒，失败统一返回同一文案，不泄露任何信息；
+  - Shell 环境剥离 `SERVER_STATUS_*` 敏感变量，绝不回传浏览器；
+  - 审计仅记录会话生命周期（auth/session created/used/closed/timeout/killed 等），**绝不记录终端输入与输出**。
+- **移动端**：底部快捷键栏（ESC / TAB / 方向键 / HOME / END / CTRL+C / CTRL+L / CTRL+Z / CTRL+D），自动 resize、防键盘顶坏、终端点击聚焦。
+
+### Shell 密码初始化
+
+管理员登录后调用（写操作需会话 + CSRF Token）：
+
+```bash
+curl -k -X POST https://your-host:9000/api/shell/setup-password \
+  -H "Content-Type: application/json" -b "session_id=<登录Cookie>" \
+  -H "X-CSRF-Token: <csrf_token>" \
+  -d '{"password":"你的Shell密码"}'
+```
+
+也可以直接用环境变量注入 bcrypt Hash（此时视为环境管理，API 不可修改）：
+
+```dotenv
+SHELL_PASSWORD_HASH=$2a$10$...
+```
+
+### API
+
+| 方法/路径 | 说明 |
+|---|---|
+| `GET /shell.html` | Web Shell 页面（需登录 + `system:exec`） |
+| `POST /api/shell/auth` | 二次认证，返回一次性 `shell_token`（60s） |
+| `POST /api/shell/setup-password` | 管理员初始化 Shell 密码 |
+| `POST /api/shell/change-password` | 修改 Shell 密码（成功即撤销旧认证 + 关闭本人全部 Shell） |
+| `GET /api/shell/sessions` | 列出运行中的 Shell |
+| `DELETE /api/shell/sessions/{id}` | 关闭指定 Shell |
+| `DELETE /api/shell/auth-sessions/{id}` | 撤销等待启动的认证 |
+| `POST /api/shell/revoke-all` | 撤销全部待启动认证 |
+| `GET /ws/shell` | WebSocket 终端（首帧 `{"type":"auth","token":...}`） |
+
+### WebSocket 消息
+
+```json
+// 浏览器 → 服务端（注意：首帧必须是 auth）
+{"type":"auth","token":"ONE_TIME_TOKEN","rows":40,"cols":120}
+{"type":"input","data":"ls -lah\n"}
+{"type":"resize","rows":40,"cols":120}
+{"type":"ping"}
+{"type":"close"}
+// 服务端 → 浏览器
+<Binary Frame: 终端输出>
+{"type":"error","message":"..."}
+{"type":"pong"}
+```
+
+> Web Shell 与 `POST /exec` 相互独立：`/exec` 用于安全固定命令白名单，Web Shell 才用于真正的交互式 Shell；实现并未放宽 `/exec` 白名单。
+
 ## 数据持久化
 
 程序自动将统计数据与配置保存到 `/opt/server-status` 下，包括：
@@ -290,6 +367,12 @@ POST /exec?command=<命令名>
 | `SERVER_STATUS_DOWNLOAD_TOKEN_SECRET` | 下载令牌签名密钥 | 同上，建议生产覆盖 |
 | `SERVER_STATUS_SIGNING_KEY` | 服务端 HMAC 签名密钥（私有入口/分享密码 Cookie、下载令牌） | 未设置时用 `crypto/rand` 随机生成并告警 |
 | `SERVER_STATUS_HOME` | 数据/日志根目录 | 例如 `SERVER_STATUS_HOME=/opt/server-status`，便于本地测试 |
+| `SHELL_PASSWORD_HASH` | Web Shell 二次认证密码的 bcrypt Hash | 设置后视为环境管理，`/api/shell/auth` 使用其校验；下线后回退到加密文件 `shell_pw.dat` |
+| `MAX_SHELLS_PER_USER` | 每用户最大并发 Shell | 默认 `3` |
+| `MAX_SHELLS_GLOBAL` | 全局最大并发 Shell | 默认 `10` |
+| `SHELL_IDLE_TIMEOUT` | Shell 空闲超时 | 默认 `30m` |
+| `SHELL_MAX_LIFETIME` | Shell 最大生命周期 | 默认 `12h` |
+| `SHELL_TOKEN_TTL` | 一次性认证 Token 有效期 | 默认 `60s` |
 
 > 注意：内置默认值仅为保证旧部署可用；任何真实的部署都应通过环境变量提供随机高强度密钥。
 
@@ -298,6 +381,7 @@ POST /exec?command=<命令名>
 - [gorilla/websocket](https://github.com/gorilla/websocket) - WebSocket 支持
 - [shirou/gopsutil](https://github.com/shirou/gopsutil) - 系统监控信息获取
 - [golang.org/x/crypto](https://golang.org/x/crypto) - bcrypt 密码哈希
+- [creack/pty](https://github.com/creack/pty) - 伪终端（Web Shell）
 
 ## 许可证
 

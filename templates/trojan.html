@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Trojan-Go 监控与管理 - Server Status</title>
-    <link rel="icon" href="data:,">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
     <style>
         html,
         body,
@@ -162,6 +162,29 @@
             margin-left: 4px;
         }
 
+        /* 顶栏左上角当前页面名指示 */
+        .tb-page {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(0, 0, 0, 0.88);
+            white-space: nowrap;
+        }
+
+        html.dark .tb-page {
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .tb-page .anticon {
+            color: #1677ff;
+        }
+
+        html.dark .tb-page .anticon {
+            color: #4096ff;
+        }
+
         @media (max-width: 768px) {
             .topbar {
                 padding: 6px 10px;
@@ -275,6 +298,17 @@
             gap: 2px;
             min-width: 0;
             overflow: hidden;
+            transition: box-shadow 0.2s, border-color 0.2s;
+        }
+
+        .mini-stat:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+            border-color: #d9d9d9;
+        }
+
+        html.dark .mini-stat:hover {
+            border-color: #4a4a4a;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
         }
 
         .mini-stat .ms-label {
@@ -986,14 +1020,8 @@
                 <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
                     <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', background: 'var(--bg)' }}>
                         <div className={'topbar' + (isDark ? ' dark' : '')}>
-                            <div className="brand">
-                                <span className="logo"><UIIcon name="RocketOutlined" /></span>
-                                <span>
-                                    <span className="bt-name">Server Status</span>
-                                    <span className="bt-sub">/ Trojan-Go</span>
-                                </span>
-                            </div>
-                            <Space>
+                            <span className="tb-page"><UIIcon name="RocketOutlined" />Trojan-Go</span>
+                            <Space style={{ marginLeft: 'auto' }}>
                                 <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = '/'}><span className="tb-text">首页</span></Button>
                                 <Button icon={<UIIcon name="GlobalOutlined" />} onClick={() => window.location.href = 'ip-panel.html'}><span className="tb-text">IP 流量</span></Button>
                                 <Tooltip title={isDark ? '浅色模式' : '深色模式'}>

@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统日志 - Server Status</title>
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
+    <style>
+        html,
+        body,
+        #root {
+            margin: 0;
+            min-height: 100%;
+            background: #f5f5f5;
+        }
+
+        html.dark,
+        html.dark body,
+        html.dark #root {
+            background: #141414;
+        }
+
+        html.dark body {
+            color: rgba(255, 255, 255, .85);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f5f5f5;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #d9d9d9;
+            border-radius: 4px;
+        }
+
+        html.dark ::-webkit-scrollbar-track {
+            background: #141414;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb {
+            background: #3a3a3a;
+        }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) { }
+        })();
+    </script>
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin
+        src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background: #f5f5f5;
+        }
+
+        #root {
+            min-height: 100vh;
+        }
+
+        .page-wrap {
+            padding: 16px;
+            max-width: 1500px;
+            margin: 0 auto;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            height: 56px;
+            background: #fff;
+            border-bottom: 1px solid #f0f0f0;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+        }
+
+        .topbar.dark {
+            background: #1f1f1f;
+            border-bottom-color: #303030;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .topbar .ant-btn {
+            font-size: 13px;
+        }
+
+        .topbar .tb-text {
+            margin-left: 4px;
+        }
+
+        .tb-page {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(0, 0, 0, 0.88);
+            white-space: nowrap;
+        }
+
+        html.dark .tb-page {
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .tb-page .anticon {
+            color: #1677ff;
+        }
+
+        html.dark .tb-page .anticon {
+            color: #4096ff;
+        }
+
+        /* ===== 紧凑统计卡片（与首页 mini-stat 同款，尺寸更精致） ===== */
+        .mini-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 8px;
+            margin-bottom: 10px;
+            min-width: 0;
+        }
+
+        .mini-stat {
+            background: #fff;
+            border: 1px solid #f0f0f0;
+            border-radius: 8px;
+            padding: 5px 12px;
+            height: 56px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0;
+            min-width: 0;
+            overflow: hidden;
+            transition: box-shadow 0.2s, border-color 0.2s;
+            cursor: default;
+        }
+
+        html.dark .mini-stat {
+            background: #1f1f1f;
+            border-color: #303030;
+        }
+
+        .mini-stat:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+            border-color: #d9d9d9;
+        }
+
+        html.dark .mini-stat:hover {
+            border-color: #4a4a4a;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        .mini-stat .ms-label {
+            font-size: 11px;
+            color: rgba(0, 0, 0, 0.45);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        html.dark .mini-stat .ms-label {
+            color: rgba(255, 255, 255, 0.45);
+        }
+
+        .mini-stat .ms-label .anticon {
+            font-size: 12px;
+        }
+
+        .mini-stat .ms-value {
+            font-size: 16px;
+            font-weight: 600;
+            line-height: 1.2;
+            color: rgba(0, 0, 0, 0.88);
+            font-variant-numeric: tabular-nums;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        html.dark .mini-stat .ms-value {
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .mini-stat .ms-value .ms-suffix {
+            font-size: 12px;
+            font-weight: 500;
+            color: rgba(0, 0, 0, 0.45);
+            margin-left: 2px;
+        }
+
+        html.dark .mini-stat .ms-value .ms-suffix {
+            color: rgba(255, 255, 255, 0.45);
+        }
+
+        /* ===== 日志工具栏 ===== */
+        .log-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        /* ===== 终端风格日志视窗（明暗主题下均保持终端观感） ===== */
+        .log-terminal {
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+        }
+
+        .log-terminal-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: #161b22;
+            border-bottom: 1px solid #21262d;
+        }
+
+        .log-terminal-bar .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            flex: none;
+        }
+
+        .log-terminal-bar .dot-r {
+            background: #ff5f56;
+        }
+
+        .log-terminal-bar .dot-y {
+            background: #ffbd2e;
+        }
+
+        .log-terminal-bar .dot-g {
+            background: #27c93f;
+        }
+
+        .log-terminal-bar .lt-name {
+            margin-left: 8px;
+            font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+            font-size: 12px;
+            color: #8b949e;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .log-terminal-bar .lt-tag {
+            margin-left: auto;
+        }
+
+        .log-view {
+            margin: 0;
+            padding: 12px 14px;
+            background: #0d1117;
+            color: #c9d1d9;
+            border-radius: 0;
+            font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+            min-height: 320px;
+            max-height: calc(100vh - 280px);
+        }
+
+        .log-view .ln-err {
+            color: #ff7b72;
+        }
+
+        .log-view .ln-warn {
+            color: #d29922;
+        }
+
+        .log-view .ln-ok {
+            color: #7ee787;
+        }
+
+        .log-view .ln-audit {
+            color: #79c0ff;
+        }
+
+        /* 终端内滚动条用深色样式，避免右侧出现突兀的浅色滚动条 */
+        .log-terminal .log-view::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .log-terminal .log-view::-webkit-scrollbar-track {
+            background: #0d1117;
+        }
+
+        .log-terminal .log-view::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+
+        .log-terminal .log-view::-webkit-scrollbar-thumb:hover {
+            background: #484f58;
+        }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .topbar {
+                padding: 8px 12px;
+                flex-wrap: wrap;
+                gap: 6px 8px;
+            }
+
+            .topbar .ant-space {
+                flex-wrap: wrap;
+                gap: 6px !important;
+            }
+
+            .topbar .ant-btn {
+                padding: 4px 8px;
+                font-size: 12px;
+                height: 30px;
+            }
+
+            .topbar .tb-text {
+                display: none;
+            }
+
+            .page-wrap {
+                padding: 10px;
+            }
+
+            .ant-card-body {
+                padding: 12px !important;
+            }
+
+            .log-view {
+                max-height: 62vh;
+                font-size: 11px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { Card, Button, Input, Select, Space, Typography, ConfigProvider, theme, Switch, Tooltip, Tag, Empty, Spin, Segmented, Table } = window.antd;
+        const { useState, useEffect, useRef, useCallback } = React;
+        const { darkAlgorithm } = theme;
+        const IconSet = window.icons || {};
+        const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
+
+        const baseUrl = window.location.origin;
+
+        // 读取非 HttpOnly 的 csrf_token Cookie（本页均为 GET 请求，仅备用）
+        function getCsrfToken() { const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+        function secureFetch(url, options = {}) {
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) { const tok = getCsrfToken(); if (tok) headers['X-CSRF-Token'] = tok; }
+            return fetch(url, { method, headers, credentials: 'include', body: options.body });
+        }
+
+        // 格式化字节数
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024, sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        // 按行首标记给日志行着色的 JSX 片段（error/warn/audit/成功）
+        function renderLine(line, idx) {
+            let cls = '';
+            if (line.indexOf('❌') >= 0 || /error|failed|失败|panic/i.test(line)) cls = 'ln-err';
+            else if (line.indexOf('⚠') >= 0 || /warn/i.test(line)) cls = 'ln-warn';
+            else if (line.indexOf('AUDIT') >= 0) cls = 'ln-audit';
+            else if (line.indexOf('✅') >= 0) cls = 'ln-ok';
+            return <span key={idx} className={cls}>{line + '\n'}</span>;
+        }
+
+        // 审计动作按前缀映射标签颜色，便于快速区分操作类别
+        function actionTagColor(a) {
+            if (!a) return 'default';
+            if (a.indexOf('rbac') === 0 || a.indexOf('user') === 0) return 'red';
+            if (a.indexOf('auth') === 0) return 'blue';
+            if (a.indexOf('file') === 0) return 'orange';
+            if (a.indexOf('docker') === 0 || a.indexOf('trojan') === 0) return 'purple';
+            if (a.indexOf('service') === 0) return 'cyan';
+            if (a.indexOf('port') === 0) return 'geekblue';
+            if (a.indexOf('token') === 0) return 'gold';
+            if (a.indexOf('shell') === 0) return 'volcano';
+            if (a.indexOf('exec') === 0) return 'magenta';
+            if (a.indexOf('ip') === 0) return 'red';
+            return 'default';
+        }
+
+        // RFC3339 时间转本地可读格式
+        function fmtAuditTime(s) {
+            const d = new Date(s);
+            return isNaN(d.getTime()) ? (s || '-') : d.toLocaleString('zh-CN', { hour12: false });
+        }
+
+        function App() {
+            const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const [logFiles, setLogFiles] = useState([]);
+            const [curFile, setCurFile] = useState('');
+            const [tail, setTail] = useState(256 * 1024);
+            const [filter, setFilter] = useState('');
+            const [content, setContent] = useState('');
+            const [meta, setMeta] = useState({ truncated: false, size: 0 });
+            const [loading, setLoading] = useState(false);
+            const [auto, setAuto] = useState(true);
+            const viewRef = useRef(null);
+            const isDarkRef = useRef(isDark);
+            isDarkRef.current = isDark;
+
+            const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+
+            // ===== 审计记录视图 =====
+            const [view, setView] = useState('tail'); // tail=实时日志 audit=审计记录
+            const [auditList, setAuditList] = useState([]);
+            const [auditLoading, setAuditLoading] = useState(false);
+            const [auditUser, setAuditUser] = useState('');
+            const [auditLimit, setAuditLimit] = useState(100);
+            const hasPermAudit = hasPerm('role:manage') || hasPerm('user:manage');
+
+            // 拉取审计记录（切换到审计视图或手动刷新时触发）
+            const loadAudit = () => {
+                setAuditLoading(true);
+                const q = new URLSearchParams({ limit: String(auditLimit) });
+                if (auditUser.trim()) q.set('user', auditUser.trim());
+                secureFetch(baseUrl + '/api/audit?' + q.toString())
+                    .then(r => r.json())
+                    .then(d => { if (d.code === 200 && Array.isArray(d.data)) setAuditList(d.data); })
+                    .catch(() => { })
+                    .finally(() => setAuditLoading(false));
+            };
+
+            useEffect(() => { if (view === 'audit' && hasPermAudit) loadAudit(); }, [view]);
+
+            useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
+                        else window.location.href = 'index.html';
+                    })
+                    .catch(() => { window.location.href = 'index.html'; });
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+            }, [isDark]);
+
+            const hasPermLog = hasPerm('system:log');
+
+            // 拉取日志文件列表，默认选中最新一个
+            useEffect(() => {
+                if (auth.ok && hasPermLog) {
+                    secureFetch(baseUrl + '/api/logs/files')
+                        .then(r => r.json())
+                        .then(d => {
+                            if (d.code === 200 && Array.isArray(d.data)) {
+                                setLogFiles(d.data);
+                                if (d.data.length) setCurFile(cur => cur || d.data[0].name);
+                            }
+                        })
+                        .catch(() => { });
+                }
+            }, [auth.ok, hasPermLog]);
+
+            // 拉取当前文件内容（tail 字节 + 关键字过滤）
+            const loadContent = useCallback(() => {
+                if (!curFile) return;
+                setLoading(true);
+                const q = new URLSearchParams({ file: curFile, tail: String(tail) });
+                if (filter.trim()) q.set('filter', filter.trim());
+                secureFetch(baseUrl + '/api/logs?' + q.toString())
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200) {
+                            setContent(d.data.content || '');
+                            setMeta({ truncated: !!d.data.truncated, size: d.data.size || 0 });
+                        }
+                    })
+                    .catch(() => { })
+                    .finally(() => {
+                        setLoading(false);
+                        // 自动滚动到底部（最新日志在文件末尾）
+                        requestAnimationFrame(() => {
+                            if (viewRef.current) viewRef.current.scrollTop = viewRef.current.scrollHeight;
+                        });
+                    });
+            }, [curFile, tail, filter]);
+
+            useEffect(() => { if (auth.ok && hasPermLog) loadContent(); }, [auth.ok, hasPermLog, loadContent]);
+
+            // 自动刷新（3 秒）
+            useEffect(() => {
+                if (!auto) return;
+                const t = setInterval(loadContent, 3000);
+                return () => clearInterval(t);
+            }, [auto, loadContent]);
+
+            if (auth.loading) {
+                return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Card loading style={{ width: 320 }} />
+                </div>;
+            }
+
+            if (!hasPermLog) {
+                return (
+                    <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
+                            <Card style={{ width: 380, textAlign: 'center' }}>
+                                <div style={{ fontSize: 48 }}>🚫</div>
+                                <Typography.Title level={4}>没有访问权限</Typography.Title>
+                                <Typography.Text type="secondary">当前账号没有「查看系统日志」权限，请联系管理员开通。</Typography.Text>
+                                <div style={{ marginTop: 16 }}>
+                                    <Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>
+                                </div>
+                            </Card>
+                        </div>
+                    </ConfigProvider>
+                );
+            }
+
+            // 下载当前日志（取当前视窗内容生成文件）
+            const downloadLog = () => {
+                const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = curFile.replace(/\.log$/, '') + (filter.trim() ? '.filtered' : '') + '.txt';
+                a.click();
+                URL.revokeObjectURL(a.href);
+            };
+
+            const lineCount = content ? content.split('\n').length : 0;
+
+            const tailOptions = [
+                { value: 64 * 1024, label: '64KB' },
+                { value: 256 * 1024, label: '256KB' },
+                { value: 512 * 1024, label: '512KB' },
+                { value: 1024 * 1024, label: '1MB' },
+                { value: 2 * 1024 * 1024, label: '2MB' },
+            ];
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <div className={'topbar' + (isDark ? ' dark' : '')}>
+                            <span className="tb-page"><UIIcon name="FileSearchOutlined" />系统日志</span>
+                            <Space style={{ marginLeft: 'auto' }}>
+                                <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>
+                                <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                                    <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                                </Tooltip>
+                                <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}><span className="tb-text">退出</span></Button>
+                            </Space>
+                        </div>
+
+                        <div className="page-wrap">
+                            {/* 视图切换：实时日志 / 审计记录（审计需 role:manage 或 user:manage 权限） */}
+                            <div style={{ marginBottom: 10 }}>
+                                <Segmented
+                                    value={view}
+                                    onChange={setView}
+                                    options={hasPermAudit
+                                        ? [{ label: '实时日志', value: 'tail' }, { label: '审计记录', value: 'audit' }]
+                                        : [{ label: '实时日志', value: 'tail' }]}
+                                />
+                            </div>
+
+                            {view === 'tail' && <React.Fragment>
+                                {/* 概览统计：当前文件 / 大小 / 行数 / 加载范围 */}
+                                <div className="mini-grid">
+                                    <div className="mini-stat">
+                                        <div className="ms-label"><UIIcon name="FileTextOutlined" />当前日志</div>
+                                        <div className="ms-value" style={{ fontSize: 14 }} title={curFile}>{curFile || '-'}</div>
+                                    </div>
+                                    <div className="mini-stat">
+                                        <div className="ms-label"><UIIcon name="HddOutlined" />文件大小</div>
+                                        <div className="ms-value">{formatBytes(meta.size)}</div>
+                                    </div>
+                                    <div className="mini-stat">
+                                        <div className="ms-label"><UIIcon name="OrderedListOutlined" />日志行数</div>
+                                        <div className="ms-value">{lineCount}<span className="ms-suffix">行</span></div>
+                                    </div>
+                                    <div className="mini-stat">
+                                        <div className="ms-label"><UIIcon name="ZoomInOutlined" />加载范围</div>
+                                        <div className="ms-value">{(tailOptions.find(o => o.value === tail) || {}).label || '-'}<span className="ms-suffix">末尾</span></div>
+                                    </div>
+                                </div>
+
+                                <Card styles={{ body: { padding: '12px 14px' } }}>
+                                    <div className="log-toolbar">
+                                        <Select
+                                            style={{ minWidth: 200, flex: 1, maxWidth: 320 }}
+                                            value={curFile || undefined}
+                                            onChange={v => setCurFile(v)}
+                                            options={logFiles.map(f => ({ value: f.name, label: `${f.name}（${formatBytes(f.size)}）` }))}
+                                            placeholder="选择日志文件"
+                                            showSearch
+                                            optionFilterProp="label"
+                                        />
+                                        <Tooltip title="加载日志末尾的字节量">
+                                            <Segmented size="small" value={tail} onChange={setTail} options={tailOptions} />
+                                        </Tooltip>
+                                        <Input
+                                            allowClear
+                                            style={{ width: 200 }}
+                                            prefix={<UIIcon name="SearchOutlined" />}
+                                            placeholder="关键字过滤..."
+                                            value={filter}
+                                            onChange={e => setFilter(e.target.value)}
+                                            onPressEnter={loadContent}
+                                        />
+                                        {meta.truncated && <Tag color="orange" style={{ marginRight: 0 }}>仅显示末尾部分</Tag>}
+                                        <Space size={8} style={{ marginLeft: 'auto' }}>
+                                            <Space size={6}>
+                                                <Switch size="small" checked={auto} onChange={setAuto} />
+                                                <Typography.Text type="secondary" style={{ fontSize: 13 }}>自动刷新</Typography.Text>
+                                            </Space>
+                                            <Button size="small" icon={<UIIcon name="ReloadOutlined" />} onClick={loadContent}>刷新</Button>
+                                            <Button size="small" icon={<UIIcon name="DownloadOutlined" />} disabled={!content} onClick={downloadLog}>下载</Button>
+                                        </Space>
+                                    </div>
+
+                                    <Spin spinning={loading}>
+                                        {content ? (
+                                            <div className="log-terminal">
+                                                <div className="log-terminal-bar">
+                                                    <span className="dot dot-r" />
+                                                    <span className="dot dot-y" />
+                                                    <span className="dot dot-g" />
+                                                    <span className="lt-name" title={curFile}>{curFile}{filter.trim() ? ` · filter: ${filter.trim()}` : ''}</span>
+                                                    {meta.truncated && <Tag color="orange" className="lt-tag">仅末尾</Tag>}
+                                                </div>
+                                                <pre className="log-view" ref={viewRef}>
+                                                    {content.split('\n').map((line, i) => renderLine(line, i))}
+                                                </pre>
+                                            </div>
+                                        ) : (
+                                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={filter ? '无匹配日志' : '暂无日志'} style={{ padding: 60 }} />
+                                        )}
+                                    </Spin>
+                                </Card>
+                            </React.Fragment>}
+
+                            {view === 'audit' && (
+                                <Card styles={{ body: { padding: '12px 14px' } }}>
+                                    <div className="log-toolbar">
+                                        <Input
+                                            allowClear
+                                            style={{ width: 200 }}
+                                            prefix={<UIIcon name="UserOutlined" />}
+                                            placeholder="按操作人过滤..."
+                                            value={auditUser}
+                                            onChange={e => setAuditUser(e.target.value)}
+                                            onPressEnter={loadAudit}
+                                        />
+                                        <Select
+                                            style={{ width: 130 }}
+                                            value={auditLimit}
+                                            onChange={v => { setAuditLimit(v); }}
+                                            options={[
+                                                { value: 50, label: '最近 50 条' },
+                                                { value: 100, label: '最近 100 条' },
+                                                { value: 200, label: '最近 200 条' },
+                                            ]}
+                                        />
+                                        <Button size="small" icon={<UIIcon name="ReloadOutlined" />} onClick={loadAudit}>刷新</Button>
+                                        <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 'auto' }}>
+                                            共 {auditList.length} 条记录
+                                        </Typography.Text>
+                                    </div>
+                                    <Table
+                                        size="small"
+                                        rowKey={(_, i) => i}
+                                        loading={auditLoading}
+                                        dataSource={auditList}
+                                        columns={[
+                                            {
+                                                title: '时间', dataIndex: 'time', width: 175,
+                                                render: v => <Typography.Text style={{ fontSize: 12 }}>{fmtAuditTime(v)}</Typography.Text>
+                                            },
+                                            {
+                                                title: '操作人', dataIndex: 'user', width: 110,
+                                                render: v => v
+                                                    ? <Tag color="blue" style={{ margin: 0 }}>{v}</Tag>
+                                                    : <Typography.Text type="secondary">-</Typography.Text>
+                                            },
+                                            {
+                                                title: '动作', dataIndex: 'action', width: 200,
+                                                render: v => <Tag color={actionTagColor(v)} style={{ margin: 0 }}>{v || '-'}</Tag>
+                                            },
+                                            {
+                                                title: '来源 IP', dataIndex: 'ip', width: 160,
+                                                render: v => <Typography.Text type="secondary" style={{ fontSize: 12 }}>{v || '-'}</Typography.Text>
+                                            },
+                                            {
+                                                title: '详情', dataIndex: 'detail', ellipsis: true,
+                                                render: v => <span className="lt-name" style={{ display: 'block' }} title={v}>{v}</span>
+                                            }
+                                        ]}
+                                        pagination={{ pageSize: 20, size: 'small', showSizeChanger: false }}
+                                        scroll={{ x: 'max-content' }}
+                                    />
+                                </Card>
+                            )}
+                        </div>
+                    </div>
+                </ConfigProvider>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>

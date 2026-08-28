@@ -30,6 +30,12 @@ func securityMux() *http.ServeMux {
 	mux.HandleFunc("GET /api/exec/list", authMiddleware(requirePermission("system:exec", securityMiddleware(echoHandler))))
 	mux.HandleFunc("POST /api/exec/list", authMiddleware(requirePermission("system:exec", securityMiddleware(echoHandler))))
 	mux.HandleFunc("/ws", authMiddleware(requirePermission("system:view", securityMiddleware(wsHandler))))
+	mux.HandleFunc("GET /api/docker/containers", authMiddleware(requirePermission("docker:view", securityMiddleware(echoHandler))))
+	mux.HandleFunc("GET /api/docker/overview", authMiddleware(requirePermission("docker:view", securityMiddleware(echoHandler))))
+	mux.HandleFunc("GET /api/docker/inspect", authMiddleware(requirePermission("docker:view", securityMiddleware(echoHandler))))
+	mux.HandleFunc("POST /api/docker/action", authMiddleware(requirePermission("docker:manage", securityMiddleware(echoHandler))))
+	mux.HandleFunc("POST /api/docker/remove", authMiddleware(requirePermission("docker:manage", securityMiddleware(echoHandler))))
+	mux.HandleFunc("/docker", authMiddleware(requireAnyPermission([]string{"docker:view", "docker:manage"}, securityMiddleware(echoHandler))))
 	return mux
 }
 
@@ -540,5 +546,99 @@ func TestDownloadTokenFullFlow(t *testing.T) {
 	}
 	if resp.Data["token"] == nil || resp.Data["token"] == "" {
 		t.Fatalf("未返回下载令牌: %s", rec.Body.String())
+	}
+}
+
+// Docker 路由的 RBAC 与 CSRF 保护回归测试。
+func TestDockerRoutesProtected(t *testing.T) {
+	oldUM := userManager
+	userManager = &UserManager{
+		RWMutex: sync.RWMutex{},
+		UserInfos: map[string]*Users{
+			"viewer":  {Username: "viewer", IsActive: true, Permissions: []string{"docker:view"}},
+			"nouser":  {Username: "nouser", IsActive: true, Permissions: []string{}},
+			"manager": {Username: "manager", IsActive: true, Permissions: []string{"docker:manage"}},
+		},
+		Sessions: make(map[string]*Session),
+	}
+	defer func() { userManager = oldUM }()
+	mux := securityMux()
+
+	// 1. 无 docker 权限 → GET /api/docker/containers 403
+	rec0 := httptest.NewRecorder()
+	mux.ServeHTTP(rec0, secureReq(newTestSession("nouser"), "GET", "/api/docker/containers", "", false))
+	if rec0.Code != http.StatusForbidden {
+		t.Fatalf("无权限用户访问 docker 列表应 403, got %d", rec0.Code)
+	}
+
+	// 2. 有 docker:view → 可读列表
+	rec1 := httptest.NewRecorder()
+	mux.ServeHTTP(rec1, secureReq(newTestSession("viewer"), "GET", "/api/docker/containers", "", false))
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("docker:view 用户读取列表应 200, got %d: %s", rec1.Code, rec1.Body.String())
+	}
+
+	// 3. 只有 view 无 manage → 启动容器 403
+	rec2 := httptest.NewRecorder()
+	mux.ServeHTTP(rec2, secureReq(newTestSession("viewer"), "POST", "/api/docker/action", `{"container":"web","action":"start"}`, true))
+	if rec2.Code != http.StatusForbidden {
+		t.Fatalf("docker:view 无 manage 权限启动容器应 403, got %d", rec2.Code)
+	}
+
+	// 4. 有 manage 但缺 CSRF → 启动容器 403
+	rec3 := httptest.NewRecorder()
+	mux.ServeHTTP(rec3, secureReq(newTestSession("manager"), "POST", "/api/docker/action", `{"container":"web","action":"start"}`, false))
+	if rec3.Code != http.StatusForbidden {
+		t.Fatalf("缺 CSRF 的启动操作应 403, got %d", rec3.Code)
+	}
+
+	// 5. 有 manage + CSRF → 通过（echoHandler 返回 200）
+	rec4 := httptest.NewRecorder()
+	mux.ServeHTTP(rec4, secureReq(newTestSession("manager"), "POST", "/api/docker/action", `{"container":"web","action":"start"}`, true))
+	if rec4.Code != http.StatusOK {
+		t.Fatalf("docker:manage + CSRF 应 200, got %d", rec4.Code)
+	}
+
+	// 6. /docker 页面：viewer 可访问（requireAnyPermission）
+	rec5 := httptest.NewRecorder()
+	mux.ServeHTTP(rec5, secureReq(newTestSession("viewer"), "GET", "/docker", "", false))
+	if rec5.Code != http.StatusOK {
+		t.Fatalf("docker:view 用户访问 /docker 页面应 200, got %d", rec5.Code)
+	}
+
+	// 7. overview/inspect 只读：viewer 可访问
+	rec6 := httptest.NewRecorder()
+	mux.ServeHTTP(rec6, secureReq(newTestSession("viewer"), "GET", "/api/docker/overview", "", false))
+	if rec6.Code != http.StatusOK {
+		t.Fatalf("docker:view 用户访问 overview 应 200, got %d", rec6.Code)
+	}
+	rec7 := httptest.NewRecorder()
+	mux.ServeHTTP(rec7, secureReq(newTestSession("viewer"), "GET", "/api/docker/inspect?container=web", "", false))
+	if rec7.Code != http.StatusOK {
+		t.Fatalf("docker:view 用户访问 inspect 应 200, got %d", rec7.Code)
+	}
+
+	// 8. 无权限用户访问 overview 应 403
+	rec8 := httptest.NewRecorder()
+	mux.ServeHTTP(rec8, secureReq(newTestSession("nouser"), "GET", "/api/docker/overview", "", false))
+	if rec8.Code != http.StatusForbidden {
+		t.Fatalf("无权限用户访问 overview 应 403, got %d", rec8.Code)
+	}
+
+	// 9. 删除（危险写操作）：viewer 无 manage 权限 403；manager 缺 CSRF 403；manager + CSRF 通过
+	rec9 := httptest.NewRecorder()
+	mux.ServeHTTP(rec9, secureReq(newTestSession("viewer"), "POST", "/api/docker/remove", `{"container":"web"}`, true))
+	if rec9.Code != http.StatusForbidden {
+		t.Fatalf("viewer 无 manage 权限删除应 403, got %d", rec9.Code)
+	}
+	rec10 := httptest.NewRecorder()
+	mux.ServeHTTP(rec10, secureReq(newTestSession("manager"), "POST", "/api/docker/remove", `{"container":"web"}`, false))
+	if rec10.Code != http.StatusForbidden {
+		t.Fatalf("manager 缺 CSRF 删除应 403, got %d", rec10.Code)
+	}
+	rec11 := httptest.NewRecorder()
+	mux.ServeHTTP(rec11, secureReq(newTestSession("manager"), "POST", "/api/docker/remove", `{"container":"web"}`, true))
+	if rec11.Code != http.StatusOK {
+		t.Fatalf("manager + CSRF 删除应 200, got %d", rec11.Code)
 	}
 }

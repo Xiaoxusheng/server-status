@@ -1,0 +1,1565 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Docker 容器 - Server Status</title>
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
+    <style>
+        html,
+        body,
+        #root {
+            margin: 0;
+            min-height: 100%;
+            background: #f5f5f5;
+        }
+
+        html.dark,
+        html.dark body,
+        html.dark #root {
+            background: #141414;
+        }
+
+        html.dark body {
+            color: rgba(255, 255, 255, .85);
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f5f5f5;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #d9d9d9;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #bfbfbf;
+        }
+
+        html.dark ::-webkit-scrollbar-track {
+            background: #141414;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb {
+            background: #3a3a3a;
+        }
+
+        html.dark ::-webkit-scrollbar-thumb:hover {
+            background: #4a4a4a;
+        }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) { }
+        })();
+    </script>
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin
+        src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background: #f5f5f5;
+            font-size: 14px;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        #root {
+            min-height: 100vh;
+        }
+
+        .page-wrap {
+            padding: 16px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            height: 54px;
+            background: #fff;
+            border-bottom: 1px solid #f0f0f0;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        .topbar.dark {
+            background: #1f1f1f;
+            border-bottom-color: #303030;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .topbar .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+
+        .topbar .brand .bt-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f1f1f;
+            line-height: 1;
+        }
+
+        .topbar.dark .brand .bt-name {
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .topbar .brand .bt-sub {
+            font-size: 14px;
+            color: rgba(0, 0, 0, 0.45);
+            font-weight: 400;
+            margin-left: 2px;
+        }
+
+        .topbar.dark .brand .bt-sub {
+            color: rgba(255, 255, 255, 0.45);
+        }
+
+        .topbar .brand .logo {
+            width: 28px;
+            height: 28px;
+            border-radius: 7px;
+            background: linear-gradient(135deg, #1677ff, #722ed1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 15px;
+        }
+
+        .topbar .ant-btn {
+            font-size: 13px;
+        }
+
+        .topbar .tb-text {
+            margin-left: 4px;
+        }
+
+        /* 顶栏左上角当前页面名指示 */
+        .tb-page {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(0, 0, 0, 0.88);
+            white-space: nowrap;
+        }
+
+        html.dark .tb-page {
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .tb-page .anticon {
+            color: #1677ff;
+        }
+
+        html.dark .tb-page .anticon {
+            color: #4096ff;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                font-size: 13px;
+            }
+
+            .topbar {
+                padding: 6px 10px;
+                gap: 4px;
+                height: auto;
+                min-height: 52px;
+            }
+
+            .topbar .brand {
+                flex: 1;
+            }
+
+            .topbar .brand .bt-name {
+                max-width: 60vw;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .topbar .brand .bt-sub {
+                display: none;
+            }
+
+            .topbar .tb-text {
+                display: none;
+            }
+
+            .topbar .ant-space {
+                gap: 4px !important;
+            }
+
+            .topbar .ant-btn {
+                padding: 4px 9px;
+                height: 32px;
+            }
+
+            .page-wrap {
+                padding: 10px;
+                padding-bottom: calc(10px + env(safe-area-inset-bottom));
+            }
+        }
+
+        /* 统一视觉变量（与其他页面一致的 Design Token） */
+        .sp-app {
+            --bg: #f5f5f5;
+            --card: #ffffff;
+            --border: #f0f0f0;
+            --text: rgba(0, 0, 0, 0.88);
+            --secondary: rgba(0, 0, 0, 0.45);
+            color-scheme: light;
+        }
+
+        .sp-app.dark {
+            --bg: #141414;
+            --card: #1f1f1f;
+            --border: #303030;
+            --text: rgba(255, 255, 255, 0.88);
+            --secondary: rgba(255, 255, 255, 0.45);
+            color-scheme: dark;
+        }
+
+        /* 统计卡片（紧凑 78px） */
+        .mini-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+            min-width: 0;
+        }
+
+        .mini-stat {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 16px;
+            height: 78px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 2px;
+            min-width: 0;
+            overflow: hidden;
+            transition: box-shadow 0.2s, border-color 0.2s;
+        }
+
+        .mini-stat:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+            border-color: #d9d9d9;
+        }
+
+        html.dark .mini-stat:hover {
+            border-color: #4a4a4a;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        }
+
+        .mini-stat .ms-label {
+            font-size: 12px;
+            color: var(--secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mini-stat .ms-label .anticon {
+            font-size: 13px;
+        }
+
+        .mini-stat .ms-value {
+            font-size: 26px;
+            font-weight: 600;
+            line-height: 1.15;
+            color: var(--text);
+            font-variant-numeric: tabular-nums;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .page-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .page-head .ph-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text);
+            line-height: 1.2;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .page-head .ph-sub {
+            font-size: 13px;
+            color: var(--secondary);
+            margin-top: 2px;
+        }
+
+        .page-head .ph-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .toolbar .toolbar-search {
+            width: 260px;
+        }
+
+        .toolbar .toolbar-extra {
+            margin-left: auto;
+            font-size: 12px;
+            color: var(--secondary);
+            white-space: nowrap;
+        }
+
+        @media (max-width: 768px) {
+            .toolbar .toolbar-search {
+                width: 100%;
+            }
+        }
+
+        .log-modal .ant-modal-body {
+            background: #161b22;
+            margin: 0;
+            padding: 12px 14px;
+            max-height: 60vh;
+            overflow: auto;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #c9d1d9;
+            white-space: pre-wrap;
+            word-break: break-all;
+            border-radius: 0 0 8px 8px;
+        }
+
+        /* 实时状态呼吸灯 */
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .live-dot.online {
+            background: #52c41a;
+            box-shadow: 0 0 0 3px rgba(82, 196, 26, 0.15);
+            animation: live-pulse 2s ease-in-out infinite;
+        }
+
+        .live-dot.offline {
+            background: #ff4d4f;
+            box-shadow: 0 0 0 3px rgba(255, 77, 79, 0.12);
+        }
+
+        @keyframes live-pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.45;
+            }
+        }
+
+        /* 容器名行 */
+        .c-name {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            color: var(--text);
+        }
+
+        .c-name:hover {
+            color: #1677ff;
+        }
+
+        /* ====== 专业管控台增强样式 ====== */
+
+        /* Header 状态指示 */
+        .dk-health {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 3px 10px;
+            border-radius: 20px;
+            background: rgba(82, 196, 26, 0.1);
+            color: #389e0d;
+        }
+
+        html.dark .dk-health {
+            background: rgba(82, 196, 26, 0.16);
+            color: #95de64;
+        }
+
+        .dk-health.error {
+            background: rgba(255, 77, 79, 0.1);
+            color: #cf1322;
+        }
+
+        html.dark .dk-health.error {
+            background: rgba(255, 77, 79, 0.16);
+            color: #ff7875;
+        }
+
+        /* 资源使用统计卡（第 4 卡） */
+        .resource-card {
+            border-left: 3px solid #1677ff;
+        }
+
+        .resource-card .rec-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--secondary);
+            margin: 3px 0;
+        }
+
+        .resource-card .rec-row .rec-bar {
+            flex: 1;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(120, 130, 150, 0.15);
+            overflow: hidden;
+            min-width: 40px;
+        }
+
+        .resource-card .rec-row .rec-bar>div {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.4s ease;
+        }
+
+        .resource-card .rec-row .rec-val {
+            width: 110px;
+            font-variant-numeric: tabular-nums;
+            text-align: right;
+            white-space: nowrap;
+            color: var(--text);
+            font-size: 12px;
+        }
+
+        /* 批量操作条 */
+        .batch-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            padding: 8px 12px;
+            margin-bottom: 10px;
+            background: rgba(22, 119, 255, 0.06);
+            border: 1px solid rgba(22, 119, 255, 0.2);
+            border-radius: 8px;
+        }
+
+        html.dark .batch-bar {
+            background: rgba(22, 119, 255, 0.1);
+        }
+
+        .batch-bar .bb-label {
+            font-size: 13px;
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        /* 双行单元格：主文本 + 副文本 */
+        .cell-t2 {
+            line-height: 1.45;
+        }
+
+        .cell-t2 .t2-main {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text);
+        }
+
+        .cell-t2 .t2-sub {
+            font-size: 11px;
+            color: var(--secondary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* 镜像：主名 + tag 徽标 */
+        .img-cell .img-name {
+            font-size: 12px;
+            color: var(--text);
+            display: block;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .img-cell .img-tag {
+            display: inline-block;
+            font-size: 10px;
+            background: rgba(120, 130, 150, 0.12);
+            color: var(--secondary);
+            border-radius: 3px;
+            padding: 0 5px;
+            margin-top: 2px;
+        }
+
+        /* 端口单元格：蓝色强调 + 溢出折叠 */
+        .ports-cell .p-item {
+            color: #1677ff;
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
+            word-break: break-all;
+        }
+
+        .ports-cell .p-more {
+            color: var(--secondary);
+            font-size: 11px;
+            cursor: pointer;
+        }
+
+        html.dark .ports-cell .p-item {
+            color: #4096ff;
+        }
+
+        /* 表格行主信息标识 */
+        .c-main {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .c-main .live-dot {
+            flex-shrink: 0;
+        }
+
+        /* 详情抽屉内描述区块 */
+        .dk-section {
+            margin-bottom: 18px;
+        }
+
+        .dk-section .dk-sec-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dk-sec-title .anticon {
+            color: #1677ff;
+        }
+
+        /* 环境变量敏感项样式 */
+        .env-hidden-tag {
+            font-size: 11px;
+            color: #fa541c;
+            background: rgba(250, 84, 28, 0.08);
+            border-radius: 3px;
+            padding: 1px 6px;
+            margin-left: 6px;
+        }
+
+        /* 日志 Drawer 内部终端 */
+        .dk-log-body {
+            background: #161b22;
+            border-radius: 8px;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            color: #c9d1d9;
+            padding: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            height: calc(100vh - 190px);
+            overflow: auto;
+        }
+
+        .dk-log-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        /* 移动端容器卡片 */
+        .mobile-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .mcard {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px 14px;
+        }
+
+        .mcard .mc-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: space-between;
+        }
+
+        .mcard .mc-name {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .mcard .mc-img {
+            font-size: 11px;
+            color: var(--secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin: 4px 0 8px 14px;
+        }
+
+        .mcard .mc-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            padding: 3px 0;
+            color: var(--secondary);
+        }
+
+        .mcard .mc-row .mc-val {
+            color: var(--text);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .mcard .mc-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        /* 资源概览轻量区（可折叠于统计卡下方） */
+        .res-overview {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .res-overview .ro-item {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+        }
+
+        .res-overview .ro-label {
+            font-size: 12px;
+            color: var(--secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+
+        .res-overview .ro-bar {
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(120, 130, 150, 0.15);
+            overflow: hidden;
+        }
+
+        .res-overview .ro-bar>div {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.4s ease;
+        }
+
+        .res-overview .ro-num {
+            margin-top: 5px;
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
+            color: var(--text);
+            text-align: right;
+        }
+
+        @media (max-width: 768px) {
+            .res-overview {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ====== Docker 页面精细化视觉打磨（保持全站一致） ====== */
+        /* 卡片统一圆角与质感 */
+        .sp-app .ant-card {
+            border-radius: 10px;
+        }
+
+        .top-card {
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .top-card:hover {
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+            border-color: #d9d9d9;
+        }
+
+        html.dark .top-card:hover {
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+            border-color: #4a4a4a;
+        }
+
+        /* 顶部健康徽标轻微投影，增强层次 */
+        .dk-health {
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Top 5 排行：微进度条 + 悬停高亮 */
+        .top-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 8px;
+            margin: 2px -4px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.18s ease;
+        }
+
+        .top-row:hover {
+            background: rgba(22, 119, 255, 0.06);
+        }
+
+        html.dark .top-row:hover {
+            background: rgba(22, 119, 255, 0.12);
+        }
+
+        .top-rank {
+            width: 18px;
+            text-align: right;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .top-name {
+            flex: 1;
+            min-width: 0;
+            font-size: 12px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text);
+        }
+
+        .top-bar {
+            flex: 1;
+            max-width: 110px;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(120, 130, 150, 0.15);
+            overflow: hidden;
+        }
+
+        .top-bar>div {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.4s ease;
+        }
+
+        .top-val {
+            width: 60px;
+            text-align: right;
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { Card, Table, Button, Input, Space, Typography, ConfigProvider, theme, message, Modal, Tooltip, Badge, Select, Drawer, Dropdown, Descriptions, Empty, Progress, Statistic, Popover } = window.antd;
+        const { useState, useEffect, useCallback, useRef } = React;
+        const { darkAlgorithm } = theme;
+        const IconSet = window.icons || {};
+        const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
+
+        const baseUrl = window.location.origin;
+
+        // 读取指定名称的 Cookie（Double-Submit CSRF 使用非 HttpOnly 的 csrf_token）
+        const getCookie = name => {
+            for (const part of document.cookie.split(';')) {
+                const eq = part.indexOf('=');
+                if (eq < 0) continue;
+                if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1));
+            }
+            return '';
+        };
+        const getCsrfToken = () => getCookie('csrf_token');
+
+        // 统一携带会话的 API 请求：写操作自动附加 CSRF Token
+        const secureFetch = (url, options = {}) => {
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) {
+                const tok = getCsrfToken();
+                if (tok) headers['X-CSRF-Token'] = tok;
+            }
+            return fetch(url, {
+                method,
+                headers,
+                credentials: 'include',
+                body: options.body
+            });
+        };
+
+        function DockerPage() {
+            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+            const [containers, setContainers] = useState([]);
+            const [overview, setOverview] = useState(null);
+            const [loading, setLoading] = useState(true);   // 仅首次加载/手动刷新时显示 loading
+            const [firstLoaded, setFirstLoaded] = useState(false); // 是否已完成首次加载
+            const [keyword, setKeyword] = useState('');
+            const [stateFilter, setStateFilter] = useState('all'); // all/running/stopped
+            const [sortBy, setSortBy] = useState('name');          // name/cpu/mem/created
+            const [rev, setRev] = useState(false);
+            const [refreshSec, setRefreshSec] = useState(5);       // 自动刷新间隔（秒），0=关闭
+            const [selected, setSelected] = useState([]);          // 批量勾选容器名
+            const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+            const [detail, setDetail] = useState(null);            // 详情 Drawer
+            const [detailLoading, setDetailLoading] = useState(false);
+            const [logDrawer, setLogDrawer] = useState({ open: false, name: '', content: '', loading: false, paused: false, kw: '' });
+            const [logModal, setLogModal] = useState({ open: false, name: '', content: '', loading: false });
+            const [lastUpd, setLastUpd] = useState(null);
+
+            const hasPerm = p => (auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p)) || false;
+            const canView = hasPerm('docker:view') || hasPerm('docker:manage');
+            const canManage = hasPerm('docker:manage');
+
+            // 移动端监听
+            useEffect(() => {
+                const onR = () => setIsMobile(window.innerWidth <= 768);
+                window.addEventListener('resize', onR);
+                return () => window.removeEventListener('resize', onR);
+            }, []);
+
+            // silent=true 表示后台轮询：不展示 loading 遮罩，避免表格频繁闪烁
+            const loadingRef = useRef(false); // in-flight 防重入：避免轮询请求重叠导致 aborted
+            const load = useCallback((silent = false) => {
+                if (!canView || loadingRef.current) return; // 上轮未完成则跳过本轮
+                loadingRef.current = true;
+                if (!silent) setLoading(true);
+                // attempt 内部处理失败重试：首次加载失败自动重试（最多 2 次，间隔 1.5s），
+                // 避免冷启动/瞬时网络抖动被直接误报为"网络错误"；重试期间保持 loading 不闪烁
+                const attempt = (retry) => {
+                    secureFetch(baseUrl + '/api/docker/containers')
+                        .then(r => r.json().then(d => ({ status: r.status, d })))
+                        .then(({ status, d }) => {
+                            if (d.code === 200) {
+                                setContainers(d.data.containers || []);
+                                setLastUpd(new Date());
+                                setFirstLoaded(true);
+                            } else if (!firstLoaded) {
+                                // 5xx（采集超时等瞬时故障）首载时自动重试；4xx（权限等）直接提示
+                                if (status >= 500 && retry < 2) {
+                                    setTimeout(() => attempt(retry + 1), 1500);
+                                    return;
+                                }
+                                message.error(d.message || '加载失败');
+                            }
+                            loadingRef.current = false;
+                            if (!silent) setLoading(false);
+                        })
+                        .catch((err) => {
+                            if (!firstLoaded && retry < 2) {
+                                setTimeout(() => attempt(retry + 1), 1500);
+                                return;
+                            }
+                            if (!firstLoaded) {
+                                console.warn('容器列表请求异常:', err);
+                                message.error('容器数据加载失败，请稍后重试');
+                            }
+                            loadingRef.current = false;
+                            if (!silent) setLoading(false);
+                        });
+                };
+                attempt(0);
+            }, [canView, firstLoaded]);
+
+            // 加载资源概览（daemon 健康 + 汇总）
+            const loadOverview = useCallback(() => {
+                if (!canView) return;
+                secureFetch(baseUrl + '/api/docker/overview')
+                    .then(r => r.json())
+                    .then(d => { if (d.code === 200) setOverview(d.data); })
+                    .catch(() => { /* 静默失败，页面仍可用 */ });
+            }, [canView]);
+
+            useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => {
+                        setAuth({ loading: false, ok: d.code === 200, user: d.code === 200 ? d.user : null });
+                    })
+                    .catch(() => setAuth({ loading: false, ok: false, user: null }));
+            }, []);
+
+            useEffect(() => {
+                if (!auth.loading && canView) {
+                    load(false);
+                    loadOverview();
+                    // 后台轮询使用静默模式 + setTimeout 链式（避免请求重叠）；间隔可由用户配置
+                    let timer = null;
+                    const tick = () => {
+                        load(true);
+                        timer = refreshSec > 0 ? setTimeout(tick, refreshSec * 1000) : null;
+                    };
+                    if (refreshSec > 0) timer = setTimeout(tick, refreshSec * 1000);
+                    return () => { if (timer) clearTimeout(timer); };
+                }
+            }, [auth.loading, canView, load, refreshSec]);
+
+            useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+            }, [isDark]);
+
+            const doAction = useCallback((container, action) => {
+                return secureFetch(baseUrl + '/api/docker/action', {
+                    method: 'POST',
+                    body: JSON.stringify({ container, action })
+                }).then(r => r.json());
+            }, []);
+
+            const onAction = async (container, action) => {
+                try {
+                    const d = await doAction(container, action);
+                    if (d.code === 200) {
+                        message.success(d.message || '操作成功');
+                        setTimeout(() => load(true), 800);
+                    } else {
+                        message.error(d.message || '操作失败');
+                    }
+                } catch (e) {
+                    message.error('网络错误: ' + e.message);
+                }
+            };
+
+            // 批量操作：对多个容器执行同一动作
+            const onBatchAction = async (action) => {
+                if (!selected.length) return;
+                for (const name of selected) {
+                    try {
+                        const d = await doAction(name, action);
+                        if (d.code !== 200) message.error(d.message || name + ' 操作失败');
+                    } catch (e) { /* 继续处理其余 */ }
+                }
+                message.success('批量' + action + '请求已提交');
+                setSelected([]);
+                setTimeout(() => { load(true); loadOverview(); }, 800);
+            };
+
+            // 删除容器（危险操作，需二次确认）
+            const removeContainer = async (name) => {
+                try {
+                    const r = await secureFetch(baseUrl + '/api/docker/remove', {
+                        method: 'POST',
+                        body: JSON.stringify({ container: name })
+                    });
+                    const d = await r.json();
+                    if (d.code === 200) {
+                        message.success(d.message || '已删除');
+                        setSelected(prev => prev.filter(x => x !== name));
+                        setTimeout(() => { load(true); loadOverview(); }, 800);
+                    } else {
+                        message.error(d.message || '删除失败');
+                    }
+                } catch (e) {
+                    message.error('网络错误: ' + e.message);
+                }
+            };
+
+            const openLog = (name) => {
+                setLogModal({ open: true, name, content: '加载中...', loading: true });
+                secureFetch(baseUrl + '/api/docker/logs?container=' + encodeURIComponent(name) + '&lines=150')
+                    .then(r => r.json())
+                    .then(d => {
+                        setLogModal(prev => ({ ...prev, loading: false, content: d.code === 200 ? (d.data.logs || '(无日志)') : (d.message || '加载失败') }));
+                    })
+                    .catch(() => setLogModal(prev => ({ ...prev, loading: false, content: '加载日志失败' })));
+            };
+
+            // 日志 Drawer：支持刷新/暂停/搜索
+            const openLogDrawer = (name) => {
+                setLogDrawer({ open: true, name, content: '加载中...', loading: true, paused: false, kw: '' });
+                fetchDockerLogs(name);
+            };
+
+            const fetchDockerLogs = (name) => {
+                secureFetch(baseUrl + '/api/docker/logs?container=' + encodeURIComponent(name) + '&lines=300')
+                    .then(r => r.json())
+                    .then(d => {
+                        setLogDrawer(prev => d.code === 200
+                            ? { ...prev, loading: false, content: d.data.logs || '(无日志)' }
+                            : { ...prev, loading: false, content: d.message || '加载失败' });
+                    })
+                    .catch(() => setLogDrawer(prev => ({ ...prev, loading: false, content: '加载日志失败' })));
+            };
+
+            // 容器详情 Drawer；extra：列表中的容器数据（提供实时 CPU/内存/网络）
+            const openDetail = (name, imgFallback, extra) => {
+                setDetail(null);
+                setDetailLoading(true);
+                secureFetch(baseUrl + '/api/docker/inspect?container=' + encodeURIComponent(name))
+                    .then(r => r.json())
+                    .then(d => {
+                        setDetailLoading(false);
+                        if (d.code === 200 && d.data) {
+                            // 若 Config.Image 为 sha256 哈希则回退到列表镜像名
+                            const img = (d.data.image && d.data.image.indexOf('sha256:') === 0 && imgFallback) ? imgFallback : d.data.image;
+                            setDetail({ ...d.data, image: img, container: extra || null });
+                        } else {
+                            setDetail(null);
+                            message.error(d.message || '加载详情失败');
+                        }
+                    })
+                    .catch(() => { setDetailLoading(false); setDetail(null); message.error('加载详情失败'); });
+            };
+
+            // 复制名称/ID
+            const copyText = (t) => { navigator.clipboard.writeText(t).then(() => message.success('已复制')); };
+
+            // 手动刷新（showLoading=true）
+            const manualRefresh = () => { load(false); loadOverview(); };
+
+            if (auth.loading) {
+                return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Card loading style={{ width: 320 }} /></div>;
+            }
+
+            if (!auth.ok) {
+                window.location.href = 'index.html';
+                return null;
+            }
+
+            if (!canView) {
+                return (
+                    <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
+                        <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Card style={{ width: 380, textAlign: 'center' }}>
+                                <div style={{ fontSize: 40, marginBottom: 8 }}><UIIcon name="StopOutlined" /></div>
+                                <Typography.Title level={4}>Access Restricted</Typography.Title>
+                                <Typography.Text type="secondary">你没有权限查看 Docker 容器</Typography.Text>
+                                <div style={{ marginTop: 16 }}>
+                                    <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = 'index.html'}>返回首页</Button>
+                                </div>
+                            </Card>
+                        </div>
+                    </ConfigProvider>
+                );
+            }
+
+            const runningCount = containers.filter(c => c.state === 'running').length;
+            const exitedCount = containers.filter(c => c.state !== 'running').length;
+
+            // overview 可能未就绪时的兜底
+            const ov = overview || { ok: true, total_containers: containers.length, running: runningCount, stopped: exitedCount, cpu_total: '', mem_used: '', mem_total: '', mem_pct: 0, disk_used: '', disk_total: '' };
+            const ovPct = (v) => (typeof v === 'number' && isFinite(v)) ? Math.round(v) : 0;
+            const daemonOK = ov.ok !== false;
+
+            const filtered = containers.filter(c => {
+                const kw = keyword.toLowerCase();
+                const matchKw = !kw || c.name.toLowerCase().includes(kw) || c.image.toLowerCase().includes(kw) || (c.id || '').toLowerCase().includes(kw);
+                const matchState = stateFilter === 'all' || (stateFilter === 'running' && c.state === 'running') || (stateFilter === 'stopped' && c.state !== 'running');
+                return matchKw && matchState;
+            }).slice().sort((a, b) => {
+                let d = 0;
+                if (sortBy === 'name') d = a.name.localeCompare(b.name);
+                else if (sortBy === 'cpu') d = (parseFloat(a.cpu) || 0) - (parseFloat(b.cpu) || 0);
+                else if (sortBy === 'mem') d = (parseFloat(a.mem_usage) || 0) - (parseFloat(b.mem_usage) || 0);
+                else if (sortBy === 'created') d = (a.created_at || '').localeCompare(b.created_at || '');
+                return rev ? -d : d;
+            });
+
+            const pctColors = p => p >= 90 ? '#ff4d4f' : p >= 70 ? '#faad14' : '#52c41a';
+            const durPct = v => Math.max((typeof v === 'number' && isFinite(v)) ? v : 0, 2);
+            const imgTag = img => { const i = img.lastIndexOf(':'); return i > img.lastIndexOf('/') && i > 0 ? img.slice(i + 1) : ''; };
+            const imgName = img => { const i = img.lastIndexOf(':'); return i > img.lastIndexOf('/') && i > 0 ? img.slice(0, i) : img; };
+
+            // CPU / 内存 Top 排行（仅运行中容器）
+            const memVal = v => { const m = (v || '').match(/^([\d.]+)\s*([KMG]?i?B)/i); return m ? parseFloat(m[1]) * ({ k: 1, m: 1024, g: 1024 * 1024 }[(m[2] || 'b').toLowerCase()[0]] || 0) : 0; };
+            const shortMem = v => { const m = (v || '').match(/^[\d.]+\s*([KMG]?i?B)/i); return m ? m[0] : v || ''; };
+            const runningList = containers.filter(c => c.state === 'running');
+            const topCpu = runningList.slice().sort((a, b) => (parseFloat(b.cpu) || 0) - (parseFloat(a.cpu) || 0)).slice(0, 5);
+            const topMem = runningList.slice().sort((a, b) => memVal(b.mem_usage) - memVal(a.mem_usage)).slice(0, 5).map(c => ({ ...c, shortMem: shortMem(c.mem_usage) }));
+
+            // 解析 CPU 文本如 "1.59%" 为数值，用于进度条宽度
+            const parsePct = v => {
+                const m = (v || '').match(/^([\d.]+)/);
+                return m ? Math.min(parseFloat(m[1]), 100) : 0;
+            };
+            // 解析内存文本如 "33.44MiB / 3.595GiB" 的百分比
+            const parseMem = v => {
+                const m = (v || '').match(/^([\d.]+)([KMG]?i?B)\s*\/\s*([\d.]+)([KMG]?i?B)/i);
+                if (!m) return 0;
+                const toKiB = u => {
+                    const s = (u || '').toLowerCase();
+                    if (s.includes('t')) return 1024 * 1024 * 1024;
+                    if (s.includes('g')) return 1024 * 1024;
+                    if (s.includes('m')) return 1024;
+                    return 1;
+                };
+                const used = parseFloat(m[1]) * toKiB(m[2]);
+                const total = parseFloat(m[3]) * toKiB(m[4]);
+                return total > 0 ? (used / total) * 100 : 0;
+            };
+            const resColor = p => p >= 90 ? '#ff4d4f' : p >= 70 ? '#faad14' : '#52c41a';
+
+            // 端口折叠：只显示 宿主机:容器 端口映射，前 2 个 + 其余 Popover 完整展示
+            const portsRender = (v) => {
+                if (!v) return <Typography.Text type="secondary" style={{ fontSize: 12 }}>-</Typography.Text>;
+                // 只保留 宿主机端口:容器端口 的简洁映射；未发布的(仅暴露)端口只显示容器端口
+                const portShort = p => {
+                    const s = p.trim();
+                    const arrow = s.indexOf('->');
+                    if (arrow >= 0) {
+                        const host = s.slice(0, arrow).trim();
+                        const cont = s.slice(arrow + 2).trim();
+                        const hp = host.slice(host.lastIndexOf(':') + 1);
+                        const cp = cont.split('/')[0] || cont;
+                        return hp + ':' + cp;
+                    }
+                    return s.split('/')[0] || s;
+                };
+                const items = v.split(',').map(x => x.trim()).filter(Boolean).map(portShort);
+                const shown = items.slice(0, 2);
+                const content = (
+                    <div style={{ maxWidth: 320, maxHeight: 260, overflow: 'auto', fontSize: 12 }}>
+                        {items.map((p, i) => <div key={i} style={{ padding: '2px 0', color: '#1677ff', wordBreak: 'break-all' }}>{p}</div>)}
+                    </div>
+                );
+                return (
+                    <div className="ports-cell">
+                        {shown.map((p, i) => <div key={i} className="p-item" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p}</div>)}
+                        {items.length > 2 && (
+                            <Popover content={content} title="完整端口映射" placement="bottomRight">
+                                <span className="p-more">+{items.length - 2} 端口</span>
+                            </Popover>
+                        )}
+                    </div>
+                );
+            };
+
+            const menuColumns = {
+                title: '操作', key: 'op', width: canManage ? 150 : 90,
+                render: (_, rec) => canManage ? (
+                    <Space size={2}>
+                        {rec.state !== 'running'
+                            ? <Button size="small" type="primary" ghost icon={<UIIcon name="PlayCircleOutlined" />} onClick={() => onAction(rec.name, 'start')}>启动</Button>
+                            : <Button size="small" type="text" icon={<UIIcon name="PauseCircleOutlined" />} onClick={() => onAction(rec.name, 'stop')}>停止</Button>}
+                        <Button size="small" type="text" icon={<UIIcon name="ReloadOutlined" />} onClick={() => onAction(rec.name, 'restart')}>重启</Button>
+                        <Dropdown menu={{
+                            items: [
+                                { key: 'detail', label: '查看详情', icon: <UIIcon name="ProfileOutlined" />, onClick: () => openDetail(rec.name, rec.image, rec) },
+                                { key: 'logs', label: '查看日志', icon: <UIIcon name="FileTextOutlined" />, onClick: () => openLogDrawer(rec.name) },
+                                { key: 'divider', type: 'divider' },
+                                ...(rec.state !== 'running' ? [{ key: 'start', label: '启动', icon: <UIIcon name="PlayCircleOutlined" />, onClick: () => onAction(rec.name, 'start') }] : [{ key: 'stop', label: '停止', icon: <UIIcon name="PauseCircleOutlined" />, onClick: () => onAction(rec.name, 'stop') }]),
+                                { key: 'restart', label: '重启', icon: <UIIcon name="ReloadOutlined" />, onClick: () => onAction(rec.name, 'restart') },
+                                { key: 'divider2', type: 'divider' },
+                                { key: 'copy-id', label: '复制 ID', icon: <UIIcon name="CopyOutlined" />, onClick: () => copyText(rec.id || '') },
+                                { key: 'copy-name', label: '复制名称', icon: <UIIcon name="CopyOutlined" />, onClick: () => copyText(rec.name) },
+                                { key: 'divider3', type: 'divider' },
+                                { key: 'remove', label: '删除容器', danger: true, icon: <UIIcon name="DeleteOutlined" />, onClick: () => { Modal.confirm({ title: '删除容器', icon: null, content: '确定要删除容器 ' + rec.name + ' 吗？该操作不可撤销。', okText: '删除', okButtonProps: { danger: true }, cancelText: '取消', onOk: () => removeContainer(rec.name) }); } }
+                            ]
+                        }}><Button size="small" type="text" icon={<UIIcon name="MoreOutlined" />} /></Dropdown>
+                    </Space>
+                ) : (
+                    <Button size="small" type="text" icon={<UIIcon name="FileTextOutlined" />} onClick={() => openLogDrawer(rec.name)}>日志</Button>
+                )
+            };
+
+            const columns = [
+                {
+                    title: '容器', dataIndex: 'name', key: 'name', width: 230,
+                    render: (v, rec) => (
+                        <div className="cell-t2">
+                            <span className="c-main" onClick={() => openDetail(v, rec.image)}>
+                                <span className={'live-dot ' + (rec.state === 'running' ? 'online' : 'offline')} />
+                                <span style={{ color: 'inherit' }}>{v}</span>
+                            </span>
+                            <div className="t2-sub">{rec.id || ''}</div>
+                        </div>
+                    )
+                },
+                {
+                    title: '镜像', dataIndex: 'image', key: 'image', ellipsis: true, width: 240,
+                    render: v => (
+                        <div className="img-cell">
+                            <Tooltip title={v}><span className="img-name">{imgName(v)}</span></Tooltip>
+                            {imgTag(v) && <span className="img-tag">{imgTag(v)}</span>}
+                        </div>
+                    )
+                },
+                {
+                    title: '状态', dataIndex: 'status', key: 'status', width: 150, render: (v, rec) => {
+                        let label = rec.state === 'running' ? '运行中' : rec.state === 'paused' ? '已暂停' : rec.state === 'restarting' ? '重启中' : '已退出';
+                        let color = rec.state === 'running' ? 'green' : rec.abnormal ? 'volcano' : 'default';
+                        return <Badge color={color} text={<div className="cell-t2"><div className="t2-main" style={{ fontSize: 12, color: rec.abnormal ? '#fa541c' : undefined }}>{label}{rec.abnormal && '（异常）'}</div><div className="t2-sub">{v}</div></div>} />;
+                    }
+                },
+                {
+                    title: 'CPU', dataIndex: 'cpu', key: 'cpu', width: 110, render: (v, rec) => rec.state !== 'running'
+                        ? <Typography.Text type="secondary" style={{ fontSize: 12 }}>-</Typography.Text>
+                        : <div className="cell-t2"><div className="t2-sub" style={{ fontSize: 12, color: 'var(--text)' }}>{v || '-'}</div><Progress percent={parsePct(v)} showInfo={false} size="small" strokeColor={resColor(parsePct(v))} style={{ marginTop: 3, lineHeight: 1 }} strokeWidth={4} /></div>
+                },
+                {
+                    title: '内存', dataIndex: 'mem_usage', key: 'mem_usage', width: 170, render: (v, rec) => rec.state !== 'running'
+                        ? <Typography.Text type="secondary" style={{ fontSize: 12 }}>-</Typography.Text>
+                        : <div className="cell-t2"><div className="t2-sub" style={{ fontSize: 12, color: 'var(--text)' }}>{v || '-'}</div><Progress percent={parseMem(v)} showInfo={false} size="small" strokeColor={resColor(parseMem(v))} style={{ marginTop: 3, lineHeight: 1 }} strokeWidth={4} /></div>
+                },
+                { title: '端口', dataIndex: 'ports', key: 'ports', width: 140, render: portsRender },
+                {
+                    title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 120, render: v => v ? (
+                        <Tooltip title={v}><Typography.Text style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{v.split(' ')[0]}</Typography.Text></Tooltip>
+                    ) : '-'
+                },
+                menuColumns
+            ];
+
+            // 移动端渲染：容器卡片
+            const mobileCards = filtered.length ? (
+                <div className="mobile-cards">
+                    {filtered.map(c => (
+                        <div className="mcard" key={c.name}>
+                            <div className="mc-head">
+                                <span className="mc-name"><span className={'live-dot ' + (c.state === 'running' ? 'online' : 'offline')} />{c.name}</span>
+                                <Badge status={c.state === 'running' ? 'success' : 'error'} text={c.state === 'running' ? '运行中' : '已退出'} />
+                            </div>
+                            <div className="mc-img">{c.image}</div>
+                            <div className="mc-row"><span>CPU</span><span className="mc-val">{c.state === 'running' ? (c.cpu || '-') : '-'}</span></div>
+                            <div className="mc-row"><span>内存</span><span className="mc-val">{c.state === 'running' ? (c.mem_usage || '-') : '-'}</span></div>
+                            <div className="mc-row"><span>端口</span><span className="mc-val">{c.ports || '-'}</span></div>
+                            {canManage && (
+                                <div className="mc-actions">
+                                    {c.state !== 'running'
+                                        ? <Button size="small" type="primary" ghost icon={<UIIcon name="PlayCircleOutlined" />} onClick={() => onAction(c.name, 'start')}>启动</Button>
+                                        : <Button size="small" icon={<UIIcon name="PauseCircleOutlined" />} onClick={() => onAction(c.name, 'stop')}>停止</Button>}
+                                    <Button size="small" icon={<UIIcon name="ReloadOutlined" />} onClick={() => onAction(c.name, 'restart')}>重启</Button>
+                                    <Button size="small" icon={<UIIcon name="ProfileOutlined" />} onClick={() => openDetail(c.name, c.image, c)}>详情</Button>
+                                    <Button size="small" icon={<UIIcon name="FileTextOutlined" />} onClick={() => openLogDrawer(c.name)}>日志</Button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <Empty description="没有找到匹配的容器" style={{ padding: 40 }} />
+            );
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <div className={'topbar' + (isDark ? ' dark' : '')}>
+                            <span className="tb-page"><UIIcon name="DockerOutlined" />Docker</span>
+                            <Space style={{ marginLeft: 'auto' }}>
+                                <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>
+                                {canManage && <Button className="tb-hide-sm" icon={<UIIcon name="AppstoreOutlined" />} onClick={() => window.location.href = 'services.html'}><span className="tb-text">服务端口</span></Button>}
+                                <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                                    <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                                </Tooltip>
+                                <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}><span className="tb-text">退出</span></Button>
+                            </Space>
+                        </div>
+
+                        <div className="page-wrap">
+                            <div className="page-head">
+                                <div>
+                                    <div className="ph-title" style={{ gap: 10 }}>
+                                        <UIIcon name="DockerOutlined" />Docker 容器管理
+                                        {daemonOK
+                                            ? <span className="dk-health"><Badge status="processing" />{'Docker Engine v' + (ov.version || '')}</span>
+                                            : <span className="dk-health error"><UIIcon name="WarningOutlined" />Docker 服务异常</span>}
+                                    </div>
+                                </div>
+                                <div className="ph-actions">
+                                    <Space wrap>
+                                        <Select value={refreshSec} style={{ width: 130 }} onChange={setRefreshSec}
+                                            options={[{ value: 5, label: '自动刷新 5s' }, { value: 10, label: '自动刷新 10s' }, { value: 30, label: '自动刷新 30s' }, { value: 60, label: '自动刷新 60s' }, { value: 0, label: '暂停刷新' }]} />
+                                        <Button icon={<UIIcon name="ReloadOutlined" />} loading={loading} onClick={manualRefresh}>刷新</Button>
+                                    </Space>
+                                </div>
+                            </div>
+
+                            {!daemonOK && (
+                                <Card size="small" style={{ marginBottom: 12, textAlign: 'center', borderColor: '#ff4d4f55' }}>
+                                    <UIIcon name="ApiOutlined" style={{ color: '#fa541c', fontSize: 20 }} />
+                                    <Typography.Text type="danger" style={{ display: 'block', margin: '6px 0' }}>无法连接 Docker Engine</Typography.Text>
+                                    <Typography.Text type="secondary">请检查 Docker 服务是否运行，或稍后重试</Typography.Text>
+                                    <div style={{ marginTop: 8 }}><Button size="small" onClick={manualRefresh}>重新连接</Button></div>
+                                </Card>
+                            )}
+
+                            <div className="mini-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+                                <div className="mini-stat"><div className="ms-label"><UIIcon name="DockerOutlined" />容器总数</div><div className="ms-value" style={{ color: '#1677ff' }}>{ov.total_containers}</div></div>
+                                <div className="mini-stat"><div className="ms-label"><UIIcon name="CaretRightOutlined" />运行中</div><div className="ms-value" style={{ color: '#52c41a' }}>{ov.running}</div></div>
+                                <div className="mini-stat"><div className="ms-label"><UIIcon name="PauseOutlined" />已停止</div><div className="ms-value" style={{ color: '#faad14' }}>{ov.stopped}</div></div>
+                                <div className="mini-stat"><div className="ms-label"><UIIcon name="WarningOutlined" />异常</div><div className="ms-value" style={{ color: ov.abnormal > 0 ? '#fa541c' : '#8c8c8c' }}>{ov.abnormal || 0}</div></div>
+                                <div className="mini-stat"><div className="ms-label"><UIIcon name="ThunderboltOutlined" />CPU</div><div className="ms-value" style={{ color: '#722ed1', fontSize: 20 }}>{ov.cpu_total || '0%'}</div></div>
+                                <div className="mini-stat"><div className="ms-label"><UIIcon name="DatabaseOutlined" />内存</div><div className="ms-value" style={{ color: '#fa8c16', fontSize: 18 }}>{ov.mem_used || '-'}<span className="ms-suffix"> / {ov.mem_total || '-'}</span></div></div>
+                            </div>
+
+                            {/* Top 容器 + 异常容器 */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginBottom: 12 }}>
+                                <Card size="small" title={<Space size={6}><UIIcon name="ThunderboltOutlined" />CPU 消耗 TOP 5</Space>} className="top-card">
+                                    {topCpu.length === 0
+                                        ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />
+                                        : topCpu.map((c, i) => (
+                                            <div key={c.name} className="top-row" onClick={() => { setKeyword(c.name); document.querySelector('.dk-table-scroll') && document.querySelector('.dk-table-scroll').scrollIntoView(); }}>
+                                                <span className="top-rank" style={{ color: i < 3 ? '#fa8c16' : 'var(--secondary)' }}>{i + 1}</span>
+                                                <span className="top-name">{c.name}</span>
+                                                <span className="top-bar"><div style={{ width: Math.min(parsePct(c.cpu), 100) + '%', background: '#722ed1' }} /></span>
+                                                <span className="top-val" style={{ color: '#722ed1' }}>{c.cpu || '0%'}</span>
+                                            </div>
+                                        ))}
+                                </Card>
+                                <Card size="small" title={<Space size={6}><UIIcon name="DatabaseOutlined" />内存消耗 TOP 5</Space>} className="top-card">
+                                    {topMem.length === 0
+                                        ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无数据" />
+                                        : (() => {
+                                            const mx = Math.max(...topMem.map(x => memVal(x.mem_usage)), 1); return topMem.map((c, i) => (
+                                                <div key={c.name} className="top-row" onClick={() => { setKeyword(c.name); document.querySelector('.dk-table-scroll') && document.querySelector('.dk-table-scroll').scrollIntoView(); }}>
+                                                    <span className="top-rank" style={{ color: i < 3 ? '#fa8c16' : 'var(--secondary)' }}>{i + 1}</span>
+                                                    <span className="top-name">{c.name}</span>
+                                                    <span className="top-bar"><div style={{ width: Math.min(memVal(c.mem_usage) / mx * 100, 100) + '%', background: '#fa8c16' }} /></span>
+                                                    <span className="top-val" style={{ color: '#fa8c16' }}>{c.shortMem || '-'}</span>
+                                                </div>
+                                            ));
+                                        })()}
+                                </Card>
+                            </div>
+
+                            {selected.length > 0 && canManage && (
+                                <div className="batch-bar">
+                                    <span className="bb-label">已选择 {selected.length} 个</span>
+                                    <Button size="small" icon={<UIIcon name="PlayCircleOutlined" />} onClick={() => onBatchAction('start')}>启动</Button>
+                                    <Button size="small" icon={<UIIcon name="PauseCircleOutlined" />} onClick={() => onBatchAction('stop')}>停止</Button>
+                                    <Button size="small" icon={<UIIcon name="ReloadOutlined" />} onClick={() => onBatchAction('restart')}>重启</Button>
+                                    <Button size="small" danger icon={<UIIcon name="DeleteOutlined" />} onClick={() => Modal.confirm({ title: '批量删除', content: '确定要删除选中的 ' + selected.length + ' 个容器吗？', okText: '删除', okButtonProps: { danger: true }, cancelText: '取消', onOk: () => { selected.forEach(n => removeContainer(n)); setSelected([]); } })}>删除</Button>
+                                    <Button size="small" type="text" onClick={() => setSelected([])}>取消选择</Button>
+                                </div>
+                            )}
+
+                            <div className="toolbar">
+                                <Input className="toolbar-search" allowClear prefix={<UIIcon name="SearchOutlined" />} placeholder="搜索容器名称 / ID / 镜像" value={keyword} onChange={e => setKeyword(e.target.value)} />
+                                <Select style={{ width: 110 }} value={stateFilter} onChange={setStateFilter}
+                                    options={[{ value: 'all', label: '全部状态' }, { value: 'running', label: '运行中' }, { value: 'stopped', label: '已停止' }]} />
+                                <Select style={{ width: 130 }} value={sortBy} onChange={v => setSortBy(v)}
+                                    options={[{ value: 'name', label: '按名称' }, { value: 'created', label: '按创建时间' }]} />
+                                <Tooltip title="反向排序">
+                                    <Button icon={<UIIcon name={rev ? 'ArrowUpOutlined' : 'ArrowDownOutlined'} />} onClick={() => setRev(!rev)} />
+                                </Tooltip>
+                                <div className="toolbar-extra">{canManage ? '可执行 启动/停止/重启' : '只读模式'}</div>
+                            </div>
+
+                            {isMobile ? mobileCards : (
+                                <Card size="small" className="dk-table-scroll" styles={{ body: { padding: 0 } }}>
+                                    <Table
+                                        rowKey="name"
+                                        columns={columns}
+                                        dataSource={filtered}
+                                        loading={loading}
+                                        size="middle"
+                                        tableLayout="fixed"
+                                        rowSelection={canManage ? { selectedRowKeys: selected, onChange: setSelected } : undefined}
+                                        pagination={filtered.length > 15 ? { pageSize: 15, showSizeChanger: true, showTotal: t => `共 ${t} 个容器` } : false}
+                                        locale={{ emptyText: '暂无容器' }}
+                                    />
+                                </Card>
+                            )}
+                        </div>
+
+                        <Modal
+                            className="log-modal"
+                            title={<Space size={6}><UIIcon name="FileTextOutlined" />容器日志：{logModal.name}</Space>}
+                            open={logModal.open}
+                            onCancel={() => setLogModal({ open: false, name: '', content: '', loading: false })}
+                            footer={
+                                <Space>
+                                    {!logModal.loading && logModal.content && (
+                                        <Button size="small" icon={<UIIcon name="CopyOutlined" />} onClick={() => { navigator.clipboard.writeText(logModal.content); message.success('日志已复制'); }}>复制日志</Button>
+                                    )}
+                                    <Button type="primary" onClick={() => setLogModal({ open: false, name: '', content: '', loading: false })}>关闭</Button>
+                                </Space>
+                            }
+                            width={800}
+                        >
+                            <div style={{ maxHeight: '60vh', overflow: 'auto', fontFamily: 'Consolas, "Courier New", monospace', fontSize: 12, lineHeight: 1.6, color: '#c9d1d9', background: '#161b22', padding: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                                {logModal.loading
+                                    ? <span style={{ color: '#8b949e' }}>加载日志中...</span>
+                                    : (logModal.content || '(无日志)')}
+                            </div>
+                        </Modal>
+
+                        {/* 容器详情 Drawer */}
+                        <Drawer
+                            title={<Space size={6}><UIIcon name="ProfileOutlined" />容器详情{detail ? '：' + detail.name : ''}</Space>}
+                            width={Math.min(560, window.innerWidth - 20)}
+                            open={!!detailLoading || !!detail}
+                            onClose={() => { setDetail(null); setDetailLoading(false); }}
+                        >
+                            {detailLoading && <div style={{ padding: 24, textAlign: 'center' }}><Card loading style={{ width: 320, margin: '0 auto' }} /></div>}
+                            {!detailLoading && detail && (
+                                <div>
+                                    <div className="dk-section">
+                                        <div className="dk-sec-title"><UIIcon name="InfoCircleOutlined" />基本信息</div>
+                                        <Descriptions size="small" column={1} bordered items={[
+                                            { key: 'n', label: '名称', children: detail.name },
+                                            { key: 'i', label: 'ID', children: <Space size={4}>{detail.id}<Button size="small" type="text" icon={<UIIcon name="CopyOutlined" />} onClick={() => copyText(detail.id)} /></Space> },
+                                            { key: 'img', label: '镜像', children: detail.image || '-' },
+                                            { key: 'st', label: '状态', children: <Badge status={detail.state === 'running' ? 'success' : 'warning'} text={detail.state} /> },
+                                            { key: 'ex', label: 'Exit Code', children: detail.exit_code },
+                                            { key: 'cr', label: '创建时间', children: detail.created ? new Date(detail.created).toLocaleString('zh-CN', { hour12: false }) : '-' }
+                                        ]} />
+                                    </div>
+                                    <div className="dk-section">
+                                        <div className="dk-sec-title"><UIIcon name="GlobalOutlined" />网络</div>
+                                        <Descriptions size="small" column={1} bordered items={[
+                                            { key: 'ip', label: 'IP', children: detail.ip || '-' },
+                                            { key: 'nm', label: '网络模式', children: detail.network_mode || '-' },
+                                            { key: 'pt', label: '端口', children: detail.ports || '-' }
+                                        ]} />
+                                    </div>
+                                    {detail.container && (
+                                        <div className="dk-section">
+                                            <div className="dk-sec-title"><UIIcon name="FundOutlined" />资源</div>
+                                            <Descriptions size="small" column={1} bordered items={[
+                                                { key: 'cpu', label: 'CPU', children: detail.container.cpu || '-' },
+                                                { key: 'mem', label: '内存', children: detail.container.mem_usage || '-' },
+                                                { key: 'net', label: '网络 I/O', children: detail.container.net_io || '-' },
+                                                { key: 'block', label: '块 I/O', children: detail.container.block_io || '-' }
+                                            ]} />
+                                        </div>
+                                    )}
+                                    {/* 容器操作区 */}
+                                    <div className="dk-section" style={{ textAlign: 'center' }}>
+                                        <div className="dk-sec-title" style={{ justifyContent: 'center' }}><UIIcon name="ControlOutlined" />操作</div>
+                                        <Space wrap>
+                                            {detail.state !== 'running'
+                                                ? <Button size="small" type="primary" icon={<UIIcon name="PlayCircleOutlined" />} onClick={() => { onAction(detail.name, 'start'); setDetail(null); }}>启动</Button>
+                                                : <Button size="small" icon={<UIIcon name="PauseCircleOutlined" />} onClick={() => { onAction(detail.name, 'stop'); setDetail(null); }}>停止</Button>}
+                                            <Button size="small" icon={<UIIcon name="ReloadOutlined" />} onClick={() => { onAction(detail.name, 'restart'); setDetail(null); }}>重启</Button>
+                                            <Button size="small" icon={<UIIcon name="FileTextOutlined" />} onClick={() => { openLogDrawer(detail.name); setDetail(null); }}>日志</Button>
+                                            <Button size="small" danger icon={<UIIcon name="DeleteOutlined" />} onClick={() => Modal.confirm({ title: '删除容器', content: '确定要删除容器 ' + detail.name + ' 吗？该操作不可撤销。', okText: '删除', okButtonProps: { danger: true }, cancelText: '取消', onOk: () => { removeContainer(detail.name); setDetail(null); } })}>删除</Button>
+                                        </Space>
+                                    </div>
+                                    {detail.mounts && detail.mounts.length > 0 && (
+                                        <div className="dk-section">
+                                            <div className="dk-sec-title"><UIIcon name="FolderOutlined" />挂载</div>
+                                            {detail.mounts.map((m, i) => <div key={i} style={{ fontSize: 12, fontFamily: 'Consolas, monospace', color: 'var(--text)', marginBottom: 4, wordBreak: 'break-all' }}>{m}</div>)}
+                                        </div>
+                                    )}
+                                    <div className="dk-section">
+                                        <div className="dk-sec-title"><UIIcon name="ControlOutlined" />环境变量（{Object.keys(detail.env || {}).length} 项）
+                                            {detail.env_hidden && detail.env_hidden.length > 0 && <span className="env-hidden-tag">{detail.env_hidden.length} 项已隐藏</span>}
+                                        </div>
+                                        {Object.keys(detail.env || {}).length === 0 && <Typography.Text type="secondary" style={{ fontSize: 12 }}>无环境变量</Typography.Text>}
+                                        {Object.entries(detail.env || {}).slice(0, 25).map(([k, v]) => (
+                                            <div key={k} style={{ fontSize: 12, display: 'flex', gap: 8, padding: '3px 0', borderBottom: '1px solid var(--border)', wordBreak: 'break-all' }}>
+                                                <span style={{ color: '#1677ff', flexShrink: 0 }}>{k}</span>
+                                                <span style={{ color: v === '******' ? '#fa541c' : 'var(--text)', fontFamily: 'Consolas, monospace' }}>{v}</span>
+                                            </div>
+                                        ))}
+                                        {Object.keys(detail.env || {}).length > 25 && <Typography.Text type="secondary" style={{ fontSize: 11 }}>仅显示前 25 项</Typography.Text>}
+                                    </div>
+                                </div>
+                            )}
+                        </Drawer>
+
+                        {/* 日志 Drawer */}
+                        <Drawer
+                            title={<Space size={6}><UIIcon name="FileTextOutlined" />容器日志：{logDrawer.name}</Space>}
+                            width={Math.min(820, window.innerWidth - 20)}
+                            open={logDrawer.open}
+                            onClose={() => setLogDrawer(prev => ({ ...prev, open: false }))}
+                            extra={<Space>
+                                <Button size="small" icon={<UIIcon name="ReloadOutlined" />} onClick={() => { setLogDrawer(prev => ({ ...prev, loading: true })); fetchDockerLogs(logDrawer.name); }}>刷新</Button>
+                            </Space>}
+                        >
+                            <div className="dk-log-toolbar">
+                                <Input size="small" allowClear prefix={<UIIcon name="SearchOutlined" />} placeholder="搜索日志内容" value={logDrawer.kw} onChange={e => setLogDrawer(prev => ({ ...prev, kw: e.target.value }))} style={{ width: 200 }} />
+                                {logDrawer.content && (
+                                    <Button size="small" icon={<UIIcon name="CopyOutlined" />} onClick={() => { navigator.clipboard.writeText(logDrawer.content); message.success('日志已复制'); }}>复制</Button>
+                                )}
+                                <div className="toolbar-extra" style={{ marginLeft: 'auto' }}>{logDrawer.loading ? '加载中...' : (logDrawer.content ? logDrawer.content.split('\n').length + ' 行' : '')}</div>
+                            </div>
+                            <div className="dk-log-body">
+                                {logDrawer.loading
+                                    ? <span style={{ color: '#8b949e' }}>加载日志中...</span>
+                                    : ((logDrawer.kw ? (logDrawer.content || '').split('\n').filter(l => l.toLowerCase().includes(logDrawer.kw.toLowerCase())).join('\n') : logDrawer.content) || '(无日志)')}
+                            </div>
+                        </Drawer>
+                    </div>
+                </ConfigProvider>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<DockerPage />);
+    </script>
+</body>
+
+</html>

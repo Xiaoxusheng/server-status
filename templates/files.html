@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>文件管理 - Server Status</title>
-    <link rel="icon" href="data:,">
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
     <style>
         html,
         body,
@@ -54,6 +55,32 @@
         html.dark ::-webkit-scrollbar-thumb:hover {
             background: #4a4a4a;
         }
+
+        /* 统一视觉变量（与其他页面一致的 Design Token） */
+        .sp-app {
+            --bg: #f5f5f5;
+            --card: #ffffff;
+            --border: #f0f0f0;
+            --text: rgba(0, 0, 0, 0.88);
+            --secondary: rgba(0, 0, 0, 0.45);
+            color-scheme: light;
+        }
+
+        .sp-app.dark {
+            --bg: #141414;
+            --card: #1f1f1f;
+            --border: #303030;
+            --text: rgba(255, 255, 255, 0.88);
+            --secondary: rgba(255, 255, 255, 0.45);
+            color-scheme: dark;
+        }
+
+        /* 数值等宽：文件大小/时间等数字刷新不跳动 */
+        .sp-app .ant-table td,
+        .sp-app .fm-size,
+        .sp-app .fm-stat b {
+            font-variant-numeric: tabular-nums;
+        }
     </style>
     <script>
         (function () {
@@ -69,6 +96,7 @@
     <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
     <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
     <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
+    <script src="https://registry.npmmirror.com/mpegts.js/1.7.3/files/dist/mpegts.js"></script>
     <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
     <style>
         body {
@@ -82,6 +110,8 @@
 
         .page-wrap {
             padding: 16px;
+            max-width: 1800px;
+            margin: 0 auto;
         }
 
         .topbar {
@@ -134,6 +164,29 @@
             margin-left: 4px;
         }
 
+        /* 顶栏左上角当前页面名指示 */
+        .tb-page {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(0, 0, 0, 0.88);
+            white-space: nowrap;
+        }
+
+        html.dark .tb-page {
+            color: rgba(255, 255, 255, 0.88);
+        }
+
+        .tb-page .anticon {
+            color: #1677ff;
+        }
+
+        html.dark .tb-page .anticon {
+            color: #4096ff;
+        }
+
         .token-url {
             word-break: break-all;
             background: #f5f5f5;
@@ -142,27 +195,285 @@
             font-size: 12px;
         }
 
-        .file-card {
-            margin-bottom: 10px;
+        /* 暗色模式：避免写死的浅色底在暗色下与浅色文字对比不足 */
+        html.dark .token-url {
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.85);
         }
 
-        .file-card .ant-card-body {
-            padding: 12px 14px;
-        }
+        /* ===== 文件管理器样式（集中管理） ===== */
 
-        .file-row {
+        /* 面包屑行：上一级按钮 + 可横向滚动的面包屑（移动端不溢出） */
+        .fm-crumb-row {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 2px 0;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        .fm-crumb {
+            overflow-x: auto;
+            white-space: nowrap;
+            flex: 1;
+            min-width: 0;
+            scrollbar-width: none;
+        }
+
+        .fm-crumb::-webkit-scrollbar {
+            display: none;
+        }
+
+        .fm-fullpath {
+            font-size: 12px;
+            margin-bottom: 12px;
+            word-break: break-all;
+        }
+
+        /* 统计条 */
+        .fm-stats {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .fm-stat {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--card);
+            font-size: 13px;
+            color: var(--text);
+        }
+
+        .fm-stat .anticon {
+            color: #1677ff;
+            font-size: 16px;
+        }
+
+        html.dark .fm-stat .anticon {
+            color: #4096ff;
+        }
+
+        .fm-stat b {
+            font-size: 15px;
+        }
+
+        .fm-stat .fm-stat-label {
+            color: var(--secondary);
+        }
+
+        /* 工具栏：搜索 / 筛选 / 排序 / 视图切换 */
+        .fm-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .fm-search {
+            width: 240px;
+        }
+
+        .fm-select {
+            min-width: 96px;
+        }
+
+        .fm-seg {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            padding: 0 2px;
+        }
+
+        /* 批量操作栏 */
+        .fm-bulkbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+            border-radius: 8px;
+            background: #e6f4ff;
+            border: 1px solid #91caff;
             font-size: 13px;
         }
 
-        .file-row .label {
-            color: #999;
-            font-size: 12px;
+        .sp-app.dark .fm-bulkbar {
+            background: rgba(22, 119, 255, 0.12);
+            border-color: #153b6f;
         }
 
+        /* 卡片网格 */
+        .fm-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 12px;
+        }
+
+        /* 文件/文件夹卡片 */
+        .fm-card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            cursor: pointer;
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }
+
+        .fm-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+            border-color: rgba(22, 119, 255, 0.35);
+        }
+
+        .fm-card:active {
+            transform: translateY(0) scale(0.995);
+        }
+
+        .sp-app.dark .fm-card:hover {
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+            border-color: rgba(64, 150, 255, 0.45);
+        }
+
+        .fm-card.fm-checked {
+            border-color: #1677ff;
+            box-shadow: inset 0 0 0 1px #1677ff;
+        }
+
+        /* 卡片顶部媒体区（图标或缩略图） */
+        .fm-card-media {
+            position: relative;
+            height: 104px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            background: #f7f8fa;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .sp-app.dark .fm-card-media {
+            background: #262626;
+        }
+
+        .fm-media-img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .fm-big-icon {
+            font-size: 40px;
+            display: inline-flex;
+        }
+
+        .fm-folder-icon {
+            font-size: 52px;
+            color: #1677ff;
+        }
+
+        html.dark .fm-folder-icon {
+            color: #4096ff;
+        }
+
+        /* 卡片左上角多选框 */
+        .fm-check {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            z-index: 2;
+        }
+
+        .fm-check .ant-checkbox-inner {
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+        }
+
+        /* 名称：最多 2 行省略 */
+        .fm-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-break: break-all;
+            line-height: 1.45;
+            min-height: 2.9em;
+            margin-bottom: 4px;
+        }
+
+        /* 元信息：大小 + 时间 */
+        .fm-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--secondary);
+        }
+
+        .fm-size {
+            font-weight: 600;
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        /* 卡片底部操作区 */
+        .fm-foot {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            min-height: 26px;
+        }
+
+        /* Drawer 预览（Drawer/Modal 渲染在 body Portal 下，拿不到 .sp-app 的 CSS 变量，需用 html.dark 显式适配暗色） */
+        .fm-preview-img {
+            width: 100%;
+            max-height: 320px;
+            object-fit: contain;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            background: #fafafa;
+            border: 1px solid #f0f0f0;
+        }
+
+        html.dark .fm-preview-img {
+            background: #1f1f1f;
+            border-color: #303030;
+        }
+
+        .fm-preview-video {
+            width: 100%;
+            max-height: 320px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            background: #000;
+        }
+
+        /* 列表模式名称图标 */
+        .fm-td-icon {
+            margin-right: 8px;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        /* 移动端适配 */
         @media (max-width: 768px) {
             .topbar {
                 padding: 8px 12px;
@@ -221,6 +532,23 @@
             .ant-card-body {
                 padding: 12px !important;
             }
+
+            .fm-search {
+                width: 100%;
+            }
+
+            .fm-select {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .fm-toolbar .ant-segmented {
+                margin-left: auto;
+            }
+
+            .fm-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -228,8 +556,8 @@
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        const { Card, Table, Button, Input, Modal, message, Space, Tag, Breadcrumb, Upload, Typography, ConfigProvider, theme, Form, InputNumber, Select, Alert, Empty, Tooltip } = window.antd;
-        const { useState, useEffect, useCallback } = React;
+        const { Card, Table, Button, Input, Modal, message, Space, Tag, Breadcrumb, Upload, Typography, ConfigProvider, theme, Form, InputNumber, Select, Alert, Empty, Tooltip, Dropdown, Drawer, Descriptions, Segmented, Checkbox, Spin, Progress } = window.antd;
+        const { useState, useEffect, useCallback, useMemo } = React;
         const { darkAlgorithm } = theme;
         const IconSet = window.icons || {};
         const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
@@ -246,6 +574,22 @@
         }
 
         const baseUrl = window.location.origin;
+        // 静态资源访问基础地址（沿用原「复制路径」的既有地址约定，非新增硬编码）
+        const STATIC_BASE = 'https://example.com:8081/static/';
+
+        // 拼接文件的可访问 URL（用于复制路径；复制出去的分享地址保持既有 8081 静态服务约定）
+        const staticUrl = (p) => STATIC_BASE + p;
+
+        // 同源媒体流地址：会话鉴权 + files:manage 权限 + Range 断点支持，用于页面内预览/播放
+        const mediaUrl = (p) => baseUrl + '/api/media?path=' + encodeURIComponent(p);
+
+        // TS 直录流扩展名：浏览器原生 <video> 不支持 MPEG-TS，需 mpegts.js 通过 MSE 播放
+        const STREAM_EXTS = ['ts', 'mts', 'm2ts'];
+
+        // 判断文件是否为需要 mpegts.js 播放的 TS 流视频
+        function isStreamVideo(name) {
+            return STREAM_EXTS.includes((name.split('.').pop() || '').toLowerCase());
+        }
 
         // 读取非 HttpOnly 的 csrf_token Cookie；写请求自动携带，会话 Cookie 由 credentials: include 携带
         function getCsrfToken() { const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
@@ -256,17 +600,74 @@
             return fetch(url, { method, headers, credentials: 'include', body: options.body });
         }
 
-        function fileIcon(name) {
+        // 根据扩展名判断文件类别（用于图标、颜色、筛选与排序）
+        function fileCategory(name) {
             const ext = (name.split('.').pop() || '').toLowerCase();
-            const map = { pdf: '📕', zip: '📦', mp4: '🎬', webm: '🎬', mov: '🎬', jpg: '🖼️', jpeg: '🖼️', png: '🖼️', epub: '📖', txt: '📄', md: '📝' };
-            return map[ext] || '📄';
+            // 注意：ts/mts/m2ts 优先识别为视频（TS 直录流），此场景下服务器几乎不存在 TypeScript 文件
+            if (['mp4', 'webm', 'mov', 'mkv', 'avi', 'flv', 'm4v', 'ts', 'mts', 'm2ts', 'wmv', 'mpg', 'mpeg', '3gp'].includes(ext)) return 'video';
+            if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext)) return 'image';
+            if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'm4a'].includes(ext)) return 'audio';
+            if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) return 'archive';
+            if (['pdf', 'txt', 'md', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'epub'].includes(ext)) return 'doc';
+            if (['json', 'html', 'htm', 'css', 'js', 'jsx', 'ts', 'tsx', 'go', 'py', 'java', 'c', 'cpp', 'h', 'sh', 'yml', 'yaml', 'xml', 'sql'].includes(ext)) return 'code';
+            return 'other';
         }
 
+        // 类别元数据：图标 / 颜色 / 中文标签
+        const CAT_META = {
+            folder: { icon: 'FolderOutlined', color: '#1677ff', label: '文件夹' },
+            video: { icon: 'VideoCameraOutlined', color: '#722ed1', label: '视频' },
+            image: { icon: 'FileImageOutlined', color: '#13c2c2', label: '图片' },
+            audio: { icon: 'SoundOutlined', color: '#eb2f96', label: '音频' },
+            archive: { icon: 'FileZipOutlined', color: '#fa8c16', label: '压缩包' },
+            doc: { icon: 'FileTextOutlined', color: '#52c41a', label: '文档' },
+            code: { icon: 'CodeOutlined', color: '#2f54eb', label: '代码' },
+            other: { icon: 'FileOutlined', color: '#8c8c8c', label: '文件' }
+        };
+
+        // 根据扩展名返回精确图标（在类别图标基础上细化）
+        function fileIconName(name) {
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            if (ext === 'pdf') return 'FilePdfOutlined';
+            if (ext === 'md') return 'FileMarkdownOutlined';
+            if (ext === 'html' || ext === 'htm') return 'Html5Outlined';
+            if (ext === 'exe' || ext === 'msi') return 'WindowsOutlined';
+            if (ext === 'apk') return 'AndroidOutlined';
+            return CAT_META[fileCategory(name)].icon;
+        }
+
+        // 类型筛选下拉选项
+        const TYPE_OPTIONS = [
+            { value: 'all', label: '全部' },
+            { value: 'folder', label: '文件夹' },
+            { value: 'video', label: '视频' },
+            { value: 'image', label: '图片' },
+            { value: 'audio', label: '音频' },
+            { value: 'doc', label: '文档' },
+            { value: 'archive', label: '压缩包' },
+            { value: 'code', label: '代码' },
+            { value: 'other', label: '其他' }
+        ];
+
+        // 排序字段下拉选项
+        const SORT_OPTIONS = [
+            { value: 'name', label: '按名称' },
+            { value: 'size', label: '按大小' },
+            { value: 'mtime', label: '按时间' },
+            { value: 'type', label: '按类型' }
+        ];
+
+        // 格式化字节数为可读大小
         function formatBytes(bytes) {
-            if (bytes === 0) return '0 B';
+            if (!bytes || bytes === 0) return '0 B';
             const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 格式化修改时间为本地展示（secondary 样式由外层控制）
+        function fmtTime(v) {
+            return v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-';
         }
 
         function App() {
@@ -284,6 +685,25 @@
             const [form] = Form.useForm();
             const isMobile = useIsMobile();
             const [shown, setShown] = useState(50);
+            // 视图模式：默认网格，记忆到 localStorage
+            const [viewMode, setViewMode] = useState(() => localStorage.getItem('filesView') === 'list' ? 'list' : 'grid');
+            // 搜索关键字（当前目录前端过滤，不修改后端）
+            const [search, setSearch] = useState('');
+            // 类型筛选
+            const [typeFilter, setTypeFilter] = useState('all');
+            // 排序字段与方向（文件夹始终优先）
+            const [sortBy, setSortBy] = useState('name');
+            const [sortOrder, setSortOrder] = useState('asc');
+            // 批量选择的 path 列表
+            const [selected, setSelected] = useState([]);
+            // 文件详情 Drawer
+            const [drawerFile, setDrawerFile] = useState(null);
+            // mpegts.js 播放器实例（仅 TS 直录流使用）
+            const tsPlayerRef = React.useRef(null);
+            // 我的令牌列表 Modal
+            const [tokenListOpen, setTokenListOpen] = useState(false);
+            const [tokenListLoading, setTokenListLoading] = useState(false);
+            const [tokenListData, setTokenListData] = useState([]);
 
             const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
 
@@ -297,6 +717,7 @@
                     .catch(() => { window.location.href = 'index.html'; });
             }, []);
 
+            // 加载指定目录的文件列表（后端负责路径安全校验）
             const load = useCallback(async (p) => {
                 setLoading(true);
                 try {
@@ -322,7 +743,65 @@
                 document.body.classList.toggle('dark', isDark);
                 document.body.style.background = isDark ? '#141414' : '#f5f5f5';
             }, [isDark]);
-            useEffect(() => { setShown(50); }, [path]);
+            useEffect(() => { localStorage.setItem('filesView', viewMode); }, [viewMode]);
+            // 目录 / 搜索 / 筛选 / 排序变化时重置「加载更多」与选中状态
+            useEffect(() => { setShown(50); setSelected([]); }, [path, search, typeFilter, sortBy, sortOrder]);
+
+            // 前端过滤 + 排序（useMemo 避免频繁重算；文件夹始终排在文件前）
+            const visibleFiles = useMemo(() => {
+                const kw = search.trim().toLowerCase();
+                let list = files.filter(f => {
+                    if (kw && !f.name.toLowerCase().includes(kw)) return false;
+                    if (typeFilter !== 'all') {
+                        const c = f.is_dir ? 'folder' : fileCategory(f.name);
+                        if (c !== typeFilter) return false;
+                    }
+                    return true;
+                });
+                const dir = sortOrder === 'asc' ? 1 : -1;
+                list = [...list].sort((a, b) => {
+                    if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+                    let r = 0;
+                    if (sortBy === 'size') r = (a.size || 0) - (b.size || 0);
+                    else if (sortBy === 'mtime') r = new Date(a.mod_time || 0) - new Date(b.mod_time || 0);
+                    else if (sortBy === 'type') r = fileCategory(a.name).localeCompare(fileCategory(b.name)) || a.name.localeCompare(b.name, 'zh-CN');
+                    else r = a.name.localeCompare(b.name, 'zh-CN');
+                    return r * dir;
+                });
+                return list;
+            }, [files, search, typeFilter, sortBy, sortOrder]);
+
+            // 当前目录统计（仅统计本次 API 返回的 files，不扫描服务器）
+            const stats = useMemo(() => {
+                let dirs = 0, fc = 0, total = 0;
+                files.forEach(f => { if (f.is_dir) dirs++; else { fc++; total += f.size || 0; } });
+                return { dirs, files: fc, total };
+            }, [files]);
+
+            // TS 直录流：打开 Drawer 时创建 mpegts.js 播放器（MSE 解码 MPEG-TS），关闭/切换时销毁避免资源泄漏
+            useEffect(() => {
+                const f = drawerFile;
+                if (!f || !isStreamVideo(f.name) || !window.mpegts) return;
+                const videoEl = document.getElementById('fm-ts-player');
+                if (!videoEl) return;
+                const player = window.mpegts.createPlayer({
+                    type: 'mpegts',
+                    isLive: false,
+                    url: mediaUrl(f.path)
+                }, {
+                    enableWorker: false,
+                    lazyLoad: true,
+                    lazyLoadMaxDuration: 180,
+                    autoCleanupSourceBuffer: true
+                });
+                tsPlayerRef.current = player;
+                player.attachMediaElement(videoEl);
+                player.load();
+                return () => {
+                    try { player.destroy(); } catch (e) { /* 忽略销毁异常 */ }
+                    tsPlayerRef.current = null;
+                };
+            }, [drawerFile]);
 
             if (auth.loading) {
                 return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -345,8 +824,9 @@
                 </ConfigProvider>;
             }
 
+            // 面包屑：根目录 + 逐级路径（均可点击跳转）
             const parts = path ? path.split('/') : [];
-            const breadcrumbItems = [{ title: <a onClick={() => load('')}>📂 根目录</a> }];
+            const breadcrumbItems = [{ title: <a onClick={() => load('')}><UIIcon name="HomeOutlined" /> 根目录</a> }];
             let acc = '';
             parts.forEach((p, i) => {
                 acc += (i === 0 ? '' : '/') + p;
@@ -356,29 +836,47 @@
                 });
             });
 
-            const columns = [
-                {
-                    title: '名称', dataIndex: 'name', key: 'name',
-                    render: (v, rec) => rec.is_dir
-                        ? <a onClick={() => load(rec.path)}><span style={{ marginRight: 8 }}>📁</span>{v}</a>
-                        : <span><span style={{ marginRight: 8 }}>{fileIcon(v)}</span>{v}</span>
-                },
-                { title: '大小', dataIndex: 'size', width: 120, render: (v, rec) => rec.is_dir ? '-' : formatBytes(v) },
-                {
-                    title: '修改时间', dataIndex: 'mod_time', width: 180,
-                    render: v => <Typography.Text type="secondary">{v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text>
-                },
-                {
-                    title: '操作', key: 'op', width: 300, fixed: 'right',
-                    render: (_, rec) => rec.is_dir
-                        ? <Button size="small" danger onClick={() => del(rec)}>删除目录</Button>
-                        : <Space wrap>
-                            <Button size="small" onClick={() => copyPath(rec.path)}>复制路径</Button>
-                            <Button size="small" type="primary" onClick={() => openToken(rec.path)}>🎫 签发令牌</Button>
-                            <Button size="small" danger onClick={() => del(rec)}>删除</Button>
-                        </Space>
+            // 返回上一级目录（根目录时按钮不显示）
+            const goUp = () => {
+                const pp = path ? path.split('/') : [];
+                pp.pop();
+                load(pp.join('/'));
+            };
+
+            // 切换某个项目的选中状态（批量操作用）
+            const toggleSelect = (p) => {
+                setSelected(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+            };
+
+            // 文件卡片的 [...] 下拉菜单（详情 / 复制路径 / 签发令牌 / 删除）
+            const fileMenu = (f) => ({
+                items: [
+                    { key: 'detail', icon: <UIIcon name="EyeOutlined" />, label: '查看详情' },
+                    { key: 'copy', icon: <UIIcon name="CopyOutlined" />, label: '复制文件路径' },
+                    { key: 'token', icon: <UIIcon name="SafetyCertificateOutlined" />, label: '签发下载令牌' },
+                    { type: 'divider' },
+                    { key: 'del', icon: <UIIcon name="DeleteOutlined" />, label: '删除文件', danger: true }
+                ],
+                onClick: ({ key }) => {
+                    if (key === 'detail') setDrawerFile(f);
+                    else if (key === 'copy') copyPath(f.path);
+                    else if (key === 'token') openToken(f.path);
+                    else if (key === 'del') del(f);
                 }
-            ];
+            });
+
+            // 文件夹卡片的 [...] 下拉菜单（打开 / 删除目录）
+            const dirMenu = (f) => ({
+                items: [
+                    { key: 'open', icon: <UIIcon name="FolderOpenOutlined" />, label: '打开目录' },
+                    { type: 'divider' },
+                    { key: 'del', icon: <UIIcon name="DeleteOutlined" />, label: '删除目录', danger: true }
+                ],
+                onClick: ({ key }) => {
+                    if (key === 'open') load(f.path);
+                    else if (key === 'del') del(f);
+                }
+            });
 
             const uploadProps = {
                 multiple: true,
@@ -400,6 +898,7 @@
                 }
             };
 
+            // 删除文件/目录（保留原确认 Modal 与 DELETE API）
             const del = (rec) => {
                 Modal.confirm({
                     title: rec.is_dir ? '删除目录' : '删除文件',
@@ -420,12 +919,51 @@
                 });
             };
 
+            // 批量复制所选文件的访问路径（文件夹跳过）
+            const bulkCopy = () => {
+                const recs = files.filter(f => selected.includes(f.path) && !f.is_dir);
+                if (!recs.length) { message.info('所选项目中没有可复制的文件'); return; }
+                const text = recs.map(f => staticUrl(f.path)).join('\n');
+                navigator.clipboard.writeText(text)
+                    .then(() => message.success(`已复制 ${recs.length} 个文件路径`))
+                    .catch(() => Modal.info({ title: '文件路径', content: <div className="token-url">{text}</div> }));
+            };
+
+            // 批量删除：逐项调用现有 DELETE API，完成后统一刷新
+            const bulkDelete = () => {
+                const targets = files.filter(f => selected.includes(f.path));
+                if (!targets.length) { message.warning('请先选择要删除的项目'); return; }
+                Modal.confirm({
+                    title: '批量删除',
+                    content: `确定删除已选择的 ${targets.length} 项吗？文件夹仅限空目录，此操作不可恢复。`,
+                    okText: '删除',
+                    okButtonProps: { danger: true },
+                    cancelText: '取消',
+                    onOk: async () => {
+                        let ok = 0, fail = 0;
+                        for (const t of targets) {
+                            try {
+                                const r = await secureFetch(baseUrl + '/api/files?path=' + encodeURIComponent(t.path), { method: 'DELETE' });
+                                const d = await r.json();
+                                if (d.code === 200) ok++; else fail++;
+                            } catch (e) { fail++; }
+                        }
+                        if (ok) message.success(`已删除 ${ok} 项`);
+                        if (fail) message.error(`${fail} 项删除失败`);
+                        setSelected([]);
+                        load(path);
+                    }
+                });
+            };
+
+            // 复制单个文件的访问路径（保留原逻辑）
             const copyPath = (p) => {
-                const full = 'https://example.com:8081/static/' + p;
+                const full = staticUrl(p);
                 navigator.clipboard.writeText(full).then(() => message.success('已复制文件路径'))
                     .catch(() => { Modal.info({ title: '文件路径', content: <div className="token-url">{full}</div> }); });
             };
 
+            // 打开签发令牌 Modal
             const openToken = (p) => {
                 setTokenFile(p);
                 setTokenResult(null);
@@ -433,9 +971,10 @@
                 setTokenModal(true);
             };
 
+            // 签发下载令牌（保留原有 API 与参数逻辑；新增 file_path 令牌与文件绑定）
             const issue = async () => {
                 const v = await form.validateFields();
-                const body = { description: '文件: ' + tokenFile };
+                const body = { description: '文件: ' + tokenFile, file_path: tokenFile };
                 if (v.username) body.username = v.username;
                 if (v.expiry) body.expires_in = v.expiry;
                 if (v.quota) body.max_bytes = v.quota * 1024 * 1024;
@@ -445,9 +984,9 @@
                     const d = await r.json();
                     if (d.code === 200) {
                         const data = d.data;
-                        const url = baseUrl + '/download?token_id=' + encodeURIComponent(data.token_id) +
+                        const url = baseUrl + '/download.html?token_id=' + encodeURIComponent(data.token_id) +
                             '&token=' + encodeURIComponent(data.token) + '&file=' + encodeURIComponent(tokenFile);
-                        setTokenResult({ url, expires: data.expires_at });
+                        setTokenResult({ url, expires: data.expires_at, maxBytes: data.max_bytes });
                     } else {
                         message.error(d.message || '签发失败');
                     }
@@ -458,6 +997,33 @@
                 }
             };
 
+            // 打开「我的令牌」列表并加载（后端按 token:issue / token:manage 权限放行）
+            const openTokenList = async () => {
+                setTokenListOpen(true);
+                setTokenListLoading(true);
+                try {
+                    const r = await secureFetch(baseUrl + '/list-download-tokens');
+                    const d = await r.json();
+                    if (d.code === 200) setTokenListData(d.data || []);
+                    else { message.error(d.message || '获取令牌列表失败'); setTokenListData([]); }
+                } catch (e) {
+                    message.error('获取令牌列表失败: ' + e.message);
+                    setTokenListData([]);
+                } finally {
+                    setTokenListLoading(false);
+                }
+            };
+
+            // 复制令牌对应的下载页链接（仅令牌所有者可见完整 token 时可用）
+            const copyTokenLink = (t) => {
+                if (!t.file_path) { message.info('该令牌未绑定文件，无法生成链接'); return; }
+                const url = baseUrl + '/download.html?token_id=' + encodeURIComponent(t.token_id) +
+                    '&token=' + encodeURIComponent(t.token) + '&file=' + encodeURIComponent(t.file_path);
+                navigator.clipboard.writeText(url).then(() => message.success('已复制下载链接'))
+                    .catch(() => Modal.info({ title: '下载链接', content: <div className="token-url">{url}</div> }));
+            };
+
+            // 新建文件夹（保留原有 API 与路径拼接逻辑）
             const mkdir = async () => {
                 const name = mkName.trim();
                 if (!name) { message.warning('请输入文件夹名称'); return; }
@@ -472,15 +1038,97 @@
                 }
             };
 
+            // 渲染文件夹卡片：点击整体进入目录，checkbox 与 [...] 均不触发进入
+            const renderFolderCard = (f) => {
+                const checked = selected.includes(f.path);
+                return (
+                    <div key={f.path} className={'fm-card' + (checked ? ' fm-checked' : '')} onClick={() => load(f.path)}>
+                        <div className="fm-card-media">
+                            <Checkbox className="fm-check" checked={checked} onClick={e => e.stopPropagation()} onChange={() => toggleSelect(f.path)} />
+                            <span className="fm-big-icon fm-folder-icon"><UIIcon name="FolderOutlined" /></span>
+                        </div>
+                        <Tooltip title={f.name} placement="top">
+                            <div className="fm-name">{f.name}</div>
+                        </Tooltip>
+                        <div className="fm-meta">
+                            <span>文件夹</span>
+                            <span>{fmtTime(f.mod_time)}</span>
+                        </div>
+                        <div className="fm-foot">
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>点击进入</Typography.Text>
+                            <Dropdown menu={dirMenu(f)} trigger={['click']}>
+                                <Button size="small" icon={<UIIcon name="MoreOutlined" />} onClick={e => e.stopPropagation()} />
+                            </Dropdown>
+                        </div>
+                    </div>
+                );
+            };
+
+            // 渲染文件卡片：主体点击打开详情 Drawer，图片显示懒加载缩略图（失败回退图标）
+            const renderFileCard = (f) => {
+                const cat = fileCategory(f.name);
+                const meta = CAT_META[cat];
+                const checked = selected.includes(f.path);
+                return (
+                    <div key={f.path} className={'fm-card' + (checked ? ' fm-checked' : '')} onClick={() => setDrawerFile(f)}>
+                        <div className="fm-card-media">
+                            <Checkbox className="fm-check" checked={checked} onClick={e => e.stopPropagation()} onChange={() => toggleSelect(f.path)} />
+                            <span className="fm-big-icon" style={{ color: meta.color }}><UIIcon name={fileIconName(f.name)} /></span>
+                            {cat === 'image' && (
+                                <img className="fm-media-img" loading="lazy" alt={f.name}
+                                    src={mediaUrl(f.path)}
+                                    onError={e => { e.currentTarget.style.display = 'none'; }} />
+                            )}
+                        </div>
+                        <Tooltip title={f.name} placement="top">
+                            <div className="fm-name">{f.name}</div>
+                        </Tooltip>
+                        <div className="fm-meta">
+                            <span className="fm-size">{formatBytes(f.size)}</span>
+                            <span>{fmtTime(f.mod_time)}</span>
+                        </div>
+                        <div className="fm-foot">
+                            <Button size="small" type="primary" ghost icon={<UIIcon name="SafetyCertificateOutlined" />}
+                                onClick={e => { e.stopPropagation(); openToken(f.path); }}>签发令牌</Button>
+                            <Dropdown menu={fileMenu(f)} trigger={['click']}>
+                                <Button size="small" icon={<UIIcon name="MoreOutlined" />} onClick={e => e.stopPropagation()} />
+                            </Dropdown>
+                        </div>
+                    </div>
+                );
+            };
+
+            // 列表模式列定义（保留 Table，样式精简 + 下拉操作）
+            const listColumns = [
+                {
+                    title: '名称', dataIndex: 'name', key: 'name',
+                    render: (v, rec) => rec.is_dir
+                        ? <a onClick={() => load(rec.path)}><span className="fm-td-icon" style={{ color: '#1677ff' }}><UIIcon name="FolderOutlined" /></span>{v}</a>
+                        : <a onClick={() => setDrawerFile(rec)}><span className="fm-td-icon" style={{ color: CAT_META[fileCategory(rec.name)].color }}><UIIcon name={fileIconName(rec.name)} /></span>{v}</a>
+                },
+                { title: '类型', key: 'type', width: 96, render: (_, rec) => <Tag style={{ margin: 0 }}>{CAT_META[rec.is_dir ? 'folder' : fileCategory(rec.name)].label}</Tag> },
+                { title: '大小', dataIndex: 'size', width: 110, render: (v, rec) => rec.is_dir ? '-' : <span className="fm-size">{formatBytes(v)}</span> },
+                { title: '修改时间', dataIndex: 'mod_time', width: 170, render: v => <Typography.Text type="secondary">{fmtTime(v)}</Typography.Text> },
+                {
+                    title: '操作', key: 'op', width: 190, fixed: 'right',
+                    render: (_, rec) => rec.is_dir
+                        ? <Space>
+                            <Button size="small" onClick={() => load(rec.path)}>打开</Button>
+                            <Dropdown menu={dirMenu(rec)} trigger={['click']}><Button size="small" icon={<UIIcon name="MoreOutlined" />} /></Dropdown>
+                        </Space>
+                        : <Space wrap>
+                            <Button size="small" type="primary" ghost icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => openToken(rec.path)}>签发令牌</Button>
+                            <Dropdown menu={fileMenu(rec)} trigger={['click']}><Button size="small" icon={<UIIcon name="MoreOutlined" />} /></Dropdown>
+                        </Space>
+                }
+            ];
+
             return (
                 <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
-                    <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                    <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
                         <div className={'topbar' + (isDark ? ' dark' : '')}>
-                            <div className="brand">
-                                <span className="logo">📁</span>
-                                <span>Server Status<span className="tb-sub"> · 文件管理</span></span>
-                            </div>
-                            <Space>
+                            <span className="tb-page"><UIIcon name="FolderOutlined" />文件管理</span>
+                            <Space style={{ marginLeft: 'auto' }}>
                                 <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>
                                 <Button className="tb-hide-sm" icon={<UIIcon name="SettingOutlined" />} onClick={() => window.location.href = 'process.html'}><span className="tb-text">进程</span></Button>
                                 <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
@@ -492,75 +1140,118 @@
 
                         <div className="page-wrap">
                             <Card
-                                title="📂 服务器文件"
-                                extra={<Space>
+                                title={<Space size={6}><UIIcon name="BankOutlined" />服务器文件</Space>}
+                                extra={<Space wrap>
                                     <Upload {...uploadProps}>
-                                        <Button type="primary" icon={<span>⬆️</span>}>上传文件</Button>
+                                        <Button type="primary" icon={<span><UIIcon name="CloudUploadOutlined" style={{ fontSize: 15 }} /></span>}>上传文件</Button>
                                     </Upload>
-                                    <Button onClick={() => setMkModal(true)}>📁 新建文件夹</Button>
-                                    <Button onClick={() => load(path)}>🔄 刷新</Button>
+                                    <Button icon={<UIIcon name="FolderAddOutlined" />} onClick={() => setMkModal(true)}>新建文件夹</Button>
+                                    <Button icon={<UIIcon name="ReloadOutlined" />} onClick={() => load(path)}>刷新</Button>
+                                    {(hasPerm('token:issue') || hasPerm('token:manage')) && (
+                                        <Button icon={<UIIcon name="FileDoneOutlined" />} onClick={openTokenList}>我的令牌</Button>
+                                    )}
                                 </Space>}
                             >
-                                <div style={{ marginBottom: 12 }}>
-                                    <Breadcrumb items={breadcrumbItems} />
+                                {/* 第二层：面包屑 + 上一级 + 完整路径 */}
+                                <div className="fm-crumb-row">
+                                    {parts.length > 0 && (
+                                        <Tooltip title="上一级">
+                                            <Button size="small" icon={<UIIcon name="ArrowLeftOutlined" />} onClick={goUp} />
+                                        </Tooltip>
+                                    )}
+                                    <div className="fm-crumb">
+                                        <Breadcrumb items={breadcrumbItems} />
+                                    </div>
                                 </div>
-                                <Alert
-                                    type="info"
-                                    showIcon
-                                    style={{ marginBottom: 12 }}
-                                    message={`当前路径: /opt/server-status/media/${path}`}
-                                />
-                                {isMobile ? (
-                                    <div>
-                                        {files.slice(0, shown).map(f => (
-                                            <Card key={f.path} size="small" hoverable bordered className="file-card">
-                                                <div className="file-row" style={{ alignItems: 'flex-start' }}>
-                                                    <span style={{ fontSize: 22, marginRight: 8 }}>{f.is_dir ? '📁' : fileIcon(f.name)}</span>
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                        {f.is_dir
-                                                            ? <a onClick={() => load(f.path)} style={{ fontWeight: 600, wordBreak: 'break-all' }}>{f.name}</a>
-                                                            : <span style={{ wordBreak: 'break-all' }}>{f.name}</span>}
-                                                    </div>
-                                                </div>
-                                                <div className="file-row"><span className="label">大小</span><span>{f.is_dir ? '-' : formatBytes(f.size)}</span></div>
-                                                <div className="file-row"><span className="label">修改时间</span><Typography.Text type="secondary" style={{ fontSize: 12 }}>{f.mod_time ? new Date(f.mod_time).toLocaleString('zh-CN', { hour12: false }) : '-'}</Typography.Text></div>
-                                                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                                                    {f.is_dir
-                                                        ? <Button size="small" danger onClick={() => del(f)}>删除目录</Button>
-                                                        : <><Button size="small" onClick={() => copyPath(f.path)}>复制路径</Button>
-                                                            <Button size="small" type="primary" onClick={() => openToken(f.path)}>🎫 签发令牌</Button>
-                                                            <Button size="small" danger onClick={() => del(f)}>删除</Button></>}
-                                                </div>
-                                            </Card>
-                                        ))}
-                                        {!files.length && <Empty description="📭 空目录" style={{ padding: 30 }} />}
-                                        {files.length > shown && (
-                                            <div style={{ textAlign: 'center', marginTop: 8 }}>
-                                                <Button block onClick={() => setShown(shown + 50)}>加载更多（{files.length - shown} 项）</Button>
+                                <div className="fm-fullpath">
+                                    <Typography.Text type="secondary">当前路径: /opt/server-status/media/{path}</Typography.Text>
+                                </div>
+
+                                {/* 第三层：当前目录统计 */}
+                                <div className="fm-stats">
+                                    <span className="fm-stat"><UIIcon name="FolderOutlined" /><b>{stats.dirs}</b><span className="fm-stat-label">文件夹</span></span>
+                                    <span className="fm-stat"><UIIcon name="FileOutlined" /><b>{stats.files}</b><span className="fm-stat-label">文件</span></span>
+                                    <span className="fm-stat"><UIIcon name="HddOutlined" /><b>{formatBytes(stats.total)}</b><span className="fm-stat-label">当前目录大小</span></span>
+                                </div>
+
+                                {/* 第四层：搜索 / 筛选 / 排序 / 视图切换 */}
+                                <div className="fm-toolbar">
+                                    <Input
+                                        className="fm-search"
+                                        allowClear
+                                        prefix={<UIIcon name="SearchOutlined" />}
+                                        placeholder="搜索文件..."
+                                        value={search}
+                                        onChange={e => setSearch(e.target.value)}
+                                    />
+                                    <Select className="fm-select" value={typeFilter} onChange={setTypeFilter} options={TYPE_OPTIONS} />
+                                    <Select className="fm-select" value={sortBy} onChange={setSortBy} options={SORT_OPTIONS} />
+                                    <Tooltip title={sortOrder === 'asc' ? '升序' : '降序'}>
+                                        <Button icon={<UIIcon name={sortOrder === 'asc' ? 'SortAscendingOutlined' : 'SortDescendingOutlined'} />}
+                                            onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')} />
+                                    </Tooltip>
+                                    <div style={{ flex: 1 }} />
+                                    <Segmented
+                                        value={viewMode}
+                                        onChange={setViewMode}
+                                        options={[
+                                            { value: 'grid', label: <span className="fm-seg"><UIIcon name="AppstoreOutlined" />网格</span> },
+                                            { value: 'list', label: <span className="fm-seg"><UIIcon name="BarsOutlined" />列表</span> }
+                                        ]}
+                                    />
+                                </div>
+
+                                {/* 批量操作栏 */}
+                                {selected.length > 0 && (
+                                    <div className="fm-bulkbar">
+                                        <span>已选择 <b>{selected.length}</b> 项</span>
+                                        <Space wrap>
+                                            <Button size="small" icon={<UIIcon name="CopyOutlined" />} onClick={bulkCopy}>复制路径</Button>
+                                            <Button size="small" danger icon={<UIIcon name="DeleteOutlined" />} onClick={bulkDelete}>删除</Button>
+                                            <Button size="small" onClick={() => setSelected([])}>取消选择</Button>
+                                        </Space>
+                                    </div>
+                                )}
+
+                                {/* 第五/六层：内容区（网格 / 列表） */}
+                                {viewMode === 'grid' ? (
+                                    <Spin spinning={loading}>
+                                        <div className="fm-grid">
+                                            {visibleFiles.slice(0, shown).map(f => f.is_dir ? renderFolderCard(f) : renderFileCard(f))}
+                                        </div>
+                                        {!loading && !visibleFiles.length && (
+                                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={files.length ? '无匹配文件' : '空目录'} style={{ padding: 40 }} />
+                                        )}
+                                        {visibleFiles.length > shown && (
+                                            <div style={{ textAlign: 'center', marginTop: 12 }}>
+                                                <Button onClick={() => setShown(shown + 50)}>加载更多（{visibleFiles.length - shown} 项）</Button>
                                             </div>
                                         )}
-                                    </div>
+                                    </Spin>
                                 ) : (
                                     <Table
                                         rowKey="path"
-                                        columns={columns}
-                                        dataSource={files}
+                                        columns={listColumns}
+                                        dataSource={visibleFiles}
                                         loading={loading}
                                         size="middle"
                                         scroll={{ x: 760 }}
-                                        pagination={files.length > 20 ? { pageSize: 20, showSizeChanger: true, showTotal: t => `共 ${t} 项` } : false}
-                                        locale={{ emptyText: '📭 空目录' }}
+                                        rowSelection={{ selectedRowKeys: selected, onChange: keys => setSelected(keys) }}
+                                        pagination={visibleFiles.length > 20 ? { pageSize: 20, showSizeChanger: true, showTotal: t => `共 ${t} 项` } : false}
+                                        locale={{ emptyText: files.length ? '无匹配文件' : '空目录' }}
                                     />
                                 )}
                             </Card>
                         </div>
 
-                        <Modal title="📁 新建文件夹" open={mkModal} onOk={mkdir} onCancel={() => setMkModal(false)} okText="创建" cancelText="取消">
+                        {/* 新建文件夹 Modal（保留原逻辑） */}
+                        <Modal title={<Space size={6}><UIIcon name="FolderAddOutlined" />新建文件夹</Space>} open={mkModal} onOk={mkdir} onCancel={() => setMkModal(false)} okText="创建" cancelText="取消">
                             <Input placeholder="请输入文件夹名称" value={mkName} onChange={e => setMkName(e.target.value)} onPressEnter={mkdir} />
                         </Modal>
 
+                        {/* 签发下载令牌 Modal（保留原逻辑） */}
                         <Modal
-                            title={`🎫 签发下载令牌：${tokenFile || ''}`}
+                            title={<Space size={6}><UIIcon name="SafetyCertificateOutlined" />签发下载令牌：{tokenFile || ''}</Space>}
                             open={tokenModal}
                             onCancel={() => setTokenModal(false)}
                             footer={null}
@@ -586,7 +1277,13 @@
                                         message="令牌生成成功"
                                         description={
                                             <div>
-                                                <div style={{ marginBottom: 4 }}>有效期至 {tokenResult.expires}</div>
+                                                <div style={{ marginBottom: 4 }}>
+                                                    有效期至 {tokenResult.expires}
+                                                    {tokenResult.maxBytes ? <> · 流量上限 {formatBytes(tokenResult.maxBytes)}</> : null}
+                                                </div>
+                                                <div style={{ marginBottom: 4 }}>
+                                                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>该令牌已绑定此文件，下载时不可用于其他文件</Typography.Text>
+                                                </div>
                                                 <div className="token-url">{tokenResult.url}</div>
                                                 <Button size="small" style={{ marginTop: 8 }} onClick={() => {
                                                     navigator.clipboard.writeText(tokenResult.url).then(() => message.success('已复制下载链接'));
@@ -603,6 +1300,105 @@
                                 </div>
                             </Form>
                         </Modal>
+
+                        {/* 我的令牌列表 Modal：查看用量/状态，找回自己的下载链接 */}
+                        <Modal
+                            title={<Space size={6}><UIIcon name="FileDoneOutlined" />我的令牌</Space>}
+                            open={tokenListOpen}
+                            onCancel={() => setTokenListOpen(false)}
+                            footer={<Button onClick={() => setTokenListOpen(false)}>关闭</Button>}
+                            width={820}
+                        >
+                            <Table
+                                rowKey="token_id"
+                                size="small"
+                                loading={tokenListLoading}
+                                dataSource={tokenListData}
+                                pagination={{ pageSize: 8, showTotal: t => `共 ${t} 个` }}
+                                locale={{ emptyText: '暂无令牌' }}
+                                columns={[
+                                    {
+                                        title: '文件 / 描述', key: 'desc', ellipsis: true,
+                                        render: (_, t) => (
+                                            <Tooltip title={t.file_path || t.description}>
+                                                <span>{t.file_path || t.description || '-'}</span>
+                                            </Tooltip>
+                                        )
+                                    },
+                                    {
+                                        title: '流量', key: 'quota', width: 190,
+                                        render: (_, t) => (
+                                            <div>
+                                                <Progress
+                                                    percent={t.max_bytes ? Math.min(100, Math.round((t.used_bytes || 0) / t.max_bytes * 100)) : 0}
+                                                    size="small"
+                                                    status={t.is_active ? 'normal' : 'exception'}
+                                                    style={{ marginBottom: 2 }}
+                                                />
+                                                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                                    {formatBytes(t.used_bytes)} / {formatBytes(t.max_bytes)}
+                                                </Typography.Text>
+                                            </div>
+                                        )
+                                    },
+                                    {
+                                        title: '有效期至', key: 'expires', width: 160,
+                                        render: (_, t) => <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtTime(t.expires_at)}</Typography.Text>
+                                    },
+                                    {
+                                        title: '状态', key: 'status', width: 80,
+                                        render: (_, t) => t.is_active ? <Tag color="green">生效中</Tag> : <Tag color="red">已失效</Tag>
+                                    },
+                                    {
+                                        title: '操作', key: 'op', width: 100,
+                                        render: (_, t) => (t.is_active && t.token && !t.token.includes('*') && t.file_path)
+                                            ? <Button size="small" type="link" onClick={() => copyTokenLink(t)}>复制链接</Button>
+                                            : <Typography.Text type="secondary" style={{ fontSize: 12 }}>-</Typography.Text>
+                                    }
+                                ]}
+                            />
+                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                提示：他人名下令牌的完整密钥已脱敏，仅自己的令牌可复制下载链接。
+                            </Typography.Text>
+                        </Modal>
+
+                        {/* 文件详情 Drawer：移动端底部弹出，图片/视频按需加载，视频不自动播放 */}
+                        <Drawer
+                            title={drawerFile ? <Space size={6}><UIIcon name="FileOutlined" />{drawerFile.name}</Space> : ''}
+                            open={!!drawerFile}
+                            onClose={() => setDrawerFile(null)}
+                            placement={isMobile ? 'bottom' : 'right'}
+                            width={isMobile ? undefined : 460}
+                            height={isMobile ? '85%' : undefined}
+                            footer={drawerFile && (
+                                <Space wrap style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                    <Button icon={<UIIcon name="CopyOutlined" />} onClick={() => copyPath(drawerFile.path)}>复制路径</Button>
+                                    <Button danger onClick={() => { const f = drawerFile; setDrawerFile(null); del(f); }}>删除</Button>
+                                    <Button type="primary" icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => openToken(drawerFile.path)}>签发令牌</Button>
+                                </Space>
+                            )}
+                        >
+                            {drawerFile && (
+                                <div>
+                                    {fileCategory(drawerFile.name) === 'image' && (
+                                        <img key={drawerFile.path} className="fm-preview-img" alt={drawerFile.name} src={mediaUrl(drawerFile.path)} />
+                                    )}
+                                    {fileCategory(drawerFile.name) === 'video' && (
+                                        isStreamVideo(drawerFile.name)
+                                            ? <video key={drawerFile.path} id="fm-ts-player" className="fm-preview-video" controls />
+                                            : <video key={drawerFile.path} className="fm-preview-video" src={mediaUrl(drawerFile.path)} controls preload="metadata" />
+                                    )}
+                                    <Descriptions column={1} size="small" bordered>
+                                        <Descriptions.Item label="类型">{CAT_META[fileCategory(drawerFile.name)].label}</Descriptions.Item>
+                                        <Descriptions.Item label="大小">{formatBytes(drawerFile.size)}</Descriptions.Item>
+                                        <Descriptions.Item label="修改时间">{fmtTime(drawerFile.mod_time)}</Descriptions.Item>
+                                        <Descriptions.Item label="完整路径">
+                                            <span className="token-url" style={{ display: 'block' }}>{staticUrl(drawerFile.path)}</span>
+                                        </Descriptions.Item>
+                                    </Descriptions>
+                                </div>
+                            )}
+                        </Drawer>
                     </div>
                 </ConfigProvider>
             );
