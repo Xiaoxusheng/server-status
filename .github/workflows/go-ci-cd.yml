@@ -13,6 +13,11 @@ env:
   BUILD_VERSION: ${{ github.ref_name }}
   GO_VERSION: '1.24.0'
 
+# Windows runner 的 run 步骤默认是 PowerShell，无法执行 GOOS=x go build 等 POSIX 语法，统一改用 bash
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test:
     name: Run Tests
