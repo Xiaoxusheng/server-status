@@ -18,6 +18,9 @@ blocked_ips.json
 # 私人空间附件
 data/
 
+# Docker 密钥环境变量
+.env
+
 # 日志与临时文件
 log/
 .upload-tmp/

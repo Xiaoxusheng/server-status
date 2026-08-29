@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -8,19 +10,24 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"io/fs"
 	"log"
+	"math"
 	"math/rand"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -54,6 +61,10 @@ const (
 	sessionTimeout    = 24 * time.Hour              // 会话超时时间
 
 	dir = "/opt/server-status/media" // EPUB 文件所在目录
+	// TLS 证书配置
+	tlsCertFile = "/etc/server-status/tls/example.com.pem" // TLS 证书文件路径
+	tlsKeyFile  = "/etc/server-status/tls/example.com.key" // TLS 私钥文件路径
+	tlsDomain   = "example.com"               // 证书绑定的主域名（SNI 用）
 	// 新增下载密钥配置
 	downloadTokenExpiry = 30 * time.Minute                // 下载令牌有效期
 	downloadLimitBytes  = 3 * 1024 * 1024 * 1024          // 2GB 下载限制
@@ -5050,9 +5061,221 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ==================== 模板内存缓存与 gzip 加速 ====================
+
+// templateCacheEntry 缓存单个模板文件：原始内容 + 预压缩内容 + 用于新鲜度判断的文件信息
+type templateCacheEntry struct {
+	raw     []byte    // 原始文件内容
+	gzipped []byte    // 预压缩内容（gzip 最快压缩级别，启动/重载时一次性生成）
+	modTime time.Time // 文件最后修改时间（用于检测磁盘上模板被更新）
+	size    int64     // 文件大小（与 modTime 一起判断是否需要重载）
+}
+
+var (
+	templateCacheMu   sync.RWMutex
+	templateCache     map[string]*templateCacheEntry // key: 模板文件名（如 index.html）
+	templateCacheInit sync.Once                      // 保证首次访问时完成一次加载
+)
+
+// loadTemplateCache 将模板目录全部文件读入内存并预压缩。
+// 压缩使用 gzip.BestSpeed：压缩率略低但 CPU 开销最小，适合大 HTML 文件的一次性预压缩。
+func loadTemplateCache() {
+	entries, err := os.ReadDir(indexPath)
+	if err != nil {
+		log.Printf("模板缓存加载失败（将回退为磁盘直读）: %v", err)
+		return
+	}
+	cache := make(map[string]*templateCacheEntry, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		// 跳过备份文件：它们会被敏感文件守卫拦截，永远无法被访问，缓存徒增内存
+		lowerName := strings.ToLower(e.Name())
+		if strings.Contains(lowerName, ".bak") || strings.HasSuffix(lowerName, "~") {
+			continue
+		}
+		entry := buildTemplateCacheEntry(filepath.Join(indexPath, e.Name()))
+		if entry != nil {
+			cache[e.Name()] = entry
+		}
+	}
+	// 单文件缓存上限：超过 5MB 的文件（如误放的二进制、大资源）不缓存，回退磁盘直读，
+	// 避免异常大文件占满内存
+	const maxCacheFileSize = 5 << 20
+	for name, entry := range cache {
+		if entry.size > maxCacheFileSize {
+			delete(cache, name)
+		}
+	}
+	templateCacheMu.Lock()
+	templateCache = cache
+	templateCacheMu.Unlock()
+	totalRaw, totalGz := 0, 0
+	for _, c := range cache {
+		totalRaw += len(c.raw)
+		if c.gzipped != nil {
+			totalGz += len(c.gzipped)
+		}
+	}
+	log.Printf("模板缓存已加载: %d 个文件（原始 %dKB，gzip 后 %dKB）", len(cache), totalRaw/1024, totalGz/1024)
+}
+
+// buildTemplateCacheEntry 读取单个模板文件并生成预压缩副本；读取失败返回 nil
+func buildTemplateCacheEntry(path string) *templateCacheEntry {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil
+	}
+	entry := &templateCacheEntry{raw: data, modTime: info.ModTime(), size: info.Size()}
+	var buf bytes.Buffer
+	gz, err := gzip.NewWriterLevel(&buf, gzip.BestSpeed)
+	if err == nil {
+		if _, werr := gz.Write(data); werr == nil && gz.Close() == nil {
+			entry.gzipped = buf.Bytes()
+		}
+	}
+	return entry
+}
+
+// getTemplateEntry 返回指定模板文件的缓存条目；若磁盘文件已被更新（mtime/size 变化）则自动重载。
+// 这样保留了「只更新模板文件、不重启服务立即生效」的部署习惯，同时避免每次请求都完整读盘。
+func getTemplateEntry(name string) *templateCacheEntry {
+	templateCacheInit.Do(loadTemplateCache)
+	templateCacheMu.RLock()
+	entry, ok := templateCache[name]
+	templateCacheMu.RUnlock()
+	if !ok {
+		return nil
+	}
+	// 新鲜度检查：stat 是轻量系统调用，远比完整读文件便宜
+	if info, err := os.Stat(filepath.Join(indexPath, name)); err == nil &&
+		info.ModTime().Equal(entry.modTime) && info.Size() == entry.size {
+		return entry
+	}
+	// 磁盘文件已变化：重读并预压缩
+	fresh := buildTemplateCacheEntry(filepath.Join(indexPath, name))
+	if fresh == nil {
+		return entry // 重读失败时继续使用旧缓存，保证服务可用
+	}
+	templateCacheMu.Lock()
+	templateCache[name] = fresh
+	templateCacheMu.Unlock()
+	return fresh
+}
+
+// serveTemplateCached 以内存缓存 + 按需 gzip 的方式提供模板文件。
+// 返回 false 表示缓存中不存在该文件，调用方需自行回退处理。
+func serveTemplateCached(w http.ResponseWriter, r *http.Request, name string) bool {
+	entry := getTemplateEntry(name)
+	if entry == nil {
+		return false
+	}
+	// 按扩展名显式设置 Content-Type（等价于原 http.FileServer 行为）
+	if ct := mime.TypeByExtension(path.Ext(name)); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && entry.gzipped != nil {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Vary", "Accept-Encoding")
+		w.Header().Set("Content-Length", strconv.Itoa(len(entry.gzipped)))
+		w.Write(entry.gzipped)
+		return true
+	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(entry.raw)))
+	w.Write(entry.raw)
+	return true
+}
+
+// ==================== SSL 证书到期检测 ====================
+
+// certInfo 描述一张 TLS 证书的关键信息（JSON 返回给前端）
+type certInfo struct {
+	Domain    string   `json:"domain"`
+	NotBefore string   `json:"not_before"`
+	NotAfter  string   `json:"not_after"`
+	DaysLeft  int      `json:"days_left"`
+	Issuer    string   `json:"issuer"`
+	Subject   string   `json:"subject"`
+	DNSNames  []string `json:"dns_names"`
+	Source    string   `json:"source"` // live=实时握手（当前生效）/ file=本地证书文件
+	CheckedAt string   `json:"checked_at"`
+}
+
+// probeLiveCertificate 对本机监听地址发起真实 TLS 握手，获取进程当前实际生效的证书。
+// 相比读文件，这能发现「证书文件已续期但服务未重启导致旧证书仍在线上」的情况。
+func probeLiveCertificate() (*x509.Certificate, error) {
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", "127.0.0.1:9000", &tls.Config{
+		ServerName:         tlsDomain,
+		InsecureSkipVerify: true, // 仅读取证书元数据，不做证书链校验
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	certs := conn.ConnectionState().PeerCertificates
+	if len(certs) == 0 {
+		return nil, fmt.Errorf("握手成功但服务端未返回证书")
+	}
+	return certs[0], nil
+}
+
+// loadFileCertificate 从磁盘证书文件解析证书（实时握手失败时的兜底来源）
+func loadFileCertificate() (*x509.Certificate, error) {
+	data, err := os.ReadFile(tlsCertFile)
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, fmt.Errorf("证书文件不是有效的 PEM 格式")
+	}
+	return x509.ParseCertificate(block.Bytes)
+}
+
+// sslExpiryHandler HTTP 端点：返回当前生效 TLS 证书的到期信息（需登录且具备 system:view 权限）
+func sslExpiryHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	cert, err := probeLiveCertificate()
+	source := "live"
+	if err != nil {
+		// 实时握手失败（如端口被防火墙限制）：回退读取本地证书文件
+		source = "file"
+		cert, err = loadFileCertificate()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("证书检测失败: %v", err)})
+			return
+		}
+	}
+	info := certInfo{
+		Domain:    tlsDomain,
+		NotBefore: cert.NotBefore.Format("2006-01-02 15:04:05"),
+		NotAfter:  cert.NotAfter.Format("2006-01-02 15:04:05"),
+		DaysLeft:  int(math.Ceil(time.Until(cert.NotAfter).Hours() / 24)),
+		Issuer:    cert.Issuer.CommonName,
+		Subject:   cert.Subject.CommonName,
+		DNSNames:  cert.DNSNames,
+		Source:    source,
+		CheckedAt: time.Now().Format("2006-01-02 15:04:05"),
+	}
+	if info.Issuer == "" && len(cert.Issuer.Organization) > 0 {
+		info.Issuer = cert.Issuer.Organization[0]
+	}
+	json.NewEncoder(w).Encode(info)
+}
+
 // trojanPageHandler 提供 Trojan-Go 详情页（需登录且具备 trojan:manage 权限）
 func trojanPageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// 优先走内存缓存 + gzip；缓存未命中（文件缺失）时回退磁盘直读并报错
+	if serveTemplateCached(w, r, "trojan.html") {
+		return
+	}
 	htmlData, err := os.ReadFile(filepath.Join(indexPath, "trojan.html"))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("无法读取 Trojan-Go 页面: %v", err), http.StatusInternalServerError)
@@ -5559,6 +5782,9 @@ func main() {
 		}
 	}()
 
+	// 启动时将模板读入内存并预压缩 gzip（消除每请求磁盘读与压缩开销）
+	loadTemplateCache()
+
 	// 启动时预热 Docker 缓存（docker stats 采集慢，预热后首屏秒开）
 	go warmDockerCaches()
 
@@ -5631,11 +5857,20 @@ func main() {
 		}
 		// 模板页面禁止缓存：认证/CSRF 逻辑随版本演进，旧模板 JS 会导致写请求缺 X-CSRF-Token 而 403
 		w.Header().Set("Cache-Control", "no-store")
+		// 优先走内存缓存 + gzip（含启动时预压缩），消除每请求磁盘读；未命中时回退磁盘直读
+		name := path.Base(r.URL.Path)
+		if name == "/" || name == "." {
+			name = "index.html"
+		}
+		if serveTemplateCached(w, r, name) {
+			return
+		}
 		http.FileServer(http.Dir(indexPath)).ServeHTTP(w, r)
 	}))
 	http.HandleFunc("/ws", authMiddleware(requirePermission("system:view", securityMiddleware(wsHandler))))
 	http.HandleFunc("/video", authMiddleware(requirePermission("files:view", securityMiddleware(homeHandler))))
 	http.HandleFunc("/status-ifaces", authMiddleware(requirePermission("system:view", securityMiddleware(ifacesHandler))))
+	http.HandleFunc("GET /api/ssl/expiry", authMiddleware(requirePermission("system:view", securityMiddleware(sslExpiryHandler))))
 	http.HandleFunc("/random-media", enableCORSh(authMiddleware(requirePermission("files:view", securityMiddleware(randomMediaHandler)))))
 	http.HandleFunc("/access-stats", authMiddleware(requirePermission("system:view", securityMiddleware(accessStatsHandler))))
 	http.HandleFunc("/exec", authMiddleware(requirePermission("system:exec", securityMiddleware(execHandler))))
@@ -5757,5 +5992,5 @@ func main() {
 		Addr:      ":9000",
 		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 	}
-	log.Fatal(srv.ListenAndServeTLS("/etc/server-status/tls/example.com.pem", "/etc/server-status/tls/example.com.key"))
+	log.Fatal(srv.ListenAndServeTLS(tlsCertFile, tlsKeyFile))
 }

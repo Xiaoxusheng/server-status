@@ -423,11 +423,13 @@
             const [curFile, setCurFile] = useState('');
             const [tail, setTail] = useState(256 * 1024);
             const [filter, setFilter] = useState('');
+            const [filterInput, setFilterInput] = useState('');
             const [content, setContent] = useState('');
             const [meta, setMeta] = useState({ truncated: false, size: 0 });
             const [loading, setLoading] = useState(false);
             const [auto, setAuto] = useState(true);
             const viewRef = useRef(null);
+            const contentRef = useRef('');
             const isDarkRef = useRef(isDark);
             isDarkRef.current = isDark;
 
@@ -489,16 +491,24 @@
                 }
             }, [auth.ok, hasPermLog]);
 
+            // 关键字输入 400ms 防抖后再触发过滤请求，避免每个按键都请求一次
+            useEffect(() => {
+                const t = setTimeout(() => setFilter(filterInput), 400);
+                return () => clearTimeout(t);
+            }, [filterInput]);
+
             // 拉取当前文件内容（tail 字节 + 关键字过滤）
             const loadContent = useCallback(() => {
                 if (!curFile) return;
-                setLoading(true);
+                // 仅首次（内容为空）显示加载态；自动刷新静默更新，避免 Spin 遮罩白屏闪烁
+                if (!contentRef.current) setLoading(true);
                 const q = new URLSearchParams({ file: curFile, tail: String(tail) });
                 if (filter.trim()) q.set('filter', filter.trim());
                 secureFetch(baseUrl + '/api/logs?' + q.toString())
                     .then(r => r.json())
                     .then(d => {
                         if (d.code === 200) {
+                            contentRef.current = d.data.content || '';
                             setContent(d.data.content || '');
                             setMeta({ truncated: !!d.data.truncated, size: d.data.size || 0 });
                         }
@@ -512,6 +522,12 @@
                         });
                     });
             }, [curFile, tail, filter]);
+
+            // 切换日志文件时清空旧内容并显示加载态
+            useEffect(() => {
+                contentRef.current = '';
+                setContent('');
+            }, [curFile]);
 
             useEffect(() => { if (auth.ok && hasPermLog) loadContent(); }, [auth.ok, hasPermLog, loadContent]);
 
@@ -631,8 +647,8 @@
                                             style={{ width: 200 }}
                                             prefix={<UIIcon name="SearchOutlined" />}
                                             placeholder="关键字过滤..."
-                                            value={filter}
-                                            onChange={e => setFilter(e.target.value)}
+                                            value={filterInput}
+                                            onChange={e => setFilterInput(e.target.value)}
                                             onPressEnter={loadContent}
                                         />
                                         {meta.truncated && <Tag color="orange" style={{ marginRight: 0 }}>仅显示末尾部分</Tag>}

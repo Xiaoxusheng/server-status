@@ -490,7 +490,7 @@
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        const { Card, Table, Button, Input, Form, Tag, Space, Statistic, Typography, ConfigProvider, theme, message, Descriptions, Badge, Alert, Tooltip } = window.antd;
+        const { Card, Table, Button, Input, Form, Tag, Space, Statistic, Typography, ConfigProvider, theme, message, Descriptions, Badge, Alert, Tooltip, Modal } = window.antd;
         const { useState, useEffect, useRef, useCallback } = React;
         const { darkAlgorithm } = theme;
         const IconSet = window.icons || {};
@@ -716,6 +716,9 @@
             const dataRef = useRef({ labels: [], cpu: [], mem: [], up: [], down: [], r: [], w: [] });
             // 记录 WebSocket 最后一次收到数据的时间，用于展示数据时效
             const [lastUpd, setLastUpd] = useState(null);
+            // SSL 证书到期信息与详情弹窗开关
+            const [sslInfo, setSslInfo] = useState(null);
+            const [sslOpen, setSslOpen] = useState(false);
 
             const hasPerm = p => (user.permissions || []).some(x => x === '*' || x === p);
 
@@ -725,6 +728,19 @@
                 document.body.classList.toggle('dark', isDark);
                 document.body.style.background = isDark ? '#141414' : '#f5f5f5';
             }, [isDark]);
+
+            // 拉取 SSL 证书到期信息：挂载时一次 + 每 10 分钟刷新
+            useEffect(() => {
+                const loadSSL = () => {
+                    fetch('/api/ssl/expiry', { credentials: 'include' })
+                        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                        .then(d => setSslInfo(d && d.days_left !== undefined ? d : null))
+                        .catch(() => setSslInfo(null));
+                };
+                loadSSL();
+                const t = setInterval(loadSSL, 10 * 60 * 1000);
+                return () => clearInterval(t);
+            }, []);
 
             const push = (arr, v, max = 20) => { arr.push(v); if (arr.length > max) arr.shift(); };
 
@@ -877,12 +893,41 @@
                                     <Badge status={conn === 'connected' ? 'success' : conn === 'connecting' ? 'processing' : 'error'} />
                                     <Typography.Text className="tb-status" type="secondary">{conn === 'connected' ? (lastUpd ? '已连接 · ' + lastUpd.toLocaleTimeString() : '已连接') : conn === 'connecting' ? '连接中...' : '已断开'}</Typography.Text>
                                 </span>
+                                {sslInfo && (
+                                    <Tooltip title="SSL 证书到期详情">
+                                        <Button size="small" onClick={() => setSslOpen(true)} icon={<UIIcon name="SafetyCertificateOutlined" />}
+                                            style={{ color: sslInfo.days_left <= 7 ? '#ff4d4f' : sslInfo.days_left <= 30 ? '#faad14' : undefined }}>
+                                            <span className="tb-text">证书 {sslInfo.days_left >= 0 ? sslInfo.days_left + ' 天' : '已过期'}</span>
+                                        </Button>
+                                    </Tooltip>
+                                )}
                                 <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
                                     <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
                                 </Tooltip>
                                 <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={onLogout}><span className="tb-text">退出</span></Button>
                             </Space>
                         </div>
+                        {/* SSL 证书详情弹窗 */}
+                        <Modal open={sslOpen} onCancel={() => setSslOpen(false)} footer={null}
+                            title={<span><UIIcon name="SafetyCertificateOutlined" /> SSL 证书信息</span>} width={520}>
+                            {sslInfo ? (
+                                <>
+                                    {sslInfo.days_left <= 7 && <Alert type="error" showIcon style={{ marginBottom: 12 }} message={sslInfo.days_left >= 0 ? `证书仅剩 ${sslInfo.days_left} 天到期，请立即续期！` : '证书已过期，服务将无法访问，请立即处理！'} />}
+                                    {sslInfo.days_left > 7 && sslInfo.days_left <= 30 && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message={`证书将于 ${sslInfo.days_left} 天后到期，建议尽快续期`} />}
+                                    <Descriptions size="small" column={1} bordered items={[
+                                        { key: 'domain', label: '主域名', children: sslInfo.domain },
+                                        { key: 'subject', label: '证书主体', children: sslInfo.subject || '-' },
+                                        { key: 'issuer', label: '颁发者', children: sslInfo.issuer || '-' },
+                                        { key: 'san', label: '覆盖域名', children: (sslInfo.dns_names && sslInfo.dns_names.length ? sslInfo.dns_names.join('、') : '-') },
+                                        { key: 'notbefore', label: '生效时间', children: sslInfo.not_before },
+                                        { key: 'notafter', label: '到期时间', children: <span style={{ color: sslInfo.days_left <= 30 ? '#ff4d4f' : undefined, fontWeight: 600 }}>{sslInfo.not_after}</span> },
+                                        { key: 'daysleft', label: '剩余天数', children: <Tag color={sslInfo.days_left <= 7 ? 'red' : sslInfo.days_left <= 30 ? 'orange' : 'green'}>{sslInfo.days_left >= 0 ? sslInfo.days_left + ' 天' : '已过期 ' + Math.abs(sslInfo.days_left) + ' 天'}</Tag> },
+                                        { key: 'source', label: '检测方式', children: sslInfo.source === 'live' ? '实时握手（当前生效）' : '本地证书文件' },
+                                        { key: 'checkedat', label: '检测时间', children: sslInfo.checked_at }
+                                    ]} />
+                                </>
+                            ) : <Alert type="info" showIcon message="暂未获取到证书信息，请稍后重试" />}
+                        </Modal>
                         <div className="page-wrap">
                             <div className="page-head">
                                 <div>

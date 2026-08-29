@@ -1,0 +1,33 @@
+# 构建上下文排除项：减小镜像体积、避免敏感/无关文件进入镜像
+.git
+.github
+.idea
+.trae
+build
+dist
+docs
+img
+shell
+
+# 文档与说明
+*.md
+LICENSE
+
+# 本地构建产物与脚本
+server-status-linux
+*.exe
+restart-server.sh
+start.sh
+setup_service.sh
+server-status.service
+
+# 备份文件
+*.bak
+*.bak.*
+
+# Docker 自身文件
+Dockerfile
+.dockerignore
+docker-compose.yml
+.env
+.env.example
