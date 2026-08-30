@@ -591,6 +591,30 @@
             box-shadow: var(--shadow-float);
         }
 
+        /* ================= 回到顶部（滚过约一屏浮现；移动端避让新建 FAB） ================= */
+        .pv-backtop {
+            position: fixed;
+            right: 16px;
+            bottom: calc(132px + env(safe-area-inset-bottom));
+            z-index: 24;
+            width: 44px !important;
+            height: 44px !important;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(10px);
+            transition: opacity .2s, transform .2s, visibility .2s;
+        }
+
+        .pv-backtop.show {
+            opacity: 1;
+            visibility: visible;
+            transform: none;
+        }
+
+        @media (min-width: 769px) {
+            .pv-backtop { right: 28px; bottom: 40px; }
+        }
+
         /* ================= 我的卡片：统一方形缩略图 ================= */
         .card-thumb {
             aspect-ratio: 1 / 1;
@@ -2595,6 +2619,15 @@
                 document.body.style.background = isDark ? '#141414' : '#f5f5f5';
             }, [isDark]);
 
+            const [showBackTop, setShowBackTop] = useState(false);
+            useEffect(() => {
+                if (phase !== 'open') return;
+                const onScroll = () => setShowBackTop(window.scrollY > 480);
+                onScroll();
+                window.addEventListener('scroll', onScroll, { passive: true });
+                return () => window.removeEventListener('scroll', onScroll);
+            }, [phase]);
+
             if (phase === 'loading') return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin size="large" /></div>;
             if (phase === 'locked') return (
                 <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
@@ -2670,6 +2703,15 @@
                         {isMobile && (
                             <Button className="pv-fab-mobile" type="primary" shape="circle" icon={<I name="PlusOutlined" />} onClick={() => { setEditing(null); setEditorOpen(true); }} />
                         )}
+                        <Tooltip title="回到顶部">
+                            <Button
+                                className={'pv-backtop' + (showBackTop ? ' show' : '')}
+                                shape="circle"
+                                aria-label="回到顶部"
+                                icon={<I name="VerticalAlignTopOutlined" />}
+                                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                            />
+                        </Tooltip>
                         {isMobile && (
                             <div className="pv-bottom-nav">
                                 {bottomNav.map(b => (
