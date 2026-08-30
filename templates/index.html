@@ -325,20 +325,42 @@
             height: 260px;
             border-radius: 12px;
             overflow: hidden;
-            background: #fff;
+            background: var(--color-surface, #fff);
             box-shadow: 0 8px 30px rgba(0, 0, 0, .16);
-            border: 1px solid rgba(22, 119, 255, .15);
+            border: 1px solid var(--color-border);
             display: flex;
             flex-direction: column;
             transition: all .3s;
         }
 
-        .media-window.zoomed {
-            right: 0 !important;
-            bottom: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
+        /* 全屏：真正的浏览器 Fullscreen API，视频铺满、控制栏悬浮 */
+        .media-window:fullscreen {
+            width: 100%;
+            height: 100%;
             border-radius: 0;
+            border: none;
+            background: #000;
+        }
+
+        .media-window:fullscreen .media-head {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 3;
+            background: rgba(0, 0, 0, .45);
+            color: #fff;
+            border-bottom: none;
+        }
+
+        .media-window:fullscreen .media-head .ant-btn {
+            color: rgba(255, 255, 255, .85);
+        }
+
+        .media-window:fullscreen .media-body video,
+        .media-window:fullscreen .media-body img {
+            width: 100%;
+            height: 100%;
         }
 
         .media-head {
@@ -346,8 +368,8 @@
             align-items: center;
             gap: 8px;
             padding: 8px 12px;
-            background: #fff;
-            color: #1677ff;
+            background: var(--color-surface, #fff);
+            color: var(--color-primary, #1677ff);
             font-size: 13px;
             font-weight: 600;
             border-bottom: 1px solid var(--color-border);
@@ -685,6 +707,7 @@
 
         function Dashboard({ user, onLogout }) {
             const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const [mediaClosed, setMediaClosed] = useState(() => localStorage.getItem('media_closed') === '1');
             const [status, setStatus] = useState(null);
             const [online, setOnline] = useState([]);
             const [onlineCount, setOnlineCount] = useState(0);
@@ -858,6 +881,9 @@
             if (hasPerm('system:log')) navBtns.push(<Button key="logs" icon={<UIIcon name="FileSearchOutlined" />} onClick={() => window.location.href = 'log.html'}>日志</Button>);
             if (hasPerm('files:download')) navBtns.push(<Button key="dl" icon={<UIIcon name="DownloadOutlined" />} onClick={() => window.location.href = 'download.html'}>安全下载</Button>);
             if (hasPerm('user:manage') || hasPerm('role:manage')) navBtns.push(<Button key="rbac" icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => window.location.href = 'rbac.html'}>权限管理</Button>);
+            if (hasPerm('files:view')) navBtns.push(<Button key="mediawin" icon={<UIIcon name="VideoCameraOutlined" />} type={mediaClosed ? 'default' : 'primary'}
+                onClick={() => { const next = !mediaClosed; setMediaClosed(next); localStorage.setItem('media_closed', next ? '1' : '0'); }}
+                title={mediaClosed ? '打开媒体展示小窗' : '关闭媒体展示小窗'}>媒体窗</Button>);
 
             const onlineCols = [
                 { title: 'IP 地址', dataIndex: 'ip' },
@@ -913,10 +939,6 @@
                         </Modal>
                         <div className="page-wrap">
                             <div className="page-head">
-                                <div>
-                                    <div className="ph-title"><UIIcon name="DashboardOutlined" />实时监控</div>
-                                    <div className="ph-sub">服务器核心指标一览，数据来自 WebSocket 实时推送</div>
-                                </div>
                                 <div className="ph-actions">
                                     <Space wrap>
                                         {navBtns}
@@ -970,22 +992,23 @@
                             <Alert type="info" showIcon style={{ marginTop: 12 }}
                                 message={conn !== 'connected' ? '⚠️ WebSocket 连接已断开，正在自动重连，图表暂停更新' : '✅ 实时数据推送中，每 1 秒更新一次'} />
                         </div>
-                        <MediaWindow />
+                        <MediaWindow closed={mediaClosed} onClose={() => { setMediaClosed(true); localStorage.setItem('media_closed', '1'); }} />
                     </div>
                 </ConfigProvider>
             );
         }
 
-        function MediaWindow() {
+        function MediaWindow({ closed, onClose }) {
             const [src, setSrc] = useState(null);
             const [playing, setPlaying] = useState(true);
-            const [zoomed, setZoomed] = useState(false);
+            const [isFs, setIsFs] = useState(false);
             const [volume, setVolume] = useState(() => {
                 const v = parseFloat(localStorage.getItem('media_volume'));
                 return isFinite(v) && v >= 0 && v <= 1 ? v : 0.5;
             });
             const [muted, setMuted] = useState(() => localStorage.getItem('media_sound') !== 'on');
             const videoRef = useRef(null);
+            const rootRef = useRef(null);
             const isVideo = src && /\.(mp4|webm|mov)(\?|$)/i.test(src);
             const fixSrc = (u) => {
                 try {
@@ -1002,10 +1025,11 @@
                     .catch(() => { });
             }, []);
             useEffect(() => {
+                if (closed) return; // 关闭后停止拉取与轮播
                 load();
                 const t = setInterval(load, 80000);
                 return () => clearInterval(t);
-            }, [load]);
+            }, [load, closed]);
             useEffect(() => {
                 const v = videoRef.current;
                 if (!v) return;
@@ -1016,11 +1040,22 @@
             }, [src, playing, volume, muted]);
             useEffect(() => { localStorage.setItem('media_sound', muted ? 'off' : 'on'); }, [muted]);
             useEffect(() => { localStorage.setItem('media_volume', String(volume)); }, [volume]);
+            useEffect(() => {
+                const h = () => setIsFs(!!document.fullscreenElement);
+                document.addEventListener('fullscreenchange', h);
+                return () => document.removeEventListener('fullscreenchange', h);
+            }, []);
+            const toggleFs = () => {
+                if (document.fullscreenElement) document.exitFullscreen();
+                else if (rootRef.current) rootRef.current.requestFullscreen().catch(() => { });
+            };
+
+            if (closed) return null;
 
             return (
-                <div className={'media-window' + (zoomed ? ' zoomed' : '')}>
+                <div ref={rootRef} className="media-window">
                     <div className="media-head">
-                        <span className="m-title"><UIIcon name="PlayCircleOutlined" /> 媒体展示</span>
+                        <span className="m-title"><UIIcon name="VideoCameraOutlined" /> 媒体展示</span>
                         {isVideo && <window.antd.Slider min={0} max={1} step={0.05} value={volume}
                             onChange={v => { setVolume(v); setMuted(v === 0); }}
                             style={{ width: 70, margin: 0 }} tooltip={{ open: false }} />}
@@ -1039,12 +1074,14 @@
                                 }
                                 setMuted(nextMuted);
                             }}
-                            title={muted ? '取消静音' : '静音'}>{muted ? '🔇' : '🔊'}</window.antd.Button>}
-                        <window.antd.Button size="small" type="text" onClick={load} title="刷新">🔄</window.antd.Button>
+                            title={muted ? '取消静音' : '静音'}><UIIcon name={muted ? 'SoundFilled' : 'SoundOutlined'} /></window.antd.Button>}
+                        <window.antd.Button size="small" type="text" onClick={load} title="换一个"><UIIcon name="ReloadOutlined" /></window.antd.Button>
                         {isVideo && <window.antd.Button size="small" type="text"
-                            onClick={() => setPlaying(!playing)} title={playing ? '暂停' : '播放'}>{playing ? '⏸' : '▶'}</window.antd.Button>}
-                        <window.antd.Button size="small" type="text" onClick={() => setZoomed(!zoomed)}
-                            title={zoomed ? '还原' : '放大'}>{zoomed ? '🗕' : '⛶'}</window.antd.Button>
+                            onClick={() => setPlaying(!playing)} title={playing ? '暂停' : '播放'}><UIIcon name={playing ? 'PauseOutlined' : 'CaretRightOutlined'} /></window.antd.Button>}
+                        <window.antd.Button size="small" type="text" onClick={toggleFs}
+                            title={isFs ? '退出全屏' : '全屏'}><UIIcon name={isFs ? 'FullscreenExitOutlined' : 'FullscreenOutlined'} /></window.antd.Button>
+                        <window.antd.Button size="small" type="text" onClick={onClose}
+                            title="关闭（不再自动播放）"><UIIcon name="CloseOutlined" /></window.antd.Button>
                     </div>
                     <div className="media-body" onClick={() => isVideo && setPlaying(!playing)}>
                         {!src ? <span className="placeholder">加载媒体中...</span>
