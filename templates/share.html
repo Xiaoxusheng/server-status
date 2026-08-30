@@ -87,18 +87,10 @@
             color: var(--secondary);
         }
 
-        .share-pw .lock-icon {
-            width: 56px;
-            height: 56px;
-            margin: 0 auto 14px;
-            border-radius: var(--radius);
-            background: var(--color-primary);
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 26px;
-            box-shadow: none;
+        .share-pw .pw-lock {
+            font-size: 24px;
+            color: var(--color-text-tertiary);
+            margin-bottom: 12px;
         }
 
         .share-pw h3 {
@@ -234,6 +226,7 @@
     <script>
         (function () {
             var token = window.location.pathname.replace(/^\/card\//, '').replace(/\/$/, '') || '';
+            var cardData = null;
 
             function esc(s) {
                 return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) {
@@ -261,7 +254,7 @@
                 document.getElementById('root').innerHTML =
                     '<div class="share-wrap">' +
                     '  <div class="share-pw">' +
-                    '    <div class="lock-icon">🔒</div>' +
+                    '    <div class="pw-lock">🔒</div>' +
                     '    <h3>\u6b64\u5206\u4eab\u9700\u8981\u5bc6\u7801</h3>' +
                     '    <div class="pw-sub">\u8bf7\u8f93\u5165\u5206\u4eab\u8005\u8bbe\u7f6e\u7684\u8bbf\u95ee\u5bc6\u7801</div>' +
                     '    <input class="ant-input" id="pw" type="password" placeholder="\u8bbf\u95ee\u5bc6\u7801" autocomplete="off" />' +
@@ -283,7 +276,11 @@
                         credentials: 'include',
                         body: JSON.stringify({ password: pw })
                     }).then(function (r) { return r.json(); }).then(function (d) {
-                        if (d && (d.code === 200 || d.code === 0)) load();
+                        if (d && (d.code === 200 || d.code === 0)) {
+                            // cookie 已下发；has_password 恒为 true，重新 load() 会回到密码页，
+                            // 因此直接用首次拉取的元数据渲染卡片
+                            if (cardData) renderCard(cardData); else load();
+                        }
                         else { err.textContent = '\u5bc6\u7801\u9519\u8bef'; err.style.display = 'block'; btn.disabled = false; btn.textContent = '\u67e5\u770b\u5361\u7247'; }
                     }).catch(function () {
                         err.textContent = '\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u91cd\u8bd5';
@@ -324,6 +321,7 @@
                     .then(function (r) { return r.json(); })
                     .then(function (d) {
                         if (d && (d.code === 200 || d.code === 0) && d.data && !d.data.invalid) {
+                            cardData = d.data;
                             if (d.data.has_password) renderPassword();
                             else renderCard(d.data);
                         } else {

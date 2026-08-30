@@ -1379,7 +1379,15 @@
                 navigator.geolocation.getCurrentPosition(pos => {
                     setGeoLoading(false);
                     const lat = pos.coords.latitude, lng = pos.coords.longitude;
-                    onChange({ location_name: lat.toFixed(4) + ', ' + lng.toFixed(4), latitude: lat, longitude: lng });
+                    // 反向地理编码：GPS 坐标 → 真实地名（城市 · 区县 · 道路），失败回退坐标
+                    fetch('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=zh-CN&lat=' + lat + '&lon=' + lng)
+                        .then(r => r.json())
+                        .then(d => {
+                            const a = (d && d.address) || {};
+                            const name = [a.city || a.town || a.county, a.suburb || a.city_district || a.district, a.road].filter(Boolean).join(' · ');
+                            onChange({ location_name: name || (d && d.display_name) || (lat.toFixed(4) + ', ' + lng.toFixed(4)), latitude: lat, longitude: lng });
+                        })
+                        .catch(() => onChange({ location_name: lat.toFixed(4) + ', ' + lng.toFixed(4), latitude: lat, longitude: lng }));
                 }, () => { setGeoLoading(false); setManual(true); }, { timeout: 8000 });
             };
             const results = search.trim() ? builtinPlaces.filter(p => p.name.includes(search.trim())) : [];
@@ -1590,6 +1598,27 @@
             const fileRef = useRef(null);
             // 同步防重锁：保存进行中时忽略后续触发（状态更新是异步的，快速连点会穿透 loading）
             const savingRef = useRef(false);
+            const contentRef = useRef(null);
+            // Markdown 快捷插入：before/after 包住所选文字，line 为行首前缀
+            const mdWrap = (before, after, ph) => {
+                const node = contentRef.current && contentRef.current.resizableTextArea;
+                const ta = node && node.textArea;
+                if (!ta) return;
+                const start = ta.selectionStart, end = ta.selectionEnd;
+                const sel = content.slice(start, end);
+                const body = sel || ph;
+                setContent(content.slice(0, start) + before + body + after + content.slice(end));
+                requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(start + before.length, start + before.length + body.length); });
+            };
+            const mdLinePrefix = (prefix) => {
+                const node = contentRef.current && contentRef.current.resizableTextArea;
+                const ta = node && node.textArea;
+                if (!ta) return;
+                const pos = ta.selectionStart;
+                const lineStart = content.lastIndexOf(String.fromCharCode(10), pos - 1) + 1;
+                setContent(content.slice(0, lineStart) + prefix + content.slice(lineStart));
+                requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(pos + prefix.length, pos + prefix.length); });
+            };
             // 未入库草稿的 id：选图/录音会自动创建草稿，重试时复用，避免生成多条空手记
             const draftRef = useRef(null);
 
@@ -1747,6 +1776,7 @@
                     <div style={{ maxWidth: 760, margin: '0 auto' }}>
                         <Input size="large" placeholder="标题（可选）" value={title} onChange={e => setTitle(e.target.value)} style={{ marginBottom: 10 }} />
                         <Input.TextArea
+                            ref={contentRef}
                             autoSize={{ minRows: 6, maxRows: 18 }}
                             placeholder={'写点什么…\n支持 Markdown、代码块、Checklist：\n- [x] 修改 Server Status\n- [ ] 测试 ESP32\n- [ ] 检查备份\n\nCtrl + Enter 快速保存'}
                             value={content}
@@ -1765,6 +1795,14 @@
                                 onDrop={e => { e.preventDefault(); setDragging(false); onFiles(e.dataTransfer.files); }}>
                                 <Button icon={<I name="CloudUploadOutlined" />}>拖拽上传</Button>
                             </div>
+                            <span style={{ width: 1, height: 20, background: 'var(--color-border)', margin: '0 2px' }} />
+                            {MD_BUTTONS.map(b => (
+                                <Tooltip key={b.title} title={b.title + '：' + b.hint}>
+                                    <Button size="small" type="text" onClick={() => b.line ? mdLinePrefix(b.line) : mdWrap(b.before, b.after, b.ph)}>
+                                        {b.icon || b.title}
+                                    </Button>
+                                </Tooltip>
+                            ))}
                         </div>
                         {(images.length > 0 || dragging) && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10, minHeight: dragging ? 92 : 0, border: dragging ? '2px dashed #1677ff' : 'none', borderRadius: 8, padding: dragging ? 4 : 0, alignItems: 'center' }}>
@@ -1845,6 +1883,21 @@
             { label: '手机壁纸', ratio: '9:16', w: 1080, h: 1920 },
             { label: '横屏 16:9', ratio: '16:9', w: 1280, h: 720 },
             { label: '横版封面', ratio: '1.91:1', w: 1200, h: 630 }
+        ];
+        // Markdown 快捷按钮：line=true 为行首前缀插入
+        const MD_BUTTONS = [
+            { title: 'H2', hint: '标题', line: '## ' },
+            { title: 'B', hint: '粗体', before: '**', after: '**', ph: '粗体文字' },
+            { title: 'I', hint: '斜体', before: '*', after: '*', ph: '斜体文字' },
+            { title: 'S', hint: '删除线', before: '~~', after: '~~', ph: '删除文字' },
+            { title: '引', hint: '引用', line: '> ' },
+            { title: '•', hint: '无序列表', line: '- ' },
+            { title: '1.', hint: '有序列表', line: '1. ' },
+            { title: '☐', hint: '待办事项', line: '- [ ] ' },
+            { title: '<>', hint: '行内代码', before: '`', after: '`', ph: 'code' },
+            { title: '≡', hint: '代码块', before: String.fromCharCode(96, 96, 96, 10), after: String.fromCharCode(10, 96, 96, 96), ph: 'code' },
+            { title: '↗', hint: '链接', before: '[', after: '](https://)', ph: '链接文字' },
+            { title: '—', hint: '分割线', line: '---' }
         ];
         const CARD_TEMPLATES = [
             { key: 'simple', label: '简洁' },
