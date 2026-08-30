@@ -897,6 +897,21 @@
         }
 
         // ==================== 卡片渲染器（Canvas）====================
+        // 去除 Markdown 语法，用于 canvas 绘制与卡片标题存储
+        const mdStrip = s => String(s == null ? '' : s)
+            .replace(/^#{1,6}\s+/gm, '')
+            .replace(/\*\*([^*]*)\*\*/g, '$1')
+            .replace(/\*([^*\n]*)\*/g, '$1')
+            .replace(/~~([^~]*)~~/g, '$1')
+            .replace(/`([^`]*)`/g, '$1')
+            .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+            .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+            .replace(/^[-*]\s+\[[ xX]\]\s*/gm, '')
+            .replace(/^[-*+]\s+/gm, '')
+            .replace(/^>\s?/gm, '')
+            .replace(/^---+$/gm, '')
+            .trim();
+
         function wrapText(ctx, text, maxW) {
             const lines = [];
             String(text).split('\n').forEach(para => {
@@ -1062,9 +1077,9 @@
             // 内容块测量（自动排版：计算缩放，防止溢出/裁剪）
             let titleLines = [], contentLines = [];
             ctx.font = `700 ${baseF.title}px ${fontFamily}`;
-            if (showTitle && title) titleLines = wrapText(ctx, String(title), maxW);
+            if (showTitle && title) titleLines = wrapText(ctx, mdStrip(title), maxW);
             ctx.font = `400 ${baseF.content}px ${fontFamily}`;
-            if (showContent && content) contentLines = wrapText(ctx, String(content), maxW);
+            if (showContent && content) contentLines = wrapText(ctx, mdStrip(content), maxW);
             const textNeed = () => {
                 let need = 0;
                 if (titleLines.length) need += titleLines.length * baseLH.title + width * 0.016;
@@ -1217,14 +1232,17 @@
             // ==================== 图片模板（上方大图 + 下方文字）====================
             if (template === 'image') {
                 await fillBackground();
-                const imgH = height * 0.5;
                 const imgs = showImages && images ? images : [];
+                // 图片高度随文字量自适应：文字少→图占更大区域，避免大面积留白
+                const textH = textNeed() + height * 0.1;
+                const imgH = imgs.length ? Math.round(Math.min(height * 0.72, Math.max(height * 0.4, height - textH))) : 0;
                 if (imgs.length) {
                     await drawCollage(0, 0, width, imgH, 0);
                     ctx.fillStyle = palette.bg;
                     ctx.fillRect(0, imgH, width, height - imgH);
                 }
-                let y = imgH + height * 0.06;
+                const rest = height - imgH;
+                let y = imgH + Math.max(height * 0.045, (rest - textNeed()) / 2);
                 y = drawText(y);
                 drawBrand();
                 return canvas;
@@ -1291,7 +1309,9 @@
                         if (blob.size > 0) {
                             const name = 'voice-' + Date.now() + (blob.type.includes('mp4') ? '.m4a' : '.webm');
                             const file = new File([blob], name, { type: blob.type });
-                            onSaved(file, secs);
+                            // 用计时起点实时计算时长：闭包里的 secs 是 start() 时刻的旧值（恒 0）
+                            const elapsed = Math.max(1, Math.floor((Date.now() - startSec.current) / 1000));
+                            onSaved(file, elapsed);
                         }
                         setState('idle'); setSecs(0);
                     };
@@ -1374,21 +1394,50 @@
                 });
             };
             const geo = () => {
-                if (!navigator.geolocation) { setManual(true); return; }
+                if (!navigator.geolocation) {
+                    message.warning(window.isSecureContext ? '当前浏览器不支持定位，请手动选择位置' : '手机浏览器要求 HTTPS 连接才能定位，请手动选择位置');
+                    setManual(true);
+                    return;
+                }
                 setGeoLoading(true);
+                // 带超时的 fetch：反向地理编码服务国内直连可能长时间挂起，不能让它卡住定位结果
+                const fetchTimeout = (url, ms) => {
+                    const ctl = new AbortController();
+                    const t = setTimeout(() => ctl.abort(), ms);
+                    return fetch(url, { signal: ctl.signal }).finally(() => clearTimeout(t));
+                };
                 navigator.geolocation.getCurrentPosition(pos => {
                     setGeoLoading(false);
                     const lat = pos.coords.latitude, lng = pos.coords.longitude;
-                    // 反向地理编码：GPS 坐标 → 真实地名（城市 · 区县 · 道路），失败回退坐标
-                    fetch('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=zh-CN&lat=' + lat + '&lon=' + lng)
+                    const fallbackCoord = () => onChange({ location_name: lat.toFixed(4) + ', ' + lng.toFixed(4), latitude: lat, longitude: lng });
+                    const setName = name => onChange({ location_name: name, latitude: lat, longitude: lng });
+                    // 反向地理编码：GPS 坐标 → 真实地名（城市 · 区县 · 道路）
+                    // nominatim 国内手机网络常超时，5s 内无响应回退 BigDataCloud，再失败回退显示坐标
+                    const bdc = () => fetchTimeout('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' + lat + '&longitude=' + lng + '&localityLanguage=zh', 5000)
+                        .then(r => r.json())
+                        .then(d => {
+                            const name = [d.city || d.locality, d.principalSubdivision].filter(Boolean).join(' · ');
+                            if (name) setName(name); else fallbackCoord();
+                        })
+                        .catch(fallbackCoord);
+                    fetchTimeout('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=zh-CN&lat=' + lat + '&lon=' + lng, 5000)
                         .then(r => r.json())
                         .then(d => {
                             const a = (d && d.address) || {};
                             const name = [a.city || a.town || a.county, a.suburb || a.city_district || a.district, a.road].filter(Boolean).join(' · ');
-                            onChange({ location_name: name || (d && d.display_name) || (lat.toFixed(4) + ', ' + lng.toFixed(4)), latitude: lat, longitude: lng });
+                            if (name || (d && d.display_name)) setName(name || d.display_name); else bdc();
                         })
-                        .catch(() => onChange({ location_name: lat.toFixed(4) + ', ' + lng.toFixed(4), latitude: lat, longitude: lng }));
-                }, () => { setGeoLoading(false); setManual(true); }, { timeout: 8000 });
+                        .catch(bdc);
+                }, err => {
+                    setGeoLoading(false);
+                    const why = {
+                        1: '定位权限被拒绝，请在浏览器设置中允许本站使用位置信息',
+                        2: '暂时无法获取位置，请移到开阔处重试',
+                        3: '定位超时，请重试'
+                    }[err && err.code] || '定位失败，请重试';
+                    message.warning(why);
+                    setManual(true);
+                }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
             };
             const results = search.trim() ? builtinPlaces.filter(p => p.name.includes(search.trim())) : [];
             return (
@@ -1703,9 +1752,12 @@
                     tags
                 };
                 try {
-                    const path = note && note.id ? '/api/private/notes/' + note.id : '/api/private/notes';
-                    const d = await api(path, { method: note && note.id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+                    // 选图/录音已静默建过草稿时，改为更新草稿，避免保存时再 POST 出第二条
+                    const id = (note && note.id) || draftRef.current;
+                    const path = id ? '/api/private/notes/' + id : '/api/private/notes';
+                    const d = await api(path, { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
                     if (ok(d)) {
+                        if (d.data && d.data.id) draftRef.current = d.data.id;
                         if (!silent) { message.success('已保存'); onSaved(d.data); }
                         return d.data;
                     }
@@ -2038,7 +2090,7 @@
                         body: JSON.stringify({
                             note_id: note ? note.id : '',
                             template, width: CARD_SIZES[size].w, height: CARD_SIZES[size].h,
-                            title: (note ? (note.title || note.content || '').slice(0, 80) : 'Server Status'),
+                            title: mdStrip(note ? (note.title || note.content || '') : 'Server Status').slice(0, 80) || '未命名卡片',
                             image: b64
                         })
                     });
@@ -2417,7 +2469,7 @@
                                 <div className="card-thumb"><img src={c.url} alt={c.title} loading="lazy" /></div>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, marginTop: 8 }}>
                                     <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title || '未命名卡片'}</div>
+                                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mdStrip(c.title) || '未命名卡片'}</div>
                                         <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
                                             {TEMPLATE_LABEL[c.template] || c.template} · {c.width} × {c.height} · {fmtDate(c.created_at)}
                                         </div>

@@ -234,6 +234,20 @@
                 });
             }
 
+            // 卡片标题可能含 Markdown 语法（旧数据），展示前去掉符号只留文字
+            function stripMd(s) {
+                return String(s == null ? '' : s)
+                    .replace(/^#{1,6}\s+/gm, '')
+                    .replace(/\*\*([^*]*)\*\*/g, '$1')
+                    .replace(/\*([^*
+]*)\*/g, '$1')
+                    .replace(/~~([^~]*)~~/g, '$1')
+                    .replace(/`([^`]*)`/g, '$1')
+                    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+                    .replace(/^>\s?/gm, '')
+                    .trim();
+            }
+
             function renderLoading() {
                 document.getElementById('root').innerHTML =
                     '<div class="share-wrap"><div class="spin"></div></div>';
@@ -300,7 +314,7 @@
                     '<div class="share-wrap">' +
                     '  <div class="share-card">' +
                     '    <img class="card-img" src="/api/share/' + encodeURIComponent(token) + '/image" alt="\u5361\u7247" />' +
-                    (data.title ? '    <div class="card-title">' + esc(data.title) + '</div>' : '') +
+                    (data.title ? '    <div class="card-title">' + esc(stripMd(data.title)) + '</div>' : '') +
                     (allow ? '    <div class="btn-row"><button class="ant-btn primary" id="dl-btn">\u2b07\uFE0F \u4e0b\u8f7d\u56fe\u7247</button></div>' : '') +
                     '    <div class="share-brand">Server Status</div>' +
                     '  </div>' +
