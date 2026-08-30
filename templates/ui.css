@@ -1,0 +1,175 @@
+/* =====================================================================
+   Server Status 全站统一 Design Token 与公共样式
+   所有页面通过 <link rel="stylesheet" href="/ui.css"> 引入。
+   规则：
+   - 颜色/圆角/阴影只允许使用这里的令牌，页面内不得再自定义一套
+   - 圆角等级：--radius-sm 6px(小控件) / --radius 8px(Card) /
+     --radius-lg 10px(Modal/Drawer) / --radius-xl 12px(大型容器)
+   - 阴影仅用于浮层（Modal/Dropdown/Drawer/Popover/浮动控件），
+     普通卡片一律 1px 边框 + 背景色，无阴影
+   ===================================================================== */
+
+html {
+    /* 背景 / 表面 */
+    --color-bg: #f5f5f5;
+    --color-surface: #ffffff;
+
+    /* 文字层级 */
+    --color-text: rgba(0, 0, 0, .88);
+    --color-text-secondary: rgba(0, 0, 0, .65);
+    --color-text-tertiary: rgba(0, 0, 0, .45);
+
+    /* 边框 */
+    --color-border: #e5e6eb;
+    --color-border-strong: #d9d9d9;
+
+    /* 主色（Ant Design 蓝色体系，单色） */
+    --color-primary: #1677ff;
+    --color-primary-hover: #4096ff;
+    --color-primary-bg: #e6f4ff;
+
+    /* 状态色（Ant Design） */
+    --color-success: #52c41a;
+    --color-warning: #faad14;
+    --color-error: #ff4d4f;
+
+    /* 圆角等级 */
+    --radius-sm: 6px;
+    --radius: 8px;
+    --radius-lg: 10px;
+    --radius-xl: 12px;
+
+    /* 阴影（仅浮层使用） */
+    --shadow-overlay: 0 6px 16px rgba(0, 0, 0, .08), 0 0 1px rgba(0, 0, 0, .1);
+    --shadow-float: 0 4px 12px rgba(0, 0, 0, .15);
+
+    /* ---- 旧变量名兼容层：存量页面样式无需改动 ---- */
+    --bg: var(--color-bg);
+    --card: var(--color-surface);
+    --border: var(--color-border);
+    --border-strong: var(--color-border-strong);
+    --text: var(--color-text);
+    --secondary: var(--color-text-tertiary);
+    --primary: var(--color-primary);
+    --primary-hover: var(--color-primary-hover);
+    --ok: var(--color-success);
+    --danger: var(--color-error);
+    --hover: rgba(0, 0, 0, .04);
+    --mark-bg: #fff1b8;
+    --shadow-sm: none;
+
+    color-scheme: light;
+}
+
+html.dark {
+    --color-bg: #141414;
+    --color-surface: #1f1f1f;
+
+    --color-text: rgba(255, 255, 255, .88);
+    --color-text-secondary: rgba(255, 255, 255, .65);
+    --color-text-tertiary: rgba(255, 255, 255, .45);
+
+    --color-border: #303030;
+    --color-border-strong: #434343;
+
+    --color-primary-bg: #111a2c;
+
+    --hover: rgba(255, 255, 255, .06);
+    --mark-bg: #613400;
+    --shadow-overlay: 0 6px 16px rgba(0, 0, 0, .45), 0 0 1px rgba(0, 0, 0, .3);
+    --shadow-float: 0 4px 12px rgba(0, 0, 0, .5);
+
+    color-scheme: dark;
+}
+
+/* ---- 通用元素基线 ---- */
+html,
+body {
+    margin: 0;
+    background: var(--color-bg);
+}
+
+body {
+    color: var(--color-text);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+}
+
+* { box-sizing: border-box; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border-strong); border-radius: 4px; }
+
+/* ---- 顶栏品牌 Logo：单色主色方块，不用渐变 ---- */
+.brand-logo {
+    width: 30px;
+    height: 30px;
+    border-radius: var(--radius-sm);
+    background: var(--color-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 16px;
+    flex: 0 0 30px;
+}
+
+/* ---- 页头（标题 + 副标题 + 操作区）---- */
+.page-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.page-head .ph-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--color-text);
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-head .ph-sub {
+    font-size: 13px;
+    color: var(--color-text-tertiary);
+    margin-top: 2px;
+}
+
+.page-head .ph-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ---- 状态点：克制的小圆点 + 次要文字，不做彩色胶囊 ---- */
+.status-dot {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+}
+
+.status-dot::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-text-tertiary);
+    flex: 0 0 6px;
+}
+
+.status-dot.ok::before { background: var(--color-success); }
+.status-dot.warn::before { background: var(--color-warning); }
+.status-dot.err::before { background: var(--color-error); }
+
+/* ---- 数值等宽（统计/时间刷新不跳动）---- */
+.tnum { font-variant-numeric: tabular-nums; }

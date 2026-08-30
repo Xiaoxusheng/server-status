@@ -7,65 +7,9 @@
     <meta name="robots" content="noindex,nofollow">
     <title>私人空间</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="stylesheet" href="/ui.css">
     <style>
-        /* ================= 设计令牌：与主面板（index.html）同一套 Design Token ================= */
-        html {
-            --bg: #f5f5f5;
-            --card: #ffffff;
-            --border: #f0f0f0;
-            --border-strong: #d9d9d9;
-            --text: rgba(0, 0, 0, .88);
-            --secondary: rgba(0, 0, 0, .45);
-            --tertiary: rgba(0, 0, 0, .35);
-            --primary: #1677ff;
-            --primary-hover: #4096ff;
-            --ok: #52c41a;
-            --danger: #ff4d4f;
-            --hover: rgba(0, 0, 0, .04);
-            --mark-bg: #fff1b8;
-            --shadow-sm: 0 1px 2px rgba(0, 0, 0, .04);
-            --shadow-md: 0 6px 20px rgba(0, 0, 0, .08);
-            --accent-grad: linear-gradient(135deg, #1677ff 0%, #722ed1 100%);
-            color-scheme: light;
-        }
-
-        html.dark {
-            --bg: #141414;
-            --card: #1f1f1f;
-            --border: #303030;
-            --border-strong: #434343;
-            --text: rgba(255, 255, 255, .88);
-            --secondary: rgba(255, 255, 255, .45);
-            --tertiary: rgba(255, 255, 255, .35);
-            --primary: #1677ff;
-            --primary-hover: #4096ff;
-            --hover: rgba(255, 255, 255, .06);
-            --mark-bg: #613400;
-            --shadow-sm: 0 1px 2px rgba(0, 0, 0, .25);
-            --shadow-md: 0 6px 20px rgba(0, 0, 0, .45);
-            color-scheme: dark;
-        }
-
-        html, body, #root { margin: 0; min-height: 100%; }
-
-        body {
-            background: var(--bg);
-            color: var(--text);
-            -webkit-font-smoothing: antialiased;
-            -webkit-tap-highlight-color: transparent;
-            overscroll-behavior-y: none;
-        }
-
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
-
-        * { box-sizing: border-box; }
-
-        @keyframes pv-fade-up {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: none; }
-        }
+        /* 页面私有样式只保留布局；颜色/圆角/阴影一律使用 ui.css 令牌 */
 
         .pv-root {
             min-height: 100vh;
@@ -79,11 +23,9 @@
             align-items: center;
             gap: 12px;
             padding: 0 20px;
-            min-height: 56px;
-            background: color-mix(in srgb, var(--card) 86%, transparent);
-            -webkit-backdrop-filter: saturate(1.4) blur(10px);
-            backdrop-filter: saturate(1.4) blur(10px);
-            border-bottom: 1px solid var(--border);
+            min-height: 54px;
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
             position: sticky;
             top: 0;
             z-index: 20;
@@ -92,25 +34,16 @@
         .pv-topbar .pv-brand {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             font-weight: 600;
             font-size: 15px;
-            color: var(--text);
+            color: var(--color-text);
             white-space: nowrap;
         }
 
-        .pv-medallion {
-            width: 30px;
-            height: 30px;
-            border-radius: 9px;
-            background: var(--accent-grad);
-            color: #fff;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 15px;
-            box-shadow: 0 2px 8px rgba(22, 119, 255, .35);
-            flex: 0 0 30px;
+        .pv-topbar .pv-brand .pv-lock-icon {
+            color: var(--color-primary);
+            font-size: 16px;
         }
 
         .pv-topbar .pv-search { flex: 1; max-width: 360px; margin-left: auto; }
@@ -118,151 +51,86 @@
         .pv-topbar .pv-actions {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
             margin-left: 12px;
-        }
-
-        .pv-status {
-            font-size: 12px;
-            color: var(--ok);
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            white-space: nowrap;
-            background: rgba(82, 196, 26, .1);
-            border: 1px solid rgba(82, 196, 26, .25);
-            border-radius: 999px;
-            padding: 3px 10px;
-        }
-
-        .pv-status .pv-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--ok);
-            box-shadow: 0 0 0 3px rgba(82, 196, 26, .15);
         }
 
         /* ================= 内容区 ================= */
         .pv-body {
             flex: 1;
             width: 100%;
-            max-width: 920px;
+            max-width: 1440px;
             margin: 0 auto;
             padding: 20px 24px 64px;
-        }
-
-        @media (min-width: 1500px) {
-            .pv-body { max-width: 1040px; }
         }
 
         .pv-tabs .ant-tabs-nav { margin-bottom: 16px; }
         .pv-tabs .ant-tabs-tab { font-size: 14px; padding-top: 6px; }
 
-        /* ================= 悬浮新建按钮 ================= */
-        .pv-fab {
-            position: fixed;
-            right: 24px;
-            bottom: 28px;
-            z-index: 30;
-            background: var(--accent-grad);
-            border: 0;
-            box-shadow: 0 6px 18px rgba(22, 119, 255, .4);
+        /* ================= 时间线（阅读宽度内） ================= */
+        .tl-wrap {
+            max-width: 900px;
+            margin: 0 auto;
         }
 
-        .pv-fab:hover { background: var(--accent-grad) !important; filter: brightness(1.08); }
-
-        .pv-fab-mobile {
-            position: fixed;
-            right: 16px;
-            bottom: calc(78px + env(safe-area-inset-bottom));
-            z-index: 30;
-            width: 54px !important;
-            height: 54px !important;
-            border: 0;
-            background: var(--accent-grad);
-            box-shadow: 0 6px 18px rgba(22, 119, 255, .45);
-        }
-
-        .pv-fab-mobile:hover { background: var(--accent-grad) !important; filter: brightness(1.08); }
-
-        /* ================= 时间线（日期导航轨 + 卡片流） ================= */
         .tl-day {
             position: relative;
             margin-bottom: 24px;
-            padding-left: 22px;
+            padding-left: 20px;
         }
 
         .tl-day::before {
             content: '';
             position: absolute;
-            left: 5px;
-            top: 30px;
+            left: 4px;
+            top: 22px;
             bottom: -4px;
-            width: 2px;
-            border-radius: 1px;
-            background: var(--border);
+            width: 1px;
+            background: var(--color-border);
         }
 
-        .tl-day:last-child::before { bottom: auto; height: calc(100% - 30px); }
+        .tl-day:last-child::before { bottom: auto; height: calc(100% - 22px); }
 
         .tl-day::after {
             content: '';
             position: absolute;
             left: 0;
-            top: 12px;
-            width: 12px;
-            height: 12px;
+            top: 8px;
+            width: 9px;
+            height: 9px;
             border-radius: 50%;
-            background: var(--accent-grad);
-            box-shadow: 0 0 0 3px var(--bg);
+            background: var(--color-primary);
+            box-shadow: 0 0 0 3px var(--color-bg);
         }
 
         .tl-day-title {
-            position: sticky;
-            top: 68px;
-            z-index: 5;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
             margin: 0 0 12px;
-            padding: 5px 14px;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
-            color: var(--text);
-            background: color-mix(in srgb, var(--card) 88%, transparent);
-            -webkit-backdrop-filter: blur(8px);
-            backdrop-filter: blur(8px);
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            box-shadow: var(--shadow-sm);
+            color: var(--color-text);
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
         }
 
         .tl-day-title .tl-date,
         .tl-day-title .tl-count {
             font-size: 12px;
-            color: var(--tertiary);
+            color: var(--color-text-tertiary);
             font-weight: 400;
             font-variant-numeric: tabular-nums;
         }
 
         /* ================= 手记卡片 ================= */
         .note-card {
-            margin-bottom: 14px;
-            border-radius: 14px !important;
-            border: 1px solid var(--border) !important;
-            box-shadow: var(--shadow-sm);
-            transition: box-shadow .18s ease, border-color .18s ease, transform .18s ease;
-            animation: pv-fade-up .25s ease both;
+            margin-bottom: 12px;
+            border-radius: var(--radius);
+            transition: border-color .15s ease;
         }
 
-        .note-card:hover {
-            border-color: rgba(22, 119, 255, .4) !important;
-            box-shadow: var(--shadow-md);
-            transform: translateY(-1px);
-        }
+        .note-card:hover { border-color: var(--color-border-strong); }
 
-        .note-card .ant-card-body { padding: 14px 18px 12px; }
+        .note-card .ant-card-body { padding: 14px 16px 12px; }
 
         .note-meta {
             display: flex;
@@ -274,35 +142,25 @@
 
         .note-time {
             font-size: 12px;
-            color: var(--secondary);
+            color: var(--color-text-tertiary);
             font-variant-numeric: tabular-nums;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
         }
 
         .note-loc {
             font-size: 12px;
-            color: var(--primary);
+            color: var(--color-primary);
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            cursor: pointer;
             max-width: 55%;
-            padding: 2px 10px;
-            border-radius: 999px;
-            background: rgba(22, 119, 255, .08);
-            transition: background .15s;
         }
-
-        .note-loc:hover { background: rgba(22, 119, 255, .16); }
 
         .note-loc .nl-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         .note-title {
             font-size: 16px;
             font-weight: 600;
-            color: var(--text);
+            color: var(--color-text);
             margin: 8px 0 2px;
             line-height: 1.45;
         }
@@ -310,7 +168,7 @@
         .note-content {
             font-size: 14px;
             line-height: 1.7;
-            color: var(--text);
+            color: var(--color-text);
             margin-top: 2px;
             word-break: break-word;
         }
@@ -319,8 +177,8 @@
 
         .note-content pre {
             background: var(--hover);
-            border: 1px solid var(--border);
-            border-radius: 8px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
             padding: 10px 12px;
             overflow-x: auto;
             font-size: 12.5px;
@@ -338,11 +196,11 @@
         .note-content blockquote {
             margin: 6px 0;
             padding: 2px 0 2px 12px;
-            border-left: 3px solid var(--primary);
-            color: var(--secondary);
+            border-left: 3px solid var(--color-border-strong);
+            color: var(--color-text-secondary);
         }
 
-        .note-content .ck { display: inline-block; margin-right: 6px; color: var(--primary); }
+        .note-content .ck { display: inline-block; margin-right: 6px; color: var(--color-primary); }
 
         .note-content mark,
         .note-title mark,
@@ -363,7 +221,7 @@
 
         .note-imgs .ni {
             position: relative;
-            border-radius: 10px;
+            border-radius: var(--radius-sm);
             overflow: hidden;
             cursor: zoom-in;
             background: var(--hover);
@@ -386,27 +244,26 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(0, 0, 0, .5);
+            background: rgba(0, 0, 0, .45);
             color: #fff;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 600;
         }
 
         .note-tags { margin-top: 10px; }
         .note-audio { margin-top: 10px; }
 
-        /* 卡片操作区：分隔线 + 静默文字按钮，移动端等宽铺满 */
         .note-actions {
             margin-top: 12px;
             padding-top: 10px;
-            border-top: 1px solid var(--border);
+            border-top: 1px solid var(--color-border);
             display: flex;
             justify-content: flex-end;
             gap: 4px;
         }
 
         /* ================= 编辑器 Drawer ================= */
-        .pv-editor .ant-drawer-header { border-bottom-color: var(--border); }
+        .pv-editor .ant-drawer-header { border-bottom-color: var(--color-border); }
         .pv-editor .ant-drawer-body { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
 
         .pv-editor-toolbar {
@@ -420,9 +277,9 @@
             position: relative;
             width: 92px;
             height: 92px;
-            border-radius: 10px;
+            border-radius: var(--radius-sm);
             overflow: hidden;
-            border: 1px solid var(--border);
+            border: 1px solid var(--color-border);
         }
 
         .pv-img-item img { width: 100%; height: 100%; object-fit: cover; }
@@ -433,13 +290,13 @@
         .pv-upload-box {
             width: 92px;
             height: 92px;
-            border: 1px dashed var(--border-strong);
-            border-radius: 10px;
+            border: 1px dashed var(--color-border-strong);
+            border-radius: var(--radius-sm);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: var(--secondary);
+            color: var(--color-text-tertiary);
             cursor: pointer;
             font-size: 12px;
             gap: 4px;
@@ -447,14 +304,14 @@
             transition: border-color .2s, color .2s;
         }
 
-        .pv-upload-box:hover { border-color: var(--primary); color: var(--primary); }
+        .pv-upload-box:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
-        .pv-loc-tip { font-size: 12px; color: var(--secondary); margin-top: 4px; }
+        .pv-loc-tip { font-size: 12px; color: var(--color-text-tertiary); margin-top: 4px; }
 
         /* ================= 卡片生成器 ================= */
         .cg-modal .ant-modal-content { overflow: hidden; }
         .cg-modal .ant-modal-body { padding: 0 20px 8px; }
-        .cg-modal .ant-modal-footer { padding: 12px 20px; margin: 0; border-top: 1px solid var(--border); }
+        .cg-modal .ant-modal-footer { padding: 12px 20px; margin: 0; border-top: 1px solid var(--color-border); }
 
         .cg-layout { display: flex; gap: 20px; min-height: 520px; }
 
@@ -474,7 +331,7 @@
         .cg-label {
             font-size: 13px;
             font-weight: 600;
-            color: var(--text);
+            color: var(--color-text);
             margin-bottom: 8px;
             display: flex;
             align-items: center;
@@ -482,7 +339,7 @@
             gap: 8px;
         }
 
-        .cg-label .cg-sub { font-size: 12px; font-weight: 400; color: var(--secondary); }
+        .cg-label .cg-sub { font-size: 12px; font-weight: 400; color: var(--color-text-tertiary); }
 
         .cg-tpl-row { display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -501,9 +358,9 @@
         .cg-stage {
             flex: 1;
             min-height: 540px;
-            border-radius: 14px;
-            border: 1px solid var(--border);
-            background: var(--bg);
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--color-border);
+            background: var(--color-bg);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -513,8 +370,8 @@
         }
 
         .cg-stage canvas {
-            box-shadow: 0 10px 34px rgba(0, 0, 0, .22);
-            border-radius: 8px;
+            box-shadow: var(--shadow-overlay);
+            border-radius: var(--radius-sm);
             background: #ffffff;
             display: block;
         }
@@ -526,25 +383,25 @@
             bottom: 10px;
             font-size: 12px;
             color: #faad14;
-            background: rgba(0, 0, 0, .07);
+            background: rgba(0, 0, 0, .05);
             border-radius: 4px;
             padding: 2px 10px;
             white-space: nowrap;
             z-index: 2;
         }
 
-        html.dark .cg-fit-hint { background: rgba(255, 255, 255, .1); }
+        html.dark .cg-fit-hint { background: rgba(255, 255, 255, .08); }
 
         .cg-zoom { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; }
 
-        .cg-ratio { font-size: 12px; color: var(--secondary); margin-top: 6px; text-align: center; }
+        .cg-ratio { font-size: 12px; color: var(--color-text-tertiary); margin-top: 6px; text-align: center; }
 
         .cg-info-row { display: flex; flex-wrap: wrap; gap: 4px 14px; }
         .cg-info-row .ant-checkbox-wrapper { margin-inline-start: 0; }
 
         .cg-footer-left { margin-right: auto; display: inline-flex; align-items: center; gap: 8px; }
 
-        .cg-success { color: var(--ok); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+        .cg-success { color: var(--color-success); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 
         body.pv-card-gen .ant-float-btn,
         body.pv-card-gen [class*="float-btn"],
@@ -583,7 +440,7 @@
         .share-line { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 
         /* ================= 标签页 ================= */
-        .pv-tags-head { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
+        .pv-tags-head { font-size: 16px; font-weight: 600; color: var(--color-text); margin-bottom: 12px; }
 
         .pv-tag-grid {
             display: grid;
@@ -593,104 +450,88 @@
         }
 
         .pv-tag-card {
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            background: var(--card);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            background: var(--color-surface);
             padding: 12px 14px;
             cursor: pointer;
-            transition: border-color .2s, box-shadow .2s, transform .2s;
+            transition: border-color .15s, background .15s;
         }
 
-        .pv-tag-card:hover {
-            border-color: rgba(22, 119, 255, .4);
-            box-shadow: var(--shadow-md);
-            transform: translateY(-1px);
-        }
+        .pv-tag-card:hover { border-color: var(--color-border-strong); }
 
-        .pv-tag-card.active { border-color: var(--primary); background: rgba(22, 119, 255, .06); }
+        .pv-tag-card.active { border-color: var(--color-primary); background: var(--color-primary-bg); }
 
         .pv-tag-card .tc-name {
             font-size: 14px;
             font-weight: 600;
-            color: var(--text);
+            color: var(--color-text);
             display: flex;
             align-items: center;
             gap: 6px;
         }
 
-        .pv-tag-card .tc-count { font-size: 12px; color: var(--secondary); margin-top: 4px; }
+        .pv-tag-card .tc-count { font-size: 12px; color: var(--color-text-tertiary); margin-top: 4px; }
 
-        /* ================= 我的卡片 ================= */
+        /* ================= 我的卡片（网格按断点 4/3/2/1 列，按图片比例自然布局） ================= */
         .pv-cards-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
 
-        .pv-cards-head h3 { font-size: 16px; font-weight: 600; color: var(--text); margin: 0; }
+        .pv-cards-head h3 { font-size: 16px; font-weight: 600; color: var(--color-text); margin: 0; }
 
-        .pv-cards-head .pv-cards-sub { font-size: 12px; color: var(--secondary); }
+        .pv-cards-head .pv-cards-sub { font-size: 12px; color: var(--color-text-tertiary); }
 
         .card-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            grid-template-columns: repeat(1, 1fr);
             gap: 16px;
         }
+
+        @media (min-width: 768px) { .card-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 1200px) { .card-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (min-width: 1600px) { .card-grid { grid-template-columns: repeat(4, 1fr); } }
 
         .card-grid .card-item { min-width: 0; }
 
         .card-grid .card-item img {
             width: 100%;
             height: auto;
-            border-radius: 12px;
-            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            border: 1px solid var(--color-border);
             display: block;
-            background: #fff;
-            transition: box-shadow .2s, transform .2s;
+            background: var(--color-surface);
         }
 
-        .card-grid .card-item img:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+        .card-item-more { display: flex; justify-content: flex-end; margin-top: 4px; }
 
-        .card-item-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-
-        /* ================= 门禁页（密码验证） ================= */
+        /* ================= 门禁页（安全工具风格，克制） ================= */
         .pv-gate {
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 16px;
-            background:
-                radial-gradient(1000px 500px at 15% -10%, rgba(22, 119, 255, .10), transparent 60%),
-                radial-gradient(900px 500px at 110% 110%, rgba(114, 46, 209, .10), transparent 60%),
-                var(--bg);
+            background: var(--color-bg);
         }
 
         .pv-gate-card {
             width: 100%;
-            max-width: 380px;
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            box-shadow: var(--shadow-md);
-            padding: 36px 28px 24px;
+            max-width: 400px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-xl);
+            padding: 32px 28px 24px;
             text-align: center;
-            animation: pv-fade-up .3s ease both;
         }
 
-        .pv-gate-medallion {
-            width: 64px;
-            height: 64px;
-            margin: 0 auto 16px;
-            border-radius: 20px;
-            background: var(--accent-grad);
-            color: #fff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            box-shadow: 0 8px 24px rgba(22, 119, 255, .35);
+        .pv-gate-icon {
+            color: var(--color-text-tertiary);
+            font-size: 24px;
+            margin-bottom: 12px;
         }
 
-        .pv-gate-title { font-size: 20px; font-weight: 600; color: var(--text); margin: 0 0 4px; }
+        .pv-gate-title { font-size: 18px; font-weight: 600; color: var(--color-text); margin: 0 0 4px; }
 
-        .pv-gate-sub { font-size: 13px; color: var(--secondary); margin-bottom: 22px; }
+        .pv-gate-sub { font-size: 13px; color: var(--color-text-tertiary); margin-bottom: 20px; }
 
         .pv-gate-back { margin-top: 16px; }
 
@@ -702,10 +543,8 @@
             bottom: 0;
             z-index: 25;
             display: flex;
-            background: color-mix(in srgb, var(--card) 90%, transparent);
-            -webkit-backdrop-filter: saturate(1.4) blur(12px);
-            backdrop-filter: saturate(1.4) blur(12px);
-            border-top: 1px solid var(--border);
+            background: var(--color-surface);
+            border-top: 1px solid var(--color-border);
             padding-bottom: env(safe-area-inset-bottom);
         }
 
@@ -715,7 +554,7 @@
             background: transparent;
             padding: 9px 0 7px;
             font-size: 11px;
-            color: var(--secondary);
+            color: var(--color-text-tertiary);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -726,19 +565,17 @@
             transition: color .15s;
         }
 
-        .pv-bottom-nav button .anticon { font-size: 19px; transition: transform .15s; }
+        .pv-bottom-nav button .anticon { font-size: 19px; }
 
-        .pv-bottom-nav button.active { color: var(--primary); font-weight: 500; }
-        .pv-bottom-nav button.active .anticon { transform: translateY(-1px) scale(1.08); }
+        .pv-bottom-nav button.active { color: var(--color-primary); font-weight: 500; }
 
         .pv-bottom-nav button.active::after {
             content: '';
             position: absolute;
             top: 0;
-            width: 28px;
-            height: 3px;
-            border-radius: 0 0 3px 3px;
-            background: var(--accent-grad);
+            width: 24px;
+            height: 2px;
+            background: var(--color-primary);
         }
 
         /* ================= 响应式 ================= */
@@ -749,8 +586,6 @@
                 row-gap: 8px;
             }
 
-            .pv-topbar .pv-brand { font-size: 15px; }
-
             .pv-topbar .pv-search {
                 order: 3;
                 max-width: 100%;
@@ -759,17 +594,14 @@
                 flex: none;
             }
 
-            .pv-status { padding: 2px 8px; }
-
             .pv-body { padding: 14px 12px calc(96px + env(safe-area-inset-bottom)); }
 
             .pv-tabs { display: none; }
 
-            /* 时间线：导航轨收窄、日期条不再吸附（顶栏太高） */
-            .tl-day { padding-left: 16px; margin-bottom: 18px; }
-            .tl-day::before { left: 4px; top: 26px; }
-            .tl-day::after { top: 10px; width: 9px; height: 9px; left: 0; box-shadow: 0 0 0 3px var(--bg); }
-            .tl-day-title { position: static; padding: 4px 12px; }
+            .tl-wrap { max-width: 100%; }
+            .tl-day { padding-left: 14px; margin-bottom: 18px; }
+            .tl-day::before { left: 3px; top: 20px; }
+            .tl-day::after { top: 7px; width: 7px; height: 7px; box-shadow: 0 0 0 3px var(--color-bg); }
 
             .note-card .ant-card-body { padding: 13px 14px 11px; }
             .note-imgs.n1 .ni, .note-imgs.n1 img { max-height: 300px; }
@@ -777,21 +609,14 @@
             .note-imgs.n3 .ni:nth-child(2),
             .note-imgs.n3 .ni:nth-child(3) { min-height: 72px; }
 
-            /* 操作区：两个主操作等宽铺满，触控友好 */
             .note-actions { gap: 8px; }
             .note-actions .ant-btn { flex: 1; margin: 0; }
-
-            
 
             .pv-tag-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
         }
 
         @media (min-width: 769px) {
             .pv-bottom-nav { display: none; }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-            .note-card, .pv-gate-card, .pv-mem-card { animation: none; }
         }
     </style>
     <script>
@@ -1694,7 +1519,7 @@
                 return <Empty description="还没有手记，点击右下角开始记录" style={{ marginTop: 60 }} />;
             }
             return (
-                <div>
+                <div className="tl-wrap">
                     {groups.map(g => {
                         const dateText = g.key.replace(/-/g, '.');
                         const label = dayLabel(g.key);
@@ -2499,21 +2324,40 @@
                         {cards.map(c => (
                             <div className="card-item" key={c.id}>
                                 <img src={c.url} alt={c.title} loading="lazy" />
-                                <div style={{ marginTop: 6, fontSize: 13, color: 'rgba(0,0,0,.85)' }}>{c.title || '未命名卡片'}</div>
-                                <div style={{ fontSize: 12, color: 'rgba(0,0,0,.45)' }}>
-                                    {TEMPLATE_LABEL[c.template] || c.template} · {c.width} × {c.height} · {fmtDate(c.created_at)}
-                                </div>
-                                <div className="card-item-actions">
-                                    <Button size="small" icon={<I name="DownloadOutlined" />} onClick={() => saveCard(c)}>保存</Button>
-                                    <Button size="small" icon={<I name="CopyOutlined" />} onClick={() => copyCard(c)}>复制</Button>
-                                    <Button size="small" icon={<I name="ShareAltOutlined" />} onClick={() => setShareCard(c)}>分享</Button>
-                                    <Popconfirm title="删除这张卡片？相关分享会立即失效。" onConfirm={async () => {
-                                        const d = await api('/api/private/cards/' + c.id, { method: 'DELETE' });
-                                        if (ok(d)) { message.success('卡片已删除'); load(); }
-                                        else message.error('删除失败');
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, marginTop: 8 }}>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title || '未命名卡片'}</div>
+                                        <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
+                                            {TEMPLATE_LABEL[c.template] || c.template} · {c.width} × {c.height} · {fmtDate(c.created_at)}
+                                        </div>
+                                    </div>
+                                    <Dropdown trigger={['click']} menu={{
+                                        items: [
+                                            { key: 'save', label: '保存图片', icon: <I name="DownloadOutlined" /> },
+                                            { key: 'copy', label: '复制图片', icon: <I name="CopyOutlined" /> },
+                                            { key: 'share', label: '分享', icon: <I name="ShareAltOutlined" /> },
+                                            { type: 'divider' },
+                                            { key: 'delete', label: '删除', icon: <I name="DeleteOutlined" />, danger: true }
+                                        ], onClick: ({ key }) => {
+                                            if (key === 'save') saveCard(c);
+                                            if (key === 'copy') copyCard(c);
+                                            if (key === 'share') setShareCard(c);
+                                            if (key === 'delete') {
+                                                Modal.confirm({
+                                                    title: '删除这张卡片？',
+                                                    content: '相关分享链接会立即失效，且无法恢复。',
+                                                    okText: '删除', okType: 'danger', cancelText: '取消',
+                                                    onOk: async () => {
+                                                        const d = await api('/api/private/cards/' + c.id, { method: 'DELETE' });
+                                                        if (ok(d)) { message.success('卡片已删除'); load(); }
+                                                        else message.error('删除失败');
+                                                    }
+                                                });
+                                            }
+                                        }
                                     }}>
-                                        <Button size="small" danger icon={<I name="DeleteOutlined" />}>删除</Button>
-                                    </Popconfirm>
+                                        <Button size="small" type="text" icon={<I name="MoreOutlined" />} />
+                                    </Dropdown>
                                 </div>
                             </div>
                         ))}
@@ -2543,7 +2387,7 @@
             return (
                 <div className="pv-gate">
                     <div className="pv-gate-card">
-                        <div className="pv-gate-medallion"><I name="LockOutlined" /></div>
+                        <div className="pv-gate-icon"><I name="LockOutlined" /></div>
                         <div className="pv-gate-title">私人空间</div>
                         <div className="pv-gate-sub">请输入访问密码继续</div>
                         <Input.Password
@@ -2644,7 +2488,7 @@
                 <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
                     <div className="pv-root" style={{ background: isDark ? '#141414' : '#f5f5f5' }}>
                         <div className="pv-topbar">
-                            <div className="pv-brand"><span className="pv-medallion"><I name="LockOutlined" /></span><span>私人空间</span></div>
+                            <div className="pv-brand"><I name="LockOutlined" className="pv-lock-icon" /><span>Server Status / 私人空间</span></div>
                             <Input.Search
                                 className="pv-search"
                                 placeholder="搜索标题 / 正文 / 标签 / 地点"
@@ -2654,7 +2498,7 @@
                                 onSearch={q => loadNotes(q || '')}
                             />
                             <div className="pv-actions">
-                                <span className="pv-status"><i className="pv-dot" /> 已解锁</span>
+                                <span className="status-dot ok">已解锁</span>
                                 <Button size="small" onClick={async () => {
                                     await api('/api/private/lock', { method: 'POST' });
                                     setPhase('locked');
