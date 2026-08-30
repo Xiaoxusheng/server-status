@@ -117,16 +117,23 @@ type TrojanClient struct {
 
 var trojanClient *TrojanClient
 
-// TrojanCredential 存储 Trojan 用户明文密码（仅在本地安全文件中，不向外部泄露）
+// TrojanCredential 存储 Trojan 用户档案：密码明文 + 限速/IP 限额。
+// 它是 Trojan-Go 重启后恢复用户的唯一数据源（v0.10.6 用户表在内存里，重启即清空）。
 type TrojanCredential struct {
-	Hash     string `json:"hash"`
-	Password string `json:"password"`
+	Hash          string `json:"hash"`
+	Password      string `json:"password"`
+	IPLimit       int32  `json:"ip_limit,omitempty"`
+	UploadLimit   uint64 `json:"upload_limit,omitempty"`
+	DownloadLimit uint64 `json:"download_limit,omitempty"`
 }
 
 // TrojanCredentialStore 凭据存储文件结构
 type TrojanCredentialStore struct {
 	Credentials []TrojanCredential `json:"credentials"`
 }
+
+// trojanCredMu 串行化凭据文件的读改写，避免并发请求与后台恢复流程互相覆盖丢数据
+var trojanCredMu sync.Mutex
 
 // trojanCredentialsFilePath 返回凭据存储文件路径
 func trojanCredentialsFilePath() string {
@@ -177,8 +184,10 @@ func getTrojanCredential(hash string) (string, bool) {
 	return "", false
 }
 
-// setTrojanCredential 添加/更新凭据
+// setTrojanCredential 添加/更新凭据（补录密码场景：已存在的档案保留限额，避免恢复时降级）
 func setTrojanCredential(hash, password string) error {
+	trojanCredMu.Lock()
+	defer trojanCredMu.Unlock()
 	store, err := loadTrojanCredentials()
 	if err != nil {
 		return err
@@ -198,8 +207,58 @@ func setTrojanCredential(hash, password string) error {
 	return saveTrojanCredentials(store)
 }
 
+// upsertTrojanUserRecord 保存完整用户档案（密码 + 限速/IP 限额），供重启后恢复用户
+func upsertTrojanUserRecord(hash, password string, ipLimit int32, uploadLimit, downloadLimit uint64) error {
+	trojanCredMu.Lock()
+	defer trojanCredMu.Unlock()
+	store, err := loadTrojanCredentials()
+	if err != nil {
+		return err
+	}
+	for i := range store.Credentials {
+		if store.Credentials[i].Hash == hash {
+			store.Credentials[i].IPLimit = ipLimit
+			store.Credentials[i].UploadLimit = uploadLimit
+			store.Credentials[i].DownloadLimit = downloadLimit
+			if password != "" {
+				store.Credentials[i].Password = password
+			}
+			return saveTrojanCredentials(store)
+		}
+	}
+	store.Credentials = append(store.Credentials, TrojanCredential{
+		Hash:          hash,
+		Password:      password,
+		IPLimit:       ipLimit,
+		UploadLimit:   uploadLimit,
+		DownloadLimit: downloadLimit,
+	})
+	return saveTrojanCredentials(store)
+}
+
+// updateTrojanUserLimits 把限速/IP 限制的变更同步到本地档案（仅更新已记录用户）
+func updateTrojanUserLimits(hash string, ipLimit int32, uploadLimit, downloadLimit uint64) error {
+	trojanCredMu.Lock()
+	defer trojanCredMu.Unlock()
+	store, err := loadTrojanCredentials()
+	if err != nil {
+		return err
+	}
+	for i := range store.Credentials {
+		if store.Credentials[i].Hash == hash {
+			store.Credentials[i].IPLimit = ipLimit
+			store.Credentials[i].UploadLimit = uploadLimit
+			store.Credentials[i].DownloadLimit = downloadLimit
+			return saveTrojanCredentials(store)
+		}
+	}
+	return nil
+}
+
 // deleteTrojanCredential 删除凭据
 func deleteTrojanCredential(hash string) error {
+	trojanCredMu.Lock()
+	defer trojanCredMu.Unlock()
 	store, err := loadTrojanCredentials()
 	if err != nil {
 		return err
@@ -346,6 +405,18 @@ func (c *TrojanClient) refresh() {
 		c.setOffline(err)
 		return
 	}
+	c.mu.RLock()
+	wasConnected := c.status.Connected
+	c.mu.RUnlock()
+	if !wasConnected {
+		// Trojan-Go 刚恢复连接（或面板首次连上）：其用户表存于内存、重启即清空，
+		// 按本地档案对齐——补发缺失用户，并把服务端已有用户记入档案。
+		c.reconcileTrojanUsers(users)
+		// 恢复的用户不在本次快照里，重取一次让状态立即完整
+		if refreshed, listErr := c.listUsers(ctx); listErr == nil {
+			users = refreshed
+		}
+	}
 	var status TrojanStatus
 	status.Enabled = true
 	status.Connected = true
@@ -362,11 +433,82 @@ func (c *TrojanClient) refresh() {
 		status.DownloadTotal += user.DownloadTotal
 	}
 	c.mu.Lock()
-	wasConnected := c.status.Connected
 	c.status = status
 	c.mu.Unlock()
 	if !wasConnected {
 		log.Printf("Trojan-Go API connection restored")
+	}
+}
+
+// reconcileTrojanUsers 在连接恢复时对齐 Trojan-Go 用户表与本地档案（trojanCredMu 全程持有，
+// 防止与并发的用户变更请求互相覆盖）。触发时机仅为离线→在线转换（Trojan-Go 重启或面板冷启动）。
+func (c *TrojanClient) reconcileTrojanUsers(live []TrojanUser) {
+	trojanCredMu.Lock()
+	defer trojanCredMu.Unlock()
+	store, err := loadTrojanCredentials()
+	if err != nil {
+		log.Printf("Trojan 用户档案读取失败，跳过恢复: %v", err)
+		return
+	}
+	byHash := make(map[string]*TrojanCredential, len(store.Credentials))
+	for i := range store.Credentials {
+		byHash[store.Credentials[i].Hash] = &store.Credentials[i]
+	}
+
+	// merge：把服务端已有但本地未记录的用户写入档案（含手动在 trojan-go 侧创建的用户），
+	// 已记录但限额全零而服务端非零的（旧版凭据文件升级），用服务端现值补齐。
+	changed := false
+	for _, u := range live {
+		if rec, ok := byHash[u.Hash]; ok {
+			if rec.IPLimit == 0 && rec.UploadLimit == 0 && rec.DownloadLimit == 0 &&
+				(u.IPLimit != 0 || u.UploadLimit != 0 || u.DownloadLimit != 0) {
+				rec.IPLimit, rec.UploadLimit, rec.DownloadLimit = u.IPLimit, u.UploadLimit, u.DownloadLimit
+				changed = true
+			}
+			continue
+		}
+		store.Credentials = append(store.Credentials, TrojanCredential{
+			Hash:          u.Hash,
+			IPLimit:       u.IPLimit,
+			UploadLimit:   u.UploadLimit,
+			DownloadLimit: u.DownloadLimit,
+		})
+		byHash[u.Hash] = &store.Credentials[len(store.Credentials)-1]
+		changed = true
+	}
+	if changed {
+		if err := saveTrojanCredentials(store); err != nil {
+			log.Printf("Trojan 用户档案保存失败: %v", err)
+		}
+	}
+
+	// restore：本地已记录而服务端缺失的用户重新下发（Add 语义）
+	liveSet := make(map[string]bool, len(live))
+	for _, u := range live {
+		liveSet[u.Hash] = true
+	}
+	restored := 0
+	for _, rec := range store.Credentials {
+		if liveSet[rec.Hash] {
+			continue
+		}
+		restoreCtx, restoreCancel := context.WithTimeout(context.Background(), c.cfg.APITimeout)
+		err := c.setUser(restoreCtx, TrojanUserRequest{
+			Hash:          rec.Hash,
+			IPLimit:       rec.IPLimit,
+			UploadLimit:   rec.UploadLimit,
+			DownloadLimit: rec.DownloadLimit,
+		}, service.SetUsersRequest_Add)
+		restoreCancel()
+		if err != nil {
+			// 已存在等错误按失败记录，下轮离线→在线转换会再次尝试
+			log.Printf("Trojan 用户恢复失败 hash=%s: %v", rec.Hash, err)
+			continue
+		}
+		restored++
+	}
+	if restored > 0 {
+		log.Printf("Trojan 用户已按本地档案恢复: %d 个", restored)
 	}
 }
 
@@ -599,13 +741,26 @@ func trojanUserMutationHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadGateway, "更新 Trojan-Go 用户失败: "+err.Error())
 		return
 	}
-	// 保存凭据（仅创建用户时保存密码）
-	if operation == service.SetUsersRequest_Add && req.Password != "" {
-		hash := trojanHash(req.Password)
-		if err := setTrojanCredential(hash, req.Password); err != nil {
+	// 保存完整档案（密码 + 限额），作为 Trojan-Go 重启后的恢复数据源
+	if operation == service.SetUsersRequest_Add {
+		hash := req.Hash
+		if hash == "" {
+			hash = trojanHash(req.Password)
+		}
+		if err := upsertTrojanUserRecord(hash, req.Password, req.IPLimit, req.UploadLimit, req.DownloadLimit); err != nil {
 			log.Printf("Trojan credential save failed: %v", err)
 		} else {
 			log.Printf("Trojan user created: hash=%s", hash)
+		}
+	}
+	// 修改限速/IP 限制时同步到本地档案，保证恢复时使用最新限额
+	if operation == service.SetUsersRequest_Modify {
+		hash := req.Hash
+		if hash == "" {
+			hash = trojanHash(req.Password)
+		}
+		if err := updateTrojanUserLimits(hash, req.IPLimit, req.UploadLimit, req.DownloadLimit); err != nil {
+			log.Printf("Trojan limits persist failed: %v", err)
 		}
 	}
 	// 删除用户时同步删除凭据

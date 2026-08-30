@@ -288,7 +288,11 @@ GET  /api/trojan/users/{hash}/singbox/download       # 下载 sing-box
 
 - 创建用户时，`server-status` 在 `trojan_credentials.json`（与 `private_notes.json` 同目录，权限 `0600`）保存 `hash → 明文密码` 的安全映射；
 - 密码**绝不**进入普通用户列表、Dashboard WebSocket、日志、URL 参数或 HTML 源码；仅在上述受保护连接 API 中返回；
-- 删除用户同步删除对应凭据；编辑限速不触碰凭据；
+- 删除用户同步删除对应凭据；编辑限速会把新的限速/IP 限制同步进档案；
+- **重启自动恢复**：Trojan-Go v0.10.6 的用户表存于内存，进程重启即清空。面板在检测到
+  Trojan-Go 连接恢复（离线→在线转换，含面板冷启动）时，会按本地档案自动补发缺失的用户
+  （含限速/IP 限额），并把服务端已有但未记录的用户（含手动在 trojan-go 侧创建的）写入档案，
+  使其同样获得重启恢复能力。恢复动作只补缺失、不改动服务端已存在用户；
 - 若凭据丢失，连接接口返回 `404 该用户缺少连接凭据`，连接弹窗会引导补录该用户创建时设置的密码（`POST /api/trojan/users/{hash}/credential`，校验密码 hash 与用户匹配，仅保存到凭据文件、不调用 Trojan-Go），无需删除重建、不丢流量数据；
 
 ### 连接测试的路由提示

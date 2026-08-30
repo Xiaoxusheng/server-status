@@ -915,3 +915,227 @@ func TestTrojanCredentialRecovery(t *testing.T) {
 		t.Fatalf("删除凭据后应 404: %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+// TestTrojanCredentialArchive 验证用户档案（密码 + 限额）的持久化：
+// 创建时写入限额、补录密码保留限额、修改限额同步、档案可完整还原。
+func TestTrojanCredentialArchive(t *testing.T) {
+	tmpDir := t.TempDir()
+	prevHome := os.Getenv("SERVER_STATUS_HOME")
+	os.Setenv("SERVER_STATUS_HOME", tmpDir)
+	defer os.Setenv("SERVER_STATUS_HOME", prevHome)
+
+	secret := "Archive@Test123"
+	hash := trojanHash(secret)
+
+	// 1. 创建档案（含限额）
+	if err := upsertTrojanUserRecord(hash, secret, 3, 1048576, 2097152); err != nil {
+		t.Fatalf("upsertTrojanUserRecord failed: %v", err)
+	}
+	store, err := loadTrojanCredentials()
+	if err != nil {
+		t.Fatalf("loadTrojanCredentials: %v", err)
+	}
+	if len(store.Credentials) != 1 {
+		t.Fatalf("expected 1 credential, got %d", len(store.Credentials))
+	}
+	rec := store.Credentials[0]
+	if rec.Password != secret || rec.IPLimit != 3 || rec.UploadLimit != 1048576 || rec.DownloadLimit != 2097152 {
+		t.Fatalf("archive fields mismatch: %+v", rec)
+	}
+
+	// 2. 补录密码（同 hash）：保留已记录限额
+	if err := setTrojanCredential(hash, "replaced-pass"); err != nil {
+		t.Fatalf("setTrojanCredential failed: %v", err)
+	}
+	store, _ = loadTrojanCredentials()
+	rec = store.Credentials[0]
+	if rec.Password != "replaced-pass" {
+		t.Fatalf("password should be updated, got %s", rec.Password)
+	}
+	if rec.IPLimit != 3 || rec.UploadLimit != 1048576 {
+		t.Fatalf("limits should be preserved on password update: %+v", rec)
+	}
+
+	// 3. 修改限额同步
+	if err := updateTrojanUserLimits(hash, 8, 1, 2); err != nil {
+		t.Fatalf("updateTrojanUserLimits failed: %v", err)
+	}
+	store, _ = loadTrojanCredentials()
+	rec = store.Credentials[0]
+	if rec.IPLimit != 8 || rec.UploadLimit != 1 || rec.DownloadLimit != 2 {
+		t.Fatalf("limits should be updated: %+v", rec)
+	}
+	if rec.Password != "replaced-pass" {
+		t.Fatalf("password should survive limits update: %+v", rec)
+	}
+
+	// 4. 对未记录用户调用限额更新应为无害 no-op
+	if err := updateTrojanUserLimits("unknown-hash", 5, 5, 5); err != nil {
+		t.Fatalf("updateTrojanUserLimits on unknown hash should not error: %v", err)
+	}
+
+	// 5. 删除档案
+	if err := deleteTrojanCredential(hash); err != nil {
+		t.Fatalf("deleteTrojanCredential failed: %v", err)
+	}
+	store, _ = loadTrojanCredentials()
+	if len(store.Credentials) != 0 {
+		t.Fatalf("credential should be deleted, got %d", len(store.Credentials))
+	}
+}
+
+// TestTrojanUserRestartRecovery 端到端验证 Trojan-Go 重启后用户自动恢复：
+// 面板创建用户（含限额）→ 模拟 Trojan-Go 重启（换全新空用户表）→ 连接恢复时
+// 按本地档案补发缺失用户，并把服务端手动创建的用户记入档案。
+func TestTrojanUserRestartRecovery(t *testing.T) {
+	// 环境搭建（与 setupTrojanEnv 相同，但保留 fake 服务端与监听器引用以便模拟重启）
+	oldUM := userManager
+	userManager = &UserManager{
+		RWMutex:   sync.RWMutex{},
+		UserInfos: map[string]*Users{"admin": {Username: "admin", IsActive: true, Permissions: []string{"*"}}},
+		Sessions:  make(map[string]*Session),
+	}
+	oldHome := os.Getenv("SERVER_STATUS_HOME")
+	os.Setenv("SERVER_STATUS_HOME", t.TempDir())
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv1 := grpc.NewServer()
+	fake1 := &fakeTrojanServer{users: make(map[string]*service.UserStatus)}
+	service.RegisterTrojanServerServiceServer(srv1, fake1)
+	go func() { _ = srv1.Serve(lis) }()
+
+	oldClient := trojanClient
+	trojanClient = &TrojanClient{cfg: TrojanConfig{
+		Enabled:         true,
+		APIAddr:         lis.Addr().String(),
+		APITimeout:      5 * time.Second,
+		RefreshInterval: time.Hour,
+	}}
+	cleanup := func() {
+		_ = trojanClient.close()
+		srv1.Stop()
+		trojanClient = oldClient
+		userManager = oldUM
+		os.Setenv("SERVER_STATUS_HOME", oldHome)
+	}
+	defer cleanup()
+
+	// 0. 首次刷新：空档案 + 空用户表，不应有任何副作用
+	trojanClient.refresh()
+
+	mux := trojanTestMux()
+	sid := "admin-session"
+	userManager.Lock()
+	userManager.Sessions[sid] = &Session{SessionID: sid, Username: "admin", CreatedAt: time.Now(), LastAccess: time.Now(), ExpiresAt: time.Now().Add(time.Hour), CSRFToken: testCSRFToken}
+	userManager.Unlock()
+
+	// 1. 面板创建用户：限速 1MB/s 上 / 2MB/s 下、IP 限制 3
+	body := `{"password":"Restart@Test123","upload_limit":1048576,"download_limit":2097152,"ip_limit":3}`
+	rec := trojanDo(mux, trojanAuthedRequest("POST", "/api/trojan/users", sid, body))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("创建用户应 200: %d %s", rec.Code, rec.Body.String())
+	}
+	hash := trojanHash("Restart@Test123")
+
+	// 档案已含限额
+	store, err := loadTrojanCredentials()
+	if err != nil {
+		t.Fatalf("load credentials: %v", err)
+	}
+	if len(store.Credentials) != 1 || store.Credentials[0].UploadLimit != 1048576 || store.Credentials[0].IPLimit != 3 {
+		t.Fatalf("档案应含限额: %+v", store.Credentials)
+	}
+
+	// 2. 模拟 Trojan-Go 重启：停掉旧进程（用户表随内存清空），起一个全新空用户表
+	srv1.Stop()
+	trojanClient.refresh() // 此时连接失败 → setOffline
+	if got := func() bool {
+		trojanClient.mu.RLock()
+		defer trojanClient.mu.RUnlock()
+		return trojanClient.status.Connected
+	}(); got {
+		t.Fatal("服务端停止后应进入离线状态")
+	}
+
+	manualHash := trojanHash("manual-side-user")
+	// 与生产一致：Trojan-Go 重启后仍在同一 API 地址监听，客户端缓存连接自动重连
+	var lis2 net.Listener
+	bindDeadline := time.Now().Add(5 * time.Second)
+	for {
+		lis2, err = net.Listen("tcp", lis.Addr().String())
+		if err == nil || time.Now().After(bindDeadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if err != nil {
+		t.Fatalf("重新绑定同端口失败: %v", err)
+	}
+	srv2 := grpc.NewServer()
+	fake2 := &fakeTrojanServer{users: map[string]*service.UserStatus{
+		// 模拟有人在 trojan-go 侧手动配置的用户（带限额）
+		manualHash: {
+			User:       &service.User{Hash: manualHash},
+			SpeedLimit: &service.Speed{UploadSpeed: 555, DownloadSpeed: 666},
+			IpLimit:    7,
+		},
+	}}
+	service.RegisterTrojanServerServiceServer(srv2, fake2)
+	go func() { _ = srv2.Serve(lis2) }()
+	defer srv2.Stop()
+
+	// 3. 连接恢复：refresh 触发 reconcile → 档案中的缺失用户被补发
+	// gRPC 重连可能需要片刻，轮询直至恢复或超时
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		trojanClient.refresh()
+		fake2.mu.Lock()
+		_, panelUserBack := fake2.users[hash]
+		fake2.mu.Unlock()
+		if panelUserBack || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// 4. 断言：面板创建的用户已恢复且限额完整
+	fake2.mu.Lock()
+	restored, ok := fake2.users[hash]
+	fake2.mu.Unlock()
+	if !ok {
+		t.Fatalf("重启后面板用户应被自动恢复 (hash=%s)，现有用户: %d 个", hash, len(fake2.users))
+	}
+	if restored.SpeedLimit == nil || restored.SpeedLimit.UploadSpeed != 1048576 || restored.SpeedLimit.DownloadSpeed != 2097152 {
+		t.Fatalf("恢复用户限速应与创建时一致: %+v", restored.SpeedLimit)
+	}
+	if restored.IpLimit != 3 {
+		t.Fatalf("恢复用户 IP 限制应为 3: %+v", restored.IpLimit)
+	}
+
+	// 5. 断言：服务端手动创建的用户被记入档案（获得下次重启的恢复能力）
+	store, err = loadTrojanCredentials()
+	if err != nil {
+		t.Fatalf("load credentials: %v", err)
+	}
+	foundManual := false
+	for _, c := range store.Credentials {
+		if c.Hash == manualHash {
+			foundManual = true
+			if c.UploadLimit != 555 || c.DownloadLimit != 666 || c.IPLimit != 7 {
+				t.Fatalf("手动用户限额应记录服务端现值: %+v", c)
+			}
+		}
+	}
+	if !foundManual {
+		t.Fatalf("服务端手动创建的用户应被记入档案: %+v", store.Credentials)
+	}
+
+	// 6. 断言：面板用户密码仍在（恢复后连接信息可用）
+	password, ok := getTrojanCredential(hash)
+	if !ok || password != "Restart@Test123" {
+		t.Fatalf("面板用户密码应保留: %q %v", password, ok)
+	}
+}

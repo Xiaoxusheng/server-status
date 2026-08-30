@@ -12,7 +12,7 @@
 - ⚙️ **进程监控**：实时进程列表、CPU/内存 TOP10、结束进程
 - 🧰 **服务与端口中心**：systemd 服务创建/启停/自启/实时日志、监听端口识别与分类、防火墙开放/关闭与端口规则
 - 🖥️ **Web Shell（Web 终端）**：真正的 Linux PTY 交互终端（xterm.js + WebSocket），每次启动均需独立 Shell 二次认证 + 一次性 Token，`system:exec` 权限
-- 🚀 **Trojan-Go 监控与管理**：状态/在线用户/IP/实时流量图表，用户增删改、限速与 IP 限制（gRPC → 后端 → WebSocket）
+- 🚀 **Trojan-Go 监控与管理**：状态/在线用户/IP/实时流量图表，用户增删改、限速与 IP 限制（gRPC → 后端 → WebSocket）；用户档案本地持久化，Trojan-Go/面板重启后自动补发缺失用户
 - 🔑 **授权下载**：令牌签发/撤销，支持粘贴下载链接自动解析令牌，配额与有效期控制
 - 🛡️ **RBAC 权限管理**：用户/角色/权限管理，细粒度访问控制
 - 🔒 **隐藏私人空间**：普通界面完全不可见，仅通过隐藏入口进入；私人手记 + 图片 + 定位 + 语音 + 信息卡片生成与分享
@@ -145,6 +145,11 @@ go build -o server-monitor
 详见 [TROJAN.md](TROJAN.md)：在 `/opt/server-status/config.json` 配置 Trojan-Go gRPC 地址
 （默认 `127.0.0.1:10000`），启动后 Dashboard 显示 Trojan-Go 状态、实时流量与用户管理，
 所有接口均经过现有登录/RBAC/HMAC 认证。
+
+用户档案（密码 + 限速/IP 限额）持久化在 `trojan_credentials.json`（权限 0600）。
+Trojan-Go v0.10.6 的用户表存于内存，进程重启即清空；面板在检测到连接恢复
+（离线→在线转换，含面板冷启动）时按本地档案自动补发缺失用户，并把服务端已有
+但未记录的用户写入档案，删除用户/修改限额均同步档案。
 
 ## 配置说明
 
@@ -331,6 +336,7 @@ SHELL_PASSWORD_HASH=$2a$10$...
 - `users.json`：用户与会话（AES-GCM 加密）
 - `rbac.json`：角色权限（AES-GCM 加密）
 - `download_tokens.json`：下载令牌（AES-GCM 加密）
+- `trojan_credentials.json`：Trojan 用户档案（hash + 明文密码 + 限速/IP 限额，权限 0600），用于 Trojan-Go 重启后自动恢复用户
 
 程序重启后会自动加载历史数据。
 
@@ -375,6 +381,24 @@ SHELL_PASSWORD_HASH=$2a$10$...
 | `SHELL_TOKEN_TTL` | 一次性认证 Token 有效期 | 默认 `60s` |
 
 > 注意：内置默认值仅为保证旧部署可用；任何真实的部署都应通过环境变量提供随机高强度密钥。
+
+## 压力测试
+
+内置零依赖压测工具（纯标准库），支持未认证/认证两种场景、爬坡与限速：
+
+```bash
+# 认证场景：每个 worker 登录一次后压测只读接口（推荐，梯度和健康判据见下）
+STRESS_PASSWORD='你的密码' go run ./stress -target https://192.168.1.10:9000 \
+  -scenario auth -username admin -c 100 -d 30s -ramp 5s
+
+# 未认证场景（公开路径）
+go run ./stress -target https://192.168.1.10:9000 -scenario public -c 50 -d 30s
+```
+
+- 主要参数：`-c` 并发数、`-d` 时长、`-ramp` 爬坡（worker 逐个启动，高并发下可避免登录风暴）、`-rate` 总 QPS 上限；
+- 报告输出 RPS、状态码分布、延迟分位（avg/p50/p90/p95/p99/max），健康判据为 **p99 < 500ms 且错误率 < 1%**，可按并发阶梯逐档定位最大健康并发；
+- 压测只打只读 GET 接口，不产生写操作；已登录会话不受反爬频控，可安全进行高强度测试。**切勿用未认证（public）场景高强度压测**：单 IP 5 分钟内超过 100 次请求会触发自动封禁 1 小时；
+- 请在局域网内或低峰期执行，压测对象应是自己有权限的服务。
 
 ## 依赖库
 
