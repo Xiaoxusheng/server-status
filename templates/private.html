@@ -126,9 +126,17 @@
             margin-bottom: 12px;
             border-radius: var(--radius);
             transition: border-color .15s ease;
+            scroll-margin-top: 66px; /* 保存后定位新帖：避开吸顶顶栏 */
         }
 
         .note-card:hover { border-color: var(--color-border-strong); }
+
+        @keyframes noteFlash {
+            0%, 55% { box-shadow: 0 0 0 2px #4096ff; }
+            100% { box-shadow: none; }
+        }
+
+        .note-card.note-flash { animation: noteFlash 1.6s ease; }
 
         .note-card .ant-card-body { padding: 14px 16px 12px; }
 
@@ -1609,7 +1617,7 @@
                 </Dropdown>
             );
             return (
-                <Card className="note-card" styles={{ body: { padding: '14px 16px' } }}>
+                <Card className="note-card" data-note-id={note.id} styles={{ body: { padding: '14px 16px' } }}>
                     <div className="note-meta">
                         <span className="note-time">{fmtClock(note.created_at)}</span>
                         {loc && <span className="note-loc"><span className="nl-text">📍 {hlText(loc, highlight)}</span></span>}
@@ -2691,7 +2699,7 @@
             }, []);
 
             const loadAllNotes = useCallback(() => {
-                api('/api/private/notes').then(d => {
+                return api('/api/private/notes').then(d => {
                     if (ok(d)) { setAllNotes(d.data || []); setNotes(d.data || []); setSearchQ(''); }
                 });
             }, []);
@@ -2730,8 +2738,19 @@
 
             const onSaved = (n) => {
                 setEditorOpen(false);
-                loadAllNotes();
-                if (searchQ) loadNotes(searchQ);
+                Promise.all([loadAllNotes(), searchQ ? loadNotes(searchQ) : Promise.resolve()])
+                    .catch(() => { })
+                    .then(() => {
+                        // 新建/编辑保存后自动滚动定位到该手记，免去手动滑动查找
+                        if (!n || !n.id) return;
+                        requestAnimationFrame(() => requestAnimationFrame(() => {
+                            const el = document.querySelector('[data-note-id="' + n.id + '"]');
+                            if (!el) return; // 搜索状态下新帖可能不匹配搜索词
+                            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            el.classList.add('note-flash');
+                            setTimeout(() => el.classList.remove('note-flash'), 1700);
+                        }));
+                    });
             };
             const onDelete = (n) => {
                 Modal.confirm({
