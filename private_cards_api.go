@@ -70,7 +70,11 @@ func (s *PrivateStore) createCard(userID string, req createCardRequest) (*Privat
 	}
 	id := randomID("card")
 	abs := filepath.Join(dir, id+".png")
-	if err := os.WriteFile(abs, raw, 0644); err != nil {
+	enc, err := encryptMediaBytes(raw)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(abs, enc, 0644); err != nil {
 		return nil, err
 	}
 	rel := filepath.ToSlash(strings.TrimPrefix(abs, s.storageAbs()+string(os.PathSeparator)))
@@ -489,7 +493,7 @@ func shareImageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "private, max-age=600")
-	http.ServeFile(w, r, abs)
+	servePrivateMediaFile(w, r, abs, "card.png")
 }
 
 // shareQRHandler GET /api/share/{token}/qr 分享二维码
@@ -603,7 +607,7 @@ func privateCardImageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
 	w.Header().Set("Cache-Control", "private, max-age=300")
-	http.ServeFile(w, r, abs)
+	servePrivateMediaFile(w, r, abs, name)
 }
 
 // privateCreateShareHandler POST /api/private/cards/{id}/share

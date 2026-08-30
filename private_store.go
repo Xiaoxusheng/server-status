@@ -5,6 +5,7 @@ package main
 // 私人文件保存在私有目录，图片/语音只能通过双层认证的 API 访问。
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -13,6 +14,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -173,6 +175,84 @@ func privateRoot() string {
 	return dataRoot()
 }
 
+// ==================== 私人媒体文件加密存储 ====================
+// 手记图片 / 语音 / 卡片 PNG 使用与用户数据一致的 AES-GCM 密钥加密落盘，
+// 文件以 magic 头标识格式；读取时自动解密，历史明文文件原样兼容，
+// 并在存储初始化时由 migratePlainMedia 原位迁移为加密格式（幂等）。
+
+var mediaCryptMagic = []byte("PVMEDIA1")
+
+// encryptMediaBytes 加密媒体字节并附加 magic 头
+func encryptMediaBytes(plain []byte) ([]byte, error) {
+	enc, err := encryptData(plain)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, 0, len(mediaCryptMagic)+len(enc))
+	out = append(out, mediaCryptMagic...)
+	return append(out, enc...), nil
+}
+
+// isMediaEncrypted 判断磁盘原始内容是否已是加密格式
+func isMediaEncrypted(raw []byte) bool {
+	return bytes.HasPrefix(raw, mediaCryptMagic)
+}
+
+// decryptMediaBytes 解密媒体字节；不带 magic 头的历史明文原样返回
+func decryptMediaBytes(raw []byte) ([]byte, error) {
+	if !isMediaEncrypted(raw) {
+		return raw, nil
+	}
+	return decryptData(raw[len(mediaCryptMagic):])
+}
+
+// servePrivateMediaFile 读取并解密媒体文件后按内容提供（支持 Range 断点播放）
+func servePrivateMediaFile(w http.ResponseWriter, r *http.Request, abs, name string) {
+	raw, err := os.ReadFile(abs)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := decryptMediaBytes(raw)
+	if err != nil {
+		log.Printf("私人媒体文件解密失败 %s: %v（请确认 SERVER_STATUS_ENCRYPT_KEY 未变更）", abs, err)
+		http.Error(w, "文件解密失败", http.StatusInternalServerError)
+		return
+	}
+	modTime := time.Time{}
+	if info, err := os.Stat(abs); err == nil {
+		modTime = info.ModTime()
+	}
+	http.ServeContent(w, r, name, modTime, bytes.NewReader(data))
+}
+
+// migratePlainMedia 将历史明文媒体文件原位加密（幂等：已带 magic 头的跳过）
+func (s *PrivateStore) migratePlainMedia() (int, error) {
+	migrated := 0
+	err := filepath.WalkDir(s.storageDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if isMediaEncrypted(raw) {
+			return nil
+		}
+		enc, err := encryptMediaBytes(raw)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, enc, 0644); err != nil {
+			return err
+		}
+		migrated++
+		return nil
+	})
+	return migrated, err
+}
+
 // initPrivateNotes 初始化私人空间存储（main 启动时调用）
 func initPrivateNotes() error {
 	st, err := NewPrivateStore(privateRoot())
@@ -224,6 +304,11 @@ func NewPrivateStore(baseDir string) (*PrivateStore, error) {
 		return nil, err
 	}
 	st.applyEnvPassword()
+	if n, err := st.migratePlainMedia(); err != nil {
+		log.Printf("⚠️ 私人空间历史媒体文件加密迁移失败: %v", err)
+	} else if n > 0 {
+		log.Printf("🔐 已将 %d 个历史明文媒体文件加密迁移", n)
+	}
 	return st, nil
 }
 

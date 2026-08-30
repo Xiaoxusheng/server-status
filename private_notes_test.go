@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"image"
 	"image/png"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -298,5 +299,52 @@ func TestShareExpiryParse(t *testing.T) {
 	}
 	if _, err := shareExpiry("xyz"); err == nil {
 		t.Fatal("非法有效期应报错")
+	}
+}
+
+func TestMediaEncryptionRoundtrip(t *testing.T) {
+	st := newTestStore(t)
+	plain := []byte("fake-png-bytes-用于测试-1234567890")
+
+	// 加密后带 magic 头，解密回环一致
+	enc, err := encryptMediaBytes(plain)
+	if err != nil {
+		t.Fatalf("加密失败: %v", err)
+	}
+	if !isMediaEncrypted(enc) {
+		t.Fatal("加密内容应带 magic 头")
+	}
+	if got, err := decryptMediaBytes(enc); err != nil || !bytes.Equal(got, plain) {
+		t.Fatalf("解密回环失败: %v", err)
+	}
+
+	// 历史明文兼容：不带 magic 头的内容原样返回
+	if got, err := decryptMediaBytes(plain); err != nil || !bytes.Equal(got, plain) {
+		t.Fatalf("历史明文应原样返回: %v", err)
+	}
+
+	// 启动迁移：明文文件原位加密、可解密回读、重复迁移幂等
+	abs := filepath.Join(st.storageDir, "2026", "08", "30", "legacy.png")
+	if err := os.MkdirAll(filepath.Dir(abs), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(abs, plain, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := st.migratePlainMedia(); err != nil || n != 1 {
+		t.Fatalf("迁移应处理 1 个文件: n=%d err=%v", n, err)
+	}
+	raw, err := os.ReadFile(abs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isMediaEncrypted(raw) {
+		t.Fatal("迁移后文件应为加密格式")
+	}
+	if n, err := st.migratePlainMedia(); err != nil || n != 0 {
+		t.Fatalf("重复迁移应幂等: n=%d err=%v", n, err)
+	}
+	if got, err := decryptMediaBytes(raw); err != nil || !bytes.Equal(got, plain) {
+		t.Fatalf("迁移后解密回环失败: %v", err)
 	}
 }

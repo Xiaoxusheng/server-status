@@ -88,7 +88,7 @@ sudo systemctl daemon-reload && sudo systemctl enable --now server-status
 | 环境变量 | 保护什么 | 不设置的后果 |
 |---|---|---|
 | `SERVER_STATUS_SIGNING_KEY` | HMAC 签名：会话 Cookie、分享密码 Cookie、私人空间入口 | 每次启动随机生成，**重启后所有已签发 Cookie 全部失效** |
-| `SERVER_STATUS_ENCRYPT_KEY` | AES-GCM 落盘加密：用户 / 角色 / 令牌数据、私人手记、Shell 密码文件 | 回退内置默认值，等于**数据可被任何拿到源码的人解密** |
+| `SERVER_STATUS_ENCRYPT_KEY` | AES-GCM 落盘加密：用户 / 角色 / 令牌数据、Shell 密码文件、私人空间媒体文件（图片 / 语音 / 卡片，首次启动自动迁移加密） | 回退内置默认值，等于**数据可被任何拿到源码的人解密** |
 | `SERVER_STATUS_DOWNLOAD_TOKEN_SECRET` | 下载令牌签名 | 同上 |
 
 ```bash
@@ -174,7 +174,7 @@ SERVER_STATUS_EXTRA_ORIGINS=<旧额外跨域来源，逗号分隔>
 
 - 双层认证：普通登录 + 独立私人密码（仅存 bcrypt，不落任何前端存储）；30 分钟无操作自动锁定，密码错 5 次锁 60 秒
 - 功能：时间线手记（Markdown / 图片 / 定位 / 语音 / 标签）、全局搜索、卡片生成器（5 种模板 × 多种尺寸，Canvas 真渲染 PNG）、分享链接 + 二维码 + 访问密码 + 有效期
-- 安全：图片 / 语音存于私有目录，静态文件服务不暴露；分享 Token 只存哈希；审计日志不记录任何正文与密码
+- 安全：图片 / 语音 / 卡片以 AES-GCM 加密落盘（历史明文文件启动时自动迁移），存于私有目录，静态文件服务不暴露；分享 Token 只存哈希；审计日志不记录任何正文与密码
 - 启用：默认开启，首次进入设置密码即可（或用 `PRIVATE_NOTES_PASSWORD` 在首次启动时初始化）
 - 细节配置见数据目录下 `private_notes.json`
 
@@ -221,7 +221,7 @@ SERVER_STATUS_EXTRA_ORIGINS=<旧额外跨域来源，逗号分隔>
 
 - 登录 bcrypt 哈希 + 失败锁定（防爆破）；会话 HttpOnly + Secure + SameSite，服务端管理
 - CSRF Double-Submit 强制校验；WebSocket / CORS Origin 精确白名单（防前缀绕过）
-- 敏感数据 AES-GCM 加密落盘（0600）；浏览器不持有任何服务端 Secret
+- 敏感数据 AES-GCM 加密落盘（0600）：用户 / 角色 / 令牌数据、Shell 密码文件、私人空间媒体文件（图片 / 语音 / 卡片）；浏览器不持有任何服务端 Secret
 - 命令执行白名单 + 固定参数；路径穿越防护；上传类型黑名单
 - 反爬：UA 白名单、行为分析、IP 自动封禁（不信任可伪造的 `X-Forwarded-For`）
 - TLS 1.2+、HSTS、X-Frame-Options、nosniff；模板目录中 `.bak/.json/.key/.pem` 等禁止访问

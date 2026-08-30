@@ -294,21 +294,33 @@ func (s *PrivateStore) addImage(userID, noteID string, file multipart.File, head
 	if err != nil {
 		return nil, err
 	}
+	rest, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("读取上传内容失败: %w", err)
+	}
+	data := make([]byte, 0, n+len(rest))
+	data = append(data, sniff[:n]...)
+	data = append(data, rest...)
+	if len(data) > 20*1024*1024 {
+		return nil, fmt.Errorf("图片不能超过 20MB")
+	}
+	enc, err := encryptMediaBytes(data)
+	if err != nil {
+		return nil, err
+	}
 	dst, err := os.OpenFile(abs, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := dst.Write(sniff[:n]); err != nil {
+	if _, err := dst.Write(enc); err != nil {
 		dst.Close()
 		os.Remove(abs)
 		return nil, err
 	}
-	if _, err := io.Copy(dst, file); err != nil {
-		dst.Close()
+	if err := dst.Close(); err != nil {
 		os.Remove(abs)
 		return nil, err
 	}
-	dst.Close()
 
 	id := randomID("img")
 	var maxOrder int
@@ -376,16 +388,30 @@ func (s *PrivateStore) addAudio(userID, noteID string, file multipart.File, head
 	if err != nil {
 		return nil, err
 	}
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("读取上传内容失败: %w", err)
+	}
+	if len(data) > 30*1024*1024 {
+		return nil, fmt.Errorf("语音不能超过 30MB")
+	}
+	enc, err := encryptMediaBytes(data)
+	if err != nil {
+		return nil, err
+	}
 	dst, err := os.OpenFile(abs, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := io.Copy(dst, file); err != nil {
+	if _, err := dst.Write(enc); err != nil {
 		dst.Close()
 		os.Remove(abs)
 		return nil, err
 	}
-	dst.Close()
+	if err := dst.Close(); err != nil {
+		os.Remove(abs)
+		return nil, err
+	}
 	id := randomID("au")
 	if _, err := s.db.Exec(`
 		INSERT INTO note_audio (id, note_id, file_path, duration, created_at) VALUES (?, ?, ?, ?, ?)`,

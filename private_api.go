@@ -394,7 +394,7 @@ func privateImageFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
 	w.Header().Set("Cache-Control", "private, max-age=300")
-	http.ServeFile(w, r, abs)
+	servePrivateMediaFile(w, r, abs, name)
 }
 
 // ==================== 语音处理器 ====================
@@ -445,7 +445,7 @@ func privateAudioFileHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
 	w.Header().Set("Cache-Control", "private, max-age=300")
-	http.ServeFile(w, r, abs)
+	servePrivateMediaFile(w, r, abs, name)
 }
 
 // ==================== 标签 / 搜索 / 导出 ====================
