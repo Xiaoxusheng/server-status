@@ -258,6 +258,7 @@
 
         .mini-stat .ms-label {
             font-size: 12px;
+            line-height: 1.15;
             color: var(--secondary);
             display: flex;
             align-items: center;
@@ -281,7 +282,15 @@
 
         .mini-stat .ms-sub {
             font-size: 12px;
+            line-height: 1.15;
             color: var(--secondary);
+        }
+
+        /* 带第三行说明的卡片：收紧纵向留白与行间距，三行才能装进固定高度（字号与卡片尺寸不变） */
+        .mini-stat:has(.ms-sub) {
+            padding-top: 6px;
+            padding-bottom: 6px;
+            gap: 0;
         }
 
         .toolbar {
@@ -336,6 +345,11 @@
             .mini-stat {
                 height: 72px;
                 padding: 8px 10px;
+            }
+
+            .mini-stat:has(.ms-sub) {
+                padding-top: 4px;
+                padding-bottom: 4px;
             }
 
             .mini-stat .ms-label {
