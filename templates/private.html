@@ -582,123 +582,6 @@
 
         .share-line { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 
-        /* ================= 记忆地图 ================= */
-        .pv-map-head {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 10px 16px;
-            margin-bottom: 12px;
-        }
-
-        .pv-map-title { font-size: 16px; font-weight: 600; color: var(--text); }
-
-        .pv-map-stats {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px 14px;
-            font-size: 12px;
-            color: var(--secondary);
-        }
-
-        .pv-map-stats .ms { display: inline-flex; align-items: center; gap: 4px; }
-
-        .pv-map-stats .ms b {
-            color: var(--primary);
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .pv-map-filters {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 12px;
-        }
-
-        .pv-map {
-            position: relative;
-            border-radius: 14px;
-            overflow: hidden;
-            border: 1px solid var(--border);
-            background: #eef3fa;
-        }
-
-        html.dark .pv-map { background: #0e1622; }
-
-        .pv-map canvas { display: block; width: 100%; height: auto; }
-
-        .pv-map-marker {
-            position: absolute;
-            transform: translate(-50%, -100%);
-            cursor: pointer;
-            font-size: 24px;
-            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .4));
-            transition: transform .15s ease;
-        }
-
-        .pv-map-marker:hover { transform: translate(-50%, -100%) scale(1.15); }
-
-        .pv-map-marker .mk-count {
-            position: absolute;
-            top: -4px;
-            right: -10px;
-            min-width: 18px;
-            height: 18px;
-            padding: 0 5px;
-            border-radius: 9px;
-            background: var(--danger);
-            color: #fff;
-            font-size: 11px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
-        }
-
-        .pv-map-marker.active { transform: translate(-50%, -100%) scale(1.2); }
-
-        /* 地点详情卡：桌面悬浮左上 / 移动端底部面板 */
-        .pv-mem-card {
-            position: absolute;
-            left: 12px;
-            top: 12px;
-            z-index: 3;
-            width: 280px;
-            background: var(--card);
-            border-radius: 14px;
-            border: 1px solid var(--border);
-            box-shadow: var(--shadow-md);
-            padding: 14px;
-            animation: pv-fade-up .2s ease both;
-        }
-
-        .pv-mem-card .mc-date { font-size: 12px; color: var(--secondary); }
-
-        .pv-mem-card .mc-loc { font-size: 13px; color: var(--primary); margin: 2px 0 4px; }
-
-        .pv-mem-card .mc-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--text);
-            margin-bottom: 6px;
-            word-break: break-word;
-        }
-
-        .pv-mem-card .mc-thumb {
-            width: 100%;
-            height: 120px;
-            object-fit: cover;
-            border-radius: 10px;
-            margin-bottom: 6px;
-            display: block;
-            background: var(--hover);
-        }
-
-        .pv-mem-card .mc-close { position: absolute; right: 8px; top: 8px; }
-
         /* ================= 标签页 ================= */
         .pv-tags-head { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 12px; }
 
@@ -898,14 +781,7 @@
             .note-actions { gap: 8px; }
             .note-actions .ant-btn { flex: 1; margin: 0; }
 
-            /* 地点详情卡改为底部面板，不遮挡地图 */
-            .pv-mem-card {
-                left: 10px;
-                right: 10px;
-                top: auto;
-                bottom: 10px;
-                width: auto;
-            }
+            
 
             .pv-tag-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
         }
@@ -933,7 +809,6 @@
     <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
     <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
     <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
-    <script src="world-simple.js"></script>
 </head>
 
 <body>
@@ -1160,101 +1035,6 @@
                 case 5: case 10: case 12: return 8;
                 default: return 1;
             }
-        }
-
-        // ==================== 世界地图（离线）====================
-        const worldRings = window.WORLD_RINGS || [];
-        function project(lat, lng, w, h, padPx) {
-            const p = padPx || 8;
-            const x = ((lng + 180) / 360) * (w - p * 2) + p;
-            const y = ((90 - lat) / 180) * (h - p * 2) + p;
-            return [x, y];
-        }
-        // 区域内投影（用于自动 fit Marker 的“记忆地图”缩放视图）
-        function projectBounds(lat, lng, w, h, b) {
-            const pad = 12;
-            const iw = w - pad * 2, ih = h - pad * 2;
-            const spanLng = Math.max(b.maxLng - b.minLng, 0.0001);
-            const spanLat = Math.max(b.maxLat - b.minLat, 0.0001);
-            const x = ((lng - b.minLng) / spanLng) * iw + pad;
-            const y = ((b.maxLat - lat) / spanLat) * ih + pad;
-            return [x, y];
-        }
-        // 根据实际 Marker 自动计算视图范围：1 个地点 → 城市尺度；少量 → 全部 fit；
-        // 跨度极大 → 退回世界视图（null）。
-        function computeViewBounds(pts) {
-            const list = (pts || []).filter(p => p.lat != null && p.lng != null);
-            if (!list.length) return null;
-            if (list.length === 1) {
-                const p = list[0];
-                return {
-                    minLng: Math.max(-180, p.lng - 8), maxLng: Math.min(180, p.lng + 8),
-                    minLat: Math.max(-85, p.lat - 7), maxLat: Math.min(85, p.lat + 7)
-                };
-            }
-            let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
-            let sumLat = 0, sumLng = 0;
-            list.forEach(p => {
-                minLng = Math.min(minLng, p.lng); maxLng = Math.max(maxLng, p.lng);
-                minLat = Math.min(minLat, p.lat); maxLat = Math.max(maxLat, p.lat);
-                sumLat += p.lat; sumLng += p.lng;
-            });
-            const spanLng = maxLng - minLng, spanLat = maxLat - minLat;
-            if (spanLng > 120 || spanLat > 70) return null; // 跨度太大退回世界视图
-            let padLng = Math.max(spanLng * 0.35, 1.5);
-            let padLat = Math.max(spanLat * 0.35, 1);
-            if (spanLng < 2 && spanLat < 2) {
-                // 同一城市/地点聚簇 → 城市尺度
-                const clat = sumLat / list.length, clng = sumLng / list.length;
-                padLng = Math.max(6, Math.abs(clng) * 0.06);
-                padLat = Math.max(5, Math.abs(clat) * 0.06);
-            }
-            return {
-                minLng: Math.max(-180, minLng - padLng), maxLng: Math.min(180, maxLng + padLng),
-                minLat: Math.max(-85, minLat - padLat), maxLat: Math.min(85, maxLat + padLat)
-            };
-        }
-        function drawWorldMap(canvas, w, h, dark, bounds) {
-            canvas.width = w; canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, w, h);
-            const isZoom = !!bounds;
-            // 网格
-            ctx.strokeStyle = dark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.04)';
-            ctx.lineWidth = 1;
-            const lngStep = isZoom ? (bounds.maxLng - bounds.minLng > 60 ? 10 : bounds.maxLng - bounds.minLng > 20 ? 5 : 2) : 30;
-            const latStep = isZoom ? (bounds.maxLat - bounds.minLat > 40 ? 10 : bounds.maxLat - bounds.minLat > 15 ? 5 : 2) : 30;
-            for (let i = Math.ceil((isZoom ? bounds.minLng : -150) / lngStep) * lngStep; i <= (isZoom ? bounds.maxLng : 150); i += lngStep) {
-                ctx.beginPath();
-                const [x] = isZoom ? projectBounds(0, Math.max(-180, Math.min(180, i)), w, h, bounds) : project(0, i, w, h);
-                ctx.moveTo(x, 0); ctx.lineTo(x, h);
-                ctx.stroke();
-            }
-            for (let i = Math.ceil((isZoom ? bounds.minLat : -60) / latStep) * latStep; i <= (isZoom ? bounds.maxLat : 60); i += latStep) {
-                ctx.beginPath();
-                const [, y] = isZoom ? projectBounds(Math.max(-85, Math.min(85, i)), 0, w, h, bounds) : project(i, 0, w, h);
-                ctx.moveTo(0, y); ctx.lineTo(w, y);
-                ctx.stroke();
-            }
-            // 陆地
-            ctx.strokeStyle = dark ? 'rgba(255,255,255,.22)' : 'rgba(22,119,255,.32)';
-            ctx.fillStyle = dark ? 'rgba(255,255,255,.07)' : 'rgba(22,119,255,.10)';
-            ctx.lineWidth = 1;
-            ctx.save();
-            ctx.beginPath();
-            ctx.rect(0, 0, w, h);
-            ctx.clip();
-            worldRings.forEach(ring => {
-                ctx.beginPath();
-                ring.forEach(([lng, lat], idx) => {
-                    const [x, y] = isZoom ? projectBounds(lat, lng, w, h, bounds) : project(lat, lng, w, h);
-                    if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-                });
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-            });
-            ctx.restore();
         }
 
         // ==================== 卡片渲染器（Canvas）====================
@@ -1810,7 +1590,7 @@
             const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             return String(html).replace(new RegExp(esc, 'gi'), '<mark>$&</mark>');
         };
-        function NoteCard({ note, onEdit, onDelete, onCard, onLocClick, highlight }) {
+        function NoteCard({ note, onEdit, onDelete, onCard, highlight }) {
             const [openIdx, setOpenIdx] = useState(-1);
             const imgs = note.images || [];
             const shown = imgs.slice(0, 4);
@@ -1844,7 +1624,7 @@
                 <Card className="note-card" styles={{ body: { padding: '14px 16px' } }}>
                     <div className="note-meta">
                         <span className="note-time">{fmtClock(note.created_at)}</span>
-                        {loc && <span className="note-loc" onClick={() => onLocClick && onLocClick(note)} title="在地图中查看"><span className="nl-text">📍 {hlText(loc, highlight)}</span></span>}
+                        {loc && <span className="note-loc"><span className="nl-text">📍 {hlText(loc, highlight)}</span></span>}
                         <span style={{ marginLeft: 'auto', display: 'inline-flex' }}>{menu}</span>
                     </div>
                     {note.title && <div className="note-title">{hlText(note.title, highlight)}</div>}
@@ -1894,7 +1674,7 @@
         }
 
         // ==================== 时间线 ====================
-        function TimelineView({ notes, isDark, onEdit, onDelete, onCard, onLocClick, highlight }) {
+        function TimelineView({ notes, isDark, onEdit, onDelete, onCard, highlight }) {
             const groups = useMemo(() => {
                 const map = {};
                 (notes || []).forEach(n => {
@@ -1920,7 +1700,7 @@
                                     <span className="tl-count">{g.items.length} 条</span>
                                 </div>
                                 {g.items.map(n => (
-                                    <NoteCard key={n.id} note={n} isDark={isDark} onEdit={onEdit} onDelete={onDelete} onCard={onCard} onLocClick={onLocClick} highlight={highlight} />
+                                    <NoteCard key={n.id} note={n} isDark={isDark} onEdit={onEdit} onDelete={onDelete} onCard={onCard} highlight={highlight} />
                                 ))}
                             </div>
                         );
@@ -2572,179 +2352,6 @@
             );
         }
 
-        // ==================== 地图（记忆地图：自动 fit + 聚合 Marker + 记忆预览卡）====================
-        function MapTab({ notes, focus, onViewNote }) {
-            const wrapRef = useRef(null);
-            const canvasRef = useRef(null);
-            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
-            const [timeFilter, setTimeFilter] = useState('all');
-            const [tagFilter, setTagFilter] = useState(null);
-            const [selGroup, setSelGroup] = useState(null);
-
-            const filtered = useMemo(() => {
-                const now = new Date();
-                const yStart = new Date(now.getFullYear(), 0, 1);
-                const mStart = new Date(now.getFullYear(), now.getMonth(), 1);
-                const wStart = new Date(now);
-                wStart.setHours(0, 0, 0, 0);
-                wStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-                return (notes || []).filter(n => {
-                    if (n.latitude == null || n.longitude == null) return false;
-                    if (tagFilter && !(n.tags || []).includes(tagFilter)) return false;
-                    if (timeFilter !== 'all') {
-                        const d = new Date(n.created_at);
-                        if (timeFilter === 'year' && d < yStart) return false;
-                        if (timeFilter === 'month' && d < mStart) return false;
-                        if (timeFilter === 'week' && d < wStart) return false;
-                    }
-                    return true;
-                });
-            }, [notes, tagFilter, timeFilter]);
-
-            const groups = useMemo(() => {
-                const m = new Map();
-                filtered.forEach(n => {
-                    const key = (n.latitude || 0).toFixed(3) + ',' + (n.longitude || 0).toFixed(3);
-                    if (!m.has(key)) m.set(key, []);
-                    m.get(key).push(n);
-                });
-                return Array.from(m.values());
-            }, [filtered]);
-
-            const viewBounds = useMemo(
-                () => computeViewBounds(filtered.map(n => ({ lat: n.latitude, lng: n.longitude }))),
-                [filtered]
-            );
-
-            // 从时间线点击地点进入：定位到该 Marker 并打开记忆预览卡
-            useEffect(() => {
-                if (!focus || !focus.id) return;
-                const target = (notes || []).find(n => n.id === focus.id);
-                if (!target || target.latitude == null) return;
-                const key = (target.latitude || 0).toFixed(3) + ',' + (target.longitude || 0).toFixed(3);
-                const g = groups.find(gr => ((gr[0].latitude || 0).toFixed(3) + ',' + (gr[0].longitude || 0).toFixed(3)) === key);
-                if (g) setSelGroup(g);
-                // eslint-disable-next-line react-hooks/exhaustive-deps
-            }, [focus && focus.id]);
-
-            useEffect(() => {
-                const draw = () => {
-                    const wrap = wrapRef.current;
-                    const canvas = canvasRef.current;
-                    if (!wrap || !canvas) return;
-                    const w = wrap.clientWidth || 800;
-                    const h = Math.max(380, Math.round(w * 0.52));
-                    canvas.style.height = h + 'px';
-                    drawWorldMap(canvas, w, h, isDark, viewBounds);
-                };
-                draw();
-                window.addEventListener('resize', draw);
-                return () => window.removeEventListener('resize', draw);
-            }, [isDark, viewBounds]);
-
-            const markerPos = (n) => {
-                const canvas = canvasRef.current;
-                if (!canvas) return { left: 0, top: 0 };
-                const [x, y] = viewBounds
-                    ? projectBounds(n.latitude, n.longitude, canvas.width, canvas.height, viewBounds)
-                    : project(n.latitude, n.longitude, canvas.width, canvas.height);
-                return { left: (x / canvas.width * 100) + '%', top: (y / canvas.height * 100) + '%' };
-            };
-
-            const allTagOptions = useMemo(() => {
-                const s = new Set();
-                (notes || []).forEach(n => (n.tags || []).forEach(t => s.add(t)));
-                return Array.from(s);
-            }, [notes]);
-            const recent = useMemo(() => {
-                let r = null;
-                (notes || []).forEach(n => {
-                    if (n.latitude == null) return;
-                    if (!r || new Date(n.created_at) > new Date(r.created_at)) r = n;
-                });
-                return r;
-            }, [notes]);
-
-            if (filtered.length === 0) {
-                return (
-                    <div>
-                        <MapHead filtered={filtered} groups={groups} recent={recent} timeFilter={timeFilter} setTimeFilter={setTimeFilter} tagFilter={tagFilter} setTagFilter={setTagFilter} tags={allTagOptions} />
-                        <Empty description={notes && notes.length ? '当前筛选条件下没有带位置的手记' : '还没有带位置的手记，记录时添加位置后会出现在这里'} style={{ marginTop: 60 }} />
-                    </div>
-                );
-            }
-            const selNote = selGroup && selGroup[0];
-            return (
-                <div>
-                    <MapHead filtered={filtered} groups={groups} recent={recent} timeFilter={timeFilter} setTimeFilter={setTimeFilter} tagFilter={tagFilter} setTagFilter={setTagFilter} tags={allTagOptions} />
-                    <div className="pv-map" ref={wrapRef}>
-                        <canvas ref={canvasRef} />
-                        {selGroup && selNote && (
-                            <div className="pv-mem-card">
-                                <Button className="mc-close" size="small" type="text" icon={<I name="CloseOutlined" />} onClick={() => setSelGroup(null)} />
-                                <div className="mc-date">{fmtDate(selNote.created_at)} {fmtClock(selNote.created_at)}</div>
-                                <div className="mc-loc">📍 {locLabel(selNote)}</div>
-                                {selGroup.length > 1 && <div style={{ fontSize: 12, color: 'rgba(0,0,0,.45)', marginBottom: 4 }}>此地点共 {selGroup.length} 条手记</div>}
-                                {selNote.images && selNote.images.length > 0 && <img className="mc-thumb" src={selNote.images[0].url} alt="" loading="lazy" />}
-                                <div className="mc-title">{selNote.title || selNote.content || ''}</div>
-                                {(selNote.tags || []).length > 0 && (
-                                    <div style={{ marginBottom: 8 }}>
-                                        {(selNote.tags || []).map(t => <Tag key={t} style={{ marginRight: 4 }}>#{t}</Tag>)}
-                                    </div>
-                                )}
-                                <Button size="small" type="primary" onClick={() => onViewNote(selNote)}>查看手记</Button>
-                            </div>
-                        )}
-                        {groups.map(gr => {
-                            const n = gr[0];
-                            const pos = markerPos(n);
-                            const active = selGroup === gr;
-                            return (
-                                <div key={n.id} className={'pv-map-marker' + (active ? ' active' : '')} style={pos} title={locLabel(n)} onClick={() => setSelGroup(active ? null : gr)}>
-                                    📍
-                                    {gr.length > 1 && <span className="mk-count">{gr.length}</span>}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            );
-        }
-
-        function MapHead({ filtered, groups, recent, timeFilter, setTimeFilter, tagFilter, setTagFilter, tags }) {
-            return (
-                <div>
-                    <div className="pv-map-head">
-                        <div className="pv-map-title">我的记忆地图</div>
-                        <div className="pv-map-stats">
-                            <span className="ms"><b>{groups.length}</b> 个地点</span>
-                            <span className="ms"><b>{filtered.length}</b> 条手记</span>
-                            {recent && <span className="ms">最近记录：{locLabel(recent)}</span>}
-                        </div>
-                    </div>
-                    <div className="pv-map-filters">
-                        <Segmented size="small" value={timeFilter} onChange={setTimeFilter} options={[
-                            { value: 'all', label: '全部' },
-                            { value: 'year', label: '今年' },
-                            { value: 'month', label: '本月' },
-                            { value: 'week', label: '本周' }
-                        ]} />
-                        {tags.length > 0 && (
-                            <Select
-                                size="small"
-                                style={{ width: 140 }}
-                                placeholder="按标签筛选"
-                                allowClear
-                                value={tagFilter || undefined}
-                                onChange={v => setTagFilter(v || null)}
-                                options={tags.map(t => ({ value: t, label: '#' + t }))}
-                            />
-                        )}
-                    </div>
-                </div>
-            );
-        }
-
         // ==================== 标签 ====================
         function TagsTab({ notes, onViewNote, onCard }) {
             const [tag, setTag] = useState(null);
@@ -2798,7 +2405,7 @@
                                 </div>
                             )}
                             {tag && (
-                                <TimelineView notes={filtered} onEdit={onViewNote} onDelete={() => { }} onCard={onCard} onLocClick={() => { }} />
+                                <TimelineView notes={filtered} onEdit={onViewNote} onDelete={() => { }} onCard={onCard} />
                             )}
                         </>
                     )}
@@ -2926,7 +2533,6 @@
             const [tab, setTab] = useState('timeline');
             const [notes, setNotes] = useState([]);
             const [allNotes, setAllNotes] = useState([]);
-            const [mapFocus, setMapFocus] = useState(null);
             const [editorOpen, setEditorOpen] = useState(false);
             const [editing, setEditing] = useState(null);
             const [cardNote, setCardNote] = useState(null);
@@ -2990,11 +2596,9 @@
             };
             const changeTab = (t) => {
                 setTab(t);
-                if (t !== 'map') setMapFocus(null);
             };
             const bottomNav = [
                 { key: 'timeline', label: '时间线', icon: 'ClockCircleOutlined' },
-                { key: 'map', label: '地图', icon: 'GlobalOutlined' },
                 { key: 'tags', label: '标签', icon: 'TagsOutlined' },
                 { key: 'cards', label: '卡片', icon: 'PictureOutlined' }
             ];
@@ -3028,14 +2632,12 @@
                                     onChange={changeTab}
                                     items={[
                                         { key: 'timeline', label: <span><I name="ClockCircleOutlined" /> 时间线</span> },
-                                        { key: 'map', label: <span><I name="GlobalOutlined" /> 地图</span> },
                                         { key: 'tags', label: <span><I name="TagsOutlined" /> 标签</span> },
                                         { key: 'cards', label: <span><I name="PictureOutlined" /> 卡片</span> }
                                     ]}
                                 />
                             )}
-                            {tab === 'timeline' && <TimelineView notes={notes} isDark={isDark} highlight={searchQ} onEdit={n => { setEditing(n); setEditorOpen(true); }} onDelete={onDelete} onCard={n => setCardNote(n)} onLocClick={n => { setMapFocus(n); setTab('map'); }} />}
-                            {tab === 'map' && <MapTab notes={allNotes} focus={mapFocus} onViewNote={n => { setEditing(n); setEditorOpen(true); }} />}
+                            {tab === 'timeline' && <TimelineView notes={notes} isDark={isDark} highlight={searchQ} onEdit={n => { setEditing(n); setEditorOpen(true); }} onDelete={onDelete} onCard={n => setCardNote(n)} />}
                             {tab === 'tags' && <TagsTab notes={allNotes} onViewNote={n => { setEditing(n); setEditorOpen(true); }} onCard={n => setCardNote(n)} />}
                             {tab === 'cards' && <CardsTab isDark={isDark} />}
                         </div>
