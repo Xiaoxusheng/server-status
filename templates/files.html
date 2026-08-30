@@ -591,6 +591,15 @@
             return STREAM_EXTS.includes((name.split('.').pop() || '').toLowerCase());
         }
 
+        // 检测当前浏览器是否具备 mpegts.js 的 MSE 解码能力。
+        // iPhone Safari（iOS 17.1 前）及部分移动 WebView 没有 MediaSource，TS 无法在线播放，需降级提示
+        function mseSupported() {
+            try {
+                return !!(window.MediaSource && window.mpegts && window.mpegts.getFeatureList
+                    && window.mpegts.getFeatureList().mseLivePlayback);
+            } catch (e) { return false; }
+        }
+
         // 读取非 HttpOnly 的 csrf_token Cookie；写请求自动携带，会话 Cookie 由 credentials: include 携带
         function getCsrfToken() { const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
         function secureFetch(url, options = {}) {
@@ -700,6 +709,8 @@
             const [drawerFile, setDrawerFile] = useState(null);
             // mpegts.js 播放器实例（仅 TS 直录流使用）
             const tsPlayerRef = React.useRef(null);
+            // 当前 TS 文件在浏览器上无法 MSE 播放（移动端 Safari 等），Drawer 内降级为提示
+            const [tsUnsupported, setTsUnsupported] = useState(false);
             // 我的令牌列表 Modal
             const [tokenListOpen, setTokenListOpen] = useState(false);
             const [tokenListLoading, setTokenListLoading] = useState(false);
@@ -781,19 +792,29 @@
             // TS 直录流：打开 Drawer 时创建 mpegts.js 播放器（MSE 解码 MPEG-TS），关闭/切换时销毁避免资源泄漏
             useEffect(() => {
                 const f = drawerFile;
-                if (!f || !isStreamVideo(f.name) || !window.mpegts) return;
+                if (!f || !isStreamVideo(f.name)) return;
+                // 能力不足（iOS Safari 等无 MSE）时降级为提示，不再静默黑屏
+                if (!mseSupported()) { setTsUnsupported(true); return; }
+                setTsUnsupported(false);
                 const videoEl = document.getElementById('fm-ts-player');
                 if (!videoEl) return;
-                const player = window.mpegts.createPlayer({
-                    type: 'mpegts',
-                    isLive: false,
-                    url: mediaUrl(f.path)
-                }, {
-                    enableWorker: false,
-                    lazyLoad: true,
-                    lazyLoadMaxDuration: 180,
-                    autoCleanupSourceBuffer: true
-                });
+                let player;
+                try {
+                    player = window.mpegts.createPlayer({
+                        type: 'mpegts',
+                        isLive: false,
+                        url: mediaUrl(f.path)
+                    }, {
+                        enableWorker: false,
+                        lazyLoad: true,
+                        lazyLoadMaxDuration: 180,
+                        autoCleanupSourceBuffer: true
+                    });
+                } catch (e) {
+                    // 创建失败（如 MSE 存在但编解码不受支持）：降级提示
+                    setTsUnsupported(true);
+                    return;
+                }
                 tsPlayerRef.current = player;
                 player.attachMediaElement(videoEl);
                 player.load();
@@ -1385,7 +1406,11 @@
                                     )}
                                     {fileCategory(drawerFile.name) === 'video' && (
                                         isStreamVideo(drawerFile.name)
-                                            ? <video key={drawerFile.path} id="fm-ts-player" className="fm-preview-video" controls />
+                                            ? (tsUnsupported
+                                                ? <Alert type="warning" showIcon style={{ marginBottom: 12 }}
+                                                    message="当前浏览器不支持在线播放 TS 流"
+                                                    description={<Typography.Text>iOS Safari 及部分移动浏览器缺少 MSE 解码能力，无法直接播放 TS 录播。<a href={mediaUrl(drawerFile.path)} download={drawerFile.name}>点此下载原文件</a> 后本地播放，或改用桌面浏览器打开本页。</Typography.Text>} />
+                                                : <video key={drawerFile.path} id="fm-ts-player" className="fm-preview-video" controls />)
                                             : <video key={drawerFile.path} className="fm-preview-video" src={mediaUrl(drawerFile.path)} controls preload="metadata" />
                                     )}
                                     <Descriptions column={1} size="small" bordered>
