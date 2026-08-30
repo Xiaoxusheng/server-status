@@ -449,6 +449,27 @@
             background: #000;
         }
 
+        /* 办公文档预览（Drawer 在 body Portal 下，拿不到 .sp-app CSS 变量，暗色用 html.dark 显式适配） */
+        .office-wrap {
+            max-height: 62vh;
+            overflow: auto;
+            border: 1px solid #d9d9d9;
+            border-radius: 8px;
+            padding: 16px;
+            background: #fff;
+            margin-bottom: 12px;
+        }
+        html.dark .office-wrap { background: #1f1f1f; border-color: var(--color-border); }
+        .office-doc { font-size: 14px; line-height: 1.7; color: #333; }
+        html.dark .office-doc { color: rgba(255,255,255,.85); }
+        .office-doc img { max-width: 100%; }
+        .office-doc h1, .office-doc h2, .office-doc h3 { margin: 12px 0 6px; }
+        .office-doc p { margin: 6px 0; }
+        .office-doc ul, .office-doc ol { padding-left: 22px; }
+        .office-doc table { border-collapse: collapse; margin: 8px 0; width: 100%; }
+        .office-doc td, .office-doc th { border: 1px solid #d9d9d9; padding: 4px 8px; font-size: 12px; min-width: 48px; white-space: nowrap; }
+        .office-sheet-name { font-weight: 600; margin: 14px 0 6px; color: #1677ff; }
+
         /* 列表模式名称图标 */
         .fm-td-icon {
             margin-right: 8px;
@@ -625,6 +646,148 @@
             if (ext === 'exe' || ext === 'msi') return 'WindowsOutlined';
             if (ext === 'apk') return 'AndroidOutlined';
             return CAT_META[fileCategory(name)].icon;
+        }
+
+        // ==================== 办公文档在线预览（docx / xlsx / pptx / pdf）====================
+        // 文件通过会话鉴权的 /api/media 读取，全部在浏览器本地渲染，不经过任何第三方服务。
+
+        function docPreviewKind(name) {
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            if (ext === 'docx') return 'docx';
+            if (ext === 'doc') return 'doc-legacy';
+            if (['xlsx', 'xls', 'csv'].includes(ext)) return 'sheet';
+            if (ext === 'pptx') return 'pptx';
+            if (ext === 'ppt') return 'ppt-legacy';
+            if (ext === 'pdf') return 'pdf';
+            return null;
+        }
+
+        // 按需加载本地 vendor 脚本（同一地址只加载一次）
+        const loadedScripts = {};
+        function loadScript(url) {
+            if (!loadedScripts[url]) {
+                loadedScripts[url] = new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = url;
+                    s.onload = resolve;
+                    s.onerror = () => { delete loadedScripts[url]; reject(new Error('本地渲染组件加载失败')); };
+                    document.head.appendChild(s);
+                });
+            }
+            return loadedScripts[url];
+        }
+
+        // PPTX 渲染组件按需从 ESM CDN 动态加载（双源兜底，仅加载渲染库本身，文件内容不外发）
+        let pptxLibPromise = null;
+        function loadPptxLib() {
+            if (!pptxLibPromise) {
+                const urls = ['https://esm.sh/pptx-preview@1.0.7', 'https://cdn.jsdelivr.net/npm/pptx-preview@1.0.7/+esm'];
+                pptxLibPromise = (async () => {
+                    let lastErr = null;
+                    for (const u of urls) {
+                        try { return await import(u); } catch (e) { lastErr = e; }
+                    }
+                    throw new Error('PPTX 渲染组件加载失败（首次使用需联网）');
+                })();
+            }
+            return pptxLibPromise;
+        }
+
+        function OfficePreview({ file }) {
+            const kind = docPreviewKind(file.name);
+            const [phase, setPhase] = useState('loading'); // loading | ready | error
+            const [errText, setErrText] = useState('');
+            const [html, setHtml] = useState('');
+            const [buf, setBuf] = useState(null);
+            const [pdfUrl, setPdfUrl] = useState('');
+            const boxRef = useRef(null);
+
+            useEffect(() => {
+                let dead = false;
+                let objectUrl = '';
+                setPhase('loading'); setErrText(''); setHtml(''); setBuf(null); setPdfUrl('');
+                (async () => {
+                    try {
+                        if (kind === 'doc-legacy') throw new Error('旧版 .doc 格式无法在线渲染，请转存为 .docx 后预览');
+                        if (kind === 'ppt-legacy') throw new Error('旧版 .ppt 格式无法在线渲染，请转存为 .pptx 后预览');
+                        if (file.size > 200 * 1024 * 1024) throw new Error('文件超过 200MB');
+                        const resp = await fetch(mediaUrl(file.path));
+                        if (!resp.ok) throw new Error('文件读取失败（HTTP ' + resp.status + '）');
+                        const arrayBuf = await resp.arrayBuffer();
+                        if (dead) return;
+                        if (kind === 'pdf') {
+                            objectUrl = URL.createObjectURL(new Blob([arrayBuf], { type: 'application/pdf' }));
+                            setBuf(arrayBuf); setPdfUrl(objectUrl); setPhase('ready'); return;
+                        }
+                        if (kind === 'docx') {
+                            await loadScript(baseUrl + '/vendor-mammoth.min.js');
+                            const r = await window.mammoth.convertToHtml({ arrayBuffer: arrayBuf });
+                            if (dead) return;
+                            setHtml(r.value || ''); setPhase('ready'); return;
+                        }
+                        if (kind === 'sheet') {
+                            await loadScript(baseUrl + '/vendor-xlsx.full.min.js');
+                            const wb = window.XLSX.read(arrayBuf, { type: 'array' });
+                            let out = '';
+                            wb.SheetNames.forEach(sn => {
+                                out += '<div class="office-sheet-name">' + sn + '</div>' + window.XLSX.utils.sheet_to_html(wb.Sheets[sn]);
+                            });
+                            if (dead) return;
+                            setHtml('<div class="office-doc">' + out + '</div>'); setPhase('ready'); return;
+                        }
+                        // pptx：先进入 ready 渲染出容器，再由下方 effect 挂载预览器
+                        setBuf(arrayBuf); setPhase('ready');
+                    } catch (e) {
+                        if (!dead) { setErrText(e.message || '预览失败'); setPhase('error'); }
+                    }
+                })();
+                return () => {
+                    dead = true;
+                    if (objectUrl) URL.revokeObjectURL(objectUrl);
+                };
+            }, [file.path]);
+
+            // PPTX：容器就绪后初始化预览器（按容器宽度自适应）
+            useEffect(() => {
+                if (phase !== 'ready' || kind !== 'pptx' || !buf || !boxRef.current) return;
+                let dead = false;
+                (async () => {
+                    const mod = await loadPptxLib();
+                    if (dead || !boxRef.current) return;
+                    boxRef.current.innerHTML = '';
+                    const holder = document.createElement('div');
+                    boxRef.current.appendChild(holder);
+                    const w = Math.max(280, Math.min(920, boxRef.current.clientWidth || 420));
+                    const inst = mod.init(holder, { width: w, height: Math.round(w * 0.5625) });
+                    await inst.preview(buf);
+                })().catch(e => {
+                    if (!dead) { setErrText(e.message || 'PPTX 渲染失败'); setPhase('error'); }
+                });
+                return () => { dead = true; };
+            }, [phase, kind, buf]);
+
+            return (
+                <div style={{ marginBottom: 12 }}>
+                    {phase === 'loading' && (
+                        <div style={{ textAlign: 'center', padding: '26px 0' }}>
+                            <Spin size="large" />
+                            <div style={{ marginTop: 10, color: 'rgba(0,0,0,.45)', fontSize: 13 }}>正在加载预览…</div>
+                        </div>
+                    )}
+                    {phase === 'error' && (
+                        <Alert type="warning" showIcon style={{ marginBottom: 4 }}
+                            message="无法在线预览"
+                            description={<Typography.Text>{errText}。<a href={mediaUrl(file.path)} download={file.name}>下载原文件</a></Typography.Text>} />
+                    )}
+                    {phase === 'ready' && kind === 'pdf' && (
+                        <iframe title="pdf-preview" src={pdfUrl} style={{ width: '100%', height: '62vh', border: '1px solid #d9d9d9', borderRadius: 8, marginBottom: 12 }} />
+                    )}
+                    {phase === 'ready' && (kind === 'docx' || kind === 'sheet') && (
+                        <div className="office-wrap" dangerouslySetInnerHTML={{ __html: html }} />
+                    )}
+                    {phase === 'ready' && kind === 'pptx' && <div ref={boxRef} className="office-wrap" />}
+                </div>
+            );
         }
 
         // 类型筛选下拉选项
@@ -1394,6 +1557,9 @@
                                                     description={<Typography.Text>iOS Safari 及部分移动浏览器缺少 MSE 解码能力，无法直接播放 TS 录播。<a href={mediaUrl(drawerFile.path)} download={drawerFile.name}>点此下载原文件</a> 后本地播放，或改用桌面浏览器打开本页。</Typography.Text>} />
                                                 : <video key={drawerFile.path} id="fm-ts-player" className="fm-preview-video" controls />)
                                             : <video key={drawerFile.path} className="fm-preview-video" src={mediaUrl(drawerFile.path)} controls preload="metadata" />
+                                    )}
+                                    {docPreviewKind(drawerFile.name) && (
+                                        <OfficePreview key={drawerFile.path} file={drawerFile} />
                                     )}
                                     <Descriptions column={1} size="small" bordered>
                                         <Descriptions.Item label="类型">{CAT_META[fileCategory(drawerFile.name)].label}</Descriptions.Item>
