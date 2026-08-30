@@ -126,6 +126,12 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # 生成发布说明需要跨 tag 的完整提交历史
+          fetch-depth: 0
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -133,6 +139,29 @@ jobs:
 
       - name: Display structure of downloaded files
         run: ls -R artifacts/
+
+      # 自动说明（generate_release_notes）只收集 PR；直接推 master 的提交不会出现，
+      # 这里按 feat/fix 分组生成提交列表，GitHub 会把它拼在自动说明前面。
+      - name: Generate release notes from commits
+        id: notes
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          RANGE="${PREV_TAG:+${PREV_TAG}..}${GITHUB_REF_NAME}"
+          echo "release notes range: $RANGE"
+          LOG=$(git log --no-merges --pretty=format:"- %s (%h)" "$RANGE")
+          FEATS=$(echo "$LOG" | grep "^- feat:" | sed 's/^- feat: /- /' || true)
+          FIXES=$(echo "$LOG" | grep "^- fix:" | sed 's/^- fix: /- /' || true)
+          OTHERS=$(echo "$LOG" | grep -v -e "^- feat:" -e "^- fix:" || true)
+          {
+            echo "body<<__NOTES_EOF__"
+            echo "## What's Changed"
+            echo
+            if [ -n "$FEATS" ]; then echo "### ✨ 新功能"; echo "$FEATS"; echo; fi
+            if [ -n "$FIXES" ]; then echo "### 🐛 问题修复"; echo "$FIXES"; echo; fi
+            if [ -n "$OTHERS" ]; then echo "### 🔧 其他变更"; echo "$OTHERS"; echo; fi
+            echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${GITHUB_REF_NAME}"
+            echo "__NOTES_EOF__"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create Release
         id: create_release
@@ -142,6 +171,7 @@ jobs:
             artifacts/**/*.tar.gz
             artifacts/**/*.zip
             artifacts/**/*.sha256
+          body: ${{ steps.notes.outputs.body }}
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref, '-') }}
