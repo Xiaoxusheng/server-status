@@ -57,6 +57,12 @@
             text-align: center;
         }
 
+        /* 卡片本体：白色相框只包图片（标题等内容已在 PNG 内），高图按视口高度收缩 */
+        .share-card {
+            max-width: 480px;
+            padding: 10px;
+        }
+
         @keyframes fade-up {
             from { opacity: 0; transform: translateY(8px); }
             to { opacity: 1; transform: none; }
@@ -67,22 +73,17 @@
         }
 
         .share-card img.card-img {
-            width: 100%;
-            border-radius: 10px;
             display: block;
+            max-width: 100%;
+            max-height: calc(100vh - 190px);
+            border-radius: 12px;
+            margin: 0 auto;
             background: var(--border);
-        }
-
-        .card-title {
-            font-size: 15px;
-            font-weight: 600;
-            margin: 14px 0 0;
-            word-break: break-word;
         }
 
         .share-brand {
             text-align: center;
-            margin-top: 16px;
+            margin-top: 14px;
             font-size: 13px;
             color: var(--secondary);
         }
@@ -228,26 +229,6 @@
             var token = window.location.pathname.replace(/^\/card\//, '').replace(/\/$/, '') || '';
             var cardData = null;
 
-            function esc(s) {
-                return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) {
-                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
-                });
-            }
-
-            // 卡片标题可能含 Markdown 语法（旧数据），展示前去掉符号只留文字
-            function stripMd(s) {
-                return String(s == null ? '' : s)
-                    .replace(/^#{1,6}\s+/gm, '')
-                    .replace(/\*\*([^*]*)\*\*/g, '$1')
-                    .replace(/\*([^*
-]*)\*/g, '$1')
-                    .replace(/~~([^~]*)~~/g, '$1')
-                    .replace(/`([^`]*)`/g, '$1')
-                    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-                    .replace(/^>\s?/gm, '')
-                    .trim();
-            }
-
             function renderLoading() {
                 document.getElementById('root').innerHTML =
                     '<div class="share-wrap"><div class="spin"></div></div>';
@@ -310,14 +291,14 @@
 
             function renderCard(data) {
                 var allow = !!data.allow_download;
+                // 卡片 PNG 已含标题/正文/时间，相框只包图片；按钮与署名放相框外
                 document.getElementById('root').innerHTML =
                     '<div class="share-wrap">' +
                     '  <div class="share-card">' +
                     '    <img class="card-img" src="/api/share/' + encodeURIComponent(token) + '/image" alt="\u5361\u7247" />' +
-                    (data.title ? '    <div class="card-title">' + esc(stripMd(data.title)) + '</div>' : '') +
-                    (allow ? '    <div class="btn-row"><button class="ant-btn primary" id="dl-btn">\u2b07\uFE0F \u4e0b\u8f7d\u56fe\u7247</button></div>' : '') +
-                    '    <div class="share-brand">Server Status</div>' +
                     '  </div>' +
+                    (allow ? '  <div class="btn-row"><button class="ant-btn primary" id="dl-btn">\u2b07\uFE0F \u4e0b\u8f7d\u56fe\u7247</button></div>' : '') +
+                    '  <div class="share-brand">Server Status</div>' +
                     '</div>';
                 if (allow) {
                     document.getElementById('dl-btn').addEventListener('click', function () {
