@@ -2094,6 +2094,15 @@ var (
 	}
 )
 
+// DiskPartition 磁盘分区使用情况明细（仪表盘展示用）
+type DiskPartition struct {
+	Mount       string  `json:"mount"`
+	Total       uint64  `json:"total"`
+	Used        uint64  `json:"used"`
+	Free        uint64  `json:"free"`
+	UsedPercent float64 `json:"used_percent"`
+}
+
 type ServerStatus struct {
 	CPUUsage      float64          `json:"cpu_usage"`
 	MemoryUsage   float64          `json:"memory_usage"`
@@ -2120,6 +2129,7 @@ type ServerStatus struct {
 	Architecture  string           `json:"architecture"`
 	ServerIP      string           `json:"server_ip"`
 	Trojan        TrojanStatus     `json:"trojan"`
+	Disks         []DiskPartition  `json:"disks"`
 }
 
 // OnlineUserInfo 用于WebSocket传输的在线用户信息结构
@@ -5520,6 +5530,7 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 	var totalDisk uint64
 	var usedDisk uint64
 	var freeDisk uint64
+	diskList := make([]DiskPartition, 0, 8)
 
 	// 获取所有分区
 	partitions, err := disk.Partitions(false)
@@ -5562,6 +5573,13 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 			totalDisk += usage.Total
 			usedDisk += usage.Used
 			freeDisk += usage.Free
+			diskList = append(diskList, DiskPartition{
+				Mount:       partition.Mountpoint,
+				Total:       usage.Total,
+				Used:        usage.Used,
+				Free:        usage.Free,
+				UsedPercent: usage.UsedPercent,
+			})
 		}
 	} else {
 		// 如果失败，回退到只获取根分区
@@ -5572,7 +5590,17 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 		totalDisk = diskInfo.Total
 		usedDisk = diskInfo.Used
 		freeDisk = diskInfo.Free
+		diskList = append(diskList, DiskPartition{
+			Mount:       "/",
+			Total:       diskInfo.Total,
+			Used:        diskInfo.Used,
+			Free:        diskInfo.Free,
+			UsedPercent: diskInfo.UsedPercent,
+		})
 	}
+
+	// 分区按挂载点排序，展示顺序稳定
+	sort.Slice(diskList, func(i, j int) bool { return diskList[i].Mount < diskList[j].Mount })
 
 	// 计算磁盘使用百分比
 	diskUsagePercent := 0.0
@@ -5695,6 +5723,7 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 			}
 			return trojanClient.snapshot()
 		}(),
+		Disks: diskList,
 	}
 
 	// 填装入缓存并回写记录刻度

@@ -393,6 +393,38 @@
         .media-head .ant-btn,
         .media-head .ant-slider { cursor: pointer; }
 
+        /* 磁盘分区卡片 */
+        .disk-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 10px;
+        }
+
+        .disk-item {
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            transition: border-color .15s ease;
+        }
+
+        .disk-item:hover { border-color: var(--color-border-strong); }
+
+        .disk-mount {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .disk-detail {
+            font-size: 12px;
+            color: var(--color-text-tertiary);
+            margin-top: 2px;
+            font-variant-numeric: tabular-nums;
+        }
+
         .media-head .m-title {
             flex: 1;
         }
@@ -504,10 +536,7 @@
             }
 
             .media-window {
-                width: min(300px, calc(100vw - 24px));
-                height: 200px;
-                right: 12px;
-                bottom: 12px;
+                display: none;
             }
         }
     </style>
@@ -516,8 +545,17 @@
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        const { Card, Table, Button, Input, Form, Tag, Space, Statistic, Typography, ConfigProvider, theme, message, Descriptions, Badge, Alert, Tooltip, Modal } = window.antd;
+        const { Card, Table, Button, Input, Form, Tag, Space, Statistic, Typography, ConfigProvider, theme, message, Descriptions, Badge, Alert, Tooltip, Modal, Progress } = window.antd;
         const { useState, useEffect, useRef, useCallback } = React;
+
+        // 磁盘容量展示格式化（后端下发原始字节）
+        const fmtDiskSize = (b) => {
+            const v = Number(b) || 0;
+            if (v >= 1024 ** 3) return (v / 1024 ** 3).toFixed(1) + ' GB';
+            if (v >= 1024 ** 2) return (v / 1024 ** 2).toFixed(0) + ' MB';
+            if (v >= 1024) return (v / 1024).toFixed(0) + ' KB';
+            return v + ' B';
+        };
         const { darkAlgorithm } = theme;
         const IconSet = window.icons || {};
         const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
@@ -1012,6 +1050,21 @@
 
                             <Alert type="info" showIcon style={{ marginTop: 12 }}
                                 message={conn !== 'connected' ? '⚠️ WebSocket 连接已断开，正在自动重连，图表暂停更新' : '✅ 实时数据推送中，每 1 秒更新一次'} />
+
+                            {status && status.disks && status.disks.length > 0 && (
+                                <Card size="small" title={<span><UIIcon name="HddOutlined" /> 磁盘分区</span>} style={{ marginTop: 12 }}>
+                                    <div className="disk-grid">
+                                        {status.disks.map(d => (
+                                            <div key={d.mount} className="disk-item">
+                                                <div className="disk-mount" title={d.mount}>{d.mount}</div>
+                                                <Progress percent={Math.min(100, Math.round(d.used_percent))}
+                                                    status={d.used_percent >= 90 ? 'exception' : 'normal'} size="small" />
+                                                <div className="disk-detail">已用 {fmtDiskSize(d.used)} / {fmtDiskSize(d.total)} · 可用 {fmtDiskSize(d.free)}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </Card>
+                            )}
                         </div>
                         <MediaWindow closed={mediaClosed} onClose={() => { setMediaClosed(true); localStorage.setItem('media_closed', '1'); }} />
                     </div>
