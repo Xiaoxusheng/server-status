@@ -211,11 +211,12 @@ SERVER_STATUS_EXTRA_ORIGINS=<旧额外跨域来源，逗号分隔>
 
 | 权限 | 说明 | 权限 | 说明 |
 |---|---|---|---|
-| `system:view` | 查看状态与统计 | `files:manage` | 浏览 / 上传 / 删除文件 |
+| `user:view` | 查看状态与统计 | `files:manage` | 浏览 / 上传 / 删除文件 |
 | `system:exec` | 命令白名单 + Web Shell | `token:manage` | 管理自己名下的令牌 |
 | `system:process` | 查看 / 结束进程 | `token:issue` | 为指定用户签发令牌 |
 | `ip:manage` | IP 封禁 / 白名单 | `user:view` / `user:manage` | 用户查看 / 管理 |
 | `files:view` | 查看媒体内容 | `role:manage` | 角色与权限管理 |
+| `private:view` | 访问隐藏私人空间（默认仅 admin） | | |
 
 ## 安全特性
 

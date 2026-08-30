@@ -42,7 +42,9 @@ func privatePageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/index.html", http.StatusFound)
 		return
 	}
-	if _, ok := getSessionFromRequest(r); !ok {
+	// 必须已登录且拥有 private:view 权限；无权限静默弹回首页，不暴露页面存在
+	session, ok := getSessionFromRequest(r)
+	if !ok || !hasPermission(session.Username, "private:view") {
 		http.Redirect(w, r, "/index.html", http.StatusFound)
 		return
 	}
@@ -59,13 +61,14 @@ func privatePageHandler(w http.ResponseWriter, r *http.Request) {
 // registerPrivateRoutes 注册隐藏私人空间全部路由（含公开分享页）
 func registerPrivateRoutes(mux *http.ServeMux) {
 	// 隐藏入口：只有通过快捷键/连点 Logo 获得短期入口 Cookie 才能打开 /private.html
-	mux.HandleFunc("POST /api/private/entry", authMiddleware(securityMiddleware(privateEntryHandler)))
+	// 且必须拥有 private:view 权限（默认仅超级管理员），普通用户请求直接 403
+	mux.HandleFunc("POST /api/private/entry", authMiddleware(requirePermission("private:view", securityMiddleware(privateEntryHandler))))
 	mux.HandleFunc("GET /private.html", securityMiddleware(privatePageHandler))
 
-	// 解锁 / 锁定 / Session / 密码初始化
-	mux.HandleFunc("POST /api/private/unlock", authMiddleware(securityMiddleware(privateUnlockHandler)))
-	mux.HandleFunc("POST /api/private/lock", authMiddleware(securityMiddleware(privateLockHandler)))
-	mux.HandleFunc("GET /api/private/session", authMiddleware(securityMiddleware(privateSessionHandler)))
+	// 解锁 / 锁定 / Session / 密码初始化（解锁同样要求 private:view，防止低权限用户凭密码硬闯）
+	mux.HandleFunc("POST /api/private/unlock", authMiddleware(requirePermission("private:view", securityMiddleware(privateUnlockHandler))))
+	mux.HandleFunc("POST /api/private/lock", authMiddleware(requirePermission("private:view", securityMiddleware(privateLockHandler))))
+	mux.HandleFunc("GET /api/private/session", authMiddleware(requirePermission("private:view", securityMiddleware(privateSessionHandler))))
 	mux.HandleFunc("POST /api/private/setup-password", authMiddleware(requirePermission("role:manage", securityMiddleware(privateSetupPasswordHandler))))
 	mux.HandleFunc("GET /api/private/server-status", authMiddleware(securityMiddleware(privateAuthMiddleware(privateServerStatusHandler))))
 

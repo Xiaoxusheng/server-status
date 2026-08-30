@@ -212,6 +212,7 @@ var allPermissions = []PermissionDef{
 	{Key: "trojan:manage", Name: "管理 Trojan-Go", Group: "服务与端口", Description: "查看 Trojan-Go 状态并管理用户"},
 	{Key: "docker:view", Name: "查看 Docker 容器", Group: "服务与端口", Description: "查看容器列表、状态、资源占用与日志"},
 	{Key: "docker:manage", Name: "管理 Docker 容器", Group: "服务与端口", Description: "启动、停止、重启容器"},
+	{Key: "private:view", Name: "访问隐藏私人空间", Group: "系统", Description: "通过隐藏入口进入私人空间（默认仅超级管理员拥有）"},
 }
 
 // defaultRoles 返回系统内置的默认角色
