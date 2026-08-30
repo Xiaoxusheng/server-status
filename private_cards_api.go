@@ -38,7 +38,11 @@ func validCardSize(w, h int) bool {
 	switch {
 	case w == 1080 && h == 1080:
 	case w == 1080 && h == 1350:
+	case w == 1080 && h == 1440:
 	case w == 1170 && h == 2532:
+	case w == 1080 && h == 1920:
+	case w == 1280 && h == 720:
+	case w == 1200 && h == 630:
 	default:
 		return false
 	}

@@ -578,6 +578,40 @@
             background: var(--color-primary);
         }
 
+        /* ================= 移动端悬浮新建按钮（48px，避让底部导航与安全区） ================= */
+        .pv-fab-mobile {
+            position: fixed;
+            right: 16px;
+            bottom: calc(72px + env(safe-area-inset-bottom));
+            z-index: 30;
+            width: 48px !important;
+            height: 48px !important;
+            border: 0;
+            background: var(--color-primary);
+            box-shadow: var(--shadow-float);
+        }
+
+        /* ================= 我的卡片：统一方形缩略图 ================= */
+        .card-thumb {
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--hover);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .card-thumb img {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }
+
         /* ================= 响应式 ================= */
         @media (max-width: 768px) {
             .pv-topbar {
@@ -1805,8 +1839,12 @@
         // ==================== 卡片生成器 ====================
         const CARD_SIZES = [
             { label: '方形', ratio: '1:1', w: 1080, h: 1080 },
-            { label: '竖版', ratio: '4:5', w: 1080, h: 1350 },
-            { label: '手机长图', ratio: '9:19.5', w: 1170, h: 2532 }
+            { label: '竖版 4:5', ratio: '4:5', w: 1080, h: 1350 },
+            { label: '竖版 3:4', ratio: '3:4', w: 1080, h: 1440 },
+            { label: '手机长图', ratio: '9:19.5', w: 1170, h: 2532 },
+            { label: '手机壁纸', ratio: '9:16', w: 1080, h: 1920 },
+            { label: '横屏 16:9', ratio: '16:9', w: 1280, h: 720 },
+            { label: '横版封面', ratio: '1.91:1', w: 1200, h: 630 }
         ];
         const CARD_TEMPLATES = [
             { key: 'simple', label: '简洁' },
@@ -2323,7 +2361,7 @@
                     <div className="card-grid">
                         {cards.map(c => (
                             <div className="card-item" key={c.id}>
-                                <img src={c.url} alt={c.title} loading="lazy" />
+                                <div className="card-thumb"><img src={c.url} alt={c.title} loading="lazy" /></div>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, marginTop: 8 }}>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                         <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title || '未命名卡片'}</div>
@@ -2512,6 +2550,7 @@
                                     className="pv-tabs"
                                     activeKey={tab}
                                     onChange={changeTab}
+                                    tabBarExtraContent={{ right: <Button type="primary" icon={<I name="PlusOutlined" />} onClick={() => { setEditing(null); setEditorOpen(true); }}>新建手记</Button> }}
                                     items={[
                                         { key: 'timeline', label: <span><I name="ClockCircleOutlined" /> 时间线</span> },
                                         { key: 'tags', label: <span><I name="TagsOutlined" /> 标签</span> },
@@ -2523,10 +2562,8 @@
                             {tab === 'tags' && <TagsTab notes={allNotes} onViewNote={n => { setEditing(n); setEditorOpen(true); }} onCard={n => setCardNote(n)} />}
                             {tab === 'cards' && <CardsTab isDark={isDark} />}
                         </div>
-                        {isMobile ? (
-                            <Button className="pv-fab-mobile" type="primary" shape="circle" size="large" icon={<I name="PlusOutlined" />} onClick={() => { setEditing(null); setEditorOpen(true); }} />
-                        ) : (
-                            <Button className="pv-fab" type="primary" icon={<I name="PlusOutlined" />} onClick={() => { setEditing(null); setEditorOpen(true); }}>新建手记</Button>
+                        {isMobile && (
+                            <Button className="pv-fab-mobile" type="primary" shape="circle" icon={<I name="PlusOutlined" />} onClick={() => { setEditing(null); setEditorOpen(true); }} />
                         )}
                         {isMobile && (
                             <div className="pv-bottom-nav">
