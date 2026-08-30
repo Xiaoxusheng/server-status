@@ -1163,7 +1163,7 @@
                 }
             };
 
-            // 打开「我的令牌」列表并加载（后端按 token:issue / token:manage 权限放行）
+            // 打开「我的令牌」列表并加载（后端按 token:issue / token:view 权限放行）
             const openTokenList = async () => {
                 setTokenListOpen(true);
                 setTokenListLoading(true);
@@ -1313,7 +1313,7 @@
                                     </Upload>
                                     <Button icon={<UIIcon name="FolderAddOutlined" />} onClick={() => setMkModal(true)}>新建文件夹</Button>
                                     <Button icon={<UIIcon name="ReloadOutlined" />} onClick={() => load(path)}>刷新</Button>
-                                    {(hasPerm('token:issue') || hasPerm('token:manage')) && (
+                                    {(hasPerm('token:issue') || hasPerm('token:view')) && (
                                         <Button icon={<UIIcon name="FileDoneOutlined" />} onClick={openTokenList}>我的令牌</Button>
                                     )}
                                 </Space>}

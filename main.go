@@ -197,7 +197,8 @@ var allPermissions = []PermissionDef{
 	{Key: "files:view", Name: "查看媒体文件", Group: "文件", Description: "查看视频、电子书、随机媒体等内容"},
 	{Key: "files:download", Name: "下载文件", Group: "文件", Description: "通过安全下载页或下载令牌下载服务器文件"},
 	{Key: "files:manage", Name: "管理文件", Group: "文件", Description: "浏览、上传、删除服务器文件目录"},
-	{Key: "token:manage", Name: "管理下载令牌（查看/撤销）", Group: "文件", Description: "查看和撤销自己名下的下载令牌"},
+	{Key: "token:view", Name: "查看下载令牌", Group: "文件", Description: "查看全部用户的下载令牌列表"},
+	{Key: "token:revoke", Name: "撤销下载令牌", Group: "文件", Description: "撤销任意用户的下载令牌（高危操作，默认仅超级管理员）"},
 	{Key: "token:issue", Name: "下发下载令牌", Group: "文件", Description: "为自己签发下载令牌，并设置有效期和流量上限"},
 	{Key: "system:process", Name: "查看进程列表", Group: "系统", Description: "查看服务器进程占用情况（CPU/内存）"},
 	{Key: "system:kill", Name: "结束进程", Group: "系统", Description: "结束/强制结束服务器进程（高危操作，默认仅超级管理员）"},
@@ -232,7 +233,7 @@ func defaultRoles() map[string]*Role {
 			RoleID:      "operator",
 			Name:        "运维人员",
 			Description: "负责服务器日常运维，可查看状态并执行命令",
-			Permissions: []string{"system:view", "system:log", "system:exec", "files:view", "files:download", "token:issue", "token:manage", "user:view", "trojan:manage", "docker:view", "docker:manage"},
+			Permissions: []string{"system:view", "system:log", "system:exec", "files:view", "files:download", "token:issue", "token:view", "token:revoke", "user:view", "trojan:manage", "docker:view", "docker:manage"},
 			IsSystem:    true,
 			CreatedAt:   now,
 		},
@@ -240,7 +241,7 @@ func defaultRoles() map[string]*Role {
 			RoleID:      "user",
 			Name:        "普通用户",
 			Description: "可查看服务器状态及下载媒体文件",
-			Permissions: []string{"system:view", "files:view", "files:download", "token:manage"},
+			Permissions: []string{"system:view", "files:view", "files:download", "token:view"},
 			IsSystem:    true,
 			CreatedAt:   now,
 		},
@@ -314,6 +315,20 @@ func loadRBAC() {
 	}
 	if rbacManager.Roles == nil {
 		rbacManager.Roles = make(map[string]*Role)
+	}
+	// 权限迁移：token:manage（查看/撤销）拆分为 token:view + token:revoke
+	// 旧 manage 本就只能查看全部 + 撤销自己名下（撤销自己现在走属主分支，无需权限），故保守映射为 token:view
+	for _, role := range rbacManager.Roles {
+		migrated := false
+		for i, p := range role.Permissions {
+			if p == "token:manage" {
+				role.Permissions[i] = "token:view"
+				migrated = true
+			}
+		}
+		if migrated {
+			log.Printf("角色权限迁移: %s 的 token:manage 已拆分为 token:view", role.RoleID)
+		}
 	}
 	rbacManager.Unlock()
 
@@ -3175,7 +3190,7 @@ func revokeDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !hasPermission(session.Username, "token:issue") && token.Username != session.Username {
+	if !hasPermission(session.Username, "token:revoke") && token.Username != session.Username {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -5927,8 +5942,9 @@ func main() {
 	http.HandleFunc("/generate-download-token", authMiddleware(requirePermission("token:issue", securityMiddleware(generateDownloadTokenHandler))))
 	http.HandleFunc("/download", securityMiddleware(secureDownloadHandler))
 	http.HandleFunc("/download-info", securityMiddleware(downloadInfoHandler))
-	http.HandleFunc("/list-download-tokens", authMiddleware(requireAnyPermission([]string{"token:manage", "token:issue"}, securityMiddleware(listDownloadTokensHandler))))
-	http.HandleFunc("/revoke-download-token", authMiddleware(requirePermission("token:manage", securityMiddleware(revokeDownloadTokenHandler))))
+	http.HandleFunc("/list-download-tokens", authMiddleware(requireAnyPermission([]string{"token:view", "token:issue"}, securityMiddleware(listDownloadTokensHandler))))
+	// 撤销：登录即可进 handler，细粒度在 handler 内判定——token:revoke 可撤任意，普通用户仅能撤自己名下
+	http.HandleFunc("/revoke-download-token", authMiddleware(securityMiddleware(revokeDownloadTokenHandler)))
 
 	// 使用认证中间件和安全中间件包装所有处理函数
 	// 静态文件服务：拦截备份/配置/源码等敏感文件，防止泄露

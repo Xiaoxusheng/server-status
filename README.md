@@ -198,7 +198,8 @@ SERVER_STATUS_EXTRA_ORIGINS=<旧额外跨域来源，逗号分隔>
 | 进程结束 | `POST /api/processes/kill` | `system:kill` |
 | 文件 | `GET /api/files`、`POST /api/files/upload`、`DELETE /api/files` | `files:manage` |
 | 媒体 | `GET /random-media`、`GET /epubs`、`GET /api/media?path=` | `files:view` / `files:manage` |
-| 下载令牌 | `POST /generate-download-token`、`GET /download?token_id=&token=&file=` | `token:issue` / `token:manage` |
+| 下载令牌 | `POST /generate-download-token`、`GET /download?token_id=&token=&file=` | `token:issue` / `token:view` |
+| 令牌撤销 | `POST /revoke-download-token` | `token:revoke` 或令牌属主本人 |
 | IP 管理 | `GET /api/ip/blocked`、`POST /api/ip/block`、`POST /api/ip/whitelist` | `ip:manage` |
 | RBAC | `GET/POST/PUT/DELETE /api/rbac/roles`、`/api/rbac/users` | `role:manage` / `user:manage` |
 
@@ -207,17 +208,18 @@ SERVER_STATUS_EXTRA_ORIGINS=<旧额外跨域来源，逗号分隔>
 ### 默认角色与权限
 
 - `admin`：全部权限（`*`）
-- `operator`：`system:view`、`system:exec`、`files:view`、`files:download`、`token:manage`、`user:view`
-- `user`：`system:view`、`files:view`、`files:download`、`token:manage`
+- `operator`：`system:view`、`system:exec`、`files:view`、`files:download`、`token:issue`、`token:view`、`token:revoke`、`user:view`
+- `user`：`system:view`、`files:view`、`files:download`、`token:view`
 
 | 权限 | 说明 | 权限 | 说明 |
 |---|---|---|---|
 | `system:view` | 查看状态与统计 | `files:manage` | 浏览 / 上传 / 删除文件 |
-| `system:exec` | 命令白名单 + Web Shell | `token:manage` | 管理自己名下的令牌 |
-| `system:process` | 查看进程列表 | `token:issue` | 为指定用户签发令牌 |
-| `system:kill` | 结束 / 强制结束进程（默认仅 admin） | `user:view` / `user:manage` | 用户查看 / 管理 |
-| `ip:manage` | IP 封禁 / 白名单 | `role:manage` | 角色与权限管理 |
-| `files:view` | 查看媒体内容 | `private:view` | 访问隐藏私人空间（默认仅 admin） |
+| `system:exec` | 命令白名单 + Web Shell | `token:view` | 查看全部用户的下载令牌 |
+| `system:process` | 查看进程列表 | `token:revoke` | 撤销任意用户的令牌（默认仅 admin） |
+| `system:kill` | 结束 / 强制结束进程（默认仅 admin） | `token:issue` | 为指定用户签发令牌（默认可管理自己签发的） |
+| `ip:manage` | IP 封禁 / 白名单 | `user:view` / `user:manage` | 用户查看 / 管理 |
+| `files:view` | 查看媒体内容 | `role:manage` | 角色与权限管理 |
+| `files:download` | 通过令牌下载文件 | `private:view` | 访问隐藏私人空间（默认仅 admin） |
 
 ## 安全特性
 
