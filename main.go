@@ -200,6 +200,7 @@ var allPermissions = []PermissionDef{
 	{Key: "token:manage", Name: "管理下载令牌（查看/撤销）", Group: "文件", Description: "查看和撤销自己名下的下载令牌"},
 	{Key: "token:issue", Name: "下发下载令牌", Group: "文件", Description: "为自己签发下载令牌，并设置有效期和流量上限"},
 	{Key: "system:process", Name: "查看进程列表", Group: "系统", Description: "查看服务器进程占用情况（CPU/内存）"},
+	{Key: "system:kill", Name: "结束进程", Group: "系统", Description: "结束/强制结束服务器进程（高危操作，默认仅超级管理员）"},
 	{Key: "ip:manage", Name: "管理IP封禁", Group: "系统", Description: "查看访问IP并封禁/解封异常IP"},
 	{Key: "user:view", Name: "查看用户", Group: "用户", Description: "查看系统用户列表"},
 	{Key: "user:manage", Name: "管理用户", Group: "用户", Description: "创建、编辑、禁用、删除用户"},
@@ -5999,11 +6000,11 @@ func main() {
 	http.HandleFunc("GET /api/media", authMiddleware(requirePermission("files:manage", securityMiddleware(mediaStreamHandler))))
 	http.HandleFunc("GET /api/processes", authMiddleware(requirePermission("system:process", securityMiddleware(listProcessesHandler))))
 	http.HandleFunc("GET /api/processes/{pid}", authMiddleware(requirePermission("system:process", securityMiddleware(getProcessDetailHandler))))
-	http.HandleFunc("POST /api/processes/kill", authMiddleware(requirePermission("system:process", securityMiddleware(killProcessHandler))))
+	http.HandleFunc("POST /api/processes/kill", authMiddleware(requirePermission("system:kill", securityMiddleware(killProcessHandler))))
 	http.HandleFunc("GET /api/ip/blocked", authMiddleware(requirePermission("ip:manage", securityMiddleware(listBlockedIPsHandler))))
 	http.HandleFunc("POST /api/ip/block", authMiddleware(requirePermission("ip:manage", securityMiddleware(blockIPHandler))))
 	http.HandleFunc("POST /api/ip/unblock", authMiddleware(requirePermission("ip:manage", securityMiddleware(unblockIPHandler))))
-	http.HandleFunc("GET /api/ipinfo", authMiddleware(securityMiddleware(ipinfoProxyHandler)))
+	http.HandleFunc("GET /api/ipinfo", authMiddleware(requirePermission("system:view", securityMiddleware(ipinfoProxyHandler))))
 	http.HandleFunc("GET /api/ip/blocked/history", authMiddleware(requirePermission("ip:manage", securityMiddleware(listBlockHistoryHandler))))
 	http.HandleFunc("GET /api/ip/whitelist", authMiddleware(requirePermission("ip:manage", securityMiddleware(listWhitelistHandler))))
 	http.HandleFunc("POST /api/ip/whitelist", authMiddleware(requirePermission("ip:manage", securityMiddleware(addWhitelistHandler))))

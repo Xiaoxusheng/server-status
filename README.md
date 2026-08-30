@@ -194,7 +194,8 @@ SERVER_STATUS_EXTRA_ORIGINS=<旧额外跨域来源，逗号分隔>
 | 实时监控 | `GET /ws?iface=`（WebSocket）、`GET /access-stats` | `system:view` |
 | Web Shell | `POST /api/shell/auth`、`GET /ws/shell`、`GET /api/shell/sessions` | `system:exec` |
 | 命令白名单 | `POST /exec?command=`（`uptime` / `df` / `free` / `who` / `uname` / `ls`） | `system:exec` |
-| 进程 | `GET /api/processes`、`POST /api/processes/kill` | `system:process` |
+| 进程 | `GET /api/processes` | `system:process` |
+| 进程结束 | `POST /api/processes/kill` | `system:kill` |
 | 文件 | `GET /api/files`、`POST /api/files/upload`、`DELETE /api/files` | `files:manage` |
 | 媒体 | `GET /random-media`、`GET /epubs`、`GET /api/media?path=` | `files:view` / `files:manage` |
 | 下载令牌 | `POST /generate-download-token`、`GET /download?token_id=&token=&file=` | `token:issue` / `token:manage` |
@@ -211,12 +212,12 @@ SERVER_STATUS_EXTRA_ORIGINS=<旧额外跨域来源，逗号分隔>
 
 | 权限 | 说明 | 权限 | 说明 |
 |---|---|---|---|
-| `user:view` | 查看状态与统计 | `files:manage` | 浏览 / 上传 / 删除文件 |
+| `system:view` | 查看状态与统计 | `files:manage` | 浏览 / 上传 / 删除文件 |
 | `system:exec` | 命令白名单 + Web Shell | `token:manage` | 管理自己名下的令牌 |
-| `system:process` | 查看 / 结束进程 | `token:issue` | 为指定用户签发令牌 |
-| `ip:manage` | IP 封禁 / 白名单 | `user:view` / `user:manage` | 用户查看 / 管理 |
-| `files:view` | 查看媒体内容 | `role:manage` | 角色与权限管理 |
-| `private:view` | 访问隐藏私人空间（默认仅 admin） | | |
+| `system:process` | 查看进程列表 | `token:issue` | 为指定用户签发令牌 |
+| `system:kill` | 结束 / 强制结束进程（默认仅 admin） | `user:view` / `user:manage` | 用户查看 / 管理 |
+| `ip:manage` | IP 封禁 / 白名单 | `role:manage` | 角色与权限管理 |
+| `files:view` | 查看媒体内容 | `private:view` | 访问隐藏私人空间（默认仅 admin） |
 
 ## 安全特性
 

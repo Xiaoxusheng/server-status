@@ -633,6 +633,7 @@
 
             const hasPerm = p => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
             const canManage = hasPerm('system:process');
+            const canKill = hasPerm('system:kill');
 
             useEffect(() => {
                 secureFetch(baseUrl + '/check-auth')
@@ -893,7 +894,7 @@
                 ];
                 if (p.service_name) items.push({ key: 'service', label: '查看服务', icon: <UIIcon name="AppstoreOutlined" /> });
                 items.push({ key: 'ports', label: '查看端口', icon: <UIIcon name="ApiOutlined" /> });
-                if (canManage && !isProtected(p)) {
+                if (canManage && canKill && !isProtected(p)) {
                     items.push({ type: 'divider' });
                     items.push({ key: 'kill', label: '结束进程', danger: true, icon: <UIIcon name="PoweroffOutlined" /> });
                     items.push({ key: 'kill9', label: '强制结束', danger: true, icon: <UIIcon name="StopOutlined" /> });
@@ -1185,7 +1186,7 @@
                                                     <div className="proc-row"><span className="label">运行</span><span>{fmtRuntime(p.elapsed)}</span></div>
                                                     <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                                                         <Button size="small" onClick={e => { e.stopPropagation(); openDetail(p.pid); }}>详情</Button>
-                                                        {canManage && !isProtected(p) && <Button size="small" danger onClick={e => { e.stopPropagation(); killConfirm(p, false); }}>结束</Button>}
+                                                        {canManage && canKill && !isProtected(p) && <Button size="small" danger onClick={e => { e.stopPropagation(); killConfirm(p, false); }}>结束</Button>}
                                                     </div>
                                                 </Card>
                                             ))}
