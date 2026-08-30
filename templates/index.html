@@ -393,26 +393,24 @@
         .media-head .ant-btn,
         .media-head .ant-slider { cursor: pointer; }
 
-        /* 磁盘分区卡片 */
-        .disk-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            gap: 10px;
+        /* 磁盘分区：主机信息卡下方的紧凑横条 */
+        .disk-strip {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
         }
 
-        .disk-item {
-            border: 1px solid var(--color-border);
-            border-radius: 8px;
-            padding: 10px 12px;
-            transition: border-color .15s ease;
+        .disk-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
         }
-
-        .disk-item:hover { border-color: var(--color-border-strong); }
 
         .disk-mount {
+            width: 110px;
+            flex-shrink: 0;
             font-weight: 600;
             font-size: 13px;
-            margin-bottom: 4px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -421,8 +419,8 @@
         .disk-detail {
             font-size: 12px;
             color: var(--color-text-tertiary);
-            margin-top: 2px;
             font-variant-numeric: tabular-nums;
+            white-space: nowrap;
         }
 
         .media-head .m-title {
@@ -1026,6 +1024,21 @@
                                 ]} />
                             </Card>
 
+                            {status && status.disks && status.disks.length > 0 && (
+                                <Card size="small" title={<Space size={6}><UIIcon name="HddOutlined" />磁盘分区</Space>} style={{ marginBottom: 12 }}>
+                                    <div className="disk-strip">
+                                        {status.disks.map(d => (
+                                            <div key={d.mount} className="disk-row">
+                                                <span className="disk-mount" title={d.mount}>{d.mount}</span>
+                                                <Progress percent={Math.min(100, Math.round(d.used_percent))} size="small"
+                                                    status={d.used_percent >= 90 ? 'exception' : 'normal'} style={{ flex: 1, margin: '0 12px', minWidth: 120 }} />
+                                                <span className="disk-detail">{fmtDiskSize(d.used)} / {fmtDiskSize(d.total)} · 可用 {fmtDiskSize(d.free)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </Card>
+                            )}
+
                             <div className="stat-grid">
                                 <Card size="small" hoverable bordered className="chart-card" title={<Space size={6}><UIIcon name="LineChartOutlined" />网络速率</Space>}>
                                     <div ref={el => chartRefs.current.net = el} className="chart"></div>
@@ -1050,21 +1063,6 @@
 
                             <Alert type="info" showIcon style={{ marginTop: 12 }}
                                 message={conn !== 'connected' ? '⚠️ WebSocket 连接已断开，正在自动重连，图表暂停更新' : '✅ 实时数据推送中，每 1 秒更新一次'} />
-
-                            {status && status.disks && status.disks.length > 0 && (
-                                <Card size="small" title={<span><UIIcon name="HddOutlined" /> 磁盘分区</span>} style={{ marginTop: 12 }}>
-                                    <div className="disk-grid">
-                                        {status.disks.map(d => (
-                                            <div key={d.mount} className="disk-item">
-                                                <div className="disk-mount" title={d.mount}>{d.mount}</div>
-                                                <Progress percent={Math.min(100, Math.round(d.used_percent))}
-                                                    status={d.used_percent >= 90 ? 'exception' : 'normal'} size="small" />
-                                                <div className="disk-detail">已用 {fmtDiskSize(d.used)} / {fmtDiskSize(d.total)} · 可用 {fmtDiskSize(d.free)}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </Card>
-                            )}
                         </div>
                         <MediaWindow closed={mediaClosed} onClose={() => { setMediaClosed(true); localStorage.setItem('media_closed', '1'); }} />
                     </div>
