@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,7 +19,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const ipSecurityFile = "/opt/server-status/ip_security.json"
+// ipSecurityFile IP 安全数据文件（默认 <数据根目录>/ip_security.json）
+var ipSecurityFile = filepath.Join(dataRoot(), "ip_security.json")
 
 // BlockedIP 封禁记录（手动 + 系统自动统一结构）
 type BlockedIP struct {

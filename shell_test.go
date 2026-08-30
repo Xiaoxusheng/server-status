@@ -33,7 +33,7 @@ func setupShellTest(t *testing.T, adminSession string, password string) (*http.S
 	}
 	shellAuthRate = &shellRateLimiter{fails: make(map[string][]time.Time), locks: make(map[string]time.Time)}
 
-	// 审计与密码文件跑在临时目录，不污染 /opt/server-status
+	// 审计与密码文件跑在临时目录，不污染数据目录
 	auditLogFile = filepath.Join(t.TempDir(), "audit.log")
 	os.Setenv("SHELL_PASSWORD_HASH_FILE", filepath.Join(t.TempDir(), "pw.dat"))
 	t.Cleanup(func() { os.Unsetenv("SHELL_PASSWORD_HASH_FILE") })

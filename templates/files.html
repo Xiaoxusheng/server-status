@@ -557,11 +557,10 @@
         }
 
         const baseUrl = window.location.origin;
-        // 静态资源访问基础地址（沿用原「复制路径」的既有地址约定，非新增硬编码）
-        const STATIC_BASE = 'https://example.com:8081/static/';
-
-        // 拼接文件的可访问 URL（用于复制路径；复制出去的分享地址保持既有 8081 静态服务约定）
-        const staticUrl = (p) => STATIC_BASE + p;
+        // 静态资源访问基础地址：默认使用同源会话鉴权的媒体流接口（/api/media）。
+        // 如部署了独立的公开静态文件服务器，可改为 'https://你的静态服务地址/static/' 实现免登录直链分享。
+        const STATIC_BASE = '/api/media?path=';
+        const staticUrl = (p) => STATIC_BASE + encodeURIComponent(p);
 
         // 同源媒体流地址：会话鉴权 + files:manage 权限 + Range 断点支持，用于页面内预览/播放
         const mediaUrl = (p) => baseUrl + '/api/media?path=' + encodeURIComponent(p);
@@ -1168,7 +1167,7 @@
                                     </div>
                                 </div>
                                 <div className="fm-fullpath">
-                                    <Typography.Text type="secondary">当前路径: /opt/server-status/media/{path}</Typography.Text>
+                                    <Typography.Text type="secondary">当前路径: 媒体目录/{path}</Typography.Text>
                                 </div>
 
                                 {/* 第三层：当前目录统计 */}

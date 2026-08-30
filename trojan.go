@@ -350,21 +350,22 @@ func deleteTrojanCredential(hash string) error {
 
 // loadTrojanConfig 依次从默认值、config.json、环境变量加载 Trojan-Go 配置。
 // config.json 与 private_notes.json 使用同一根目录（SERVER_STATUS_HOME 或 /opt/server-status）。
+// 默认关闭：未部署 Trojan-Go 时面板自动隐藏，不影响其他功能。
 func loadTrojanConfig() TrojanConfig {
 	cfg := TrojanConfig{
-		Enabled:         true,
+		Enabled:         false,
 		APIAddr:         "127.0.0.1:10000",
 		APITimeout:      5 * time.Second,
 		RefreshInterval: 2 * time.Second,
 		Connection: TrojanConnectionConfig{
-			Server: "example.com",
+			Server: "127.0.0.1",
 			Port:   8388,
 			TLS:    true,
-			SNI:    "example.com",
+			SNI:    "",
 			WebSocket: TrojanWebSocketConfig{
-				Enabled: true,
+				Enabled: false,
 				Path:    "/ws",
-				Host:    "example.com",
+				Host:    "",
 			},
 			UDP:     true,
 			LanCIDR: "192.168.1.0/24",

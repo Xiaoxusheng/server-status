@@ -168,12 +168,9 @@ var (
 	privateErrAuth   = fmt.Errorf("密码错误")
 )
 
-// privateRoot 私人空间数据根目录（生产 /opt/server-status，开发可用 SERVER_STATUS_HOME 覆盖）
+// privateRoot 私人空间数据根目录（与主程序数据目录一致，可用 SERVER_STATUS_HOME 覆盖）
 func privateRoot() string {
-	if root := os.Getenv("SERVER_STATUS_HOME"); root != "" {
-		return root
-	}
-	return "/opt/server-status"
+	return dataRoot()
 }
 
 // initPrivateNotes 初始化私人空间存储（main 启动时调用）

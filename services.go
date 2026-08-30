@@ -23,10 +23,12 @@ import (
 )
 
 const (
-	managedServicesFile = "/opt/server-status/managed_services.json"
-	unitDir             = "/etc/systemd/system"
-	managedMarker       = "# Managed by Server Status"
+	unitDir       = "/etc/systemd/system"
+	managedMarker = "# Managed by Server Status"
 )
+
+// managedServicesFile 受管服务登记文件（默认 <数据根目录>/managed_services.json）
+var managedServicesFile = filepath.Join(dataRoot(), "managed_services.json")
 
 // serviceNameRe systemd 单元名称允许的字符集（防止路径穿越与任意文件写入）
 var serviceNameRe = regexp.MustCompile(`^[a-zA-Z0-9_.@-]+$`)

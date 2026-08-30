@@ -1,6 +1,7 @@
 # server-status Docker Compose 部署配置
 #
-# 部署（在 192.168.1.10 服务器上执行）：
+# 部署（在本目录执行）：
+#   cp .env.example .env   # 填入三个密钥（openssl rand -hex 32）
 #   docker compose up -d --build
 # 更新版本：
 #   docker compose build --no-cache && docker compose up -d
@@ -8,7 +9,7 @@
 # 与 systemd 部署的差异（重要）：
 # 1. 服务监控(systemctl)/端口防火墙(iptables)页面依赖宿主机环境，容器内数据不可用
 # 2. Web Shell 在容器内打开的是容器自身的 shell，而非宿主机 shell
-# 3. 挂载 /opt/server-status 复用现有部署的用户/角色/模板/日志等数据；二进制本体在镜像内
+# 3. 模板烧在镜像内（更新镜像即更新模板），运行数据全部落在 server-status-data 卷
 services:
   server-status:
     build: .
@@ -23,17 +24,17 @@ services:
       SERVER_STATUS_SIGNING_KEY: ${SERVER_STATUS_SIGNING_KEY:?请在 .env 中设置 SERVER_STATUS_SIGNING_KEY}
       SERVER_STATUS_ENCRYPT_KEY: ${SERVER_STATUS_ENCRYPT_KEY:?请在 .env 中设置 SERVER_STATUS_ENCRYPT_KEY}
       SERVER_STATUS_DOWNLOAD_TOKEN_SECRET: ${SERVER_STATUS_DOWNLOAD_TOKEN_SECRET:?请在 .env 中设置 SERVER_STATUS_DOWNLOAD_TOKEN_SECRET}
+      # 对外域名：跨域白名单/Cookie Domain 用；本机调试保持 localhost
+      SERVER_STATUS_DOMAIN: ${SERVER_STATUS_DOMAIN:-localhost}
+      # 额外跨域白名单（可选，逗号分隔）
+      SERVER_STATUS_EXTRA_ORIGINS: ${SERVER_STATUS_EXTRA_ORIGINS:-}
     volumes:
-      # 应用数据目录（users.json / rbac.json / templates / log / config.json / *tokens.json 等）
-      # 复用服务器现有 systemd 部署的数据；全新部署可改为命名卷:
-      #   server-status-data:/opt/server-status
-      - /opt/server-status:/opt/server-status
-      # TLS 证书目录（example.com.pem / example.com.key）
-      - /etc/server-status/tls:/etc/server-status/tls:ro
-      # 媒体/EPUB 静态文件目录
-      - /opt/server-status/media:/opt/server-status/media
-      # 宿主 Docker 套接字：容器管理页依赖（挂载后容器内可见宿主全部容器）
-      - /var/run/docker.sock:/var/run/docker.sock
+      # TLS 证书目录：把 cert.pem / key.pem 放进本目录 tls/ 下（可用 deploy.sh --docker 自动生成）
+      - ./tls:/data/tls
+      # 其余全部运行数据（用户/角色/令牌/私人空间/日志/媒体/config.json）
+      - server-status-data:/data
+      # 需要容器管理页时打开（挂载后容器内可见宿主全部容器）：
+      # - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       # 忽略自签证书探测 HTTPS 首页
       test: ["CMD", "wget", "--no-check-certificate", "-q", "-O", "/dev/null", "https://127.0.0.1:9000/"]
@@ -42,6 +43,5 @@ services:
       retries: 3
       start_period: 15s
 
-# 采用命名卷（全新部署）时取消注释：
-# volumes:
-#   server-status-data:
+volumes:
+  server-status-data:

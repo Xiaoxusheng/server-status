@@ -32,13 +32,14 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      # 测试依赖生产目录布局（默认日志/数据路径在 /opt/server-status），runner 用户无权限创建，需预建并授权
-      - name: Prepare writable runtime dirs
-        run: |
-          sudo mkdir -p /opt/server-status/templates /opt/server-status/log
-          sudo chown -R $(whoami) /opt/server-status
+      # 测试会把数据/日志写入数据根目录；runner 上用仓库内临时目录承载
+      # （SERVER_STATUS_HOME 覆盖默认的 /opt/server-status，runner 用户无权创建）
+      - name: Prepare writable runtime dir
+        run: mkdir -p runtime
 
       - name: Run tests
+        env:
+          SERVER_STATUS_HOME: ${{ github.workspace }}/runtime
         run: |
           go test ./... -v
 

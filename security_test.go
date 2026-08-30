@@ -329,7 +329,7 @@ func TestFrontendHasNoEmbeddedSecret(t *testing.T) {
 		"X-Signature",
 		"X-Timestamp",
 		"X-Nonce",
-		"redacted_anti_crawler",
+		"anti_crawler_secret",
 	}
 	ents, err := os.ReadDir("templates")
 	if err != nil {

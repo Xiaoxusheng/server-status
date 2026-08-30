@@ -16,7 +16,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # 复制源码并编译
-# modernc.org/sqlite 为纯 Go 实现，可关闭 CGO；-s -w 与 build.sh 保持一致（去除符号表减小体积）
+# modernc.org/sqlite 为纯 Go 实现，可关闭 CGO；-s -w 去除符号表减小体积
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/server-status .
 
@@ -26,21 +26,30 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/server-status .
 FROM alpine:3.20
 
 # 安装运行时依赖：
-# - docker-cli: 容器管理页通过 docker CLI 操作宿主 Docker（需挂载 /var/run/docker.sock）
+# - docker-cli: 容器管理页通过 docker CLI 操作宿主 Docker（需自行挂载 /var/run/docker.sock）
 # - bash:       Web Shell 页面优先使用 /bin/bash
 # - procps:     进程页依赖完整版 ps（busybox ps 不支持 --sort 等参数）
 # - ca-certificates / tzdata: HTTPS 根证书与时区数据
 RUN apk add --no-cache ca-certificates tzdata bash docker-cli procps
 
-# 按二进制硬编码路径创建目录（/opt/server-status 数据与模板、/etc/server-status/tls 证书、/opt/server-status/media 媒体）
-RUN mkdir -p /opt/server-status/templates /opt/server-status/log /etc/server-status/tls /opt/server-status/media /app
+# /data 为唯一数据卷挂载点（运行数据 / 日志 / 媒体 / TLS 证书 / config.json 都在其中）
+RUN mkdir -p /data/log /data/media /data/tls /app
 
-# 复制编译产物与默认模板/配置（若挂载宿主机目录，宿主内容将覆盖镜像内文件）
+# 复制编译产物；模板烧入镜像（不随数据卷丢失），通过 SERVER_STATUS_TEMPLATES_DIR 指向
 COPY --from=builder /out/server-status /app/server-status
-COPY templates/ /opt/server-status/templates/
-COPY config.json /opt/server-status/config.json
+COPY templates/ /app/templates/
 
-WORKDIR /opt/server-status
+# 默认功能配置（named volume 首次创建时会把镜像内 /data 内容播种进去，之后以卷内为准）
+COPY config.json /data/config.json
+COPY private_notes.json /data/private_notes.json
+
+# 容器内固定数据根目录；密钥/域名等敏感配置由 compose 从 .env 注入
+ENV SERVER_STATUS_HOME=/data \
+    SERVER_STATUS_TEMPLATES_DIR=/app/templates \
+    SERVER_STATUS_TLS_CERT=/data/tls/cert.pem \
+    SERVER_STATUS_TLS_KEY=/data/tls/key.pem
+
+WORKDIR /data
 
 EXPOSE 9000
 

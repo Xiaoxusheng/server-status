@@ -68,7 +68,7 @@ func shellPasswordFilePath() string {
 	if v := getEnvOr("SHELL_PASSWORD_HASH_FILE", ""); v != "" {
 		return v
 	}
-	return "/opt/server-status/shell_pw.dat"
+	return filepath.Join(dataRoot(), "shell_pw.dat")
 }
 
 // Shell close 原因（用于审计与状态展示）

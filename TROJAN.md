@@ -147,7 +147,7 @@ go test -v ./...
 
 ```bash
 # 1. 登录（同时下发 HttpOnly 的 session_id 与 JS 可读的 csrf_token Cookie）
-curl -k -c /tmp/ss.jar -X POST https://192.168.1.10:9000/login \
+curl -k -c /tmp/ss.jar -X POST https://127.0.0.1:9000/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"你的密码"}'
 
@@ -155,33 +155,33 @@ curl -k -c /tmp/ss.jar -X POST https://192.168.1.10:9000/login \
 CSRF=$(grep csrf_token /tmp/ss.jar | awk '{print $7}')
 
 # 3. 状态（GET，无需 CSRF）
-curl -k -b /tmp/ss.jar "https://192.168.1.10:9000/api/trojan/status"
+curl -k -b /tmp/ss.jar "https://127.0.0.1:9000/api/trojan/status"
 
 # 4. 用户列表（GET，无需 CSRF）
-curl -k -b /tmp/ss.jar "https://192.168.1.10:9000/api/trojan/users"
+curl -k -b /tmp/ss.jar "https://127.0.0.1:9000/api/trojan/users"
 
 # 5. 添加用户（POST，需 CSRF 头；限速单位 B/s：10 MB/s = 10485760；
 #    traffic_limit 为流量限额（上传+下载累计，字节，0=不限）；
 #    traffic_reset_day 为 0（不自动重置）或 1-28（每月几号自动清零用量））
-curl -k -b /tmp/ss.jar -X POST "https://192.168.1.10:9000/api/trojan/users" \
+curl -k -b /tmp/ss.jar -X POST "https://127.0.0.1:9000/api/trojan/users" \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: $CSRF" \
   -d '{"password":"MyPass123","upload_limit":10485760,"download_limit":52428800,"ip_limit":5,"traffic_limit":107374182400,"traffic_reset_day":1}'
 
 # 6. 修改用户（PUT，需 CSRF 头；用列表里返回的 hash）
-curl -k -b /tmp/ss.jar -X PUT "https://192.168.1.10:9000/api/trojan/users" \
+curl -k -b /tmp/ss.jar -X PUT "https://127.0.0.1:9000/api/trojan/users" \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: $CSRF" \
   -d '{"hash":"<用户hash>","upload_limit":10485760,"download_limit":104857600,"ip_limit":8,"traffic_limit":107374182400,"traffic_reset_day":1}'
 
 # 7. 删除用户（DELETE，需 CSRF 头）
-curl -k -b /tmp/ss.jar -X DELETE "https://192.168.1.10:9000/api/trojan/users" \
+curl -k -b /tmp/ss.jar -X DELETE "https://127.0.0.1:9000/api/trojan/users" \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: $CSRF" \
   -d '{"hash":"<用户hash>"}'
 
 # 8. 重置用户累计流量用量（POST，需 CSRF 头；超限被踢出的用户会重新下发）
-curl -k -b /tmp/ss.jar -X POST "https://192.168.1.10:9000/api/trojan/users/traffic-reset" \
+curl -k -b /tmp/ss.jar -X POST "https://127.0.0.1:9000/api/trojan/users/traffic-reset" \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: $CSRF" \
   -d '{"hash":"<用户hash>"}'
@@ -194,7 +194,7 @@ curl -k -b /tmp/ss.jar -X POST "https://192.168.1.10:9000/api/trojan/users/traff
 ## 8. 浏览器访问地址
 
 ```text
-https://192.168.1.10:9000/
+https://127.0.0.1:9000/
 ```
 
 登录后 Dashboard 底部会出现 **Trojan-Go** 模块：
@@ -217,7 +217,7 @@ https://192.168.1.10:9000/
 
 ## 9. 如何验证实时速度
 
-1. 打开 `https://192.168.1.10:9000/` 并登录；
+1. 打开 `https://127.0.0.1:9000/` 并登录；
 2. 用 Trojan 客户端（如 v2rayN/Trojan-Qt5）连接 `8388` 端口开始下载；
 3. 观察 Trojan-Go 卡片“下载速度”和 Traffic 曲线上升；
 4. 上传同理。数据每 1~2 秒刷新一次（来自 gRPC `ListUsers` 的 `SpeedCurrent`）。
@@ -320,7 +320,7 @@ gRPC API 只绑定到其中一个实例，而客户端流量走另一个实例�
 
 **修复**：给 trojan-go v0.10.6 打补丁 `docs/trojan-go-shared-auth.patch`，
 把 `statistic.NewAuthenticator` 的缓存键从 `context` 改为**后端名称**，
-让两个实例共享同一个统计认证器。已在 `192.168.1.10` 上重新编译并部署：
+让两个实例共享同一个统计认证器。已在 `127.0.0.1` 上重新编译并部署：
 
 ```bash
 cp -r /root/go/pkg/mod/github.com/p4gefau1t/trojan-go@v0.10.6 /opt/trojan-go/src/trojan-go-src

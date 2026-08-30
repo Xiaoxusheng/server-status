@@ -1,6 +1,5 @@
 [Unit]
 Description=Server Status Monitor Service
-Documentation=https://example.com
 After=network-online.target
 Wants=network-online.target
 
@@ -10,6 +9,9 @@ User=root
 Group=root
 WorkingDirectory=/opt/server-status
 ExecStart=/opt/server-status/server-status
+# 密钥、域名等配置统一从独立 env 文件读取（建议 root 属主、0600 权限）
+# 前导 "-" 表示文件不存在时不阻塞启动（首次部署前允许安装单元）
+EnvironmentFile=-/etc/server-status/server-status.env
 LimitNOFILE=65535
 Restart=always
 RestartSec=5

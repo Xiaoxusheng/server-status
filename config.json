@@ -1,18 +1,18 @@
 {
   "trojan": {
-    "enabled": true,
+    "enabled": false,
     "api_addr": "127.0.0.1:10000",
     "api_timeout": 5,
     "refresh_interval": 2,
     "connection": {
-      "server": "example.com",
+      "server": "你的域名或IP",
       "port": 8388,
       "tls": true,
-      "sni": "example.com",
+      "sni": "你的域名",
       "websocket": {
-        "enabled": true,
+        "enabled": false,
         "path": "/ws",
-        "host": "example.com"
+        "host": "你的域名"
       },
       "udp": true,
       "lan_cidr": "192.168.1.0/24"

@@ -3,7 +3,7 @@
 # 配置
 APP_NAME="server-status"
 SERVICE_NAME="server-status.service"
-SRC_DIR="/opt/server-status"  # main.go 所在目录
+SRC_DIR="/opt/server-status"  # main.go 所在目录（部署目录）
 
 # 颜色定义
 GREEN='\033[0;32m'

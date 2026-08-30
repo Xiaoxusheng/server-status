@@ -7,13 +7,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// auditLogFile 审计日志路径（可通过环境变量 AUDIT_LOG_FILE 覆盖，便于测试与部署调整）
-var auditLogFile = getEnvOr("AUDIT_LOG_FILE", "/opt/server-status/audit.log")
+// auditLogFile 审计日志路径（默认 <数据根目录>/audit.log，可用环境变量 AUDIT_LOG_FILE 覆盖）
+var auditLogFile = getEnvOr("AUDIT_LOG_FILE", filepath.Join(dataRoot(), "audit.log"))
 
 // auditAction 记录高风险操作到审计日志（服务变更、防火墙修改等）
 func auditAction(r *http.Request, action, detail string) {

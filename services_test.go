@@ -8,9 +8,9 @@ import (
 func TestValidateManagedService(t *testing.T) {
 	valid := &ManagedService{
 		Name:        "douyin-upload",
-		ExecStart:   "/opt/server-status/douyin-upload",
-		WorkingDir:  "/opt/server-status/douyin",
-		Args:        []string{"--config", "/opt/server-status/config.yaml"},
+		ExecStart:   "/opt/app/douyin-upload",
+		WorkingDir:  "/opt/app/douyin",
+		Args:        []string{"--config", "/opt/app/config.yaml"},
 		User:        "root",
 		Restart:     "on-failure",
 		RestartSec:  5,

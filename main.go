@@ -49,27 +49,47 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// 配置项
-const (
-	mediaDir          = "/opt/server-status/media"
-	indexPath         = "/opt/server-status/templates" //index.html 文件所在目录
-	urls              = "https://example.com:8081/static/"
-	dataFile          = "/opt/server-status/server_data.json" //服务器数据保存路径
-	rateLimit         = 10                          // 每分钟最大请求数
-	rateLimitDuration = time.Minute                 // 速率限制时间窗口
-	usersFile         = "/opt/server-status/users.json"       // 用户数据文件
-	sessionTimeout    = 24 * time.Hour              // 会话超时时间
+// ==================== 可配置项 ====================
+// 编译期不再绑定任何域名 / 路径 / 端口，全部支持环境变量覆盖（详见 README「配置说明」）：
+//
+//	SERVER_STATUS_HOME             数据根目录（模板 / 数据文件 / 日志 / TLS 证书默认都在它下面）
+//	SERVER_STATUS_MEDIA_DIR        媒体文件目录（默认 <数据根目录>/media）
+//	SERVER_STATUS_TLS_CERT / _KEY  TLS 证书与私钥（默认 <数据根目录>/tls/cert.pem、key.pem）
+//	SERVER_STATUS_DOMAIN           对外域名（跨域白名单、证书探测显示；localhost 表示本机调试）
+//	SERVER_STATUS_LISTEN_ADDR      HTTPS 监听地址（默认 :9000）
+//	SERVER_STATUS_STATIC_BASE_URL  随机媒体外链基地址（留空回退为同源会话鉴权的 /api/media）
+//	SERVER_STATUS_EXTRA_ORIGINS    额外跨域白名单 Origin，逗号分隔
+var (
+	mediaDir          = getEnvOr("SERVER_STATUS_MEDIA_DIR", filepath.Join(dataRoot(), "media"))
+	indexPath         = getEnvOr("SERVER_STATUS_TEMPLATES_DIR", filepath.Join(dataRoot(), "templates")) //index.html 文件所在目录
+	dataFile          = filepath.Join(dataRoot(), "server_data.json")                                   //服务器数据保存路径
+	rateLimit         = 10                                                                              // 每分钟最大请求数
+	rateLimitDuration = time.Minute                                                                     // 速率限制时间窗口
+	usersFile         = filepath.Join(dataRoot(), "users.json")                                         // 用户数据文件
+	sessionTimeout    = 24 * time.Hour                                                                  // 会话超时时间
 
-	dir = "/opt/server-status/media" // EPUB 文件所在目录
+	dir = mediaDir // EPUB 文件所在目录（与媒体目录共用）
 	// TLS 证书配置
-	tlsCertFile = "/etc/server-status/tls/example.com.pem" // TLS 证书文件路径
-	tlsKeyFile  = "/etc/server-status/tls/example.com.key" // TLS 私钥文件路径
-	tlsDomain   = "example.com"               // 证书绑定的主域名（SNI 用）
-	// 新增下载密钥配置
-	downloadTokenExpiry = 30 * time.Minute                // 下载令牌有效期
-	downloadLimitBytes  = 3 * 1024 * 1024 * 1024          // 2GB 下载限制
-	downloadTokensFile  = "/opt/server-status/download_tokens.json" // 下载令牌存储文件
+	tlsCertFile = getEnvOr("SERVER_STATUS_TLS_CERT", filepath.Join(dataRoot(), "tls", "cert.pem")) // TLS 证书文件路径
+	tlsKeyFile  = getEnvOr("SERVER_STATUS_TLS_KEY", filepath.Join(dataRoot(), "tls", "key.pem"))   // TLS 私钥文件路径
+	tlsDomain   = getEnvOr("SERVER_STATUS_DOMAIN", "localhost")                                    // 证书绑定的主域名（SNI / 跨域白名单用）
+	listenAddr  = getEnvOr("SERVER_STATUS_LISTEN_ADDR", ":9000")                                   // HTTPS 监听地址
+	// 随机媒体外链基地址：留空时回退为同源 /api/media（会话鉴权，无需额外静态服务器）
+	staticBaseURL = getEnvOr("SERVER_STATUS_STATIC_BASE_URL", "")
+	// 下载令牌配置
+	downloadTokenExpiry = 30 * time.Minute                                  // 下载令牌有效期
+	downloadLimitBytes  = 3 * 1024 * 1024 * 1024                            // 下载限制
+	downloadTokensFile  = filepath.Join(dataRoot(), "download_tokens.json") // 下载令牌存储文件
 )
+
+// dataRoot 数据根目录：模板、运行数据、日志、TLS 证书的默认存放位置。
+// 生产默认 /opt/server-status，可用 SERVER_STATUS_HOME 整体覆盖（Docker / 本地开发常用）。
+func dataRoot() string {
+	if root := os.Getenv("SERVER_STATUS_HOME"); root != "" {
+		return root
+	}
+	return "/opt/server-status"
+}
 
 // CSRF 相关标识
 const (
@@ -82,9 +102,9 @@ const (
 // 生产环境请通过环境变量注入；默认值仅为向后兼容旧部署，一旦配置应尽量保持不变。
 var (
 	// encryptionKey 用户数据（私人手记等）AES-GCM 加密密钥。环境变量：SERVER_STATUS_ENCRYPT_KEY
-	encryptionKey = getEnvOr("SERVER_STATUS_ENCRYPT_KEY", "redacted_user_data_encryption_key_2024")
+	encryptionKey = getEnvOr("SERVER_STATUS_ENCRYPT_KEY", "server_status_user_data_encryption_key_2024")
 	// downloadTokenSecret 下载令牌签名密钥。环境变量：SERVER_STATUS_DOWNLOAD_TOKEN_SECRET
-	downloadTokenSecret = getEnvOr("SERVER_STATUS_DOWNLOAD_TOKEN_SECRET", "redacted_download_token_secret_2024")
+	downloadTokenSecret = getEnvOr("SERVER_STATUS_DOWNLOAD_TOKEN_SECRET", "server_status_download_token_secret_2024")
 	// serverSigningKey 仅服务端持有的 HMAC 签名密钥（私有入口 Cookie、分享密码 Cookie、下载令牌）。
 	// 优先取环境变量 SERVER_STATUS_SIGNING_KEY；未设置时用 crypto/rand 随机生成并告警。
 	serverSigningKey = initSigningKey()
@@ -117,7 +137,7 @@ func fallbackSigningDigest(n int64) string {
 	return hex.EncodeToString(h[:])
 }
 
-// logDir 日志目录（生产默认 /opt/server-status/log，可用 SERVER_STATUS_HOME 覆盖便于本地测试/开发）
+// logDir 日志目录（默认 <数据根目录>/log，可用 SERVER_STATUS_HOME 覆盖便于本地测试/开发）
 var logDir = defaultLogDir()
 
 // 版本信息（由 CI 通过 -ldflags "-X" 注入，本地构建时为 dev）
@@ -128,10 +148,7 @@ var (
 )
 
 func defaultLogDir() string {
-	if root := os.Getenv("SERVER_STATUS_HOME"); root != "" {
-		return filepath.Join(root, "log")
-	}
-	return "/opt/server-status/log"
+	return filepath.Join(dataRoot(), "log")
 }
 
 // 用户相关结构体
@@ -1798,7 +1815,7 @@ func ipinfoProxyHandler(w http.ResponseWriter, r *http.Request) {
 		target += "?ip=" + url.QueryEscape(q)
 	}
 
-	// 127.0.0.1 上证书 CN=example.com 与主机名不匹配，需跳过证书校验
+	// 127.0.0.1 上证书 CN 与主机名不匹配（自签 / 域名证书场景），需跳过证书校验
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 		Transport: &http.Transport{
@@ -1824,7 +1841,8 @@ func ipinfoProxyHandler(w http.ResponseWriter, r *http.Request) {
 
 // ==================== IP 封禁管理功能 ====================
 
-const blockedIPsFile = "/opt/server-status/blocked_ips.json"
+// blockedIPsFile 手动封禁 IP 列表文件（默认 <数据根目录>/blocked_ips.json）
+var blockedIPsFile = filepath.Join(dataRoot(), "blocked_ips.json")
 
 // loadBlockedIPs 启动时加载手动封禁的 IP 列表
 func loadBlockedIPs() {
@@ -2237,7 +2255,7 @@ var (
 		Roles: make(map[string]*Role),
 	}
 	rbacSaveChan = make(chan struct{}, 1)
-	rbacFile     = "/opt/server-status/rbac.json"
+	rbacFile     = filepath.Join(dataRoot(), "rbac.json")
 )
 
 type NetStat struct {
@@ -3612,7 +3630,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	auditActionAs(r, user.Username, "auth.login", fmt.Sprintf("user=%s ip=%s", user.Username, clientIP))
 
 	// 设置会话Cookie
-	http.SetCookie(w, &http.Cookie{
+	sessionCookie := &http.Cookie{
 		Name:     "session_id",
 		Value:    sessionID,
 		Expires:  time.Now().Add(sessionTimeout),
@@ -3620,8 +3638,12 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		Secure:   true,                 // 仅在HTTPS下传输
 		SameSite: http.SameSiteLaxMode, // 或者 http.SameSiteNoneMode
 		Path:     "/",
-		Domain:   ".example.com", // 关键：添加顶级域名，注意前面的点
-	})
+	}
+	// 仅当配置了真实域名（非 localhost、非 IP 直连）时限定 Domain，便于子域共享会话
+	if tlsDomain != "localhost" && net.ParseIP(tlsDomain) == nil {
+		sessionCookie.Domain = tlsDomain
+	}
+	http.SetCookie(w, sessionCookie)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -4277,17 +4299,39 @@ func checkOrigin(r *http.Request) bool {
 	return false
 }
 
-// allowedOrigins 跨域白名单（精确匹配，防止 example.com.evil.com 之类的前缀绕过）
-var allowedOrigins = []string{
-	"https://example.com",
-	"https://www.example.com",
-	"https://example.com:9000",
-	"https://example.com:8081",
-	"http://example.com:8081",
-	"https://192.168.1.14:9000",
-	"http://192.168.1.14:9000",
-	"http://localhost:9000",
-	"http://127.0.0.1:9000",
+// allowedOrigins 跨域白名单（精确匹配，防止 example.com.evil.com 之类的前缀绕过）。
+// 由 SERVER_STATUS_DOMAIN 与 SERVER_STATUS_LISTEN_ADDR 推导，
+// 本机回环地址始终放行；其余来源用 SERVER_STATUS_EXTRA_ORIGINS 追加（逗号分隔）。
+var allowedOrigins = buildAllowedOrigins()
+
+func buildAllowedOrigins() []string {
+	port := listenPort()
+	origins := []string{
+		"http://localhost:" + port,
+		"http://127.0.0.1:" + port,
+	}
+	if d := tlsDomain; d != "" && d != "localhost" {
+		origins = append(origins,
+			"https://"+d,          // 经 443 / 反向代理访问
+			"https://"+d+":"+port, // 直连本服务端口
+		)
+	}
+	if extra := os.Getenv("SERVER_STATUS_EXTRA_ORIGINS"); extra != "" {
+		for _, o := range strings.Split(extra, ",") {
+			if o = strings.TrimSpace(o); o != "" {
+				origins = append(origins, o)
+			}
+		}
+	}
+	return origins
+}
+
+// listenPort 从监听地址中解析端口（":9000" / "0.0.0.0:9000" → 9000），解析失败按 443 处理。
+func listenPort() string {
+	if _, port, err := net.SplitHostPort(listenAddr); err == nil && port != "" {
+		return port
+	}
+	return "443"
 }
 
 // isAllowedOrigin 精确校验 Origin 是否在白名单内
@@ -4962,6 +5006,16 @@ func recordAccess(r *http.Request) {
 // ---------------- 媒体文件 ----------------
 
 // randomMediaHandler HTTP 端点：分发流媒体挂载链接（含严密高并发处理防竞争）
+// mediaSrcURL 生成随机媒体的访问地址：
+// 配置了 SERVER_STATUS_STATIC_BASE_URL 时使用外链基地址；
+// 否则回退为同源 /api/media（会话 + files:view 鉴权），部署无需额外的静态文件服务器。
+func mediaSrcURL(name string) string {
+	if staticBaseURL != "" {
+		return staticBaseURL + name
+	}
+	return "/api/media?path=" + url.QueryEscape(name)
+}
+
 func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 	// 添加速率限制检查
 	clientIP := getClientIP(r)
@@ -5001,7 +5055,7 @@ func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 		key++
 		randIdx := rand.Intn(len(files))
 		s.Code = http.StatusOK
-		s.Src = urls + files[randIdx]
+		s.Src = mediaSrcURL(files[randIdx])
 		json.NewEncoder(w).Encode(s)
 	} else {
 		key = 0
@@ -5038,7 +5092,7 @@ func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 
 		randIdx := rand.Intn(len(files))
 		s.Code = http.StatusOK
-		s.Src = urls + files[randIdx]
+		s.Src = mediaSrcURL(files[randIdx])
 		json.NewEncoder(w).Encode(s)
 	}
 }
@@ -5048,7 +5102,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	updateOnlineUser(r, "video")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	htmlData, err := os.ReadFile("/opt/server-status/templates/video.html")
+	htmlData, err := os.ReadFile(filepath.Join(indexPath, "video.html"))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("无法读取 HTML 文件: %v", err), http.StatusInternalServerError)
 		log.Printf("读取 video.html 失败: %v", err)
@@ -5209,7 +5263,7 @@ type certInfo struct {
 // probeLiveCertificate 对本机监听地址发起真实 TLS 握手，获取进程当前实际生效的证书。
 // 相比读文件，这能发现「证书文件已续期但服务未重启导致旧证书仍在线上」的情况。
 func probeLiveCertificate() (*x509.Certificate, error) {
-	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", "127.0.0.1:9000", &tls.Config{
+	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", net.JoinHostPort("127.0.0.1", listenPort()), &tls.Config{
 		ServerName:         tlsDomain,
 		InsecureSkipVerify: true, // 仅读取证书元数据，不做证书链校验
 	})
@@ -5986,11 +6040,11 @@ func main() {
 		log.Println("⚠️ 建议通过环境变量 SERVER_STATUS_ENCRYPT_KEY / SERVER_STATUS_DOWNLOAD_TOKEN_SECRET 注入加密密钥，避免使用内置默认值。")
 	}
 
-	fmt.Println("Server running at https://localhost:9000")
+	fmt.Printf("Server running on %s (HTTPS)\n", listenAddr)
 	log.Printf("服务器启动时间: %s", serverStartTime.Format("2006-01-02 15:04:05"))
 	// 启用 TLS 1.2+，禁用老旧弱协议
 	srv := &http.Server{
-		Addr:      ":9000",
+		Addr:      listenAddr,
 		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
 	}
 	log.Fatal(srv.ListenAndServeTLS(tlsCertFile, tlsKeyFile))

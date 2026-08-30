@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -289,7 +290,8 @@ type FirewallState struct {
 	Rules    []PortRule `json:"rules"`
 }
 
-const firewallStateFile = "/opt/server-status/firewall_state.json"
+// firewallStateFile 防火墙状态文件（默认 <数据根目录>/firewall_state.json）
+var firewallStateFile = filepath.Join(dataRoot(), "firewall_state.json")
 
 var fwState struct {
 	sync.RWMutex

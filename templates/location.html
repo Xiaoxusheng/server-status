@@ -773,10 +773,9 @@
             users.me.id = userId;
             users.me.name = `我 (用户 ${userId.substring(5, 9)})`;
 
-            // 连接到WebSocket服务器
-            // 注意: 这里需要替换为您的实际WebSocket服务器地址
+            // 连接到WebSocket服务器（同源：自动使用当前访问的域名与端口）
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const url="example.com:9000/location"
+            const url = window.location.host + '/location';
             const wsUrl = `${protocol}//${url}`;
 
             try {

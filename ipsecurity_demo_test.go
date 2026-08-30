@@ -4,7 +4,7 @@ package main
 // 直接调用生产代码，完整演示 高频触发 → 行为评分触发 → 白名单豁免 →
 // 手动封禁 → 封禁列表/倒计时 → 解封 → 过期自动解封 的整个运行过程。
 // 运行：go test -run TestIPBlockDemo -v
-// 注意：会临时写入 /opt/server-status/ip_security.json 与审计日志，结束后自动恢复原状。
+// 注意：会临时写入 数据目录下的 ip_security.json 与审计日志，结束后自动恢复原状。
 
 import (
 	"encoding/json"

@@ -3,10 +3,10 @@
 // 用法示例：
 //
 //	# 公网场景（未认证），50 并发持续 30 秒
-//	go run ./stress -target https://192.168.1.10:9000 -scenario public -c 50 -d 30s
+//	go run ./stress -target https://127.0.0.1:9000 -scenario public -c 50 -d 30s
 //
 //	# 认证场景（先登录拿会话，再压测已认证接口）
-//	go run ./stress -target https://192.168.1.10:9000 -scenario auth -username admin -password 'xxx' -c 50 -d 60s
+//	go run ./stress -target https://127.0.0.1:9000 -scenario auth -username admin -password 'xxx' -c 50 -d 60s
 //
 //	# 限制总速率 200 QPS，逐步爬坡 10 秒
 //	go run ./stress -target https://example.com:9000 -rate 200 -ramp 10s -c 100 -d 2m
@@ -63,7 +63,7 @@ var (
 
 func main() {
 	var (
-		target   = flag.String("target", "https://192.168.1.10:9000", "目标服务器基址 URL")
+		target   = flag.String("target", "https://127.0.0.1:9000", "目标服务器基址 URL")
 		scenario = flag.String("scenario", "public", "压测场景: public | auth")
 		conc     = flag.Int("c", 50, "并发 worker 数")
 		dur      = flag.Duration("d", 30*time.Second, "压测持续时间")
@@ -144,8 +144,8 @@ func main() {
 	}
 
 	// doLogin 为单个 worker 执行一次登录，返回 http.Client 与 session_id。
-	// 注意：服务端会话 Cookie 指定了 Domain=.example.com，用 IP 直连时 cookiejar 不会回传，
-	// 因此这里手动解析 Set-Cookie，由 worker 在每个请求中显式携带 session_id。
+	// 注意：兼容带 Domain 属性的会话 Cookie 与 IP 直连场景，这里手动解析 Set-Cookie，
+	// 由 worker 在每个请求中显式携带 session_id。
 	doLogin := func() (*http.Client, string, error) {
 		jar, err := cookiejar.New(nil)
 		if err != nil {
