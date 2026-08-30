@@ -273,6 +273,54 @@
             margin-bottom: 10px;
         }
 
+        /* ================= 表情选择面板 ================= */
+        .pv-emoji-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .pv-emoji-tabs button {
+            border: 1px solid var(--color-border);
+            background: transparent;
+            color: var(--color-text);
+            font-size: 12px;
+            line-height: 1;
+            padding: 5px 9px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: background .12s, color .12s, border-color .12s;
+        }
+
+        .pv-emoji-tabs button.active {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
+        }
+
+        .pv-emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 34px);
+            gap: 2px;
+            max-height: 218px;
+            overflow-y: auto;
+        }
+
+        .pv-emoji-grid button {
+            border: 0;
+            background: transparent;
+            font-size: 20px;
+            line-height: 34px;
+            height: 34px;
+            padding: 0;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: background .12s;
+        }
+
+        .pv-emoji-grid button:hover { background: rgba(128, 128, 128, .18); }
+
         .pv-img-item {
             position: relative;
             width: 92px;
@@ -1669,6 +1717,7 @@
             const [exif, setExif] = useState(null);
             const [dragging, setDragging] = useState(false);
             const fileRef = useRef(null);
+            const [emojiTab, setEmojiTab] = useState(0);
             // 同步防重锁：保存进行中时忽略后续触发（状态更新是异步的，快速连点会穿透 loading）
             const savingRef = useRef(false);
             const contentRef = useRef(null);
@@ -1691,6 +1740,15 @@
                 const lineStart = content.lastIndexOf(String.fromCharCode(10), pos - 1) + 1;
                 setContent(content.slice(0, lineStart) + prefix + content.slice(lineStart));
                 requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(pos + prefix.length, pos + prefix.length); });
+            };
+            // 光标处插入任意文本（表情等），插入后光标停在文本之后
+            const mdInsertText = (text) => {
+                const node = contentRef.current && contentRef.current.resizableTextArea;
+                const ta = node && node.textArea;
+                if (!ta) return;
+                const start = ta.selectionStart, end = ta.selectionEnd;
+                setContent(content.slice(0, start) + text + content.slice(end));
+                requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(start + text.length, start + text.length); });
             };
             // 未入库草稿的 id：选图/录音会自动创建草稿，重试时复用，避免生成多条空手记
             const draftRef = useRef(null);
@@ -1879,6 +1937,30 @@
                                     </Button>
                                 </Tooltip>
                             ))}
+                            <span style={{ width: 1, height: 20, background: 'var(--color-border)', margin: '0 2px' }} />
+                            <Popover
+                                trigger="click"
+                                placement="bottomLeft"
+                                title="选择表情"
+                                content={
+                                    <div style={{ width: 292 }}>
+                                        <div className="pv-emoji-tabs">
+                                            {EMOJI_CATEGORIES.map((c, i) => (
+                                                <button key={c.label} type="button" className={emojiTab === i ? 'active' : ''} onClick={() => setEmojiTab(i)}>{c.label}</button>
+                                            ))}
+                                        </div>
+                                        <div className="pv-emoji-grid">
+                                            {EMOJI_CATEGORIES[emojiTab].emojis.map(e => (
+                                                <button key={e} type="button" onClick={() => mdInsertText(e)}>{e}</button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                }
+                            >
+                                <Tooltip title="表情">
+                                    <Button size="small" type="text" style={{ fontSize: 16 }}>😊</Button>
+                                </Tooltip>
+                            </Popover>
                         </div>
                         {(images.length > 0 || dragging) && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10, minHeight: dragging ? 92 : 0, border: dragging ? '2px dashed #1677ff' : 'none', borderRadius: 8, padding: dragging ? 4 : 0, alignItems: 'center' }}>
@@ -1974,6 +2056,17 @@
             { title: '≡', hint: '代码块', before: String.fromCharCode(96, 96, 96, 10), after: String.fromCharCode(10, 96, 96, 96), ph: 'code' },
             { title: '↗', hint: '链接', before: '[', after: '](https://)', ph: '链接文字' },
             { title: '—', hint: '分割线', line: '---' }
+        ];
+        // 表情选择面板：按场景分 8 类，共 300+ 常用表情
+        const EMOJI_CATEGORIES = [
+            { label: '表情', emojis: ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '🥲', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🥸', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😴', '🤤', '😪', '😮', '😲', '🥴', '😵', '🤠', '😷', '🤒', '🤕', '🤢', '🤮'] },
+            { label: '手势', emojis: ['👋', '🤚', '🖐️', '✋', '🖖', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '🤙', '👈', '👉', '👆', '👇', '☝️', '👍', '👎', '✊', '👊', '🤛', '🤜', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '💪', '🫡', '🫶', '💅', '🤳'] },
+            { label: '爱心', emojis: ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💟', '♥️', '💯', '🔥', '✨', '⭐', '🌟', '💫', '⚡', '💥', '💢', '❗', '❓', '✅', '❌', '⭕', '🚫', '💤', '💬', '💭'] },
+            { label: '动物自然', emojis: ['🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧', '🐦', '🦆', '🦉', '🦋', '🐌', '🐝', '🐢', '🐍', '🐙', '🐳', '🐬', '🐠', '🌸', '🌹', '🌻', '🌈', '🌙', '⭐', '☀️', '⛅', '🌧️', '❄️', '⛄', '🌊', '🍀', '🌵', '🌴', '🌲', '🍁'] },
+            { label: '吃喝', emojis: ['🍏', '🍎', '🍐', '🍊', '🍋', '🍉', '🍇', '🍓', '🫐', '🍒', '🍑', '🥭', '🍍', '🥥', '🍌', '🥝', '🍅', '🥑', '🍆', '🥕', '🌽', '🌶️', '🥒', '🍞', '🥐', '🥖', '🧀', '🥚', '🍳', '🥓', '🍔', '🍟', '🍕', '🌭', '🍜', '🍝', '🍣', '🍱', '🍚', '🍛', '🥘', '🍲', '🍿', '🥞', '🧇', '🍩', '🍪', '🎂', '🍰', '🧁', '🍫', '🍬', '🍭', '☕', '🍵', '🧋', '🥤', '🍺', '🍻', '🥂', '🍷'] },
+            { label: '出行', emojis: ['🚗', '🚕', '🚙', '🚌', '🏎️', '🚓', '🚑', '🚒', '🚚', '🚜', '🛵', '🏍️', '🚲', '🛴', '✈️', '🚁', '🚀', '🛰️', '🚢', '⛵', '🚤', '🛶', '🚄', '🚅', '🚂', '🗺️', '🏔️', '⛰️', '🌋', '🏝️', '🏖️', '🏜️', '🏕️', '🎡', '🎢', '🎠', '⛲', '⛺', '🏠', '🏡', '🏢', '🏬', '🏦', '🏨', '🏥', '🏫'] },
+            { label: '活动', emojis: ['⚽', '🏀', '🏈', '⚾', '🎾', '🏐', '🏓', '🏸', '🥊', '⛳', '🎣', '🎽', '🎿', '🏂', '🏄', '🏊', '🚴', '🚵', '🎯', '🎮', '🕹️', '🎲', '🧩', '🎰', '🎳', '🎤', '🎧', '🎼', '🎹', '🥁', '🎸', '🎺', '🎬', '📷', '📸', '💻', '🖥️', '⌨️', '🖱️', '💡', '🔋', '📱', '☎️', '📺', '📻', '⏰', '⌚', '📚', '✏️', '📎', '✂️', '🔧', '🔨', '💊', '💰', '🛒', '🎁', '🎈', '🎀', '🎊', '🎉'] },
+            { label: '人物', emojis: ['👀', '🧠', '👁️', '👂', '👃', '👄', '👶', '🧒', '👦', '👧', '🧑', '👨', '👩', '🧓', '👴', '👵', '👮', '🕵️', '💂', '🧑‍⚕️', '🧑‍🍳', '🧑‍🎓', '🧙', '🧚', '🦸', '🦹', '🧟', '🤶', '🎅', '👻', '👽', '🤖', '💩', '🤡'] }
         ];
         const CARD_TEMPLATES = [
             { key: 'simple', label: '简洁' },
