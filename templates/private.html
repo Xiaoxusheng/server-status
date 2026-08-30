@@ -259,7 +259,35 @@
         }
 
         .note-tags { margin-top: 10px; }
-        .note-audio { margin-top: 10px; }
+        .note-audio { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+
+        /* 语音气泡：点击播放，播放中显示跳动的声波 */
+        .voice-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 12px;
+            border-radius: 999px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            color: var(--color-text);
+            cursor: pointer;
+            user-select: none;
+            transition: transform .12s ease, box-shadow .15s ease, border-color .15s ease;
+        }
+        .voice-pill:active { transform: scale(.97); }
+        .voice-pill.playing { border-color: #4096ff; color: #4096ff; }
+        .voice-dur { font-size: 12px; opacity: .65; font-variant-numeric: tabular-nums; }
+        .voice-bars { display: inline-flex; align-items: flex-end; gap: 2.5px; height: 14px; }
+        .voice-bars i { width: 3px; border-radius: 1.5px; background: currentColor; height: 30%; opacity: .45; transition: opacity .15s; }
+        .voice-bars.on i { opacity: 1; animation: voiceBar .9s ease-in-out infinite; }
+        .voice-bars.on i:nth-child(2) { animation-delay: .18s; }
+        .voice-bars.on i:nth-child(3) { animation-delay: .36s; }
+        .voice-bars.on i:nth-child(4) { animation-delay: .54s; }
+        @keyframes voiceBar {
+            0%, 100% { height: 30%; }
+            50% { height: 100%; }
+        }
 
         .note-actions {
             margin-top: 12px;
@@ -1354,6 +1382,74 @@
                 return canvas;
             }
 
+            // ==================== 小红书模板（奶油底 + 大标题 + 圆角拼图 + 标签胶囊）====================
+            if (template === 'xhs') {
+                const xhs = { bg: '#fff7ef', text: '#2b2622', secondary: 'rgba(43,38,34,.55)', red: '#ff2442' };
+                ctx.fillStyle = xhs.bg;
+                ctx.fillRect(0, 0, width, height);
+                ctx.textAlign = 'left';
+                let y = height * 0.072;
+                // 大标题：左侧红色竖条 + 最多 3 行
+                ctx.font = `800 ${width * 0.062}px ${fontFamily}`;
+                const tLs = showTitle && title ? wrapText(ctx, mdStrip(title), maxW).slice(0, 3) : [];
+                const tLH = width * 0.088;
+                if (tLs.length) {
+                    ctx.fillStyle = xhs.red;
+                    roundRect(ctx, padX, y - tLH * 0.62, width * 0.012, tLH * (tLs.length * 0.82), width * 0.006);
+                    ctx.fill();
+                    ctx.fillStyle = xhs.text;
+                    tLs.forEach((l, i) => ctx.fillText(l, padX + width * 0.032, y + i * tLH));
+                    y += tLs.length * tLH + width * 0.025;
+                }
+                // 圆角拼图（最多 4 张，超出显示 +N）
+                if (showImages && images && images.length) {
+                    const ih = Math.min(height * 0.5, height - y - height * 0.24);
+                    if (ih > height * 0.1) {
+                        await drawCollage(padX, y, maxW, ih, width * 0.032);
+                        y += ih + width * 0.04;
+                    }
+                }
+                // 正文：按剩余空间裁行，末行省略号
+                if (showContent && content) {
+                    ctx.font = `400 ${width * 0.03}px ${fontFamily}`;
+                    const cLH = width * 0.047;
+                    const reserve = height * 0.16 + (tagList.length ? width * 0.07 : 0);
+                    const availH = Math.max(cLH, height - y - reserve);
+                    let cLs = wrapText(ctx, mdStrip(content), maxW);
+                    const maxLines = Math.max(1, Math.floor(availH / cLH));
+                    if (cLs.length > maxLines) {
+                        cLs = cLs.slice(0, maxLines);
+                        cLs[maxLines - 1] = cLs[maxLines - 1].slice(0, Math.max(1, cLs[maxLines - 1].length - 2)) + '…';
+                    }
+                    ctx.fillStyle = xhs.text;
+                    cLs.forEach((l, i) => ctx.fillText(l, padX, y + i * cLH));
+                    y += cLs.length * cLH + width * 0.02;
+                }
+                // 标签胶囊（小红书红描边，最多 6 个）
+                if (tagList.length) {
+                    ctx.font = `500 ${width * 0.028}px ${fontFamily}`;
+                    let tx = padX;
+                    const ty = height * 0.865;
+                    tagList.slice(0, 6).forEach(t => {
+                        const tw = ctx.measureText(t).width + width * 0.05;
+                        if (tx + tw > width - padX) return;
+                        ctx.strokeStyle = xhs.red;
+                        ctx.lineWidth = Math.max(1.5, width * 0.0032);
+                        roundRect(ctx, tx, ty - width * 0.037, tw, width * 0.06, width * 0.03);
+                        ctx.stroke();
+                        ctx.fillStyle = xhs.red;
+                        ctx.fillText(t, tx + width * 0.025, ty + width * 0.004);
+                        tx += tw + width * 0.022;
+                    });
+                }
+                // 底部：时间 · 地点（左） + 品牌（右）
+                ctx.font = `400 ${width * 0.024}px ${fontFamily}`;
+                ctx.fillStyle = xhs.secondary;
+                ctx.fillText([timeTxt, locText].filter(Boolean).join(' · '), padX, height - height * 0.05);
+                drawBrand();
+                return canvas;
+            }
+
             // ==================== 简洁 / 深色 / 浅灰（纯文字排版）====================
             await fillBackground();
             let y = height * 0.15;
@@ -1411,11 +1507,14 @@
                     {audio && audio.id ? (
                         <Space direction="vertical" style={{ width: '100%' }}>
                             <Space>
-                                <Button size="small" icon={<I name="PlayCircleOutlined" />} onClick={() => {
+                                <Button size="small" onClick={() => {
                                     const a = audioRef.current;
                                     if (!a) return;
                                     if (playing) { a.pause(); setPlaying(false); } else { a.play(); setPlaying(true); }
-                                }}>{playing ? '暂停' : '播放'}</Button>
+                                }}>
+                                    <span className={'voice-bars' + (playing ? ' on' : '')}><i /><i /><i /><i /></span>
+                                    <span style={{ marginLeft: 6 }}>{playing ? '暂停' : '播放'}</span>
+                                </Button>
                                 <Popconfirm title="删除这段语音？" onConfirm={() => onDeleted(audio.id)}>
                                     <Button size="small" danger icon={<I name="DeleteOutlined" />}>删除</Button>
                                 </Popconfirm>
@@ -1586,6 +1685,30 @@
             const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             return String(html).replace(new RegExp(esc, 'gi'), '<mark>$&</mark>');
         };
+        // 语音气泡播放器：点击播放/暂停，播放中显示跳动的声波
+        function VoicePlayer({ src, duration }) {
+            const [playing, setPlaying] = useState(false);
+            const ref = useRef(null);
+            const toggle = () => {
+                const el = ref.current;
+                if (!el) return;
+                if (el.paused) el.play(); else el.pause();
+            };
+            const t = Math.max(0, Math.round(duration || 0));
+            const durText = t >= 60 ? Math.floor(t / 60) + "'" + String(t % 60).padStart(2, '0') + '"' : t + '"';
+            return (
+                <span className={'voice-pill' + (playing ? ' playing' : '')} onClick={toggle}>
+                    <span className={'voice-bars' + (playing ? ' on' : '')}><i /><i /><i /><i /></span>
+                    <span className="voice-dur">{durText}</span>
+                    <audio ref={ref} src={src} preload="none"
+                        onPlay={() => setPlaying(true)}
+                        onPause={() => setPlaying(false)}
+                        onEnded={() => setPlaying(false)}
+                        style={{ display: 'none' }} />
+                </span>
+            );
+        }
+
         function NoteCard({ note, onEdit, onDelete, onCard, highlight }) {
             const [openIdx, setOpenIdx] = useState(-1);
             const imgs = note.images || [];
@@ -1651,13 +1774,7 @@
                     )}
                     {note.audio && note.audio.length > 0 && (
                         <div className="note-audio">
-                            {note.audio.map(a => (
-                                <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <Button size="small" icon={<I name="PlayCircleOutlined" />} onClick={() => { const el = document.getElementById('pv-audio-' + a.id); if (el) el.paused ? el.play() : el.pause(); }}>播放语音</Button>
-                                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>{Math.round(a.duration || 0)}s</Typography.Text>
-                                    <audio id={'pv-audio-' + a.id} src={a.url} preload="none" style={{ display: 'none' }} />
-                                </div>
-                            ))}
+                            {note.audio.map(a => <VoicePlayer key={a.id} src={a.url} duration={a.duration} />)}
                         </div>
                     )}
                     {note.tags && note.tags.length > 0 && (
@@ -2078,6 +2195,7 @@
         ];
         const CARD_TEMPLATES = [
             { key: 'simple', label: '简洁' },
+            { key: 'xhs', label: '小红书' },
             { key: 'dark', label: '深色' },
             { key: 'image', label: '图片' },
             { key: 'travel', label: '旅行' },
