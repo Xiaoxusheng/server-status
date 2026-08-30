@@ -1640,10 +1640,16 @@
                         </div>
                     )}
                     {imgs.length > 0 && (
-                        <Image.PreviewGroup>
-                            {imgs.map((img, i) => (
-                                <Image key={img.id} src={img.url} style={{ display: 'none' }}
-                                    preview={{ visible: openIdx === i, onVisibleChange: v => { if (!v) setOpenIdx(-1); } }} />
+                        <Image.PreviewGroup
+                            preview={{
+                                visible: openIdx >= 0,
+                                current: Math.max(openIdx, 0),
+                                onVisibleChange: v => { if (!v) setOpenIdx(-1); },
+                                onChange: cur => setOpenIdx(cur)
+                            }}
+                        >
+                            {imgs.map(img => (
+                                <Image key={img.id} src={img.url} style={{ display: 'none' }} />
                             ))}
                         </Image.PreviewGroup>
                     )}
