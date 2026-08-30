@@ -418,7 +418,7 @@
     <div id="root"></div>
     <script type="text/babel">
         const { Card, Table, Statistic, Button, Input, InputNumber, Select, Form, Tag, Space, message, Modal, Drawer,
-            Row, Col, Typography, ConfigProvider, theme, Empty, Descriptions, Divider, Badge, Alert, Tooltip, Spin, Radio } = window.antd;
+            Row, Col, Typography, ConfigProvider, theme, Empty, Descriptions, Divider, Badge, Alert, Tooltip, Spin, Radio, Progress } = window.antd;
         const { useState, useEffect, useRef, useCallback } = React;
         const { darkAlgorithm } = theme;
         const IconSet = window.icons || {};
@@ -705,7 +705,7 @@
 
             const openAdd = () => {
                 setEditing(null);
-                form.setFieldsValue({ password: '', ip_limit: 5, upload_limit: 0, upload_unit: 'MB/s', download_limit: 0, download_unit: 'MB/s' });
+                form.setFieldsValue({ password: '', ip_limit: 5, upload_limit: 0, upload_unit: 'MB/s', download_limit: 0, download_unit: 'MB/s', traffic_limit_gb: 0, traffic_reset_day: 0 });
                 setModalOpen(true);
             };
 
@@ -717,7 +717,9 @@
                     upload_limit: bytesToUnit(record.upload_limit, 'MB/s'),
                     upload_unit: 'MB/s',
                     download_limit: bytesToUnit(record.download_limit, 'MB/s'),
-                    download_unit: 'MB/s'
+                    download_unit: 'MB/s',
+                    traffic_limit_gb: (Number(record.traffic_limit) || 0) / (1024 * 1024 * 1024),
+                    traffic_reset_day: Number(record.traffic_reset_day) || 0
                 });
                 setModalOpen(true);
             };
@@ -731,7 +733,9 @@
                         password: values.password || '',
                         ip_limit: Number(values.ip_limit) || 0,
                         upload_limit: Math.round((Number(values.upload_limit) || 0) * (UNIT_RATE[values.upload_unit] || 1)),
-                        download_limit: Math.round((Number(values.download_limit) || 0) * (UNIT_RATE[values.download_unit] || 1))
+                        download_limit: Math.round((Number(values.download_limit) || 0) * (UNIT_RATE[values.download_unit] || 1)),
+                        traffic_limit: Math.round((Number(values.traffic_limit_gb) || 0) * 1024 * 1024 * 1024),
+                        traffic_reset_day: Number(values.traffic_reset_day) || 0
                     };
                     const response = await secureFetch(baseUrl + '/api/trojan/users', { method: editing ? 'PUT' : 'POST', body: JSON.stringify(body) });
                     const payload = await response.json();
@@ -764,6 +768,28 @@
                     okButtonProps: { danger: true },
                     cancelText: '取消',
                     onOk: () => deleteUser(record)
+                });
+            };
+
+            // 手动重置用户累计流量用量（超限被踢出的用户会重新下发）
+            const resetTraffic = async record => {
+                try {
+                    const response = await secureFetch(baseUrl + '/api/trojan/users/traffic-reset', { method: 'POST', body: JSON.stringify({ hash: record.hash }) });
+                    const payload = await response.json();
+                    if (!response.ok || payload.code !== 200) throw new Error(payload.message || '重置失败');
+                    message.success('流量用量已重置');
+                    await loadUsers();
+                    await refreshAll();
+                } catch (e) { message.error(e.message || '重置流量用量失败'); }
+            };
+
+            const confirmTrafficReset = record => {
+                Modal.confirm({
+                    title: '重置流量用量',
+                    content: <span>将累计用量清零并重新允许该用户连接。<br /><Typography.Text code>{record.hash}</Typography.Text></span>,
+                    okText: '重置',
+                    cancelText: '取消',
+                    onOk: () => resetTraffic(record)
                 });
             };
 
@@ -963,14 +989,35 @@
                 { title: '当前上传', dataIndex: 'upload_speed', width: 110, render: v => '↑ ' + formatBytes(v, 'B/s') },
                 { title: '下载限制', dataIndex: 'download_limit', width: 110, render: v => (Number(v) || 0) === 0 ? '不限' : '↓ ' + formatBytes(v, 'B/s') },
                 { title: '上传限制', dataIndex: 'upload_limit', width: 110, render: v => (Number(v) || 0) === 0 ? '不限' : '↑ ' + formatBytes(v, 'B/s') },
+                {
+                    title: '流量用量', dataIndex: 'traffic_used', width: 170,
+                    render: (used, r) => {
+                        const limit = Number(r.traffic_limit) || 0;
+                        used = Number(used) || 0;
+                        if (limit === 0) return <span style={{ whiteSpace: 'nowrap' }}>{formatBytes(used, '')} <Typography.Text type="secondary">/ 不限</Typography.Text></span>;
+                        const percent = Math.min(100, Math.round(used / limit * 100));
+                        return (
+                            <Tooltip title={formatBytes(used, '') + ' / ' + formatBytes(limit, '') + (r.traffic_reset_day ? '（每月 ' + r.traffic_reset_day + ' 日重置）' : '')}>
+                                <div style={{ minWidth: 130 }}>
+                                    <div style={{ fontSize: 12, marginBottom: 2, whiteSpace: 'nowrap', color: r.traffic_exhausted ? 'var(--danger, #ff4d4f)' : undefined }}>
+                                        {formatBytes(used, '')} / {formatBytes(limit, '')}{r.traffic_exhausted ? ' 已超限' : ''}
+                                    </div>
+                                    <Progress percent={percent} size="small" showInfo={false}
+                                        status={r.traffic_exhausted ? 'exception' : (percent >= 80 ? 'active' : 'normal')} />
+                                </div>
+                            </Tooltip>
+                        );
+                    }
+                },
                 { title: '总下载', dataIndex: 'download_total', width: 110, render: v => formatBytes(v, '') },
                 { title: '总上传', dataIndex: 'upload_total', width: 110, render: v => formatBytes(v, '') },
                 {
-                    title: '操作', width: 220, fixed: 'right', render: (_, r) => (
+                    title: '操作', width: 290, fixed: 'right', render: (_, r) => (
                         <Space size={4}>
                             <Button size="small" type="primary" ghost onClick={() => openConnection(r)}>连接</Button>
                             <Button size="small" onClick={() => setDetail(r)}>详情</Button>
                             <Button size="small" onClick={() => openEdit(r)}>编辑</Button>
+                            <Button size="small" onClick={() => confirmTrafficReset(r)}>重置</Button>
                             <Button size="small" danger onClick={() => confirmDelete(r)}>删除</Button>
                         </Space>
                     )
@@ -1151,10 +1198,19 @@
                                         </Form.Item>
                                     </Space.Compact>
                                 </Form.Item>
+                                <Form.Item name="traffic_limit_gb" label="流量限额 (GB)" rules={[{ required: true, message: '请输入流量限额' }]}>
+                                    <InputNumber min={0} step={1} precision={2} style={{ width: '100%' }} placeholder="0 = 不限" addonAfter="GB" />
+                                </Form.Item>
+                                <Form.Item name="traffic_reset_day" label="流量自动重置">
+                                    <Select options={[
+                                        { value: 0, label: '不自动重置' },
+                                        ...Array.from({ length: 28 }, (_, i) => ({ value: i + 1, label: '每月 ' + (i + 1) + ' 日重置' }))
+                                    ]} />
+                                </Form.Item>
                                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                                     {editing
-                                        ? 'Trojan-Go v0.10.6 的 Modify 接口不支持修改密码，仅可修改限速与 IP 限制。'
-                                        : '限速按所选单位提交，后端自动转换为 bytes/s（如 10 MB/s = 10485760 B/s）。'}
+                                        ? 'Trojan-Go v0.10.6 的 Modify 接口不支持修改密码，仅可修改限速与 IP 限制。流量限额由本面板统计与执行（上传+下载累计），超限自动断开，用量已持久化。'
+                                        : '限速按所选单位提交，后端自动转换为 bytes/s（如 10 MB/s = 10485760 B/s）。流量限额按上传+下载累计统计，超限自动断开。'}
                                 </Typography.Text>
                             </Form>
                         </Modal>

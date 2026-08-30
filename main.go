@@ -5883,6 +5883,7 @@ func main() {
 	http.HandleFunc("POST /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
 	http.HandleFunc("PUT /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
 	http.HandleFunc("DELETE /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
+	http.HandleFunc("POST /api/trojan/users/traffic-reset", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanTrafficResetHandler))))
 	http.HandleFunc("GET /api/trojan/users/{hash}/connection", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanConnectionHandler))))
 	http.HandleFunc("POST /api/trojan/users/{hash}/credential", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanCredentialHandler))))
 	http.HandleFunc("GET /api/trojan/users/{hash}/connection/test", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanConnectionTestHandler))))

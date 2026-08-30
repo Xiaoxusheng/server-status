@@ -78,6 +78,12 @@ type TrojanUser struct {
 	DownloadTotal uint64 `json:"download_total"`
 	UploadLimit   uint64 `json:"upload_limit"`
 	DownloadLimit uint64 `json:"download_limit"`
+	// 流量限额（累计上传+下载，字节）：limit 为本地档案配置；used 为跨重启的累计真实用量；
+	// exhausted 表示已超限被踢出（此时用户不在 Trojan-Go 在线表中，由档案合并展示）。
+	TrafficLimit     uint64 `json:"traffic_limit"`
+	TrafficUsed      uint64 `json:"traffic_used"`
+	TrafficResetDay  int    `json:"traffic_reset_day"`
+	TrafficExhausted bool   `json:"traffic_exhausted"`
 }
 
 // TrojanStatus 是面向 API 和 WebSocket 的 Trojan-Go 总体状态模型。
@@ -96,13 +102,17 @@ type TrojanStatus struct {
 }
 
 // TrojanUserRequest 是添加和修改用户的 HTTP 请求模型。
-// upload_limit / download_limit 单位为 B/s（前端负责把 MB/s 转换为字节）。
+// upload_limit / download_limit 单位为 B/s（前端负责把 MB/s 转换为字节）；
+// traffic_limit 单位为字节（前端负责把 GB 转换为字节），0 = 不限；
+// traffic_reset_day 为 0（不自动重置）或 1-28（每月几号零点自动清零用量）。
 type TrojanUserRequest struct {
-	Hash          string `json:"hash"`
-	Password      string `json:"password"`
-	UploadLimit   uint64 `json:"upload_limit"`
-	DownloadLimit uint64 `json:"download_limit"`
-	IPLimit       int32  `json:"ip_limit"`
+	Hash            string `json:"hash"`
+	Password        string `json:"password"`
+	UploadLimit     uint64 `json:"upload_limit"`
+	DownloadLimit   uint64 `json:"download_limit"`
+	IPLimit         int32  `json:"ip_limit"`
+	TrafficLimit    uint64 `json:"traffic_limit"`
+	TrafficResetDay int    `json:"traffic_reset_day"`
 }
 
 // TrojanClient 复用单个 gRPC 连接并缓存最新 Trojan-Go 状态。
@@ -113,18 +123,46 @@ type TrojanClient struct {
 	status    TrojanStatus
 	lastError time.Time
 	closed    atomic.Bool
+	// trafficAcc 按用户 hash 维护流量累计基线：
+	// 真实累计用量 = baseUsed（持久化基准）+ (本次会话计数 − base 会话基线)。
+	// Trojan-Go 重启会话计数归零时重立基线并把已算得的用量并入 baseUsed。
+	trafficAcc map[string]*trojanTrafficAcc
+	// archiveCache 档案缓存（含限额/用量），每 30 秒随用量落盘一并刷新，
+	// 用于把「已超限被踢出」的档案用户合并进状态快照、并在恢复时跳过超限用户。
+	archiveCache   map[string]TrojanCredential
+	archiveLoaded  time.Time
+	persistTick    *time.Ticker
+	persistStopped chan struct{}
+	persistOnce    sync.Once
+}
+
+// trojanTrafficAcc 单个用户在面板进程内的流量累计基线。
+type trojanTrafficAcc struct {
+	baseUsed uint64 // 已固化的历史累计用量（跨 Trojan-Go/面板重启连续）
+	baseUp   uint64 // Trojan-Go 本次会话的上传计数基线
+	baseDown uint64 // Trojan-Go 本次会话的下载计数基线
+	lastUp   uint64 // 上次采样的会话计数（用于检测计数回绕并折叠用量）
+	lastDown uint64
+	lastUsed uint64 // 上次计算得到的真实累计用量（持久化直接取用）
 }
 
 var trojanClient *TrojanClient
 
-// TrojanCredential 存储 Trojan 用户档案：密码明文 + 限速/IP 限额。
-// 它是 Trojan-Go 重启后恢复用户的唯一数据源（v0.10.6 用户表在内存里，重启即清空）。
+// TrojanCredential 存储 Trojan 用户档案：密码明文 + 限速/IP 限额 + 流量限额。
+// 它是 Trojan-Go 重启后恢复用户的唯一数据源（v0.10.6 用户表在内存里，重启即清空），
+// 同时是流量限额与累计用量的持久化载体（所有字段随保存落盘，重启不丢）。
 type TrojanCredential struct {
 	Hash          string `json:"hash"`
-	Password      string `json:"password"`
+	Password      string `json:"password,omitempty"`
 	IPLimit       int32  `json:"ip_limit,omitempty"`
 	UploadLimit   uint64 `json:"upload_limit,omitempty"`
 	DownloadLimit uint64 `json:"download_limit,omitempty"`
+	// TrafficLimit：流量限额（上传+下载累计，字节，0=不限）；TrafficUsed：已用累计用量（字节），
+	// 由面板周期性回写，Trojan-Go 重启前后均连续累计。
+	TrafficLimit     uint64 `json:"traffic_limit,omitempty"`
+	TrafficUsed      uint64 `json:"traffic_used,omitempty"`
+	TrafficResetDay  int    `json:"traffic_reset_day,omitempty"`
+	TrafficLastReset string `json:"traffic_last_reset,omitempty"`
 }
 
 // TrojanCredentialStore 凭据存储文件结构
@@ -207,8 +245,9 @@ func setTrojanCredential(hash, password string) error {
 	return saveTrojanCredentials(store)
 }
 
-// upsertTrojanUserRecord 保存完整用户档案（密码 + 限速/IP 限额），供重启后恢复用户
-func upsertTrojanUserRecord(hash, password string, ipLimit int32, uploadLimit, downloadLimit uint64) error {
+// upsertTrojanUserRecord 保存完整用户档案（密码 + 限速/IP/流量限额），供重启后恢复用户。
+// 新建时流量累计从零开始；已存在的档案保留原有累计用量与重置设置，除非显式传入。
+func upsertTrojanUserRecord(hash, password string, ipLimit int32, uploadLimit, downloadLimit, trafficLimit uint64, trafficResetDay int) error {
 	trojanCredMu.Lock()
 	defer trojanCredMu.Unlock()
 	store, err := loadTrojanCredentials()
@@ -220,24 +259,42 @@ func upsertTrojanUserRecord(hash, password string, ipLimit int32, uploadLimit, d
 			store.Credentials[i].IPLimit = ipLimit
 			store.Credentials[i].UploadLimit = uploadLimit
 			store.Credentials[i].DownloadLimit = downloadLimit
+			store.Credentials[i].TrafficLimit = trafficLimit
+			store.Credentials[i].TrafficResetDay = trafficResetDay
 			if password != "" {
 				store.Credentials[i].Password = password
 			}
-			return saveTrojanCredentials(store)
+			cred := store.Credentials[i]
+			if err := saveTrojanCredentials(store); err != nil {
+				return err
+			}
+			if trojanClient != nil {
+				trojanClient.updateArchiveCache(cred)
+			}
+			return nil
 		}
 	}
-	store.Credentials = append(store.Credentials, TrojanCredential{
-		Hash:          hash,
-		Password:      password,
-		IPLimit:       ipLimit,
-		UploadLimit:   uploadLimit,
-		DownloadLimit: downloadLimit,
-	})
-	return saveTrojanCredentials(store)
+	cred := TrojanCredential{
+		Hash:            hash,
+		Password:        password,
+		IPLimit:         ipLimit,
+		UploadLimit:     uploadLimit,
+		DownloadLimit:   downloadLimit,
+		TrafficLimit:    trafficLimit,
+		TrafficResetDay: trafficResetDay,
+	}
+	store.Credentials = append(store.Credentials, cred)
+	if err := saveTrojanCredentials(store); err != nil {
+		return err
+	}
+	if trojanClient != nil {
+		trojanClient.updateArchiveCache(cred)
+	}
+	return nil
 }
 
-// updateTrojanUserLimits 把限速/IP 限制的变更同步到本地档案（仅更新已记录用户）
-func updateTrojanUserLimits(hash string, ipLimit int32, uploadLimit, downloadLimit uint64) error {
+// updateTrojanUserLimits 把限速/IP/流量限额的变更同步到本地档案（仅更新已记录用户）。
+func updateTrojanUserLimits(hash string, ipLimit int32, uploadLimit, downloadLimit, trafficLimit uint64, trafficResetDay int) error {
 	trojanCredMu.Lock()
 	defer trojanCredMu.Unlock()
 	store, err := loadTrojanCredentials()
@@ -249,13 +306,22 @@ func updateTrojanUserLimits(hash string, ipLimit int32, uploadLimit, downloadLim
 			store.Credentials[i].IPLimit = ipLimit
 			store.Credentials[i].UploadLimit = uploadLimit
 			store.Credentials[i].DownloadLimit = downloadLimit
-			return saveTrojanCredentials(store)
+			store.Credentials[i].TrafficLimit = trafficLimit
+			store.Credentials[i].TrafficResetDay = trafficResetDay
+			cred := store.Credentials[i]
+			if err := saveTrojanCredentials(store); err != nil {
+				return err
+			}
+			if trojanClient != nil {
+				trojanClient.updateArchiveCache(cred)
+			}
+			return nil
 		}
 	}
 	return nil
 }
 
-// deleteTrojanCredential 删除凭据
+// deleteTrojanCredential 删除凭据，并同步清理内存缓存与流量累计基线
 func deleteTrojanCredential(hash string) error {
 	trojanCredMu.Lock()
 	defer trojanCredMu.Unlock()
@@ -270,7 +336,16 @@ func deleteTrojanCredential(hash string) error {
 		}
 	}
 	store.Credentials = newCreds
-	return saveTrojanCredentials(store)
+	if err := saveTrojanCredentials(store); err != nil {
+		return err
+	}
+	if trojanClient != nil {
+		trojanClient.mu.Lock()
+		delete(trojanClient.archiveCache, hash)
+		delete(trojanClient.trafficAcc, hash)
+		trojanClient.mu.Unlock()
+	}
+	return nil
 }
 
 // loadTrojanConfig 依次从默认值、config.json、环境变量加载 Trojan-Go 配置。
@@ -372,11 +447,19 @@ func loadTrojanJSON(baseDir string, cfg *TrojanConfig) {
 
 // newTrojanClient 创建客户端并启动定时刷新协程。
 func newTrojanClient() *TrojanClient {
-	client := &TrojanClient{cfg: loadTrojanConfig()}
+	client := &TrojanClient{
+		cfg:            loadTrojanConfig(),
+		trafficAcc:     make(map[string]*trojanTrafficAcc),
+		persistStopped: make(chan struct{}),
+	}
 	client.status = TrojanStatus{Enabled: client.cfg.Enabled, Timestamp: time.Now(), Users: []TrojanUser{}}
+	client.reloadArchive()
 	if client.cfg.Enabled {
 		log.Printf("Trojan-Go 客户端已启用，API: %s，刷新间隔: %v", client.cfg.APIAddr, client.cfg.RefreshInterval)
 		go client.refreshLoop()
+		// 流量用量持久化：周期回写 + 关闭兜底，保证限额与用量跨重启连续
+		client.persistTick = time.NewTicker(60 * time.Second)
+		go client.persistLoop()
 	} else {
 		log.Println("Trojan-Go 客户端未启用（config.json 中 trojan.enabled=false）")
 	}
@@ -417,6 +500,8 @@ func (c *TrojanClient) refresh() {
 			users = refreshed
 		}
 	}
+	// 流量限额：推进累计用量、踢出超限用户、合并展示超限档案用户
+	users = c.applyTrafficQuota(users)
 	var status TrojanStatus
 	status.Enabled = true
 	status.Connected = true
@@ -482,7 +567,8 @@ func (c *TrojanClient) reconcileTrojanUsers(live []TrojanUser) {
 		}
 	}
 
-	// restore：本地已记录而服务端缺失的用户重新下发（Add 语义）
+	// restore：本地已记录而服务端缺失的用户重新下发（Add 语义）；流量已超限的用户不恢复，
+	// 避免 Trojan-Go 重启后超限用户自动回归，直到面板里手动重置用量。
 	liveSet := make(map[string]bool, len(live))
 	for _, u := range live {
 		liveSet[u.Hash] = true
@@ -490,6 +576,9 @@ func (c *TrojanClient) reconcileTrojanUsers(live []TrojanUser) {
 	restored := 0
 	for _, rec := range store.Credentials {
 		if liveSet[rec.Hash] {
+			continue
+		}
+		if rec.TrafficLimit > 0 && rec.TrafficUsed >= rec.TrafficLimit {
 			continue
 		}
 		restoreCtx, restoreCancel := context.WithTimeout(context.Background(), c.cfg.APITimeout)
@@ -589,9 +678,10 @@ func (c *TrojanClient) snapshot() TrojanStatus {
 	return status
 }
 
-// close 释放 gRPC 连接及后台刷新资源。
+// close 释放 gRPC 连接及后台刷新资源，并做关闭前最后一次用量落盘。
 func (c *TrojanClient) close() error {
 	c.closed.Store(true)
+	c.stopPersist()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.conn == nil {
@@ -632,6 +722,241 @@ func trojanHash(password string) string {
 	hash := sha256.New224()
 	_, _ = hash.Write([]byte(password))
 	return hex.EncodeToString(hash.Sum(nil))
+}
+
+// ==================== 流量限额：累计口径 / 自动重置 / 持久化 ====================
+
+// updateTrafficAcc 依据 Trojan-Go 本次会话计数推进基线，返回该用户跨重启连续的累计用量。
+// 会话计数较上次采样不增反减（Trojan-Go 重启或用户被重建，计数在内存中归零）时，
+// 先把截至上次采样的会话用量折叠进 baseUsed 再重立基线，保证累计口径连续不重复、不丢失。
+func updateTrafficAcc(acc *trojanTrafficAcc, up, down uint64) uint64 {
+	if up < acc.lastUp || down < acc.lastDown {
+		acc.baseUsed += (acc.lastUp - acc.baseUp) + (acc.lastDown - acc.baseDown)
+		acc.baseUp, acc.baseDown = up, down
+	}
+	acc.lastUp, acc.lastDown = up, down
+	acc.lastUsed = acc.baseUsed + (up - acc.baseUp) + (down - acc.baseDown)
+	return acc.lastUsed
+}
+
+// trafficResetDue 判断按月自动重置是否到期：本月 resetDay 已过且上次重置早于该日。
+// 服务器在重置日当天停机，下次启动后的首个持久化周期也会补做重置。
+func trafficResetDue(now, lastReset time.Time, resetDay int) bool {
+	if resetDay < 1 || resetDay > 28 {
+		return false
+	}
+	due := time.Date(now.Year(), now.Month(), resetDay, 0, 0, 0, 0, now.Location())
+	return now.After(due) && (lastReset.IsZero() || lastReset.Before(due))
+}
+
+// reloadArchive 从磁盘重建档案缓存（调用方不得已持有 trojanCredMu）。
+func (c *TrojanClient) reloadArchive() {
+	trojanCredMu.Lock()
+	store, err := loadTrojanCredentials()
+	trojanCredMu.Unlock()
+	if err != nil {
+		log.Printf("Trojan 用户档案读取失败，沿用上次缓存: %v", err)
+		return
+	}
+	m := make(map[string]TrojanCredential, len(store.Credentials))
+	for _, cred := range store.Credentials {
+		m[cred.Hash] = cred
+	}
+	c.mu.Lock()
+	c.archiveCache = m
+	c.archiveLoaded = time.Now()
+	c.mu.Unlock()
+}
+
+// updateArchiveCache 把档案的最新内容同步进内存缓存（须在档案文件保存成功后调用）。
+func (c *TrojanClient) updateArchiveCache(cred TrojanCredential) {
+	c.mu.Lock()
+	if c.archiveCache == nil {
+		c.archiveCache = make(map[string]TrojanCredential)
+	}
+	c.archiveCache[cred.Hash] = cred
+	c.mu.Unlock()
+}
+
+// dropTrafficAcc 丢弃某用户的流量累计基线（删除用户/手动重置后，下次采样以档案值为基准重建）。
+func (c *TrojanClient) dropTrafficAcc(hash string) {
+	c.mu.Lock()
+	delete(c.trafficAcc, hash)
+	c.mu.Unlock()
+}
+
+// applyTrafficQuota 在每次状态刷新后执行：推进各用户累计用量、标记并踢出超限在线用户、
+// 把“已超限被踢出”的档案用户合并进快照。锁内只做内存操作，网络调用在锁外执行。
+func (c *TrojanClient) applyTrafficQuota(users []TrojanUser) []TrojanUser {
+	c.mu.Lock()
+	if c.trafficAcc == nil {
+		// 零值构造的客户端（部分测试路径）也安全
+		c.trafficAcc = make(map[string]*trojanTrafficAcc)
+	}
+	arch := make(map[string]TrojanCredential, len(c.archiveCache))
+	for k, v := range c.archiveCache {
+		arch[k] = v
+	}
+	accs := c.trafficAcc
+	c.mu.Unlock()
+
+	live := make(map[string]bool, len(users))
+	type kickedUser struct {
+		hash string
+		used uint64
+	}
+	var toKick []kickedUser
+	for i := range users {
+		u := &users[i]
+		live[u.Hash] = true
+		cred := arch[u.Hash]
+		u.TrafficLimit = cred.TrafficLimit
+		u.TrafficResetDay = cred.TrafficResetDay
+		acc, ok := accs[u.Hash]
+		if !ok {
+			// 首次采样：以档案中的持久化用量为历史基准，以当前会话计数为新基线
+			acc = &trojanTrafficAcc{baseUsed: cred.TrafficUsed, baseUp: u.UploadTotal, baseDown: u.DownloadTotal, lastUp: u.UploadTotal, lastDown: u.DownloadTotal, lastUsed: cred.TrafficUsed}
+			accs[u.Hash] = acc
+		}
+		u.TrafficUsed = updateTrafficAcc(acc, u.UploadTotal, u.DownloadTotal)
+		if cred.TrafficLimit > 0 && u.TrafficUsed >= cred.TrafficLimit {
+			u.TrafficExhausted = true
+			toKick = append(toKick, kickedUser{hash: u.Hash, used: u.TrafficUsed})
+		}
+	}
+	// 合并已超限被踢出（不在 Trojan-Go 在线表）的档案用户，供面板查看与重置
+	for hash, cred := range arch {
+		if live[hash] || cred.TrafficLimit == 0 || cred.TrafficUsed < cred.TrafficLimit {
+			continue
+		}
+		users = append(users, TrojanUser{
+			Hash:             hash,
+			Online:           false,
+			TrafficLimit:     cred.TrafficLimit,
+			TrafficUsed:      cred.TrafficUsed,
+			TrafficResetDay:  cred.TrafficResetDay,
+			TrafficExhausted: true,
+		})
+	}
+	// 踢出超限在线用户并立即持久化，确保超限状态跨重启依然生效
+	for _, k := range toKick {
+		ctx, cancel := context.WithTimeout(context.Background(), c.cfg.APITimeout)
+		err := c.setUser(ctx, TrojanUserRequest{Hash: k.hash}, service.SetUsersRequest_Delete)
+		cancel()
+		if err != nil {
+			// 下一轮刷新会重试；期间用量仍在累计，不会漏踢
+			log.Printf("Trojan 超限用户踢出失败 hash=%s: %v", k.hash, err)
+			continue
+		}
+		log.Printf("Trojan 用户流量超限已踢出: hash=%s used=%d", k.hash, k.used)
+		c.persistTraffic(map[string]uint64{k.hash: k.used}, time.Now())
+	}
+	return users
+}
+
+// persistLoop 周期把累计用量落盘并处理按月自动重置；同时低频刷新档案缓存。
+func (c *TrojanClient) persistLoop() {
+	for {
+		select {
+		case <-c.persistStopped:
+			return
+		case <-c.persistTick.C:
+			if reAdd := c.persistTraffic(nil, time.Now()); len(reAdd) > 0 {
+				c.reAddUsers(reAdd, "流量自动重置")
+			}
+			if time.Since(c.archiveLoaded) >= 30*time.Second {
+				c.reloadArchive()
+			}
+		}
+	}
+}
+
+// reAddUsers 把用户重新下发到 Trojan-Go（hash-only Add；已存在等错误忽略）。
+func (c *TrojanClient) reAddUsers(hashes []string, reason string) {
+	for _, hash := range hashes {
+		ctx, cancel := context.WithTimeout(context.Background(), c.cfg.APITimeout)
+		err := c.setUser(ctx, TrojanUserRequest{Hash: hash}, service.SetUsersRequest_Add)
+		cancel()
+		if err != nil {
+			// Trojan-Go 离线或用户已存在时静默跳过：离线场景由离线→在线的对账流程兜底恢复
+			continue
+		}
+		log.Printf("Trojan 用户已重新下发(%s): hash=%s", reason, hash)
+	}
+}
+
+// persistTraffic 把内存累计用量合并回档案文件并处理按月自动重置。
+// usedOverride 非 nil 的条目以覆盖值为准（踢出后立即落盘场景）。
+// 返回本次因自动重置而需要重新下发到 Trojan-Go 的用户 hash 列表。
+func (c *TrojanClient) persistTraffic(usedOverride map[string]uint64, now time.Time) []string {
+	c.mu.RLock()
+	used := make(map[string]uint64, len(c.trafficAcc))
+	for h, acc := range c.trafficAcc {
+		used[h] = acc.lastUsed
+	}
+	c.mu.RUnlock()
+	for h, u := range usedOverride {
+		used[h] = u
+	}
+
+	var reAdd []string
+	trojanCredMu.Lock()
+	defer trojanCredMu.Unlock()
+	store, err := loadTrojanCredentials()
+	if err != nil {
+		log.Printf("Trojan 用量持久化失败（档案读取）: %v", err)
+		return nil
+	}
+	changed := false
+	for i := range store.Credentials {
+		cred := &store.Credentials[i]
+		if u, ok := used[cred.Hash]; ok && u != cred.TrafficUsed {
+			cred.TrafficUsed = u
+			changed = true
+		}
+		var lastReset time.Time
+		if cred.TrafficLastReset != "" {
+			lastReset, _ = time.Parse(time.RFC3339, cred.TrafficLastReset)
+		}
+		if trafficResetDue(now, lastReset, cred.TrafficResetDay) {
+			cred.TrafficUsed = 0
+			cred.TrafficLastReset = now.Format(time.RFC3339)
+			changed = true
+			c.dropTrafficAcc(cred.Hash)
+			if cred.TrafficLimit > 0 {
+				reAdd = append(reAdd, cred.Hash)
+			}
+			log.Printf("Trojan 用户流量已按月重置: hash=%s reset_day=%d", cred.Hash, cred.TrafficResetDay)
+		}
+	}
+	if !changed {
+		return nil
+	}
+	if err := saveTrojanCredentials(store); err != nil {
+		log.Printf("Trojan 用量持久化失败（写入）: %v", err)
+		return nil
+	}
+	c.mu.Lock()
+	if c.archiveCache == nil {
+		c.archiveCache = make(map[string]TrojanCredential)
+	}
+	for i := range store.Credentials {
+		c.archiveCache[store.Credentials[i].Hash] = store.Credentials[i]
+	}
+	c.mu.Unlock()
+	return reAdd
+}
+
+// stopPersist 停止周期持久化并做关闭前最后一次落盘（幂等，可重复调用）。
+func (c *TrojanClient) stopPersist() {
+	if c.persistTick == nil {
+		return
+	}
+	c.persistOnce.Do(func() {
+		c.persistTick.Stop()
+		close(c.persistStopped)
+		c.persistTraffic(nil, time.Now())
+	})
 }
 
 // setUser 调用官方 SetUsers 双向流式 RPC 执行增删改。
@@ -709,6 +1034,11 @@ func trojanUserMutationHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "无效的请求数据")
 		return
 	}
+	// 流量限额参数校验：重置日 0（不重置）或 1-28（避免 29-31 在平年二月永不触发）
+	if req.TrafficResetDay < 0 || req.TrafficResetDay > 28 {
+		writeJSONError(w, http.StatusBadRequest, "traffic_reset_day 仅支持 0（不自动重置）或 1-28")
+		return
+	}
 
 	var operation service.SetUsersRequest_Operation
 	switch r.Method {
@@ -747,19 +1077,19 @@ func trojanUserMutationHandler(w http.ResponseWriter, r *http.Request) {
 		if hash == "" {
 			hash = trojanHash(req.Password)
 		}
-		if err := upsertTrojanUserRecord(hash, req.Password, req.IPLimit, req.UploadLimit, req.DownloadLimit); err != nil {
+		if err := upsertTrojanUserRecord(hash, req.Password, req.IPLimit, req.UploadLimit, req.DownloadLimit, req.TrafficLimit, req.TrafficResetDay); err != nil {
 			log.Printf("Trojan credential save failed: %v", err)
 		} else {
 			log.Printf("Trojan user created: hash=%s", hash)
 		}
 	}
-	// 修改限速/IP 限制时同步到本地档案，保证恢复时使用最新限额
+	// 修改限速/IP/流量限额时同步到本地档案，保证恢复时使用最新限额
 	if operation == service.SetUsersRequest_Modify {
 		hash := req.Hash
 		if hash == "" {
 			hash = trojanHash(req.Password)
 		}
-		if err := updateTrojanUserLimits(hash, req.IPLimit, req.UploadLimit, req.DownloadLimit); err != nil {
+		if err := updateTrojanUserLimits(hash, req.IPLimit, req.UploadLimit, req.DownloadLimit, req.TrafficLimit, req.TrafficResetDay); err != nil {
 			log.Printf("Trojan limits persist failed: %v", err)
 		}
 	}
@@ -778,8 +1108,70 @@ func trojanUserMutationHandler(w http.ResponseWriter, r *http.Request) {
 	trojanClient.refresh()
 	// Trojan 用户变更高危操作，记录审计（detail 中不包含密码明文）
 	auditAction(r, "trojan.user."+strings.ToLower(operation.String()),
-		fmt.Sprintf("hash=%s ip_limit=%d", req.Hash, req.IPLimit))
+		fmt.Sprintf("hash=%s ip_limit=%d traffic_limit=%d", req.Hash, req.IPLimit, req.TrafficLimit))
 	writeJSON(w, http.StatusOK, "Trojan-Go 用户更新成功", nil)
+}
+
+// trojanTrafficResetHandler POST /api/trojan/users/traffic-reset  body: {"hash": "..."}
+// 手动重置指定用户的累计流量用量：清零并记录重置时间，若用户因超限被踢出则重新下发。
+func trojanTrafficResetHandler(w http.ResponseWriter, r *http.Request) {
+	if trojanClient == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "Trojan-Go 客户端未初始化")
+		return
+	}
+	var req struct {
+		Hash string `json:"hash"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Hash == "" {
+		writeJSONError(w, http.StatusBadRequest, "必须提供 hash")
+		return
+	}
+	now := time.Now()
+	trojanCredMu.Lock()
+	store, err := loadTrojanCredentials()
+	if err != nil {
+		trojanCredMu.Unlock()
+		writeJSONError(w, http.StatusInternalServerError, "读取用户档案失败: "+err.Error())
+		return
+	}
+	found := false
+	for i := range store.Credentials {
+		if store.Credentials[i].Hash == req.Hash {
+			store.Credentials[i].TrafficUsed = 0
+			store.Credentials[i].TrafficLastReset = now.Format(time.RFC3339)
+			found = true
+			break
+		}
+	}
+	if !found {
+		trojanCredMu.Unlock()
+		writeJSONError(w, http.StatusNotFound, "用户不存在于本地档案")
+		return
+	}
+	if err := saveTrojanCredentials(store); err != nil {
+		trojanCredMu.Unlock()
+		writeJSONError(w, http.StatusInternalServerError, "保存用户档案失败: "+err.Error())
+		return
+	}
+	for i := range store.Credentials {
+		if store.Credentials[i].Hash == req.Hash {
+			trojanClient.updateArchiveCache(store.Credentials[i])
+			break
+		}
+	}
+	trojanCredMu.Unlock()
+	// 丢弃内存累计基线，下次刷新以档案值（0）为基准重建
+	trojanClient.dropTrafficAcc(req.Hash)
+	// 若用户因超限被踢出（不在 Trojan-Go 在线表），重新下发；失败不阻断——
+	// Trojan-Go 离线时由离线→在线对账流程兜底恢复
+	ctx, cancel := context.WithTimeout(r.Context(), trojanClient.cfg.APITimeout)
+	if err := trojanClient.setUser(ctx, TrojanUserRequest{Hash: req.Hash}, service.SetUsersRequest_Add); err != nil {
+		log.Printf("Trojan 流量重置后重新下发失败（将由对账流程恢复）hash=%s: %v", req.Hash, err)
+	}
+	cancel()
+	trojanClient.refresh()
+	auditAction(r, "trojan.traffic.reset", "hash="+req.Hash)
+	writeJSON(w, http.StatusOK, "流量用量已重置", nil)
 }
 
 // TrojanConnectionInfo 返回给前端展示的连接信息。

@@ -518,6 +518,7 @@ func trojanTestMux() *http.ServeMux {
 	mux.HandleFunc("GET /api/trojan/status", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanStatusHandler))))
 	mux.HandleFunc("GET /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUsersHandler))))
 	mux.HandleFunc("POST /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
+	mux.HandleFunc("POST /api/trojan/users/traffic-reset", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanTrafficResetHandler))))
 	mux.HandleFunc("GET /api/trojan/users/{hash}/connection", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanConnectionHandler))))
 	mux.HandleFunc("POST /api/trojan/users/{hash}/credential", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanCredentialHandler))))
 	mux.HandleFunc("GET /api/trojan/users/{hash}/clash/download", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanClashDownloadHandler))))
@@ -928,7 +929,7 @@ func TestTrojanCredentialArchive(t *testing.T) {
 	hash := trojanHash(secret)
 
 	// 1. 创建档案（含限额）
-	if err := upsertTrojanUserRecord(hash, secret, 3, 1048576, 2097152); err != nil {
+	if err := upsertTrojanUserRecord(hash, secret, 3, 1048576, 2097152, 1073741824, 15); err != nil {
 		t.Fatalf("upsertTrojanUserRecord failed: %v", err)
 	}
 	store, err := loadTrojanCredentials()
@@ -941,6 +942,9 @@ func TestTrojanCredentialArchive(t *testing.T) {
 	rec := store.Credentials[0]
 	if rec.Password != secret || rec.IPLimit != 3 || rec.UploadLimit != 1048576 || rec.DownloadLimit != 2097152 {
 		t.Fatalf("archive fields mismatch: %+v", rec)
+	}
+	if rec.TrafficLimit != 1073741824 || rec.TrafficResetDay != 15 || rec.TrafficUsed != 0 {
+		t.Fatalf("traffic fields mismatch: %+v", rec)
 	}
 
 	// 2. 补录密码（同 hash）：保留已记录限额
@@ -956,8 +960,8 @@ func TestTrojanCredentialArchive(t *testing.T) {
 		t.Fatalf("limits should be preserved on password update: %+v", rec)
 	}
 
-	// 3. 修改限额同步
-	if err := updateTrojanUserLimits(hash, 8, 1, 2); err != nil {
+	// 3. 修改限额同步（流量限额与重置日一并更新，累计用量保留）
+	if err := updateTrojanUserLimits(hash, 8, 1, 2, 2147483648, 0); err != nil {
 		t.Fatalf("updateTrojanUserLimits failed: %v", err)
 	}
 	store, _ = loadTrojanCredentials()
@@ -965,12 +969,18 @@ func TestTrojanCredentialArchive(t *testing.T) {
 	if rec.IPLimit != 8 || rec.UploadLimit != 1 || rec.DownloadLimit != 2 {
 		t.Fatalf("limits should be updated: %+v", rec)
 	}
+	if rec.TrafficLimit != 2147483648 || rec.TrafficResetDay != 0 {
+		t.Fatalf("traffic limits should be updated: %+v", rec)
+	}
+	if rec.TrafficUsed != 0 {
+		t.Fatalf("traffic used should survive limits update: %+v", rec)
+	}
 	if rec.Password != "replaced-pass" {
 		t.Fatalf("password should survive limits update: %+v", rec)
 	}
 
 	// 4. 对未记录用户调用限额更新应为无害 no-op
-	if err := updateTrojanUserLimits("unknown-hash", 5, 5, 5); err != nil {
+	if err := updateTrojanUserLimits("unknown-hash", 5, 5, 5, 0, 0); err != nil {
 		t.Fatalf("updateTrojanUserLimits on unknown hash should not error: %v", err)
 	}
 
@@ -1137,5 +1147,216 @@ func TestTrojanUserRestartRecovery(t *testing.T) {
 	password, ok := getTrojanCredential(hash)
 	if !ok || password != "Restart@Test123" {
 		t.Fatalf("面板用户密码应保留: %q %v", password, ok)
+	}
+}
+
+// TestUpdateTrafficAccRebase 验证流量累计基线推进与回绕折叠：
+// Trojan-Go 重启导致会话计数归零时，截至上次采样的用量应折叠进持久化基准。
+func TestUpdateTrafficAccRebase(t *testing.T) {
+	acc := &trojanTrafficAcc{baseUsed: 1000, baseUp: 100, baseDown: 200, lastUp: 100, lastDown: 200}
+
+	// 正常累积：1000 + (700-100) + (500-200) = 1900
+	if got := updateTrafficAcc(acc, 700, 500); got != 1900 {
+		t.Fatalf("used = %d, want 1900", got)
+	}
+	// 再采样：仅下载增加 → 1000 + 600 + 400 = 2000
+	if got := updateTrafficAcc(acc, 700, 600); got != 2000 {
+		t.Fatalf("used = %d, want 2000", got)
+	}
+	// Trojan-Go 重启，计数回绕归零：折叠上次会话已确认的 (700-100)+(600-200)=1000
+	// baseUsed = 1000+1000 = 2000，基线重立为 50/80 → used = 2000
+	if got := updateTrafficAcc(acc, 50, 80); got != 2000 {
+		t.Fatalf("used after rebase = %d, want 2000", got)
+	}
+	// 重立基线后继续累计：2000 + 100 + 100 = 2200
+	if got := updateTrafficAcc(acc, 150, 180); got != 2200 {
+		t.Fatalf("used = %d, want 2200", got)
+	}
+	// 单边回绕（上传回绕、下载继续）：折叠 (150-50)+(180-80)=200 → 2200
+	if got := updateTrafficAcc(acc, 10, 200); got != 2200 {
+		t.Fatalf("used after one-side rebase = %d, want 2200", got)
+	}
+}
+
+// TestTrafficResetDue 验证按月自动重置的到期判定。
+func TestTrafficResetDue(t *testing.T) {
+	now := time.Date(2026, 8, 26, 10, 0, 0, 0, time.Local)
+
+	// 不自动重置 / 非法值
+	if trafficResetDue(now, time.Time{}, 0) {
+		t.Fatal("reset_day=0 不应触发重置")
+	}
+	if trafficResetDue(now, time.Time{}, 29) {
+		t.Fatal("reset_day=29 非法，不应触发重置")
+	}
+	// 本月 15 号已过、从未重置 → 到期
+	if !trafficResetDue(now, time.Time{}, 15) {
+		t.Fatal("8 月 26 日应对 reset_day=15 触发重置")
+	}
+	// 本月 15 号已过、但本月 15 号后已重置过 → 不重复
+	last := time.Date(2026, 8, 16, 0, 0, 0, 0, time.Local)
+	if trafficResetDue(now, last, 15) {
+		t.Fatal("本月已重置过不应重复触发")
+	}
+	// 本月 15 号已过、但上次重置在 7 月（停机跨过重置日）→ 补做
+	stale := time.Date(2026, 7, 20, 0, 0, 0, 0, time.Local)
+	if !trafficResetDue(now, stale, 15) {
+		t.Fatal("跨月停机后应补做重置")
+	}
+	// 重置日未到（本月 28 号还没到）
+	if trafficResetDue(now, time.Time{}, 28) {
+		t.Fatal("重置日未到不应触发")
+	}
+}
+
+// TestTrojanTrafficQuotaLifecycle 端到端验证流量限额：
+// 创建限额用户 → 累计用量持久化 → 超限踢出 → Trojan-Go 重启不恢复超限用户
+// → 面板重启后累计口径连续 → API 手动重置并重新下发。
+func TestTrojanTrafficQuotaLifecycle(t *testing.T) {
+	oldUM := userManager
+	userManager = &UserManager{
+		RWMutex:   sync.RWMutex{},
+		UserInfos: map[string]*Users{"admin": {Username: "admin", IsActive: true, Permissions: []string{"*"}}},
+		Sessions:  make(map[string]*Session),
+	}
+	oldHome := os.Getenv("SERVER_STATUS_HOME")
+	os.Setenv("SERVER_STATUS_HOME", t.TempDir())
+
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := grpc.NewServer()
+	fake := &fakeTrojanServer{users: make(map[string]*service.UserStatus)}
+	service.RegisterTrojanServerServiceServer(srv, fake)
+	go func() { _ = srv.Serve(lis) }()
+
+	oldClient := trojanClient
+	trojanClient = &TrojanClient{
+		cfg:            TrojanConfig{Enabled: true, APIAddr: lis.Addr().String(), APITimeout: 5 * time.Second, RefreshInterval: time.Hour},
+		trafficAcc:     make(map[string]*trojanTrafficAcc),
+		persistStopped: make(chan struct{}),
+	}
+	cleanup := func() {
+		_ = trojanClient.close()
+		srv.Stop()
+		trojanClient = oldClient
+		userManager = oldUM
+		os.Setenv("SERVER_STATUS_HOME", oldHome)
+	}
+	defer cleanup()
+	trojanClient.reloadArchive()
+
+	mux := trojanTestMux()
+	sid := "admin-session"
+	userManager.Lock()
+	userManager.Sessions[sid] = &Session{SessionID: sid, Username: "admin", CreatedAt: time.Now(), LastAccess: time.Now(), ExpiresAt: time.Now().Add(time.Hour), CSRFToken: testCSRFToken}
+	userManager.Unlock()
+	do := func(method, path, body string) *httptest.ResponseRecorder {
+		req := trojanAuthedRequest(method, path, sid, body)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+	findUser := func(hash string) *TrojanUser {
+		snap := trojanClient.snapshot()
+		for i := range snap.Users {
+			if snap.Users[i].Hash == hash {
+				return &snap.Users[i]
+			}
+		}
+		return nil
+	}
+
+	secret := "Quota@Test123"
+	hash := trojanHash(secret)
+
+	// 1. 创建限额 1000 字节的用户
+	rec := do("POST", "/api/trojan/users", `{"password":"`+secret+`","ip_limit":0,"upload_limit":0,"download_limit":0,"traffic_limit":1000,"traffic_reset_day":0}`)
+	if rec.Code != 200 {
+		t.Fatalf("create user failed: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, ok := fake.users[hash]; !ok {
+		t.Fatal("用户应已下发到 Trojan-Go")
+	}
+
+	// 2. 模拟流量 600/300 → 累计 900，未超限
+	fake.mu.Lock()
+	fake.users[hash].TrafficTotal = &service.Traffic{UploadTraffic: 600, DownloadTraffic: 300}
+	fake.mu.Unlock()
+	trojanClient.refresh()
+	trojanClient.persistTraffic(nil, time.Now())
+	user := findUser(hash)
+	if user == nil || user.TrafficUsed != 900 || user.TrafficExhausted {
+		t.Fatalf("used 应为 900 且未超限: %+v", user)
+	}
+	store, _ := loadTrojanCredentials()
+	if store.Credentials[0].TrafficUsed != 900 {
+		t.Fatalf("用量应持久化到档案: %+v", store.Credentials[0])
+	}
+
+	// 3. 继续使用至 700/400 = 1100 ≥ 1000 → 超限踢出并落盘
+	fake.mu.Lock()
+	fake.users[hash].TrafficTotal = &service.Traffic{UploadTraffic: 700, DownloadTraffic: 400}
+	fake.mu.Unlock()
+	trojanClient.refresh()
+	if _, ok := fake.users[hash]; ok {
+		t.Fatal("超限用户应被踢出 Trojan-Go")
+	}
+	user = findUser(hash)
+	if user == nil || !user.TrafficExhausted || user.TrafficUsed != 1100 {
+		t.Fatalf("快照应合并展示超限档案用户: %+v", user)
+	}
+	store, _ = loadTrojanCredentials()
+	if store.Credentials[0].TrafficUsed != 1100 {
+		t.Fatalf("超限用量应立即持久化: %+v", store.Credentials[0])
+	}
+
+	// 4. 模拟 Trojan-Go 重启（用户表清空）→ 超限用户不应被自动恢复
+	trojanClient.mu.Lock()
+	fake.users = make(map[string]*service.UserStatus)
+	trojanClient.status.Connected = false
+	trojanClient.mu.Unlock()
+	trojanClient.refresh()
+	if _, ok := fake.users[hash]; ok {
+		t.Fatal("超限用户重启后不应被自动恢复")
+	}
+
+	// 5. 模拟面板重启：重建客户端，累计口径应从档案（1100）继续
+	trojanClient.close()
+	trojanClient = &TrojanClient{
+		cfg:            TrojanConfig{Enabled: true, APIAddr: lis.Addr().String(), APITimeout: 5 * time.Second, RefreshInterval: time.Hour},
+		trafficAcc:     make(map[string]*trojanTrafficAcc),
+		persistStopped: make(chan struct{}),
+	}
+	trojanClient.reloadArchive()
+	trojanClient.refresh()
+	user = findUser(hash)
+	if user == nil || user.TrafficUsed != 1100 || !user.TrafficExhausted {
+		t.Fatalf("面板重启后用量应连续（1100）且仍超限: %+v", user)
+	}
+
+	// 6. 通过 API 手动重置 → 用量清零、用户重新下发
+	rec = do("POST", "/api/trojan/users/traffic-reset", `{"hash":"`+hash+`"}`)
+	if rec.Code != 200 {
+		t.Fatalf("traffic-reset failed: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, ok := fake.users[hash]; !ok {
+		t.Fatal("重置后用户应重新下发到 Trojan-Go")
+	}
+	store, _ = loadTrojanCredentials()
+	if store.Credentials[0].TrafficUsed != 0 {
+		t.Fatalf("重置后档案用量应为 0: %+v", store.Credentials[0])
+	}
+	trojanClient.refresh()
+	user = findUser(hash)
+	if user == nil || user.TrafficUsed != 0 || user.TrafficExhausted {
+		t.Fatalf("重置后快照应正常: %+v", user)
+	}
+
+	// 7. 重置接口对未知 hash 应 404
+	rec = do("POST", "/api/trojan/users/traffic-reset", `{"hash":"no-such-hash"}`)
+	if rec.Code != 404 {
+		t.Fatalf("unknown hash should 404, got %d", rec.Code)
 	}
 }

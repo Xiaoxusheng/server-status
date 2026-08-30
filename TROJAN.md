@@ -160,20 +160,28 @@ curl -k -b /tmp/ss.jar "https://192.168.1.10:9000/api/trojan/status"
 # 4. 用户列表（GET，无需 CSRF）
 curl -k -b /tmp/ss.jar "https://192.168.1.10:9000/api/trojan/users"
 
-# 5. 添加用户（POST，需 CSRF 头；限速单位 B/s：10 MB/s = 10485760）
+# 5. 添加用户（POST，需 CSRF 头；限速单位 B/s：10 MB/s = 10485760；
+#    traffic_limit 为流量限额（上传+下载累计，字节，0=不限）；
+#    traffic_reset_day 为 0（不自动重置）或 1-28（每月几号自动清零用量））
 curl -k -b /tmp/ss.jar -X POST "https://192.168.1.10:9000/api/trojan/users" \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: $CSRF" \
-  -d '{"password":"MyPass123","upload_limit":10485760,"download_limit":52428800,"ip_limit":5}'
+  -d '{"password":"MyPass123","upload_limit":10485760,"download_limit":52428800,"ip_limit":5,"traffic_limit":107374182400,"traffic_reset_day":1}'
 
 # 6. 修改用户（PUT，需 CSRF 头；用列表里返回的 hash）
 curl -k -b /tmp/ss.jar -X PUT "https://192.168.1.10:9000/api/trojan/users" \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: $CSRF" \
-  -d '{"hash":"<用户hash>","upload_limit":10485760,"download_limit":104857600,"ip_limit":8}'
+  -d '{"hash":"<用户hash>","upload_limit":10485760,"download_limit":104857600,"ip_limit":8,"traffic_limit":107374182400,"traffic_reset_day":1}'
 
 # 7. 删除用户（DELETE，需 CSRF 头）
 curl -k -b /tmp/ss.jar -X DELETE "https://192.168.1.10:9000/api/trojan/users" \
+  -H "Content-Type: application/json" \
+  -H "X-CSRF-Token: $CSRF" \
+  -d '{"hash":"<用户hash>"}'
+
+# 8. 重置用户累计流量用量（POST，需 CSRF 头；超限被踢出的用户会重新下发）
+curl -k -b /tmp/ss.jar -X POST "https://192.168.1.10:9000/api/trojan/users/traffic-reset" \
   -H "Content-Type: application/json" \
   -H "X-CSRF-Token: $CSRF" \
   -d '{"hash":"<用户hash>"}'
@@ -335,3 +343,40 @@ systemctl restart trojan-go
   因此 `ip_current` 恒为 0。需要在面板“编辑用户”里给用户设置 IP 限制（当前已设为 20），
   在线 IP 才会显示；该限制仅保存在 trojan-go 运行内存中，trojan-go 重启后会恢复为 0，
   届时在面板里重新设置即可（配置文件的 password 列表不支持每用户 IP 限制）。
+
+## 14. 流量限额与用量持久化（面板侧实现）
+
+Trojan-Go v0.10.6 的 gRPC API 只支持限速/IP 限制，不支持流量配额，因此流量限额由
+server-status 面板侧实现：面板按刷新周期（默认 2s）采样各用户会话流量计数，累计出
+**跨重启连续的真实用量**，超限即调用 SetUsers Delete 把用户从 Trojan-Go 踢出。
+
+### 14.1 数据与口径
+
+- 每用户配置：`traffic_limit`（上传+下载累计，字节，0=不限）、`traffic_reset_day`
+  （0=不自动重置，1-28=每月几号自动清零）、`traffic_used`（累计用量）、
+  `traffic_last_reset`（上次重置时间），全部随 `trojan_credentials.json` 落盘；
+- 累计口径：`真实用量 = 持久化基准 + (本次会话计数 − 会话基线)`。Trojan-Go 重启导致
+  会话计数归零时，自动把截至上次采样的用量折叠进基准并重立基线；面板重启则从档案
+  文件恢复基准。任何一侧重启，用量都连续、不重复、不丢失；
+- 采样间隙（面板离线/停机期间最长约一个持久化周期）的用量不计入，属已知误差。
+
+### 14.2 持久化时机
+
+- 每 60 秒周期性回写 `trojan_credentials.json`（仅在有变化时写）；
+- 超限踢出时立即写、手动重置时立即写、删除用户时清理记录；
+- 面板进程关闭（SIGTERM/SIGINT）前最后落盘一次。
+
+### 14.3 超限行为
+
+- 刷新周期内检测到 `用量 ≥ 限额` → 立即从 Trojan-Go 删除该用户（新连接与现有连接中断）；
+- 已超限用户记录保留在档案中：面板用户表合并展示（Offline + 红色"已超限"进度条），
+  Trojan-Go 重启后的自动恢复流程会**跳过**超限用户，不会自动回归；
+- 恢复方式：面板"重置"按钮（或 `POST /api/trojan/users/traffic-reset`），用量清零并
+  重新下发用户；设置了 `traffic_reset_day` 的用户到期自动清零并重新下发。
+
+### 14.4 面板操作
+
+- 用户表新增"流量用量"列：进度条展示 `已用/限额`（不限额显示 `已用 / 不限`），
+  ≥80% 高亮，超限红色并标注"已超限"；
+- 操作列新增"重置"：二次确认后清零该用户累计用量；
+- 添加/编辑弹窗新增"流量限额 (GB)"（0=不限）与"流量自动重置"（不重置 / 每月 1-28 日）。
