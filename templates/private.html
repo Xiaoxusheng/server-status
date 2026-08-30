@@ -1729,6 +1729,10 @@
             const [exif, setExif] = useState(null);
             const [dragging, setDragging] = useState(false);
             const fileRef = useRef(null);
+            // 同步防重锁：保存进行中时忽略后续触发（状态更新是异步的，快速连点会穿透 loading）
+            const savingRef = useRef(false);
+            // 未入库草稿的 id：选图/录音会自动创建草稿，重试时复用，避免生成多条空手记
+            const draftRef = useRef(null);
 
             const reset = (n) => {
                 setTitle(n && n.title ? n.title : '');
@@ -1739,6 +1743,7 @@
                 setImages(n && n.images ? n.images.slice() : []);
                 setAudioList(n && n.audio ? n.audio.slice() : []);
                 setExif(null);
+                draftRef.current = n && n.id ? n.id : null;
             };
             useEffect(() => {
                 if (open) reset(note);
@@ -1773,19 +1778,33 @@
             const onFiles = (list) => {
                 if (!list || !list.length) return;
                 const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-                const bad = Array.from(list).some(f => !allowed.includes(f.type));
-                if (bad) { message.error('仅支持 jpg / png / webp / gif 图片'); return; }
+                const extOk = f => /\.(jpe?g|png|webp|gif)$/i.test(f.name || '');
+                // 逐张过滤：只跳过不支持的（如 iPhone 的 HEIC），不再整批拒绝
+                const good = [], skipped = [];
+                Array.from(list).forEach(f => {
+                    if (allowed.includes(f.type) || extOk(f)) good.push(f);
+                    else skipped.push(f);
+                });
+                if (skipped.length) {
+                    message.warning(skipped.length === Array.from(list).length
+                        ? '所选图片格式不支持，仅支持 jpg / png / webp / gif（iPhone 的 HEIC 照片可在分享时选择 JPEG）'
+                        : `${skipped.length} 张图片格式不支持已跳过（仅支持 jpg / png / webp / gif）`);
+                }
+                if (!good.length) return;
                 if (!note) {
-                    // 尚无手记：先保存草稿（正文为空时给占位）
+                    // 尚无手记：先保存草稿（正文为空时给占位）；重试时复用已建草稿，避免生成多条空手记
+                    if (draftRef.current) { uploadFiles(good, draftRef.current); return; }
                     doSave(true).then(saved => {
-                        if (saved) uploadFiles(list, saved.id);
+                        if (saved) { draftRef.current = saved.id; uploadFiles(good, saved.id); }
                     });
                     return;
                 }
-                uploadFiles(list);
+                uploadFiles(good);
             };
             const doSave = async (silent) => {
+                if (savingRef.current) return null;
                 if (!content.trim() && !title.trim() && images.length === 0) { message.warning('请输入正文或标题'); return null; }
+                savingRef.current = true;
                 setSaving(true);
                 const body = {
                     title, content,
@@ -1808,6 +1827,7 @@
                     if (!silent) message.error('保存失败，请重试');
                     return null;
                 } finally {
+                    savingRef.current = false;
                     setSaving(false);
                 }
             };
@@ -1824,9 +1844,13 @@
             };
             const onSaveAudio = async (file, secs) => {
                 if (!note) {
-                    const saved = await doSave(true);
-                    if (!saved) return;
-                    note = saved;
+                    if (draftRef.current) { note = { id: draftRef.current }; }
+                    else {
+                        const saved = await doSave(true);
+                        if (!saved) return;
+                        note = saved;
+                        draftRef.current = saved.id;
+                    }
                 }
                 const fd = new FormData();
                 fd.append('file', file);
@@ -1980,6 +2004,7 @@
             const [preview, setPreview] = useState(null);
             const [fullCanvas, setFullCanvas] = useState(null);
             const [genState, setGenState] = useState('idle'); // idle | generating | done | error
+            const generatingRef = useRef(false); // 同步防重：连点「生成卡片」不再重复入库
             const [savedCard, setSavedCard] = useState(null);
             const [server, setServer] = useState(null);
             const [shareOpen, setShareOpen] = useState(false);
@@ -2080,6 +2105,8 @@
 
             const toBlob = c => new Promise(res => c.toBlob(res, 'image/png'));
             const generate = async () => {
+                if (generatingRef.current) return;
+                generatingRef.current = true;
                 setGenState('generating');
                 try {
                     const c = await renderCard(opts());
@@ -2110,6 +2137,8 @@
                 } catch (e) {
                     setGenState('error');
                     message.error('卡片生成失败，请重试');
+                } finally {
+                    generatingRef.current = false;
                 }
             };
             const savePng = async () => {
@@ -2277,8 +2306,11 @@
             const [password, setPassword] = useState('');
             const [allowDownload, setAllowDownload] = useState(true);
             const [creating, setCreating] = useState(false);
+            const creatingRef = useRef(false);
             const [share, setShare] = useState(null);
             const create = async () => {
+                if (creatingRef.current) return;
+                creatingRef.current = true;
                 setCreating(true);
                 try {
                     const d = await api('/api/private/cards/' + card.id + '/share', {
@@ -2288,7 +2320,7 @@
                     if (ok(d) && d.data) setShare(d.data);
                     else message.error(d.message || '分享失败，请重试');
                 } catch (e) { message.error('分享失败，请重试'); }
-                finally { setCreating(false); }
+                finally { creatingRef.current = false; setCreating(false); }
             };
             const copyText = async (t) => {
                 try { await navigator.clipboard.writeText(t); message.success('已复制'); }

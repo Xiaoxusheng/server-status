@@ -7,96 +7,188 @@
     <meta name="robots" content="noindex,nofollow">
     <title>分享卡片</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
+    <!-- 公开分享页：零外部依赖（不加载 React/antd/Babel CDN），外部访客任何网络环境都能秒开 -->
     <style>
+        /* 与主面板一致的 Design Token */
+        html {
+            --bg: #f5f5f5;
+            --card: #ffffff;
+            --border: #f0f0f0;
+            --border-strong: #d9d9d9;
+            --text: rgba(0, 0, 0, .88);
+            --secondary: rgba(0, 0, 0, .45);
+            --primary: #1677ff;
+            --primary-hover: #4096ff;
+            --warn-bg: #fffbe6;
+            --warn-border: #ffe58f;
+            --warn-text: #d48806;
+            color-scheme: light;
+        }
+
+        html.dark {
+            --bg: #141414;
+            --card: #1f1f1f;
+            --border: #303030;
+            --border-strong: #434343;
+            --text: rgba(255, 255, 255, .88);
+            --secondary: rgba(255, 255, 255, .45);
+            --warn-bg: #2b2111;
+            --warn-border: #594214;
+            --warn-text: #ffd666;
+            color-scheme: dark;
+        }
+
         html,
         body,
         #root {
             margin: 0;
             min-height: 100%;
-            background: #f5f5f5;
-        }
-
-        html.dark,
-        html.dark body,
-        html.dark #root {
-            background: #141414;
         }
 
         body {
-            color: rgba(0, 0, 0, .88);
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            -webkit-font-smoothing: antialiased;
         }
 
-        html.dark body {
-            color: rgba(255, 255, 255, .85);
-        }
-
-        * {
-            box-sizing: border-box;
-        }
+        * { box-sizing: border-box; }
 
         .share-wrap {
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             padding: 24px 16px;
         }
 
-        .share-card {
-            max-width: 560px;
+        .share-card,
+        .share-pw {
             width: 100%;
-            background: #fff;
+            max-width: 560px;
+            background: var(--card);
+            border: 1px solid var(--border);
             border-radius: 14px;
             padding: 20px;
             box-shadow: 0 6px 24px rgba(0, 0, 0, .08);
+            animation: fade-up .25s ease both;
         }
 
-        html.dark .share-card {
-            background: #1f1f1f;
-            box-shadow: 0 6px 24px rgba(0, 0, 0, .35);
+        .share-pw {
+            max-width: 400px;
+            padding: 32px 28px;
+            text-align: center;
+        }
+
+        @keyframes fade-up {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: none; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .share-card, .share-pw { animation: none; }
         }
 
         .share-card img.card-img {
             width: 100%;
             border-radius: 10px;
             display: block;
-            background: #f0f0f0;
+            background: var(--border);
+        }
+
+        .card-title {
+            font-size: 15px;
+            font-weight: 600;
+            margin: 14px 0 0;
+            word-break: break-word;
         }
 
         .share-brand {
             text-align: center;
-            margin-top: 18px;
+            margin-top: 16px;
             font-size: 13px;
-            color: rgba(0, 0, 0, .35);
+            color: var(--secondary);
         }
 
-        html.dark .share-brand {
-            color: rgba(255, 255, 255, .35);
-        }
-
-        .share-pw {
-            max-width: 400px;
-            width: 100%;
-            background: #fff;
-            border-radius: 14px;
-            padding: 28px;
-            text-align: center;
-            box-shadow: 0 6px 24px rgba(0, 0, 0, .08);
-        }
-
-        html.dark .share-pw {
-            background: #1f1f1f;
+        .share-pw .lock-icon {
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 14px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #1677ff 0%, #722ed1 100%);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            box-shadow: 0 8px 24px rgba(22, 119, 255, .35);
         }
 
         .share-pw h3 {
-            margin: 8px 0 4px;
+            margin: 0 0 4px;
+            font-size: 17px;
         }
 
-        .share-expired {
-            color: rgba(0, 0, 0, .45);
-            text-align: center;
-            margin-top: 30px;
+        .share-pw .pw-sub {
+            font-size: 13px;
+            color: var(--secondary);
+            margin-bottom: 18px;
         }
+
+        /* antd 风格输入框 */
+        .ant-input {
+            width: 100%;
+            height: 40px;
+            padding: 4px 11px;
+            font-size: 15px;
+            color: var(--text);
+            background: var(--card);
+            border: 1px solid var(--border-strong);
+            border-radius: 8px;
+            outline: none;
+            transition: border-color .2s, box-shadow .2s;
+        }
+
+        .ant-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(22, 119, 255, .15);
+        }
+
+        /* antd 风格按钮 */
+        .ant-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 40px;
+            padding: 0 18px;
+            font-size: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-strong);
+            background: var(--card);
+            color: var(--text);
+            cursor: pointer;
+            transition: color .2s, border-color .2s, background .2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .ant-btn:hover { color: var(--primary); border-color: var(--primary); }
+
+        .ant-btn.primary {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #fff;
+        }
+
+        .ant-btn.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); color: #fff; }
+
+        .ant-btn.block {
+            width: 100%;
+            margin-top: 14px;
+        }
+
+        .ant-btn:disabled { opacity: .6; cursor: not-allowed; }
 
         .btn-row {
             display: flex;
@@ -104,6 +196,51 @@
             justify-content: center;
             margin-top: 14px;
             flex-wrap: wrap;
+        }
+
+        /* antd Alert(warning) 风格 */
+        .share-alert {
+            width: 100%;
+            max-width: 560px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            background: var(--warn-bg);
+            border: 1px solid var(--warn-border);
+            border-radius: 10px;
+            padding: 12px 16px;
+            font-size: 14px;
+            color: var(--warn-text);
+        }
+
+        .share-alert .alert-icon { font-size: 16px; line-height: 1.4; }
+
+        .share-alert .alert-title { font-weight: 600; }
+        .share-alert .alert-desc { font-size: 13px; color: var(--secondary); margin-top: 2px; }
+
+        .share-expired {
+            color: var(--secondary);
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        /* 加载 spinner */
+        .spin {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(22, 119, 255, .2);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .pw-error {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #ff4d4f;
+            text-align: left;
         }
     </style>
     <script>
@@ -114,112 +251,114 @@
             } catch (e) { }
         })();
     </script>
-    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
-    <script crossorigin
-        src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
-    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
-    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
 </head>
 
 <body>
     <div id="root"></div>
-    <script type="text/babel">
-        const { Button, Input, message, Spin, ConfigProvider, theme, Typography, Alert } = window.antd;
-        const { useState, useEffect } = React;
-        const { darkAlgorithm } = theme;
-        const baseUrl = window.location.origin;
-        const token = window.location.pathname.replace(/^\/card\//, '').replace(/\/$/, '') || '';
+    <script>
+        (function () {
+            var token = window.location.pathname.replace(/^\/card\//, '').replace(/\/$/, '') || '';
 
-        // 读取指定名称的 Cookie（Double-Submit CSRF 使用非 HttpOnly 的 csrf_token，会话 Cookie 仍为 HttpOnly）
-        const getCookie = name => {
-            for (const part of document.cookie.split(';')) {
-                const eq = part.indexOf('=');
-                if (eq < 0) continue;
-                if (part.slice(0, eq).trim() === name) return decodeURIComponent(part.slice(eq + 1));
+            function esc(s) {
+                return String(s == null ? '' : s).replace(/[&<>"']/g, function (ch) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+                });
             }
-            return '';
-        };
-        const getCsrfToken = () => getCookie('csrf_token');
 
-        // 统一携带会话的 API 请求：写操作若存在 CSRF Cookie 则自动附加，不再由浏览器自行计算 HMAC 签名
-        const api = (path, options = {}) => {
-            const method = options.method || 'GET';
-            const headers = { 'Content-Type': 'application/json' };
-            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) {
-                const tok = getCsrfToken();
-                if (tok) headers['X-CSRF-Token'] = tok;
+            function renderLoading() {
+                document.getElementById('root').innerHTML =
+                    '<div class="share-wrap"><div class="spin"></div></div>';
             }
-            return fetch(baseUrl + path, {
-                method,
-                headers,
-                credentials: 'include',
-                body: options.body
-            }).then(r => r.json().catch(() => ({ code: r.status, message: '请求失败' })));
-        };
 
-        function SharePage() {
-            const [state, setState] = useState('loading');
-            const [data, setData] = useState(null);
-            const [pw, setPw] = useState('');
-            const [checking, setChecking] = useState(false);
-            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
-            useEffect(() => {
-                api('/api/share/' + token + '/data').then(d => {
-                    if (ok(d) && d.data) {
-                        setData(d.data);
-                        setState(d.data.invalid ? 'invalid' : (d.data.has_password ? 'password' : 'ready'));
-                    } else setState('invalid');
-                }).catch(() => setState('invalid'));
-            }, []);
-            const ok = d => d && (d.code === 200 || d.code === 0);
-            const verify = async () => {
-                setChecking(true);
-                const d = await api('/api/share/' + token + '/verify', { method: 'POST', body: JSON.stringify({ password: pw }) });
-                setChecking(false);
-                if (ok(d)) setState('ready');
-                else message.error('密码错误');
-            };
-            if (state === 'loading') return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin size="large" /></div>;
-            if (state === 'invalid') return <div className="share-wrap"><Alert type="warning" message="分享不存在或已失效" /></div>;
-            return (
-                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined }}>
-                    <div className="share-wrap">
-                        {state === 'password' ? (
-                            <div className="share-pw">
-                                <div style={{ fontSize: 30 }}>🔒</div>
-                                <h3>此分享需要密码</h3>
-                                <Input.Password size="large" placeholder="访问密码" value={pw} onChange={e => setPw(e.target.value)} onPressEnter={verify} style={{ marginTop: 14 }} />
-                                <div className="btn-row">
-                                    <Button type="primary" size="large" loading={checking} onClick={verify}>查看卡片</Button>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="share-card">
-                                <img className="card-img" src={baseUrl + '/api/share/' + token + '/image'} alt="卡片" />
-                                {data && data.title && <Typography.Title level={5} style={{ marginTop: 14 }}>{data.title}</Typography.Title>}
-                                {data && data.allow_download && (
-                                    <div className="btn-row">
-                                        <Button type="primary" icon={<span>↓</span>} onClick={async () => {
-                                            try {
-                                                const r = await fetch(baseUrl + '/api/share/' + token + '/image', { credentials: 'include' });
-                                                const blob = await r.blob();
-                                                const a = document.createElement('a');
-                                                a.href = URL.createObjectURL(blob);
-                                                a.download = 'card-' + token + '.png';
-                                                a.click();
-                                                setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-                                            } catch (e) { message.error('下载失败'); }
-                                        }}>下载图片</Button>
-                                    </div>
-                                )}
-                                <div className="share-brand">Server Status</div>
-                            </div>
-                        )}
-                    </div>
-                </ConfigProvider>
-            );
-        }
-        ReactDOM.createRoot(document.getElementById('root')).render(<SharePage />);
+            function renderInvalid() {
+                document.getElementById('root').innerHTML =
+                    '<div class="share-wrap">' +
+                    '  <div class="share-alert">' +
+                    '    <div class="alert-icon">&#9888;&#65039;</div>' +
+                    '    <div><div class="alert-title">\u5206\u4eab\u4e0d\u5b58\u5728\u6216\u5df2\u5931\u6548</div>' +
+                    '    <div class="alert-desc">\u94fe\u63a5\u53ef\u80fd\u5df2\u8fc7\u671f\u3001\u88ab\u64a4\u9500\u6216\u94fe\u63a5\u4e0d\u5b8c\u6574\uff0c\u8bf7\u8054\u7cfb\u5206\u4eab\u8005\u91cd\u65b0\u83b7\u53d6\u3002</div></div>' +
+                    '  </div>' +
+                    '</div>';
+            }
+
+            function renderPassword() {
+                document.getElementById('root').innerHTML =
+                    '<div class="share-wrap">' +
+                    '  <div class="share-pw">' +
+                    '    <div class="lock-icon">🔒</div>' +
+                    '    <h3>\u6b64\u5206\u4eab\u9700\u8981\u5bc6\u7801</h3>' +
+                    '    <div class="pw-sub">\u8bf7\u8f93\u5165\u5206\u4eab\u8005\u8bbe\u7f6e\u7684\u8bbf\u95ee\u5bc6\u7801</div>' +
+                    '    <input class="ant-input" id="pw" type="password" placeholder="\u8bbf\u95ee\u5bc6\u7801" autocomplete="off" />' +
+                    '    <div class="pw-error" id="pw-err" style="display:none"></div>' +
+                    '    <button class="ant-btn primary block" id="verify-btn">\u67e5\u770b\u5361\u7247</button>' +
+                    '  </div>' +
+                    '</div>';
+                var input = document.getElementById('pw');
+                var btn = document.getElementById('verify-btn');
+                var err = document.getElementById('pw-err');
+                var submit = function () {
+                    var pw = input.value;
+                    if (!pw) { err.textContent = '\u8bf7\u8f93\u5165\u8bbf\u95ee\u5bc6\u7801'; err.style.display = 'block'; return; }
+                    btn.disabled = true;
+                    btn.textContent = '\u9a8c\u8bc1\u4e2d\u2026';
+                    fetch('/api/share/' + encodeURIComponent(token) + '/verify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ password: pw })
+                    }).then(function (r) { return r.json(); }).then(function (d) {
+                        if (d && (d.code === 200 || d.code === 0)) load();
+                        else { err.textContent = '\u5bc6\u7801\u9519\u8bef'; err.style.display = 'block'; btn.disabled = false; btn.textContent = '\u67e5\u770b\u5361\u7247'; }
+                    }).catch(function () {
+                        err.textContent = '\u7f51\u7edc\u9519\u8bef\uff0c\u8bf7\u91cd\u8bd5';
+                        err.style.display = 'block';
+                        btn.disabled = false;
+                        btn.textContent = '\u67e5\u770b\u5361\u7247';
+                    });
+                };
+                btn.addEventListener('click', submit);
+                input.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+                input.focus();
+            }
+
+            function renderCard(data) {
+                var allow = !!data.allow_download;
+                document.getElementById('root').innerHTML =
+                    '<div class="share-wrap">' +
+                    '  <div class="share-card">' +
+                    '    <img class="card-img" src="/api/share/' + encodeURIComponent(token) + '/image" alt="\u5361\u7247" />' +
+                    (data.title ? '    <div class="card-title">' + esc(data.title) + '</div>' : '') +
+                    (allow ? '    <div class="btn-row"><button class="ant-btn primary" id="dl-btn">\u2b07\uFE0F \u4e0b\u8f7d\u56fe\u7247</button></div>' : '') +
+                    '    <div class="share-brand">Server Status</div>' +
+                    '  </div>' +
+                    '</div>';
+                if (allow) {
+                    document.getElementById('dl-btn').addEventListener('click', function () {
+                        var a = document.createElement('a');
+                        a.href = '/api/share/' + encodeURIComponent(token) + '/image';
+                        a.download = 'card-' + token + '.png';
+                        a.click();
+                    });
+                }
+            }
+
+            function load() {
+                renderLoading();
+                fetch('/api/share/' + encodeURIComponent(token) + '/data', { credentials: 'include' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d && (d.code === 200 || d.code === 0) && d.data && !d.data.invalid) {
+                            if (d.data.has_password) renderPassword();
+                            else renderCard(d.data);
+                        } else {
+                            renderInvalid();
+                        }
+                    })
+                    .catch(function () { renderInvalid(); });
+            }
+
+            load();
+        })();
     </script>
 </body>
 
