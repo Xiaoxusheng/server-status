@@ -536,6 +536,11 @@
             .media-window {
                 display: none;
             }
+
+            /* 移动端不显示媒体小窗，入口按钮一并隐藏 */
+            .nav-media-btn {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -938,7 +943,7 @@
             if (hasPerm('system:log')) navBtns.push(<Button key="logs" icon={<UIIcon name="FileSearchOutlined" />} onClick={() => window.location.href = 'log.html'}>日志</Button>);
             if (hasPerm('files:download')) navBtns.push(<Button key="dl" icon={<UIIcon name="DownloadOutlined" />} onClick={() => window.location.href = 'download.html'}>安全下载</Button>);
             if (hasPerm('user:manage') || hasPerm('role:manage')) navBtns.push(<Button key="rbac" icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => window.location.href = 'rbac.html'}>权限管理</Button>);
-            if (hasPerm('files:view')) navBtns.push(<Button key="mediawin" icon={<UIIcon name="VideoCameraOutlined" />} type={mediaClosed ? 'default' : 'primary'}
+            if (hasPerm('files:view')) navBtns.push(<Button key="mediawin" className="nav-media-btn" icon={<UIIcon name="VideoCameraOutlined" />} type={mediaClosed ? 'default' : 'primary'}
                 onClick={() => { const next = !mediaClosed; setMediaClosed(next); localStorage.setItem('media_closed', next ? '1' : '0'); }}
                 title={mediaClosed ? '打开媒体展示小窗' : '关闭媒体展示小窗'}>媒体窗</Button>);
 
