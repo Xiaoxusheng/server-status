@@ -480,15 +480,11 @@ go run ./stress -target https://192.168.1.10:9000 -scenario public -c 50 -d 30s
         </tr>
         <tr>
             <td><img src="img/12-rbac.png" alt="权限管理（RBAC）" width="1920" /></td>
-            <td><img src="img/14-video.png" alt="视频播放器" width="1920" /></td>
+            <td><img src="img/18-private-tags.png" alt="私人空间·标签" width="1920" /></td>
         </tr>
         <tr>
             <td><img src="img/15-private-gate.png" alt="私人空间密码门" width="1920" /></td>
             <td><img src="img/17-private-timeline.png" alt="私人空间·手记时间线" width="1920" /></td>
-        </tr>
-        <tr>
-            <td><img src="img/18-private-tags.png" alt="私人空间·标签" width="1920" /></td>
-            <td><img src="img/19-private-cards.png" alt="私人空间·图片卡片" width="1920" /></td>
         </tr>
         <tr>
             <td colspan="2"><img src="img/16-mobile.png" alt="移动端布局" width="390" /></td>
