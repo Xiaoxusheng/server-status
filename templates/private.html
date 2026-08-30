@@ -289,6 +289,14 @@
             50% { height: 100%; }
         }
 
+        /* 时间线长文折叠：默认最多 10 行，点「展开全文」查看全部 */
+        .note-content.clamp {
+            display: -webkit-box;
+            -webkit-line-clamp: 10;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
         .note-actions {
             margin-top: 12px;
             padding-top: 10px;
@@ -1123,7 +1131,8 @@
             const {
                 template, width, height, title, content, time, location, tags, images, brand, server,
                 locationName, latitude, longitude,
-                show = {}, locationMode = 'name', background = 'white', autoLayout = true
+                show = {}, locationMode = 'name', background = 'white', autoLayout = true,
+                fold = false, foldLines = 8
             } = opts;
             const showTitle = show.title !== false;
             const showContent = show.content !== false;
@@ -1188,6 +1197,11 @@
             if (showTitle && title) titleLines = wrapText(ctx, mdStrip(title), maxW);
             ctx.font = `400 ${baseF.content}px ${fontFamily}`;
             if (showContent && content) contentLines = wrapText(ctx, mdStrip(content), maxW);
+            // 长文折叠：超过 foldLines 行只保留前 N 行并以 … 结尾，字号保持可读不再缩小
+            if (fold && contentLines.length > foldLines) {
+                contentLines = contentLines.slice(0, foldLines);
+                contentLines[foldLines - 1] = contentLines[foldLines - 1].replace(/\s+$/, '') + ' …';
+            }
             const textNeed = () => {
                 let need = 0;
                 if (titleLines.length) need += titleLines.length * baseLH.title + width * 0.016;
@@ -1417,6 +1431,7 @@
                     const availH = Math.max(cLH, height - y - reserve);
                     let cLs = wrapText(ctx, mdStrip(content), maxW);
                     const maxLines = Math.max(1, Math.floor(availH / cLH));
+                    if (fold && foldLines < maxLines) maxLines = foldLines;
                     if (cLs.length > maxLines) {
                         cLs = cLs.slice(0, maxLines);
                         cLs[maxLines - 1] = cLs[maxLines - 1].slice(0, Math.max(1, cLs[maxLines - 1].length - 2)) + '…';
@@ -1711,6 +1726,8 @@
 
         function NoteCard({ note, onEdit, onDelete, onCard, highlight }) {
             const [openIdx, setOpenIdx] = useState(-1);
+            const [expanded, setExpanded] = useState(false);
+            const contentLong = !!(note.content && note.content.length > 300);
             const imgs = note.images || [];
             const shown = imgs.slice(0, 4);
             const extra = imgs.length - 4;
@@ -1747,7 +1764,10 @@
                         <span style={{ marginLeft: 'auto', display: 'inline-flex' }}>{menu}</span>
                     </div>
                     {note.title && <div className="note-title">{hlText(note.title, highlight)}</div>}
-                    {note.content && <div className="note-content" dangerouslySetInnerHTML={{ __html: hlHtml(mdToHtml(note.content), highlight) }} />}
+                    {note.content && <div className={'note-content' + (contentLong && !expanded ? ' clamp' : '')} dangerouslySetInnerHTML={{ __html: hlHtml(mdToHtml(note.content), highlight) }} />}
+                    {contentLong && (
+                        <Button type="link" size="small" style={{ padding: 0, marginTop: 4 }} onClick={() => setExpanded(!expanded)}>{expanded ? '收起' : '展开全文'}</Button>
+                    )}
                     {imgs.length > 0 && (
                         <div className={'note-imgs n' + Math.min(imgs.length, 4)}>
                             {shown.map((img, i) => (
@@ -2205,6 +2225,8 @@
 
         function CardModal({ open, note, onClose }) {
             const [template, setTemplate] = useState('simple');
+            const [foldLong, setFoldLong] = useState(true);
+            const [foldLineN, setFoldLineN] = useState(8);
             const [size, setSize] = useState(0);
             const [background, setBackground] = useState('white');
             const [show, setShow] = useState({ title: true, content: true, time: true, location: true, tags: true, images: true, brand: false });
@@ -2244,7 +2266,9 @@
                 show,
                 locationMode,
                 background,
-                autoLayout
+                autoLayout,
+                fold: foldLong,
+                foldLines
             });
 
             // 生成期间隐藏页面 AI 浮球等悬浮元素（Card Renderer 本身不依赖 DOM）
@@ -2475,6 +2499,19 @@
                                         </Tooltip>
                                     </div>
                                     <Switch checked={autoLayout} onChange={setAutoLayout} checkedChildren="开" unCheckedChildren="关" />
+                                </div>
+                                <div className="cg-section">
+                                    <div className="cg-label">长文折叠 <span className="cg-sub">文字过长时保留前几行并以 … 结尾，字号保持可读</span></div>
+                                    <Space size={12}>
+                                        <Switch checked={foldLong} onChange={setFoldLong} checkedChildren="开" unCheckedChildren="关" />
+                                        {foldLong && (
+                                            <Segmented size="small" value={foldLineN} onChange={setFoldLineN} options={[
+                                                { value: 6, label: '6 行' },
+                                                { value: 8, label: '8 行' },
+                                                { value: 12, label: '12 行' }
+                                            ]} />
+                                        )}
+                                    </Space>
                                 </div>
                                 {note && note.images && note.images.length > 0 && (
                                     <div style={{ fontSize: 12, color: 'rgba(0,0,0,.45)' }}>将使用手记中的前 {Math.min(note.images.length, 4)} 张图片</div>
