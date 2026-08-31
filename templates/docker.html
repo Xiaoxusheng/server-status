@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+﻿﻿<!DOCTYPE html>
 <html lang="zh-CN">
 
 <head>
@@ -883,8 +883,13 @@
 
             // silent=true 表示后台轮询：不展示 loading 遮罩，避免表格频繁闪烁
             const loadingRef = useRef(false); // in-flight 防重入：避免轮询请求重叠导致 aborted
+            const wsRef = useRef(null);          // /ws/docker 推送连接
+            const wsOkRef = useRef(false);       // WS 在线标志：在线时后台轮询跳过 HTTP
+            const wsGotFrameRef = useRef(false); // 是否已收到 WS 首帧（决定是否回退 HTTP 首载）
+            const wsRetryRef = useRef(0);        // WS 重连次数（指数退避，最多 10 次）
             const load = useCallback((silent = false) => {
                 if (!canView || loadingRef.current) return; // 上轮未完成则跳过本轮
+                if (silent && wsOkRef.current) return;      // WS 在线时由推送通道供数，轮询仅作降级兜底
                 loadingRef.current = true;
                 if (!silent) setLoading(true);
                 // attempt 内部处理失败重试：首次加载失败自动重试（最多 2 次，间隔 1.5s），
@@ -942,18 +947,60 @@
                     .catch(() => setAuth({ loading: false, ok: false, user: null }));
             }, []);
 
+            // WebSocket 推送通道：连接后首帧即服务端缓存数据（秒开），之后每 5 秒推送一次；
+            // 断线自动重连（指数退避，最多 10 次），彻底不可用时由轮询兜底
+            useEffect(() => {
+                if (auth.loading || !canView) return;
+                let closed = false;
+                const connect = () => {
+                    if (closed) return;
+                    const ws = new WebSocket(baseUrl.replace(/^http/, 'ws') + '/ws/docker');
+                    wsRef.current = ws;
+                    ws.onopen = () => { wsOkRef.current = true; wsRetryRef.current = 0; };
+                    ws.onmessage = (e) => {
+                        try {
+                            const d = JSON.parse(e.data);
+                            if (d.code === 200) {
+                                wsGotFrameRef.current = true;
+                                setContainers((d.data && d.data.containers) || []);
+                                setLastUpd(new Date());
+                                setFirstLoaded(true);
+                                setLoading(false);
+                            }
+                        } catch (err) { console.warn('容器 WS 数据解析失败:', err); }
+                    };
+                    ws.onerror = () => { wsOkRef.current = false; };
+                    ws.onclose = () => {
+                        wsOkRef.current = false;
+                        if (!closed && wsRetryRef.current < 10) {
+                            const delay = Math.min(3000 * ++wsRetryRef.current, 15000);
+                            setTimeout(connect, delay);
+                        }
+                    };
+                };
+                connect();
+                return () => {
+                    closed = true;
+                    wsOkRef.current = false;
+                    if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); wsRef.current = null; }
+                };
+            }, [auth.loading, canView]);
+
             useEffect(() => {
                 if (!auth.loading && canView) {
-                    load(false);
+                    // 首帧优先走 WS 推送；5s 内仍未收到首帧（wss 握手慢/被代理拦截等）则回退 HTTP 首载。
+                    // 不宜过短：TCP+TLS+Upgrade 握手本身可能超过 1~2 秒，过短会导致 HTTP 首载抢跑
+                    const fallback = setTimeout(() => { if (!wsGotFrameRef.current) load(false); }, 5000);
                     loadOverview();
-                    // 后台轮询使用静默模式 + setTimeout 链式（避免请求重叠）；间隔可由用户配置
+                    // 后台轮询仅作为 WS 降级兜底：WS 在线时 load(true) 内部直接跳过 HTTP；
+                    // 间隔可由用户配置
                     let timer = null;
                     const tick = () => {
                         load(true);
                         timer = refreshSec > 0 ? setTimeout(tick, refreshSec * 1000) : null;
                     };
                     if (refreshSec > 0) timer = setTimeout(tick, refreshSec * 1000);
-                    return () => { if (timer) clearTimeout(timer); };
+                    return () => { clearTimeout(fallback); if (timer) clearTimeout(timer); };
                 }
             }, [auth.loading, canView, load, refreshSec]);
 

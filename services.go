@@ -223,10 +223,44 @@ func runSystemctl(ctx context.Context, args ...string) (string, error) {
 
 // 服务状态缓存（2 秒 TTL）
 var (
-	servicesStatusMu   sync.Mutex
-	servicesStatusList []*ServiceListItem
-	servicesStatusTime time.Time
+	servicesStatusMu        sync.Mutex
+	servicesStatusList      []*ServiceListItem
+	servicesStatusTime      time.Time
+	servicesStatusRefreshing bool // 后台刷新进行中（singleflight，防止并发重复采集）
 )
+
+// refreshServicesCache 后台刷新服务状态缓存（由 stale-first 读取触发）
+func refreshServicesCache() {
+	list, err := collectServicesStatus()
+	servicesStatusMu.Lock()
+	if err == nil {
+		servicesStatusList = list
+		servicesStatusTime = time.Now()
+	}
+	servicesStatusRefreshing = false
+	servicesStatusMu.Unlock()
+}
+
+// getCachedServicesStale 以 stale-first 策略读取服务状态缓存：
+// 只要缓存存在就立即返回（即使已过期），缺失或超过 2 秒新鲜期则触发后台刷新，
+// 绝不阻塞调用方（collectServicesStatus 过期后会同步执行大量 systemctl show，耗时明显）。
+// 返回 (服务列表, 缓存是否存在)。
+func getCachedServicesStale() ([]*ServiceListItem, bool) {
+	servicesStatusMu.Lock()
+	cached := servicesStatusList
+	needRefresh := (cached == nil || time.Since(servicesStatusTime) >= 2*time.Second) && !servicesStatusRefreshing
+	if needRefresh {
+		servicesStatusRefreshing = true
+	}
+	servicesStatusMu.Unlock()
+	if needRefresh {
+		go refreshServicesCache()
+	}
+	if cached == nil {
+		return nil, false
+	}
+	return cached, true
+}
 
 // collectServicesStatus 汇总系统全部 systemd 服务状态
 func collectServicesStatus() ([]*ServiceListItem, error) {

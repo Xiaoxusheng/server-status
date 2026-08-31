@@ -54,10 +54,16 @@ var (
 	portScanCache []PortInfo
 	portScanTime  time.Time
 
+	portScanRefreshing bool // 端口扫描后台刷新进行中（singleflight，防止并发重复扫描）
+
 	portChangeMu     sync.Mutex
 	portChanges      []PortChange
 	lastPortSnapshot map[string]bool
 	lastPortMeta     map[string]PortChange
+
+	fwProviderMu    sync.Mutex
+	fwProviderCache FirewallProvider
+	fwProviderTime  time.Time
 )
 
 type procDetail struct {
@@ -363,8 +369,29 @@ func (p *noopProvider) ApplyRule(rule PortRule, cidrs []string, remove bool) err
 	return fmt.Errorf("未检测到受支持的防火墙（firewalld / nftables / iptables）")
 }
 
-// detectFirewallProvider 自动检测当前系统使用的防火墙
+// detectFirewallProvider 探测防火墙类型（结果缓存 60 秒）。
+// 不缓存时每次探测都会执行 `firewall-cmd --state`（最长 3 秒），
+// 这是 /api/ports 接口响应慢的主要元凶之一。
 func detectFirewallProvider() FirewallProvider {
+	fwProviderMu.Lock()
+	if fwProviderCache != nil && time.Since(fwProviderTime) < 60*time.Second {
+		p := fwProviderCache
+		fwProviderMu.Unlock()
+		return p
+	}
+	fwProviderMu.Unlock()
+
+	p := detectFirewallProviderUncached()
+
+	fwProviderMu.Lock()
+	fwProviderCache = p
+	fwProviderTime = time.Now()
+	fwProviderMu.Unlock()
+	return p
+}
+
+// detectFirewallProviderUncached 实际执行防火墙类型探测（无缓存）
+func detectFirewallProviderUncached() FirewallProvider {
 	if bin, err := exec.LookPath("firewall-cmd"); err == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
@@ -768,6 +795,135 @@ func findRuleByID(id string) *PortRule {
 
 // ==================== 端口 API 处理函数 ====================
 
+// refreshPortScanCache 后台刷新端口扫描缓存（由 stale-first 读取触发，singleflight 防重入）
+func refreshPortScanCache() {
+	list, err := scanListeningPorts()
+	portScanMu.Lock()
+	if err == nil {
+		portScanCache = list
+		portScanTime = time.Now()
+	}
+	portScanRefreshing = false
+	portScanMu.Unlock()
+	if err == nil {
+		trackPortChanges(list)
+	}
+}
+
+// getCachedPortsStale 以 stale-first 策略读取端口缓存：
+// 只要缓存存在就立即返回（即使已过期，保证调用方秒开）；
+// 缓存缺失或超过 2 秒新鲜期时触发后台刷新，绝不阻塞调用方。
+// 返回 (端口列表, 缓存是否存在)。
+func getCachedPortsStale() ([]PortInfo, bool) {
+	portScanMu.Lock()
+	cached := portScanCache
+	needRefresh := (cached == nil || time.Since(portScanTime) >= 2*time.Second) && !portScanRefreshing
+	if needRefresh {
+		portScanRefreshing = true
+	}
+	portScanMu.Unlock()
+	if needRefresh {
+		go refreshPortScanCache()
+	}
+	if cached == nil {
+		return nil, false
+	}
+	return cached, true
+}
+
+// buildPortsPayload 组装端口中心页面数据（ports + firewall + changes），与 /api/ports 响应结构一致
+func buildPortsPayload(ports []PortInfo) map[string]interface{} {
+	return map[string]interface{}{
+		"ports":    ports,
+		"firewall": getFirewallInfo(),
+		"changes":  getPortChanges(),
+	}
+}
+
+// portsWSHandler GET /ws/ports —— 服务与端口中心页面级 WebSocket 推送：
+// 连接建立后立即推送当前缓存数据（陈旧数据先行，页面秒开），随后每 5 秒推送一次；
+// 数据永远读自缓存（端口 + 服务），过期仅触发后台刷新，推送协程不会被慢采集
+// （systemd 枚举/防火墙探测）阻塞。按连接用户的 RBAC 权限过滤推送字段：
+// port:view → ports/firewall/changes；service:view → services/systemd_available。
+// 认证链由路由中间件保障：会话 Cookie + RBAC + Origin 校验。
+func portsWSHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	updateOnlineUser(r, "ports")
+
+	// 字段级权限过滤：路由为 Any(port:view, service:view)，此处再细分推送内容
+	session, sessOK := getSessionFromRequest(r)
+	canPorts := sessOK && hasPermission(session.Username, "port:view")
+	canSvc := sessOK && hasPermission(session.Username, "service:view")
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("服务端口 WebSocket Upgrade Error:", err)
+		return
+	}
+	defer conn.Close()
+
+	// 读协程：仅用于感知客户端断开（页面关闭/刷新即退出推送循环）
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+
+	// push 推送一帧数据；失败（连接断开/写超时）返回 false
+	push := func() bool {
+		data := map[string]interface{}{}
+		if canPorts {
+			ports, ok := getCachedPortsStale()
+			if !ok {
+				ports = []PortInfo{} // 冷启动首帧允许为空，后续帧会带上数据
+			}
+			mergePortsPayload(data, ports)
+		}
+		if canSvc {
+			svcs, ok := getCachedServicesStale()
+			if !ok {
+				svcs = []*ServiceListItem{}
+			}
+			data["services"] = svcs
+			data["systemd_available"] = ok
+		}
+		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		return conn.WriteJSON(map[string]interface{}{
+			"code":    200,
+			"message": "success",
+			"data":    data,
+		}) == nil
+	}
+
+	if !push() { // 首帧立即推送（秒开关键）
+		return
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			if !push() {
+				return
+			}
+		}
+	}
+}
+
+// mergePortsPayload 将端口中心数据（ports + firewall + changes）合并进 data
+func mergePortsPayload(data map[string]interface{}, ports []PortInfo) {
+	data["ports"] = ports
+	data["firewall"] = getFirewallInfo()
+	data["changes"] = getPortChanges()
+}
+
 // listPortsHandler GET /api/ports
 func listPortsHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
@@ -778,11 +934,7 @@ func listPortsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	trackPortChanges(list)
-	writeJSON(w, http.StatusOK, "获取端口列表成功", map[string]interface{}{
-		"ports":    list,
-		"firewall": getFirewallInfo(),
-		"changes":  getPortChanges(),
-	})
+	writeJSON(w, http.StatusOK, "获取端口列表成功", buildPortsPayload(list))
 }
 
 // listPortChangesHandler GET /api/ports/changes

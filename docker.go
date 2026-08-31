@@ -101,6 +101,72 @@ func refreshDockerListCache() {
 	dockerListCache.Unlock()
 }
 
+// dockerWSHandler GET /ws/docker —— 容器列表 WebSocket 推送（纯缓存推送，永不阻塞）：
+// 连接建立后立即推送当前缓存数据（即使已过期，保证页面秒开），随后每 5 秒推送一次；
+// 缓存过期仅触发后台刷新（singleflight），推送协程绝不执行同步 docker stats 采集（2~4 秒）。
+// 认证链由路由中间件保障：会话 Cookie + RBAC(docker:view/manage) + Origin 校验。
+func dockerWSHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("Docker WebSocket Upgrade Error:", err)
+		return
+	}
+	defer conn.Close()
+
+	// 读协程：仅用于感知客户端断开（页面关闭/刷新即退出推送循环）
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+
+	// push 推送一帧容器列表；失败（连接断开/写超时）返回 false
+	push := func() bool {
+		dockerListCache.Lock()
+		containers := dockerListCache.containers
+		needRefresh := (containers == nil || time.Since(dockerListCache.ts) >= dockerListCacheTTL) && !dockerListCache.refreshing
+		if needRefresh {
+			dockerListCache.refreshing = true
+		}
+		dockerListCache.Unlock()
+		if needRefresh {
+			go refreshDockerListCache()
+		}
+		if containers == nil {
+			containers = []dockerContainer{} // 冷启动首帧允许为空，后续帧会带上数据
+		}
+		conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		return conn.WriteJSON(map[string]interface{}{
+			"code":    200,
+			"message": "success",
+			"data":    map[string]interface{}{"containers": containers},
+		}) == nil
+	}
+
+	if !push() { // 首帧立即推送（秒开关键）
+		return
+	}
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			if !push() {
+				return
+			}
+		}
+	}
+}
+
 // collectDockerContainers 执行 docker ps + stats 并组装容器列表
 func collectDockerContainers(ctx context.Context) ([]dockerContainer, error) {
 	psOut, err := exec.CommandContext(ctx, "docker", "ps", "-a", "--no-trunc",

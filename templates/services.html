@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>服务与端口中心 - Server Status</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
     <link rel="stylesheet" href="/ui.css">
     <style>
         html,
@@ -803,10 +804,16 @@
             const resRef = useRef(null);
             const resInst = useRef(null);
             const resHistory = useRef({ labels: [], cpu: [], mem: [] });
+            // /ws/ports 页面级推送连接（服务列表数据）相关 ref
+            const listWsRef = useRef(null);
+            const listWsOkRef = useRef(false);      // WS 在线标志：在线时后台轮询跳过 HTTP
+            const listWsGotRef = useRef(false);     // 是否已收到含 services 的首帧
+            const listWsRetryRef = useRef(0);       // WS 重连次数（指数退避，最多 10 次）
             const isMobile = useIsMobile();
 
             const load = useCallback(async (manual) => {
                 if (manual) setRefreshing(true);
+                if (!manual && listWsOkRef.current) return; // WS 在线时由推送通道供数，轮询仅作降级兜底
                 try {
                     const r = await secureFetch(baseUrl + '/api/services');
                     const d = await r.json();
@@ -831,11 +838,53 @@
             }, []);
 
             useEffect(() => {
-                load();
+                // 首帧优先走 WS 推送；5s 内未收到含 services 的首帧则回退 HTTP 首载
+                const fallback = setTimeout(() => { if (!listWsGotRef.current) load(); }, 5000);
                 if (paused) return;
                 const t = setInterval(() => load(), 8000);
-                return () => clearInterval(t);
+                return () => { clearTimeout(fallback); clearInterval(t); };
             }, [load, paused]);
+
+            // /ws/ports 页面级推送连接（与端口面板同一端点，此处仅消费 services 字段）：
+            // 连接后首帧即服务端缓存数据（秒开），之后每 5 秒推送一次；
+            // 断线自动重连（指数退避，最多 10 次），彻底不可用时由 HTTP 轮询兜底
+            useEffect(() => {
+                let closed = false;
+                const connect = () => {
+                    if (closed) return;
+                    const ws = new WebSocket(baseUrl.replace(/^http/, 'ws') + '/ws/ports');
+                    listWsRef.current = ws;
+                    ws.onopen = () => { listWsOkRef.current = true; listWsRetryRef.current = 0; };
+                    ws.onmessage = (e) => {
+                        try {
+                            const d = JSON.parse(e.data);
+                            if (d.code === 200 && d.data && ('services' in d.data)) {
+                                listWsGotRef.current = true;
+                                setList(d.data.services || []);
+                                setSysdAvailable(!!d.data.systemd_available);
+                                setSysdError('');
+                                setLoadedAt(new Date());
+                                setLoading(false);
+                                setRefreshing(false);
+                            }
+                        } catch (err) { console.warn('服务列表 WS 数据解析失败:', err); }
+                    };
+                    ws.onerror = () => { listWsOkRef.current = false; };
+                    ws.onclose = () => {
+                        listWsOkRef.current = false;
+                        if (!closed && listWsRetryRef.current < 10) {
+                            const delay = Math.min(3000 * ++listWsRetryRef.current, 15000);
+                            setTimeout(connect, delay);
+                        }
+                    };
+                };
+                connect();
+                return () => {
+                    closed = true;
+                    listWsOkRef.current = false;
+                    if (listWsRef.current) { listWsRef.current.onclose = null; listWsRef.current.close(); listWsRef.current = null; }
+                };
+            }, []);
 
             // 页面切到后台时暂停自动刷新，回到前台立即恢复
             useEffect(() => {
@@ -1527,8 +1576,15 @@
             const [ruleForm] = Form.useForm();
             const isMobile = useIsMobile();
 
+            // /ws/ports 推送通道相关 ref
+            const wsRef = useRef(null);
+            const wsOkRef = useRef(false);       // WS 在线标志：在线时后台轮询跳过 HTTP
+            const wsGotFrameRef = useRef(false); // 是否已收到 WS 首帧（决定是否回退 HTTP 首载）
+            const wsRetryRef = useRef(0);        // WS 重连次数（指数退避，最多 10 次）
+
             const load = useCallback(async (manual) => {
                 if (manual) setRefreshing(true);
+                if (!manual && wsOkRef.current) return; // WS 在线时由推送通道供数，轮询仅作降级兜底
                 try {
                     const r = await secureFetch(baseUrl + '/api/ports');
                     const d = await r.json();
@@ -1551,11 +1607,51 @@
             }, []);
 
             useEffect(() => {
-                load();
+                // 首帧优先走 WS 推送；5s 内仍未收到首帧（wss 握手慢/被代理拦截等）则回退 HTTP 首载。
+                // 不宜过短：TCP+TLS+Upgrade 握手本身可能超过 1~2 秒，过短会导致 HTTP 首载抢跑
+                const fallback = setTimeout(() => { if (!wsGotFrameRef.current) load(); }, 5000);
                 if (paused) return;
                 const t = setInterval(() => load(), 20000);
-                return () => clearInterval(t);
+                return () => { clearTimeout(fallback); clearInterval(t); };
             }, [load, paused]);
+
+            // WebSocket 推送通道：连接后首帧即服务端缓存数据（秒开），之后每 5 秒推送一次；
+            // 断线自动重连（指数退避，最多 10 次），彻底不可用时由 HTTP 轮询兜底
+            useEffect(() => {
+                let closed = false;
+                const connect = () => {
+                    if (closed) return;
+                    const ws = new WebSocket(baseUrl.replace(/^http/, 'ws') + '/ws/ports');
+                    wsRef.current = ws;
+                    ws.onopen = () => { wsOkRef.current = true; wsRetryRef.current = 0; };
+                    ws.onmessage = (e) => {
+                        try {
+                            const d = JSON.parse(e.data);
+                            if (d.code === 200 && d.data) {
+                                wsGotFrameRef.current = true;
+                                setData({ ports: [], firewall: { provider: '', available: false, blocked: [], rules: [] }, changes: [], ...d.data });
+                                setLoadedAt(new Date());
+                                setLoading(false);
+                                setRefreshing(false);
+                            }
+                        } catch (err) { console.warn('端口 WS 数据解析失败:', err); }
+                    };
+                    ws.onerror = () => { wsOkRef.current = false; };
+                    ws.onclose = () => {
+                        wsOkRef.current = false;
+                        if (!closed && wsRetryRef.current < 10) {
+                            const delay = Math.min(3000 * ++wsRetryRef.current, 15000);
+                            setTimeout(connect, delay);
+                        }
+                    };
+                };
+                connect();
+                return () => {
+                    closed = true;
+                    wsOkRef.current = false;
+                    if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); wsRef.current = null; }
+                };
+            }, []);
 
             // 页面切到后台时暂停自动刷新，回到前台立即恢复
             useEffect(() => {
@@ -2034,6 +2130,9 @@
             if (canViewPorts) {
                 tabItems.push({
                     key: 'ports',
+                    // forceRender：页面加载即挂载端口面板，让 /ws/ports 推送连接立即建立，
+                    // 点击“端口”标签时数据已就绪（否则面板懒挂载，不点标签 WS 不会连接）
+                    forceRender: true,
                     label: <span><UIIcon name="ApiOutlined" />端口</span>,
                     children: <PortsTab isDark={isDark} canManage={canManagePorts}
                         deepPort={deepPort}

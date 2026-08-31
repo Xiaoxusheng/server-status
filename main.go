@@ -6052,6 +6052,8 @@ func main() {
 	http.HandleFunc("DELETE /api/ports/rules/{id}", authMiddleware(requirePermission("port:manage", securityMiddleware(deletePortRuleHandler))))
 	// 服务与端口中心 - 实时服务日志
 	http.HandleFunc("GET /ws/service-logs", authMiddleware(requirePermission("service:view", securityMiddleware(serviceLogsWSHandler))))
+	// 服务与端口中心页面级数据推送（端口+服务，stale-first 缓存直推，按权限过滤字段）
+	http.HandleFunc("GET /ws/ports", authMiddleware(requireAnyPermission([]string{"port:view", "service:view"}, securityMiddleware(portsWSHandler))))
 
 	// ==================== Docker 容器监控与管理 ====================
 	http.HandleFunc("GET /api/docker/containers", authMiddleware(requirePermission("docker:view", securityMiddleware(dockerListHandler))))
@@ -6061,6 +6063,8 @@ func main() {
 	http.HandleFunc("POST /api/docker/action", authMiddleware(requirePermission("docker:manage", securityMiddleware(dockerActionHandler))))
 	http.HandleFunc("POST /api/docker/remove", authMiddleware(requirePermission("docker:manage", securityMiddleware(dockerRemoveHandler))))
 	http.HandleFunc("/docker", authMiddleware(requireAnyPermission([]string{"docker:view", "docker:manage"}, securityMiddleware(dockerPageHandler))))
+	// 容器列表数据推送（纯缓存直推，替代阻塞式 HTTP 轮询首载）
+	http.HandleFunc("GET /ws/docker", authMiddleware(requireAnyPermission([]string{"docker:view", "docker:manage"}, securityMiddleware(dockerWSHandler))))
 
 	// ==================== Web Shell / Web Terminal ====================
 	// 复用 system:exec 权限；每次启动 Shell 均需独立二次认证 + 一次性 Token
