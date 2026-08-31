@@ -675,6 +675,13 @@
         }
 
         .cg-stage canvas {
+            /* 绝对定位脱离文档流：stage 尺寸不再被 canvas 显示尺寸反噬，
+               避免移动端「点选图片 → 重算 fit → stage 变矮 → fit 再缩小」的循环 */
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            max-width: none;
             box-shadow: var(--shadow-overlay);
             border-radius: var(--radius-sm);
             background: #ffffff;
@@ -843,6 +850,9 @@
             }
 
             .cg-stage {
+                /* flex:none 避免 flex-basis:0% 覆盖 height，
+                   否则在内容自适应高度的 flex column 里 stage 会塌缩成细条 */
+                flex: none;
                 min-height: 0;
                 height: 56vh;
                 padding: 14px;
@@ -3067,8 +3077,34 @@
                 finally { creatingRef.current = false; setCreating(false); }
             };
             const copyText = async (t) => {
-                try { await navigator.clipboard.writeText(t); message.success('已复制'); }
-                catch (e) { message.info('复制失败，请手动复制'); }
+                // 优先 Clipboard API（HTTPS + 用户手势场景）；
+                // iOS Safari / 微信内置浏览器常拒绝或不支持，降级 execCommand + 隐藏 textarea
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(t);
+                        message.success('已复制');
+                        return;
+                    }
+                } catch (e) { /* 降级到 execCommand */ }
+                try {
+                    const ta = document.createElement('textarea');
+                    ta.value = t;
+                    ta.setAttribute('readonly', '');
+                    ta.style.position = 'fixed';
+                    ta.style.top = '-9999px';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    // iOS 需先 focus 再 select/setSelectionRange 才能选中
+                    ta.focus();
+                    ta.select();
+                    ta.setSelectionRange(0, t.length);
+                    const done = document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    if (done) message.success('已复制');
+                    else message.info('复制失败，请长按链接手动复制');
+                } catch (e) {
+                    message.info('复制失败，请长按链接手动复制');
+                }
             };
             const saveQr = async () => {
                 try {
