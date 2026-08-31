@@ -2324,12 +2324,39 @@
 
         // ==================== 新建/编辑手记 Drawer ====================
         const PRESET_TAGS = ['生活', '工作', '服务器', '旅行', '想法', '待办', '重要'];
+        // 自定义标签历史：localStorage 持久化，历史自定义标签在下拉中可直接点选
+        const CUSTOM_TAGS_KEY = 'pvCustomTags';
+        function loadCustomTags() {
+            try { return JSON.parse(localStorage.getItem(CUSTOM_TAGS_KEY) || '[]'); } catch (e) { return []; }
+        }
+        function saveCustomTags(list) {
+            try { localStorage.setItem(CUSTOM_TAGS_KEY, JSON.stringify(list.slice(0, 30))); } catch (e) { /* 忽略存储失败 */ }
+        }
         function NoteEditor({ open, note, isDark, onClose, onSaved, onGenerateCard }) {
             const [title, setTitle] = useState('');
             const [content, setContent] = useState('');
             const [timeVal, setTimeVal] = useState('');
             const [loc, setLoc] = useState({ location_name: '', latitude: null, longitude: null });
             const [tags, setTags] = useState([]);
+            // 自定义标签历史（localStorage 持久化）+ 输入框未确认文字（blur 兜底收签）
+            const [customTags, setCustomTags] = useState(loadCustomTags);
+            const pendingSearchRef = useRef('');
+            // 标签变化时把新的自定义标签并入历史，下次可在下拉中直接点选
+            const handleTagsChange = (vals) => {
+                setTags(vals);
+                const custom = vals.filter(t => !PRESET_TAGS.includes(t) && !customTags.includes(t));
+                if (custom.length) {
+                    const next = [...custom, ...customTags].slice(0, 30);
+                    setCustomTags(next);
+                    saveCustomTags(next);
+                }
+            };
+            // blur 兜底：手机虚拟键盘「完成」键不触发 Enter，把未确认的输入直接收进标签
+            const handleTagsBlur = () => {
+                const v = (pendingSearchRef.current || '').trim();
+                pendingSearchRef.current = '';
+                if (v && !tags.includes(v)) handleTagsChange([...tags, v]);
+            };
             const [images, setImages] = useState([]);
             const [audioList, setAudioList] = useState([]);
             const [saving, setSaving] = useState(false);
@@ -2621,11 +2648,13 @@
                             <Select
                                 mode="tags"
                                 style={{ width: '100%' }}
-                                placeholder="选择或输入标签"
+                                placeholder="点选标签，或输入自定义标签"
                                 value={tags}
-                                onChange={setTags}
+                                onChange={handleTagsChange}
+                                onSearch={v => { pendingSearchRef.current = v; }}
+                                onBlur={handleTagsBlur}
                                 tokenSeparators={[',', '，', '#']}
-                                options={PRESET_TAGS.concat(tags.filter(t => !PRESET_TAGS.includes(t))).map(t => ({ value: t, label: '#' + t }))}
+                                options={Array.from(new Set(PRESET_TAGS.concat(customTags, tags))).map(t => ({ value: t, label: '#' + t }))}
                             />
                         </div>
                         <div style={{ marginBottom: 12 }}>
