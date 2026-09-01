@@ -1521,6 +1521,20 @@
         const fmtClock = s => { const d = parseISO(s); return d ? pad(d.getHours()) + ':' + pad(d.getMinutes()) : ''; };
         const fmtDate = s => { const d = parseISO(s); return d ? d.getFullYear() + '.' + pad(d.getMonth() + 1) + '.' + pad(d.getDate()) : ''; };
         const fmtFull = s => { const d = parseISO(s); return d ? fmtDate(s) + ' ' + fmtClock(s) : ''; };
+        // 统一滚动动画：easeInOutQuint 缓入缓出（缓起-加速-缓停一次到位，苹果式丝滑），rAF 驱动
+        function animateScrollTo(to, dur) {
+            const from = window.scrollY;
+            let start = null;
+            const ease = t => (t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2);
+            const step = (ts) => {
+                if (start === null) start = ts;
+                const p = Math.min(1, (ts - start) / dur);
+                window.scrollTo(0, from + (to - from) * ease(p));
+                if (p < 1) requestAnimationFrame(step);
+            };
+            requestAnimationFrame(step);
+        }
+
         const dayKey = s => { const d = parseISO(s); return d ? d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) : ''; };
         const dayLabel = key => {
             const t = new Date(); const today = t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate());
@@ -3482,24 +3496,11 @@
                 setPop({ key, items, left, top: r.bottom - cr.top + 10 });
             };
 
-            // rAF 滚动动画：from → to 按 easing 曲线推进，结束回调 onDone
-            const animateScroll = (from, to, dur, ease, onDone) => {
-                let start = null;
-                const step = (ts) => {
-                    if (start === null) start = ts;
-                    const p = Math.min(1, (ts - start) / dur);
-                    window.scrollTo(0, from + (to - from) * ease(p));
-                    if (p < 1) requestAnimationFrame(step);
-                    else if (onDone) onDone();
-                };
-                requestAnimationFrame(step);
-            };
+            // rAF 滚动动画辅助（缓动曲线由 animateScrollTo 统一提供）
 
-            // 跳转动画（苹果式丝滑）：
-            //   近距离（≤2.5 屏）：单段 easeInOutQuart，缓起-加速-缓停一次到位（500-700ms）
-            //   远距离：加速段 easeInQuad「抛出」350ms 惯性越过目标 1.4 屏 → 落点段 easeOutQuart
-            //   减速回落 550ms。衔接发生在速度峰值处，肉眼感知为同一次连贯运动（过冲回落即弹簧手感）；
-            //   避免了跨整页匀速滚动导致的懒加载图白屏。
+            // 跳转动画（单段连续缓动）：easeInOutQuint 缓起-加速-缓停，全程一次运动、
+            // 无任何衔接断点——丝滑的关键。时长随距离自适应 600-900ms；
+            // 目标区懒加载图提前转 eager + 手记卡片 content-visibility，滚动路径渲染开销最小。
             const jumpTo = (key, id) => {
                 setPop(null);
                 const el = document.getElementById(id ? 'note-' + id : 'day-' + key);
@@ -3509,9 +3510,8 @@
                 const target = Math.max(0, block === 'center'
                     ? window.scrollY + rect.top - window.innerHeight / 2
                     : window.scrollY + rect.top - 70);
-                const from = window.scrollY;
-                const total = target - from;
-                if (Math.abs(total) < 2) return;
+                const dist = Math.abs(target - window.scrollY);
+                if (dist < 2) return;
 
                 // 目标卡片内的懒加载图提前转为立即加载，落地即成图不闪白
                 el.querySelectorAll('img[loading="lazy"]').forEach(img => { img.loading = 'eager'; });
@@ -3522,19 +3522,7 @@
                 t.classList.add('note-flash');
                 setTimeout(() => t.classList.remove('note-flash'), 1700);
 
-                if (Math.abs(total) <= window.innerHeight * 2.5) {
-                    // 近距离：单段缓入缓出
-                    const dur = Math.min(700, Math.max(500, Math.abs(total) * 0.4));
-                    animateScroll(from, target, dur, t => (t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2));
-                    return;
-                }
-                // 远距离：沿原方向惯性越过目标 1.4 屏，再减速回落（弹簧手感）
-                const pre = Math.max(0, target - (total > 0 ? 1 : -1) * window.innerHeight * 1.4);
-                animateScroll(from, pre, 350, t => t * t, () => {
-                    requestAnimationFrame(() => requestAnimationFrame(() => {
-                        animateScroll(window.scrollY, target, 550, t => 1 - Math.pow(1 - t, 4));
-                    }));
-                });
+                animateScrollTo(target, Math.min(900, Math.max(600, dist * 0.45)));
             };
 
             // 点击日历以外区域关闭浮层（移动端没有 mouseleave）
@@ -3975,20 +3963,10 @@
                     setExporting(false);
                 }
             };
-            // 回到顶部：rAF 缓动动画（easeOutCubic），距离越远时长略增（上限 700ms），比原生 smooth 更顺滑可控
+            // 回到顶部：与跳转同款单段 easeInOutQuint 缓动，时长按距离自适应（600-900ms）
             const scrollToTop = () => {
-                const from = window.scrollY;
-                if (from <= 0) return;
-                const dur = Math.min(700, 300 + from / 4);
-                let start = null;
-                const ease = t => 1 - Math.pow(1 - t, 3);
-                const step = (ts) => {
-                    if (start === null) start = ts;
-                    const p = Math.min(1, (ts - start) / dur);
-                    window.scrollTo(0, from * (1 - ease(p)));
-                    if (p < 1) requestAnimationFrame(step);
-                };
-                requestAnimationFrame(step);
+                if (window.scrollY <= 0) return;
+                animateScrollTo(0, Math.min(900, Math.max(600, window.scrollY * 0.45)));
             };
             const bottomNav = [
                 { key: 'timeline', label: '时间线', icon: 'ClockCircleOutlined' },
