@@ -3708,6 +3708,8 @@
             const [searchQ, setSearchQ] = useState('');
             // 会话过期重新验证浮层：任意 API 被锁定拦截时弹出，解锁后自动续做刚才的操作
             const [reauth, setReauth] = useState(false);
+            // 全量备份导出进行中标记（hook 必须声明在下方 phase 提前 return 之前，否则锁定态会因 hooks 数量减少而崩溃）
+            const [exporting, setExporting] = useState(false);
             const phaseRef = useRef(phase);
             phaseRef.current = phase;
             const isMobile = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches, []);
@@ -3808,7 +3810,6 @@
                 setTab(t);
             };
             // 全量备份导出：后端流式打包 zip（手记 Markdown + 解密后的图片/语音），前端拉 blob 触发下载
-            const [exporting, setExporting] = useState(false);
             const exportAll = async () => {
                 if (exporting) return;
                 setExporting(true);
