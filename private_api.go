@@ -94,6 +94,7 @@ func registerPrivateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/private/tags", authMiddleware(securityMiddleware(privateAuthMiddleware(privateTagsHandler))))
 	mux.HandleFunc("GET /api/private/search", authMiddleware(securityMiddleware(privateAuthMiddleware(privateSearchHandler))))
 	mux.HandleFunc("GET /api/private/export/{id}", authMiddleware(securityMiddleware(privateAuthMiddleware(privateExportHandler))))
+	mux.HandleFunc("GET /api/private/export/all", authMiddleware(securityMiddleware(privateAuthMiddleware(privateExportAllHandler))))
 
 	// 卡片
 	mux.HandleFunc("POST /api/private/cards", authMiddleware(securityMiddleware(privateAuthMiddleware(privateCreateCardHandler))))

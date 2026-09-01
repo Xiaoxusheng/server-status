@@ -877,6 +877,147 @@
             margin-top: 10px;
         }
 
+        /* ================= 日历热力图（GitHub 贡献图风格） ================= */
+        .cal-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius, 10px);
+            padding: 14px 16px;
+            margin-bottom: 16px;
+        }
+
+        .cal-head {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .cal-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--color-text);
+        }
+
+        .cal-stat {
+            font-size: 12px;
+            color: var(--color-text-tertiary, rgba(0, 0, 0, .45));
+        }
+
+        .cal-scroll {
+            overflow-x: auto;
+            padding-bottom: 4px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* 色阶变量：亮色 / 暗色两套，格子色阶与 GitHub 贡献图一致 */
+        .cal-inner {
+            --cal-0: #ebedf0;
+            --cal-1: #9be9a8;
+            --cal-2: #40c463;
+            --cal-3: #30a14e;
+            --cal-4: #216e39;
+            display: inline-block;
+        }
+
+        html.dark .cal-inner {
+            --cal-0: #1f1f1f;
+            --cal-1: #033a16;
+            --cal-2: #196c2e;
+            --cal-3: #2ea043;
+            --cal-4: #39d353;
+        }
+
+        .cal-months {
+            display: grid;
+            grid-auto-flow: column;
+            grid-auto-columns: 13px;
+            gap: 3px;
+            margin-bottom: 4px;
+            margin-left: 24px;
+            font-size: 11px;
+            color: var(--color-text-tertiary, rgba(0, 0, 0, .45));
+            white-space: nowrap;
+        }
+
+        .cal-body {
+            display: flex;
+            gap: 6px;
+        }
+
+        .cal-weekdays {
+            display: grid;
+            grid-template-rows: repeat(7, 13px);
+            gap: 3px;
+            width: 18px;
+            font-size: 10px;
+            line-height: 13px;
+            color: var(--color-text-tertiary, rgba(0, 0, 0, .45));
+            text-align: right;
+        }
+
+        .cal-grid {
+            display: grid;
+            grid-auto-flow: column;
+            grid-template-rows: repeat(7, 13px);
+            grid-auto-columns: 13px;
+            gap: 3px;
+        }
+
+        .cal-cell {
+            width: 13px;
+            height: 13px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .cal-cell.cal-l0 {
+            background: var(--cal-0);
+        }
+
+        .cal-cell.cal-l1 {
+            background: var(--cal-1);
+        }
+
+        .cal-cell.cal-l2 {
+            background: var(--cal-2);
+        }
+
+        .cal-cell.cal-l3 {
+            background: var(--cal-3);
+        }
+
+        .cal-cell.cal-l4 {
+            background: var(--cal-4);
+        }
+
+        .cal-cell.future {
+            background: transparent;
+            cursor: default;
+        }
+
+        .cal-cell.sel {
+            outline: 2px solid var(--color-primary, #1677ff);
+            outline-offset: 1px;
+        }
+
+        .cal-legend {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 12px;
+            font-size: 11px;
+            color: var(--color-text-tertiary, rgba(0, 0, 0, .45));
+        }
+
+        .cal-legend i {
+            width: 11px;
+            height: 11px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+
         /* ================= 标签页 ================= */
         .pv-tags-head {
             font-size: 16px;
@@ -3199,6 +3340,121 @@
             );
         }
 
+        // ==================== 日历视图：GitHub 风格热力图 + 按日浏览 ====================
+        // 纯前端组件：手记全量在客户端（allNotes），按本地日期聚合出每日篇数渲染热力图，
+        // 点击有记录的日期在下方复用 NoteCard 列表查看当天全部手记。
+        function CalendarTab({ notes, isDark, onEdit, onDelete, onCard, highlight }) {
+            const [selected, setSelected] = useState(null);
+
+            // 按本地日期统计手记数：key = yyyy-mm-dd
+            const counts = useMemo(() => {
+                const m = {};
+                (notes || []).forEach(n => {
+                    const k = dayKey(n.created_at);
+                    if (k) m[k] = (m[k] || 0) + 1;
+                });
+                return m;
+            }, [notes]);
+
+            // 生成最近一年（53 周）的周列网格：周一为第一行，未来日期留空
+            const weeks = useMemo(() => {
+                const today = new Date();
+                const dow = (today.getDay() + 6) % 7; // 周一=0 ... 周日=6
+                const end = new Date(today);
+                end.setDate(today.getDate() + (6 - dow)); // 本周日（网格最后一天）
+                const start = new Date(end);
+                start.setDate(end.getDate() - 53 * 7 + 1); // 往前推满 53 周
+                const cols = [];
+                const cur = new Date(start);
+                const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+                while (cur <= end) {
+                    const col = [];
+                    for (let d = 0; d < 7; d++) {
+                        col.push(new Date(cur));
+                        cur.setDate(cur.getDate() + 1);
+                    }
+                    cols.push(col);
+                }
+                return { cols, todayMid };
+            }, []);
+
+            // 月份标签：某列首格所在月份与前列不同 → 在该列顶部标注月份
+            const monthLabels = useMemo(() => {
+                const labels = [];
+                let lastMonth = -1;
+                weeks.cols.forEach((col, w) => {
+                    const m = col[0].getMonth();
+                    if (m !== lastMonth) {
+                        labels.push({ col: w, label: (m + 1) + '月' });
+                        lastMonth = m;
+                    }
+                });
+                return labels;
+            }, [weeks]);
+
+            // 篇数 → 色阶 0-4（0 篇/1 篇/2 篇/3-4 篇/5+ 篇）
+            const level = c => (c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c <= 4 ? 3 : 4);
+
+            // 选中日期的当天手记
+            const dayNotes = selected ? (notes || []).filter(n => dayKey(n.created_at) === selected) : [];
+            const activeDays = Object.keys(counts).length;
+
+            return (
+                <div>
+                    <div className="cal-card">
+                        <div className="cal-head">
+                            <span className="cal-title">记录日历</span>
+                            <span className="cal-stat">近一年共 {notes ? notes.length : 0} 篇 · {activeDays} 天有记录，点击日期查看当天手记</span>
+                        </div>
+                        <div className="cal-scroll">
+                            <div className="cal-inner">
+                                <div className="cal-months">
+                                    {weeks.cols.map((_, w) => {
+                                        const hit = monthLabels.find(x => x.col === w);
+                                        return <span key={w}>{hit ? hit.label : ''}</span>;
+                                    })}
+                                </div>
+                                <div className="cal-body">
+                                    <div className="cal-weekdays">
+                                        <span>一</span><span></span><span>三</span><span></span><span>五</span><span></span><span>日</span>
+                                    </div>
+                                    <div className="cal-grid">
+                                        {weeks.cols.map((col, w) => col.map((dt, d) => {
+                                            const key = dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
+                                            const future = dt > weeks.todayMid;
+                                            const c = counts[key] || 0;
+                                            const cls = 'cal-cell' + (future ? ' future' : ' cal-l' + level(c)) + (selected === key ? ' sel' : '');
+                                            return <div key={w + '-' + d} className={cls}
+                                                title={future ? '' : key + (c ? ' · ' + c + ' 篇' : ' · 无记录')}
+                                                onClick={() => { if (!future && c) setSelected(selected === key ? null : key); }} />;
+                                        }))}
+                                    </div>
+                                </div>
+                                <div className="cal-legend" style={{ marginLeft: 24 }}>
+                                    少 <i className="cal-l0" style={{ background: 'var(--cal-0)' }} /><i className="cal-l1" style={{ background: 'var(--cal-1)' }} /><i className="cal-l2" style={{ background: 'var(--cal-2)' }} /><i className="cal-l3" style={{ background: 'var(--cal-3)' }} /><i className="cal-l4" style={{ background: 'var(--cal-4)' }} /> 多
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {selected && (
+                        <div className="tl-day">
+                            <div className="tl-day-title">
+                                {dayLabel(selected)}
+                                <span className="tl-date">{selected.replace(/-/g, '.')}</span>
+                                <span className="tl-count">{dayNotes.length} 条</span>
+                                <Button size="small" type="link" onClick={() => setSelected(null)}>收起</Button>
+                            </div>
+                            {dayNotes.length === 0
+                                ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="该日期没有手记" style={{ padding: 24 }} />
+                                : dayNotes.map(n => (
+                                    <NoteCard key={n.id} note={n} isDark={isDark} onEdit={onEdit} onDelete={onDelete} onCard={onCard} highlight={highlight} />
+                                ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
         // ==================== 标签 ====================
         function TagsTab({ notes, onViewNote, onCard }) {
             const [tag, setTag] = useState(null);
@@ -3551,8 +3807,30 @@
             const changeTab = (t) => {
                 setTab(t);
             };
+            // 全量备份导出：后端流式打包 zip（手记 Markdown + 解密后的图片/语音），前端拉 blob 触发下载
+            const [exporting, setExporting] = useState(false);
+            const exportAll = async () => {
+                if (exporting) return;
+                setExporting(true);
+                try {
+                    const r = await fetch(baseUrl + '/api/private/export/all', { credentials: 'include' });
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    const blob = await r.blob();
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = '手记备份-' + new Date().toISOString().slice(0, 10) + '.zip';
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+                    message.success('备份已导出');
+                } catch (e) {
+                    message.error('导出失败：' + (e.message || e));
+                } finally {
+                    setExporting(false);
+                }
+            };
             const bottomNav = [
                 { key: 'timeline', label: '时间线', icon: 'ClockCircleOutlined' },
+                { key: 'calendar', label: '日历', icon: 'CalendarOutlined' },
                 { key: 'tags', label: '标签', icon: 'TagsOutlined' },
                 { key: 'cards', label: '卡片', icon: 'PictureOutlined' }
             ];
@@ -3571,6 +3849,9 @@
                             />
                             <div className="pv-actions">
                                 <span className="status-dot ok">已解锁</span>
+                                <Tooltip title="导出全部手记备份（含图片/语音）">
+                                    <Button size="small" icon={<I name="DownloadOutlined" />} loading={exporting} onClick={exportAll} />
+                                </Tooltip>
                                 <Button size="small" onClick={async () => {
                                     await api('/api/private/lock', { method: 'POST' });
                                     setPhase('locked');
@@ -3587,12 +3868,14 @@
                                     tabBarExtraContent={{ right: <Button type="primary" icon={<I name="PlusOutlined" />} onClick={() => { setEditing(null); setEditorOpen(true); }}>新建手记</Button> }}
                                     items={[
                                         { key: 'timeline', label: <span><I name="ClockCircleOutlined" /> 时间线</span> },
+                                        { key: 'calendar', label: <span><I name="CalendarOutlined" /> 日历</span> },
                                         { key: 'tags', label: <span><I name="TagsOutlined" /> 标签</span> },
                                         { key: 'cards', label: <span><I name="PictureOutlined" /> 卡片</span> }
                                     ]}
                                 />
                             )}
                             {tab === 'timeline' && <TimelineView notes={notes} isDark={isDark} highlight={searchQ} onEdit={n => { setEditing(n); setEditorOpen(true); }} onDelete={onDelete} onCard={n => setCardNote(n)} />}
+                            {tab === 'calendar' && <CalendarTab notes={allNotes} isDark={isDark} highlight={searchQ} onEdit={n => { setEditing(n); setEditorOpen(true); }} onDelete={onDelete} onCard={n => setCardNote(n)} />}
                             {tab === 'tags' && <TagsTab notes={allNotes} onViewNote={n => { setEditing(n); setEditorOpen(true); }} onCard={n => setCardNote(n)} />}
                             {tab === 'cards' && <CardsTab isDark={isDark} />}
                         </div>
