@@ -879,6 +879,8 @@
 
         /* ================= 日历热力图（GitHub 贡献图风格） ================= */
         .cal-card {
+            position: relative;
+            /* 悬浮预览卡的定位基准 */
             background: var(--color-surface);
             border: 1px solid var(--color-border);
             border-radius: var(--radius, 10px);
@@ -1007,6 +1009,7 @@
             align-items: center;
             gap: 4px;
             margin-top: 12px;
+            margin-left: 24px;
             font-size: 11px;
             color: var(--color-text-tertiary, rgba(0, 0, 0, .45));
         }
@@ -1016,6 +1019,75 @@
             height: 11px;
             border-radius: 3px;
             display: inline-block;
+        }
+
+        /* 悬浮预览卡：悬停/点按有记录的日期时浮出当天手记列表 */
+        .cal-pop {
+            position: absolute;
+            z-index: 20;
+            min-width: 210px;
+            max-width: 280px;
+            max-height: 250px;
+            overflow-y: auto;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 10px;
+            box-shadow: var(--shadow-overlay, 0 6px 24px rgba(0, 0, 0, .15));
+            padding: 8px;
+            transform: translateX(-50%);
+        }
+
+        .cal-pop-head {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--color-text);
+            padding: 2px 6px 6px;
+            border-bottom: 1px solid var(--color-border);
+            margin-bottom: 4px;
+        }
+
+        .cal-pop-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 8px;
+            padding: 6px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .cal-pop-item:hover {
+            background: var(--color-bg, rgba(0, 0, 0, .04));
+        }
+
+        .cal-pop-item-t {
+            font-size: 12px;
+            color: var(--color-text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .cal-pop-item-time {
+            flex: none;
+            font-size: 11px;
+            color: var(--color-text-tertiary, rgba(0, 0, 0, .45));
+            font-variant-numeric: tabular-nums;
+        }
+
+        .cal-pop-more {
+            font-size: 11px;
+            color: var(--color-text-tertiary, rgba(0, 0, 0, .45));
+            padding: 4px 6px 0;
+        }
+
+        .cal-pop-jump {
+            font-size: 12px;
+            color: var(--color-primary, #1677ff);
+            padding: 6px;
+            margin-top: 4px;
+            border-top: 1px dashed var(--color-border);
+            cursor: pointer;
         }
 
         /* ================= 标签页 ================= */
@@ -2443,18 +2515,22 @@
             }
             return (
                 <div className="tl-wrap">
+                    {/* 顶部记录日历：热力图 + 悬浮预览卡，点击跳转到下方对应手记 */}
+                    <NoteCalendar groups={groups} />
                     {groups.map(g => {
                         const dateText = g.key.replace(/-/g, '.');
                         const label = dayLabel(g.key);
                         return (
-                            <div className="tl-day" key={g.key}>
+                            <div className="tl-day" key={g.key} id={'day-' + g.key}>
                                 <div className="tl-day-title">
                                     {label}
                                     {label !== dateText && <span className="tl-date">{dateText}</span>}
                                     <span className="tl-count">{g.items.length} 条</span>
                                 </div>
                                 {g.items.map(n => (
-                                    <NoteCard key={n.id} note={n} isDark={isDark} onEdit={onEdit} onDelete={onDelete} onCard={onCard} highlight={highlight} />
+                                    <div key={n.id} id={'note-' + n.id}>
+                                        <NoteCard note={n} isDark={isDark} onEdit={onEdit} onDelete={onDelete} onCard={onCard} highlight={highlight} />
+                                    </div>
                                 ))}
                             </div>
                         );
@@ -3340,23 +3416,21 @@
             );
         }
 
-        // ==================== 日历视图：GitHub 风格热力图 + 按日浏览 ====================
-        // 纯前端组件：手记全量在客户端（allNotes），按本地日期聚合出每日篇数渲染热力图，
-        // 点击有记录的日期在下方复用 NoteCard 列表查看当天全部手记。
-        function CalendarTab({ notes, isDark, onEdit, onDelete, onCard, highlight }) {
-            const [selected, setSelected] = useState(null);
+        // ==================== 记录日历（嵌入时间线顶部） ====================
+        // 紧凑热力图：有手记的日期着色；桌面悬停 / 移动端点按在旁边浮出当天手记预览卡，
+        // 点击预览项平滑滚动到下方对应手记并闪烁高亮，「在时间线中查看」定位到当天分组。
+        function NoteCalendar({ groups }) {
+            const [pop, setPop] = useState(null); // { key, items, left, top }
+            const cardRef = useRef(null);
 
-            // 按本地日期统计手记数：key = yyyy-mm-dd
+            // 日期 → 篇数映射（groups 已按日期分组且倒序）
             const counts = useMemo(() => {
                 const m = {};
-                (notes || []).forEach(n => {
-                    const k = dayKey(n.created_at);
-                    if (k) m[k] = (m[k] || 0) + 1;
-                });
+                groups.forEach(g => { m[g.key] = g.items.length; });
                 return m;
-            }, [notes]);
+            }, [groups]);
 
-            // 生成最近一年（53 周）的周列网格：周一为第一行，未来日期留空
+            // 生成最近一年（53 周）周列网格：周一为第一行，未来日期留空
             const weeks = useMemo(() => {
                 const today = new Date();
                 const dow = (today.getDay() + 6) % 7; // 周一=0 ... 周日=6
@@ -3366,28 +3440,21 @@
                 start.setDate(end.getDate() - 53 * 7 + 1); // 往前推满 53 周
                 const cols = [];
                 const cur = new Date(start);
-                const todayMid = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+                const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
                 while (cur <= end) {
                     const col = [];
-                    for (let d = 0; d < 7; d++) {
-                        col.push(new Date(cur));
-                        cur.setDate(cur.getDate() + 1);
-                    }
+                    for (let d = 0; d < 7; d++) { col.push(new Date(cur)); cur.setDate(cur.getDate() + 1); }
                     cols.push(col);
                 }
-                return { cols, todayMid };
+                return { cols, todayEnd };
             }, []);
 
-            // 月份标签：某列首格所在月份与前列不同 → 在该列顶部标注月份
+            // 月份标注：某列首格所在月份与前列不同 → 该列顶部标注月份
             const monthLabels = useMemo(() => {
-                const labels = [];
-                let lastMonth = -1;
+                const labels = []; let last = -1;
                 weeks.cols.forEach((col, w) => {
                     const m = col[0].getMonth();
-                    if (m !== lastMonth) {
-                        labels.push({ col: w, label: (m + 1) + '月' });
-                        lastMonth = m;
-                    }
+                    if (m !== last) { labels.push({ col: w, label: (m + 1) + '月' }); last = m; }
                 });
                 return labels;
             }, [weeks]);
@@ -3395,60 +3462,86 @@
             // 篇数 → 色阶 0-4（0 篇/1 篇/2 篇/3-4 篇/5+ 篇）
             const level = c => (c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : c <= 4 ? 3 : 4);
 
-            // 选中日期的当天手记
-            const dayNotes = selected ? (notes || []).filter(n => dayKey(n.created_at) === selected) : [];
-            const activeDays = Object.keys(counts).length;
+            // 展示浮层：以日历卡片为定位基准计算坐标，水平钳制防溢出
+            const showPop = (key, items, cell) => {
+                const card = cardRef.current;
+                if (!card) return;
+                const cr = card.getBoundingClientRect();
+                const r = cell.getBoundingClientRect();
+                const left = Math.max(110, Math.min(r.left - cr.left + r.width / 2, cr.width - 110));
+                setPop({ key, items, left, top: r.bottom - cr.top + 10 });
+            };
+
+            // 跳转：滚动到对应手记（或当日分组）并闪烁高亮
+            const jumpTo = (key, id) => {
+                setPop(null);
+                const el = document.getElementById(id ? 'note-' + id : 'day-' + key);
+                if (!el) return;
+                el.scrollIntoView({ behavior: 'smooth', block: id ? 'center' : 'start' });
+                const card = el.classList.contains('note-card') ? el : el.querySelector('.note-card');
+                const t = card || el;
+                t.classList.add('note-flash');
+                setTimeout(() => t.classList.remove('note-flash'), 1700);
+            };
+
+            // 点击日历以外区域关闭浮层（移动端没有 mouseleave）
+            useEffect(() => {
+                const onDoc = (e) => { if (cardRef.current && !cardRef.current.contains(e.target)) setPop(null); };
+                document.addEventListener('click', onDoc);
+                return () => document.removeEventListener('click', onDoc);
+            }, []);
 
             return (
-                <div>
-                    <div className="cal-card">
-                        <div className="cal-head">
-                            <span className="cal-title">记录日历</span>
-                            <span className="cal-stat">近一年共 {notes ? notes.length : 0} 篇 · {activeDays} 天有记录，点击日期查看当天手记</span>
-                        </div>
-                        <div className="cal-scroll">
-                            <div className="cal-inner">
-                                <div className="cal-months">
-                                    {weeks.cols.map((_, w) => {
-                                        const hit = monthLabels.find(x => x.col === w);
-                                        return <span key={w}>{hit ? hit.label : ''}</span>;
-                                    })}
+                <div className="cal-card" ref={cardRef} onMouseLeave={() => setPop(null)}>
+                    <div className="cal-head">
+                        <span className="cal-title">记录日历</span>
+                        <span className="cal-stat">近一年 {groups.reduce((s, g) => s + g.items.length, 0)} 篇 · {groups.length} 天有记录 · 悬停预览，点击条目跳转</span>
+                    </div>
+                    <div className="cal-scroll">
+                        <div className="cal-inner">
+                            <div className="cal-months">
+                                {weeks.cols.map((_, w) => {
+                                    const hit = monthLabels.find(x => x.col === w);
+                                    return <span key={w}>{hit ? hit.label : ''}</span>;
+                                })}
+                            </div>
+                            <div className="cal-body">
+                                <div className="cal-weekdays">
+                                    <span>一</span><span></span><span>三</span><span></span><span>五</span><span></span><span>日</span>
                                 </div>
-                                <div className="cal-body">
-                                    <div className="cal-weekdays">
-                                        <span>一</span><span></span><span>三</span><span></span><span>五</span><span></span><span>日</span>
-                                    </div>
-                                    <div className="cal-grid">
-                                        {weeks.cols.map((col, w) => col.map((dt, d) => {
-                                            const key = dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
-                                            const future = dt > weeks.todayMid;
-                                            const c = counts[key] || 0;
-                                            const cls = 'cal-cell' + (future ? ' future' : ' cal-l' + level(c)) + (selected === key ? ' sel' : '');
-                                            return <div key={w + '-' + d} className={cls}
-                                                title={future ? '' : key + (c ? ' · ' + c + ' 篇' : ' · 无记录')}
-                                                onClick={() => { if (!future && c) setSelected(selected === key ? null : key); }} />;
-                                        }))}
-                                    </div>
+                                <div className="cal-grid">
+                                    {weeks.cols.map((col, w) => col.map((dt, d) => {
+                                        const key = dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
+                                        const future = dt > weeks.todayEnd;
+                                        const c = counts[key] || 0;
+                                        const items = c ? (groups.find(x => x.key === key) || {}).items : null;
+                                        const cls = 'cal-cell' + (future ? ' future' : ' cal-l' + level(c));
+                                        return <div key={w + '-' + d} className={cls}
+                                            title={future ? '' : key + (c ? ' · ' + c + ' 篇' : '')}
+                                            onMouseEnter={c ? (e) => showPop(key, items, e.currentTarget) : undefined}
+                                            onClick={c ? (e) => showPop(key, items, e.currentTarget) : undefined} />;
+                                    }))}
                                 </div>
-                                <div className="cal-legend" style={{ marginLeft: 24 }}>
-                                    少 <i className="cal-l0" style={{ background: 'var(--cal-0)' }} /><i className="cal-l1" style={{ background: 'var(--cal-1)' }} /><i className="cal-l2" style={{ background: 'var(--cal-2)' }} /><i className="cal-l3" style={{ background: 'var(--cal-3)' }} /><i className="cal-l4" style={{ background: 'var(--cal-4)' }} /> 多
-                                </div>
+                            </div>
+                            <div className="cal-legend">
+                                少 <i style={{ background: 'var(--cal-0)' }} /><i style={{ background: 'var(--cal-1)' }} /><i style={{ background: 'var(--cal-2)' }} /><i style={{ background: 'var(--cal-3)' }} /><i style={{ background: 'var(--cal-4)' }} /> 多
                             </div>
                         </div>
                     </div>
-                    {selected && (
-                        <div className="tl-day">
-                            <div className="tl-day-title">
-                                {dayLabel(selected)}
-                                <span className="tl-date">{selected.replace(/-/g, '.')}</span>
-                                <span className="tl-count">{dayNotes.length} 条</span>
-                                <Button size="small" type="link" onClick={() => setSelected(null)}>收起</Button>
-                            </div>
-                            {dayNotes.length === 0
-                                ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="该日期没有手记" style={{ padding: 24 }} />
-                                : dayNotes.map(n => (
-                                    <NoteCard key={n.id} note={n} isDark={isDark} onEdit={onEdit} onDelete={onDelete} onCard={onCard} highlight={highlight} />
-                                ))}
+                    {pop && (
+                        <div className="cal-pop" style={{ left: pop.left, top: pop.top }}>
+                            <div className="cal-pop-head">{dayLabel(pop.key)} · {pop.items.length} 条</div>
+                            {pop.items.slice(0, 5).map(n => {
+                                const t = parseISO(n.created_at);
+                                return (
+                                    <div key={n.id} className="cal-pop-item" onClick={() => jumpTo(pop.key, n.id)}>
+                                        <div className="cal-pop-item-t">{(n.title || (n.content || '').split('\n')[0] || '未命名').slice(0, 42)}</div>
+                                        {t && <div className="cal-pop-item-time">{pad(t.getHours())}:{pad(t.getMinutes())}</div>}
+                                    </div>
+                                );
+                            })}
+                            {pop.items.length > 5 && <div className="cal-pop-more">还有 {pop.items.length - 5} 条</div>}
+                            <div className="cal-pop-jump" onClick={() => jumpTo(pop.key, null)}>在时间线中查看这一天 →</div>
                         </div>
                     )}
                 </div>
@@ -3831,7 +3924,6 @@
             };
             const bottomNav = [
                 { key: 'timeline', label: '时间线', icon: 'ClockCircleOutlined' },
-                { key: 'calendar', label: '日历', icon: 'CalendarOutlined' },
                 { key: 'tags', label: '标签', icon: 'TagsOutlined' },
                 { key: 'cards', label: '卡片', icon: 'PictureOutlined' }
             ];
@@ -3869,14 +3961,12 @@
                                     tabBarExtraContent={{ right: <Button type="primary" icon={<I name="PlusOutlined" />} onClick={() => { setEditing(null); setEditorOpen(true); }}>新建手记</Button> }}
                                     items={[
                                         { key: 'timeline', label: <span><I name="ClockCircleOutlined" /> 时间线</span> },
-                                        { key: 'calendar', label: <span><I name="CalendarOutlined" /> 日历</span> },
                                         { key: 'tags', label: <span><I name="TagsOutlined" /> 标签</span> },
                                         { key: 'cards', label: <span><I name="PictureOutlined" /> 卡片</span> }
                                     ]}
                                 />
                             )}
                             {tab === 'timeline' && <TimelineView notes={notes} isDark={isDark} highlight={searchQ} onEdit={n => { setEditing(n); setEditorOpen(true); }} onDelete={onDelete} onCard={n => setCardNote(n)} />}
-                            {tab === 'calendar' && <CalendarTab notes={allNotes} isDark={isDark} highlight={searchQ} onEdit={n => { setEditing(n); setEditorOpen(true); }} onDelete={onDelete} onCard={n => setCardNote(n)} />}
                             {tab === 'tags' && <TagsTab notes={allNotes} onViewNote={n => { setEditing(n); setEditorOpen(true); }} onCard={n => setCardNote(n)} />}
                             {tab === 'cards' && <CardsTab isDark={isDark} />}
                         </div>
