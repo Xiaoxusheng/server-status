@@ -1148,17 +1148,18 @@
             margin-top: 4px;
         }
 
-        /* ================= 我的卡片（网格按断点 4/3/2/1 列，按图片比例自然布局） ================= */
+        /* ================= 我的卡片（Masonry 瀑布流：按图片比例分列，媒体区以宽高比占位防抖动） ================= */
         .pv-cards-head {
             display: flex;
             align-items: baseline;
             gap: 10px;
-            margin-bottom: 14px;
+            margin-bottom: 16px;
         }
 
         .pv-cards-head h3 {
-            font-size: 16px;
+            font-size: 17px;
             font-weight: 600;
+            letter-spacing: .2px;
             color: var(--color-text);
             margin: 0;
         }
@@ -1168,41 +1169,400 @@
             color: var(--color-text-tertiary);
         }
 
-        .card-grid {
-            display: grid;
-            grid-template-columns: repeat(1, 1fr);
-            gap: 16px;
+        /* 瀑布流容器：JS 最短列策略分列，各列等宽纵向自然排列 */
+        .masonry {
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
         }
 
-        @media (min-width: 768px) {
-            .card-grid {
-                grid-template-columns: repeat(2, 1fr);
+        .masonry-col {
+            flex: 1 1 0;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        figure.mcard {
+            margin: 0;
+            min-width: 0;
+            cursor: pointer;
+        }
+
+        /* 媒体区：宽高比占位（数据自带 width/height，加载零跳动），图片为绝对定位铺满 */
+        .mcard-media {
+            position: relative;
+            overflow: hidden;
+            border-radius: calc(var(--radius) + 2px);
+            border: 1px solid var(--color-border);
+            background: var(--hover);
+            cursor: zoom-in;
+            transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+        }
+
+        .mcard:hover .mcard-media {
+            border-color: var(--color-border-strong);
+            box-shadow: 0 8px 28px rgba(0, 0, 0, .10);
+            transform: translateY(-2px);
+        }
+
+        .mcard-media img {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            opacity: 0;
+            transition: opacity .25s ease;
+        }
+
+        .mcard-media img.is-loaded {
+            opacity: 1;
+        }
+
+        .mcard-fallback {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--color-text-tertiary);
+            background: var(--hover);
+        }
+
+        .mcard-fallback .anticon {
+            font-size: 22px;
+            opacity: .55;
+        }
+
+        /* 图片右上角浮动操作：桌面 hover 显现，触摸设备仅保留单个“…”入口 */
+        .mcard-actions {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 2;
+            display: flex;
+            gap: 6px;
+            opacity: 0;
+            transform: translateY(-4px);
+            transition: opacity .18s ease, transform .18s ease;
+            pointer-events: none;
+        }
+
+        .mcard:hover .mcard-actions,
+        .mcard-actions:focus-within {
+            opacity: 1;
+            transform: none;
+            pointer-events: auto;
+        }
+
+        .mbtn {
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #fff;
+            background: rgba(0, 0, 0, .45);
+            cursor: pointer;
+            transition: background .18s ease;
+        }
+
+        .mbtn:hover {
+            background: rgba(0, 0, 0, .68);
+        }
+
+        .mbtn.light {
+            background: rgba(255, 255, 255, .12);
+        }
+
+        .mbtn.light:hover {
+            background: rgba(255, 255, 255, .24);
+        }
+
+        @media (hover: none) {
+            .mcard .mbtn.opt {
+                display: none;
+            }
+
+            .mcard-actions {
+                opacity: 1;
+                transform: none;
+                pointer-events: auto;
             }
         }
 
-        @media (min-width: 1200px) {
-            .card-grid {
+        /* 信息区：标题为第一层级，元信息更弱更小、紧凑排布 */
+        .mcard-info {
+            padding: 9px 2px 0;
+        }
+
+        .mcard-title {
+            font-size: 13px;
+            font-weight: 600;
+            line-height: 1.45;
+            color: var(--color-text);
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            word-break: break-word;
+        }
+
+        .mcard-meta {
+            margin-top: 3px;
+            font-size: 11.5px;
+            color: var(--color-text-tertiary);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .mcard-meta .anticon {
+            font-size: 11px;
+            flex: none;
+            opacity: .8;
+        }
+
+        /* 加载骨架：3:4 占位微光扫过，避免数据返回前空白 */
+        .masonry-skel {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+        }
+
+        .masonry-skel .sk {
+            aspect-ratio: 3 / 4;
+            border-radius: calc(var(--radius) + 2px);
+            border: 1px solid var(--color-border);
+            background: linear-gradient(100deg, var(--hover) 40%, var(--color-border) 50%, var(--hover) 60%);
+            background-size: 220% 100%;
+            animation: skFlow 1.3s ease-in-out infinite;
+        }
+
+        @keyframes skFlow {
+            from {
+                background-position: 130% 0;
+            }
+
+            to {
+                background-position: -90% 0;
+            }
+        }
+
+        @media (min-width: 1000px) {
+            .masonry-skel {
                 grid-template-columns: repeat(3, 1fr);
             }
         }
 
-        @media (min-width: 1600px) {
-            .card-grid {
+        @media (min-width: 1500px) {
+            .masonry-skel {
                 grid-template-columns: repeat(4, 1fr);
             }
         }
 
-        .card-grid .card-item {
+        /* ================= 沉浸式卡片预览（深色遮罩 + 居中大图，非默认 Modal 观感） ================= */
+        .pv-viewer {
+            position: fixed;
+            inset: 0;
+            z-index: 2100;
+            background: rgba(0, 0, 0, .93);
+            animation: pvViewerIn .2s ease;
+        }
+
+        @keyframes pvViewerIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .pv-viewer-head {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 3;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px 20px;
+            pointer-events: none;
+        }
+
+        .pv-viewer-head>* {
+            pointer-events: auto;
+        }
+
+        .pv-viewer-info {
+            flex: 1;
             min-width: 0;
         }
 
-        .card-grid .card-item img {
-            width: 100%;
-            height: auto;
-            border-radius: var(--radius);
-            border: 1px solid var(--color-border);
-            display: block;
-            background: var(--color-surface);
+        .pv-viewer-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, .92);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .pv-viewer-meta {
+            margin-top: 2px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, .5);
+        }
+
+        .pv-viewer-tools {
+            display: flex;
+            gap: 8px;
+            flex: none;
+        }
+
+        .pv-viewer-stage {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            cursor: grab;
+            touch-action: none;
+        }
+
+        .pv-viewer-stage.dragging {
+            cursor: grabbing;
+        }
+
+        .pv-viewer-stage img {
+            max-width: min(92vw, 1400px);
+            max-height: calc(100vh - 120px);
+            user-select: none;
+            -webkit-user-drag: none;
+            will-change: transform;
+            transform-origin: center center;
+            transition: transform .18s ease, opacity .22s ease;
+            animation: pvImgIn .22s ease;
+        }
+
+        .pv-viewer-stage.dragging img {
+            transition: none;
+        }
+
+        @keyframes pvImgIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* 大图加载期间隐藏（避免出现裂图），配合居中 Spin 指示 */
+        .pv-viewer-stage img.pending {
+            opacity: 0;
+        }
+
+        .pv-viewer-loading,
+        .pv-viewer-fallback {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .pv-viewer-fallback {
+            color: rgba(255, 255, 255, .65);
+            font-size: 14px;
+        }
+
+        .pv-viewer-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 3;
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+            color: rgba(255, 255, 255, .85);
+            background: rgba(255, 255, 255, .10);
+            cursor: pointer;
+            transition: background .18s ease, opacity .18s ease;
+        }
+
+        .pv-viewer-nav:hover {
+            background: rgba(255, 255, 255, .22);
+        }
+
+        .pv-viewer-nav.prev {
+            left: 14px;
+        }
+
+        .pv-viewer-nav.next {
+            right: 14px;
+        }
+
+        .pv-viewer-nav[disabled] {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .pv-viewer-hint {
+            position: absolute;
+            bottom: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: rgba(255, 255, 255, .32);
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        @media (max-width: 768px) {
+            .masonry {
+                gap: 10px;
+            }
+
+            .masonry-col {
+                gap: 14px;
+            }
+
+            .pv-viewer-nav {
+                display: none;
+            }
+
+            .pv-viewer-stage img {
+                max-width: 100vw;
+                max-height: calc(100vh - 150px);
+            }
+
+            .pv-viewer-hint {
+                bottom: calc(14px + env(safe-area-inset-bottom));
+            }
         }
 
         .card-item-more {
@@ -1340,27 +1700,6 @@
                 right: 28px;
                 bottom: 40px;
             }
-        }
-
-        /* ================= 我的卡片：统一方形缩略图 ================= */
-        .card-thumb {
-            aspect-ratio: 1 / 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: var(--hover);
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius);
-            overflow: hidden;
-        }
-
-        .card-thumb img {
-            max-width: 100%;
-            max-height: 100%;
-            width: auto;
-            height: auto;
-            object-fit: contain;
-            display: block;
         }
 
         /* ================= 响应式 ================= */
@@ -1521,18 +1860,60 @@
         const fmtClock = s => { const d = parseISO(s); return d ? pad(d.getHours()) + ':' + pad(d.getMinutes()) : ''; };
         const fmtDate = s => { const d = parseISO(s); return d ? d.getFullYear() + '.' + pad(d.getMonth() + 1) + '.' + pad(d.getDate()) : ''; };
         const fmtFull = s => { const d = parseISO(s); return d ? fmtDate(s) + ' ' + fmtClock(s) : ''; };
-        // 统一滚动动画：easeInOutQuint 缓入缓出（缓起-加速-缓停一次到位，苹果式丝滑），rAF 驱动
+        // 统一滚动动画（两段式，根治长距离滚动白屏）：
+        // 长距离连续滚动时，途经的懒加载图片 / content-visibility 未渲染卡片来不及绘制，
+        // 会出现滑动途中白屏。策略：
+        //   长距离 → 瞬时定位到目标外侧约 1.2 屏处，停 2 帧待目标区域真实渲染完成，
+        //            再对剩余短距离做 rAF easeOutCubic 平滑收尾（短距离新内容极少，不会白屏）；
+        //   短距离（<1.5 屏）→ 单段 easeOutCubic 缓出一次到位。
+        // to 支持传函数：瞬移后邻近卡片真实渲染，高度可能与估算不同，收尾前取实时坐标。
+        // 动画期间用户滚轮/触摸立即接管并终止动画；重复调用自动取消上一次动画。
+        let scrollAnimSeq = 0;
         function animateScrollTo(to, dur) {
-            const from = window.scrollY;
-            let start = null;
-            const ease = t => (t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2);
-            const step = (ts) => {
-                if (start === null) start = ts;
-                const p = Math.min(1, (ts - start) / dur);
-                window.scrollTo(0, from + (to - from) * ease(p));
-                if (p < 1) requestAnimationFrame(step);
+            // 解析目标位置（函数形式每次取实时值，且不允许滚出页面顶部）
+            const resolveTo = () => Math.max(0, typeof to === 'function' ? to() : to);
+            const seq = ++scrollAnimSeq;
+            const alive = () => seq === scrollAnimSeq;
+            // 用户主动滚动立即终止动画，避免与用户抢滚动条
+            const takeover = () => { scrollAnimSeq++; };
+            window.addEventListener('wheel', takeover, { passive: true });
+            window.addEventListener('touchstart', takeover, { passive: true });
+            const cleanup = () => {
+                window.removeEventListener('wheel', takeover);
+                window.removeEventListener('touchstart', takeover);
             };
-            requestAnimationFrame(step);
+            // easeOutCubic：起步快、收尾缓，衔接瞬移后的观感最自然
+            const easeOut = t => 1 - Math.pow(1 - t, 3);
+            // rAF 驱动一段平滑滚动，ms 为时长，结束回调 onDone
+            const rafScroll = (fromY, toY, ms, onDone) => {
+                let start = null;
+                const step = ts => {
+                    if (!alive()) return cleanup();
+                    if (start === null) start = ts;
+                    const p = Math.min(1, (ts - start) / ms);
+                    window.scrollTo(0, fromY + (toY - fromY) * easeOut(p));
+                    if (p < 1) requestAnimationFrame(step);
+                    else { cleanup(); if (onDone) onDone(); }
+                };
+                requestAnimationFrame(step);
+            };
+
+            const target = resolveTo();
+            const dist = Math.abs(target - window.scrollY);
+            if (dist < 2) { cleanup(); return; }
+            if (dist < window.innerHeight * 1.5) {
+                // 短距离：单段缓出，一次到位
+                rafScroll(window.scrollY, target, Math.min(700, Math.max(350, dist * 0.6)));
+                return;
+            }
+            // 长距离两段式：瞬移到目标外侧 1.2 屏 → 停 2 帧等浏览器绘制 → 平滑滑完剩余
+            const dir = target > window.scrollY ? 1 : -1;
+            window.scrollTo(0, Math.max(0, target - dir * window.innerHeight * 1.2));
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                if (!alive()) return cleanup();
+                // 重新解析目标：瞬移后附近卡片真实渲染，高度可能与估算不同
+                rafScroll(window.scrollY, resolveTo(), 480);
+            }));
         }
 
         const dayKey = s => { const d = parseISO(s); return d ? d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) : ''; };
@@ -3387,8 +3768,9 @@
                     setTimeout(() => URL.revokeObjectURL(a.href), 3000);
                 } catch (e) { message.error('二维码下载失败'); }
             };
+            // zIndex 2200 > 预览层 2100：从沉浸式预览内发起分享时，弹窗不会被预览层盖住
             return (
-                <Modal open={open} onCancel={onClose} width={480} footer={null} title="生成分享链接" destroyOnClose>
+                <Modal open={open} onCancel={onClose} width={480} footer={null} title="生成分享链接" destroyOnClose zIndex={2200}>
                     {!share ? (
                         <Space direction="vertical" style={{ width: '100%' }} size={12}>
                             <div>
@@ -3435,8 +3817,9 @@
                             </div>
                             {share.expires_at && <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>有效期至 {fmtFull(share.expires_at)}</Typography.Text>}
                         </div>
-                    )}
-                </Modal>
+                    )
+                    }
+                </Modal >
             );
         }
 
@@ -3496,25 +3879,26 @@
                 setPop({ key, items, left, top: r.bottom - cr.top + 10 });
             };
 
-            // rAF 滚动动画辅助（缓动曲线由 animateScrollTo 统一提供）
+            // 目标区域懒加载图提前转 eager 并触发解码：瞬移落地即成图，不闪白
+            const predecodeImgs = root => {
+                if (!root) return;
+                root.querySelectorAll('img[loading="lazy"]').forEach(img => {
+                    img.loading = 'eager';
+                    if (img.decode) img.decode().catch(() => { });
+                });
+            };
 
-            // 跳转动画（单段连续缓动）：easeInOutQuint 缓起-加速-缓停，全程一次运动、
-            // 无任何衔接断点——丝滑的关键。时长随距离自适应 600-900ms；
-            // 目标区懒加载图提前转 eager + 手记卡片 content-visibility，滚动路径渲染开销最小。
+            // 跳转动画（两段式）：长距离先瞬移到目标外侧约 1.2 屏、停帧渲染后平滑收尾，
+            // 途经内容不再参与逐帧渲染，杜绝滑动途中白屏；短距离则单段缓出一次到位。
             const jumpTo = (key, id) => {
                 setPop(null);
                 const el = document.getElementById(id ? 'note-' + id : 'day-' + key);
                 if (!el) return;
                 const block = id ? 'center' : 'start';
-                const rect = el.getBoundingClientRect();
-                const target = Math.max(0, block === 'center'
-                    ? window.scrollY + rect.top - window.innerHeight / 2
-                    : window.scrollY + rect.top - 70);
-                const dist = Math.abs(target - window.scrollY);
-                if (dist < 2) return;
 
-                // 目标卡片内的懒加载图提前转为立即加载，落地即成图不闪白
-                el.querySelectorAll('img[loading="lazy"]').forEach(img => { img.loading = 'eager'; });
+                // 目标卡片及上一张卡片内的懒加载图提前转为立即加载并预解码
+                predecodeImgs(el);
+                predecodeImgs(el.previousElementSibling);
 
                 // 闪烁高亮
                 const card = el.classList.contains('note-card') ? el : el.querySelector('.note-card');
@@ -3522,7 +3906,14 @@
                 t.classList.add('note-flash');
                 setTimeout(() => t.classList.remove('note-flash'), 1700);
 
-                animateScrollTo(target, Math.min(900, Math.max(600, dist * 0.45)));
+                // 目标坐标延迟解析：瞬移后邻近卡片真实渲染、高度可能变化，收尾前取实时位置
+                const resolveTarget = () => {
+                    const rect = el.getBoundingClientRect();
+                    return block === 'center'
+                        ? window.scrollY + rect.top - window.innerHeight / 2
+                        : window.scrollY + rect.top - 70;
+                };
+                animateScrollTo(resolveTarget, 600);
             };
 
             // 点击日历以外区域关闭浮层（移动端没有 mouseleave）
@@ -3650,11 +4041,167 @@
             );
         }
 
-        // ==================== 卡片历史 ====================
+        // ==================== 卡片图片：宽高比占位 + 加载淡入 + 失败兜底（加载过程零跳动） ====================
+        function CardImg({ c }) {
+            const [st, setSt] = useState('loading');
+            return (
+                <>
+                    <img src={c.url} alt={mdStrip(c.title) || '卡片'} loading="lazy" draggable={false}
+                        className={st === 'loaded' ? 'is-loaded' : ''}
+                        onLoad={() => setSt('loaded')} onError={() => setSt('error')} />
+                    {st === 'error' && (
+                        <div className="mcard-fallback"><I name="PictureOutlined" /><span>加载失败</span></div>
+                    )}
+                </>
+            );
+        }
+
+        // ==================== 沉浸式卡片预览：深色遮罩 + 居中大图 ====================
+        // 交互：ESC 关闭 / ←→ 或滑动切换 / 滚轮缩放 / 双击放大 / 放大后拖拽平移
+        function CardViewer({ cards, index, onNav, onClose, onSave, onShare }) {
+            const [scale, setScale] = useState(1);
+            const [off, setOff] = useState({ x: 0, y: 0 });
+            const [dragging, setDragging] = useState(false);
+            const [imgState, setImgState] = useState('loading'); // 当前大图：loading | ok | error
+            const dragRef = useRef(null);
+            const stageRef = useRef(null);
+            const suppressClickRef = useRef(false); // 拖拽/滑动后的 click 不触发遮罩关闭
+            const scaleRef = useRef(1);
+            const c = cards[index];
+            const total = cards.length;
+            const touch = useMemo(() => window.matchMedia && window.matchMedia('(hover: none)').matches, []);
+
+            // 切换目标（越界静默忽略）；index 变化时重置缩放与偏移
+            const nav = useCallback(dir => {
+                const ni = index + dir;
+                if (ni < 0 || ni >= total) return;
+                onNav(ni);
+            }, [index, total, onNav]);
+            // 切换时重置缩放/偏移，大图回到加载中状态
+            useEffect(() => { setScale(1); setOff({ x: 0, y: 0 }); setImgState('loading'); }, [index]);
+
+            // 键盘：ESC 关闭，←→ 切换（放大态先复位再切换）
+            useEffect(() => {
+                const onKey = e => {
+                    if (e.key === 'Escape') onClose();
+                    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                        if (scale > 1) { setScale(1); setOff({ x: 0, y: 0 }); }
+                        else nav(e.key === 'ArrowLeft' ? -1 : 1);
+                    }
+                };
+                window.addEventListener('keydown', onKey);
+                return () => window.removeEventListener('keydown', onKey);
+            }, [scale, nav, onClose]);
+
+            // 打开期间锁定背景滚动
+            useEffect(() => {
+                const prev = document.body.style.overflow;
+                document.body.style.overflow = 'hidden';
+                return () => { document.body.style.overflow = prev; };
+            }, []);
+
+            // 预加载相邻图片，切换不闪白（本页 Babel 会把 antd 的 Image 挂到 window.Image，
+            // new Image()/new window.Image() 均会抛错，必须用 createElement('img')）
+            useEffect(() => {
+                [index + 1, index - 1].forEach(i => {
+                    const n = cards[i];
+                    if (n) { const im = document.createElement('img'); im.src = baseUrl + n.url; }
+                });
+            }, [index, cards]);
+
+            // 滚轮缩放（原生监听，React 合成事件为 passive 无法 preventDefault）
+            useEffect(() => { scaleRef.current = scale; }, [scale]);
+            useEffect(() => {
+                const el = stageRef.current;
+                if (!el) return;
+                const onWheel = e => {
+                    e.preventDefault();
+                    const ns = Math.min(5, Math.max(1, scaleRef.current * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+                    setScale(ns);
+                    if (ns === 1) setOff({ x: 0, y: 0 });
+                };
+                el.addEventListener('wheel', onWheel, { passive: false });
+                return () => el.removeEventListener('wheel', onWheel);
+            }, []);
+
+            // 拖拽：放大态平移；未放大时横向滑动切换
+            const onPointerDown = e => {
+                dragRef.current = { sx: e.clientX, sy: e.clientY, ox: off.x, oy: off.y, moved: false };
+                suppressClickRef.current = false;
+                setDragging(true);
+                if (e.currentTarget.setPointerCapture) e.currentTarget.setPointerCapture(e.pointerId);
+            };
+            const onPointerMove = e => {
+                const d = dragRef.current;
+                if (!d) return;
+                if (Math.abs(e.clientX - d.sx) > 6 || Math.abs(e.clientY - d.sy) > 6) d.moved = true;
+                if (scale > 1) setOff({ x: d.ox + (e.clientX - d.sx), y: d.oy + (e.clientY - d.sy) });
+            };
+            const onPointerUp = e => {
+                const d = dragRef.current;
+                dragRef.current = null;
+                setDragging(false);
+                if (!d) return;
+                if (d.moved) suppressClickRef.current = true;
+                if (!d.moved || scale > 1) return;
+                const dx = e.clientX - d.sx;
+                if (dx < -60) nav(1);
+                else if (dx > 60) nav(-1);
+            };
+            // 双击：放大 2.5 倍 / 复位
+            const onDblClick = () => {
+                if (scale > 1) { setScale(1); setOff({ x: 0, y: 0 }); }
+                else setScale(2.5);
+            };
+            // 点击遮罩空白处关闭（拖拽/滑动后的 click 不触发）
+            const onStageClick = e => {
+                if (e.target === e.currentTarget && !suppressClickRef.current) onClose();
+            };
+            if (!c) return null;
+            return (
+                <div className="pv-viewer" role="dialog" aria-modal="true">
+                    <div className="pv-viewer-head">
+                        <div className="pv-viewer-info">
+                            <div className="pv-viewer-title">{mdStrip(c.title) || '未命名卡片'}</div>
+                            <div className="pv-viewer-meta">
+                                {TEMPLATE_LABEL[c.template] || c.template} · {c.width} × {c.height} · {fmtDate(c.created_at)} · {index + 1} / {total}
+                            </div>
+                        </div>
+                        <div className="pv-viewer-tools">
+                            <button className="mbtn light" title="保存图片" onClick={() => onSave(c)}><I name="DownloadOutlined" /></button>
+                            <button className="mbtn light" title="分享" onClick={() => onShare(c)}><I name="ShareAltOutlined" /></button>
+                            <button className="mbtn light" title="关闭 (Esc)" onClick={onClose}><I name="CloseOutlined" /></button>
+                        </div>
+                    </div>
+                    <div ref={stageRef}
+                        className={'pv-viewer-stage' + (dragging ? ' dragging' : '')}
+                        onPointerDown={onPointerDown} onPointerMove={onPointerMove}
+                        onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
+                        onDoubleClick={onDblClick} onClick={onStageClick}>
+                        {imgState !== 'error' && (
+                            <img key={c.id} src={baseUrl + c.url} alt="" draggable={false}
+                                className={imgState === 'ok' ? '' : 'pending'}
+                                onLoad={() => setImgState('ok')} onError={() => setImgState('error')}
+                                style={{ transform: 'translate(' + off.x + 'px,' + off.y + 'px) scale(' + scale + ')' }} />
+                        )}
+                        {imgState === 'loading' && <div className="pv-viewer-loading"><Spin size="large" /></div>}
+                        {imgState === 'error' && <div className="pv-viewer-fallback">图片加载失败，请稍后重试</div>}
+                        <button className="pv-viewer-nav prev" disabled={index === 0} onClick={() => nav(-1)} aria-label="上一张"><I name="LeftOutlined" /></button>
+                        <button className="pv-viewer-nav next" disabled={index === total - 1} onClick={() => nav(1)} aria-label="下一张"><I name="RightOutlined" /></button>
+                    </div>
+                    <div className="pv-viewer-hint">{touch ? '左右滑动切换 · 双击缩放' : '滚轮缩放 · 双击放大 · ← → 切换 · Esc 关闭'}</div>
+                </div>
+            );
+        }
+
+        // ==================== 卡片历史（Masonry 瀑布流 + 沉浸式预览） ====================
         function CardsTab({ isDark }) {
             const [cards, setCards] = useState([]);
             const [loading, setLoading] = useState(true);
             const [shareCard, setShareCard] = useState(null);
+            const [viewIdx, setViewIdx] = useState(-1); // 预览器当前下标，-1 = 关闭
+            const wrapRef = useRef(null);
+            const [colCount, setColCount] = useState(2);
             const load = useCallback(() => {
                 setLoading(true);
                 api('/api/private/cards').then(d => {
@@ -3663,6 +4210,21 @@
                 }).catch(() => setLoading(false));
             }, []);
             useEffect(() => { if (isDark !== undefined) load(); }, [load]);
+
+            // 列数随容器宽度自适应（ResizeObserver：窗口/侧栏变化即时重排）
+            useEffect(() => {
+                const el = wrapRef.current;
+                if (!el) return;
+                const calc = () => {
+                    const w = el.clientWidth;
+                    setColCount(w >= 1500 ? 4 : w >= 1000 ? 3 : 2);
+                };
+                calc();
+                const ro = new ResizeObserver(calc);
+                ro.observe(el);
+                return () => ro.disconnect();
+            }, []);
+
             const saveCard = async (c) => {
                 try {
                     const r = await fetch(baseUrl + c.url, { credentials: 'include' });
@@ -3672,6 +4234,7 @@
                     a.download = 'note-card-' + stamp(c.created_at) + '.png';
                     a.click();
                     setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+                    message.success('已开始下载');
                 } catch (e) { message.error('保存失败'); }
             };
             const copyCard = async (c) => {
@@ -3688,58 +4251,129 @@
                     message.info('当前浏览器不支持复制图片，请保存图片');
                 }
             };
+            const deleteCard = (c) => {
+                Modal.confirm({
+                    title: '删除这张卡片？',
+                    content: '相关分享链接会立即失效，且无法恢复。',
+                    okText: '删除', okType: 'danger', cancelText: '取消',
+                    onOk: async () => {
+                        const d = await api('/api/private/cards/' + c.id, { method: 'DELETE' });
+                        if (ok(d)) { message.success('卡片已删除'); setViewIdx(-1); load(); }
+                        else message.error('删除失败');
+                    }
+                });
+            };
+            // 每张卡片的“更多”下拉：复制/删除等低频操作收纳于此
+            const cardMenu = c => ({
+                items: [
+                    { key: 'save', label: '保存图片', icon: <I name="DownloadOutlined" /> },
+                    { key: 'copy', label: '复制图片', icon: <I name="CopyOutlined" /> },
+                    { key: 'share', label: '分享', icon: <I name="ShareAltOutlined" /> },
+                    { type: 'divider' },
+                    { key: 'delete', label: '删除', icon: <I name="DeleteOutlined" />, danger: true }
+                ],
+                onClick: ({ key }) => {
+                    if (key === 'save') saveCard(c);
+                    if (key === 'copy') copyCard(c);
+                    if (key === 'share') setShareCard(c);
+                    if (key === 'delete') deleteCard(c);
+                }
+            });
+
+            // Masonry 分列：按 width/height 比例做最短列堆叠（比例数据自带，无需等图片加载）
+            const cols = useMemo(() => {
+                const arr = Array.from({ length: colCount }, () => []);
+                const h = Array(colCount).fill(0);
+                const INFO_H = 58, GAP = 18; // 信息区高度估算 + 纵向间距
+                cards.forEach(c => {
+                    let i = 0;
+                    for (let k = 1; k < colCount; k++) if (h[k] < h[i]) i = k;
+                    const ratio = (c.width && c.height) ? c.height / c.width : 4 / 3;
+                    arr[i].push(c);
+                    h[i] += ratio * 100 + INFO_H + GAP;
+                });
+                return arr;
+            }, [cards, colCount]);
+            // id → 全局下标映射（预览器按全局顺序前后切换）
+            const indexMap = useMemo(() => new Map(cards.map((c, i) => [c.id, i])), [cards]);
+
             return (
-                <div>
+                <div ref={wrapRef}>
                     <div className="pv-cards-head">
                         <h3>我的卡片</h3>
                         <span className="pv-cards-sub">最近生成 · 共 {cards.length} 张</span>
                     </div>
-                    <div className="card-grid">
-                        {cards.map(c => (
-                            <div className="card-item" key={c.id}>
-                                <div className="card-thumb"><img src={c.url} alt={c.title} loading="lazy" /></div>
-                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, marginTop: 8 }}>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mdStrip(c.title) || '未命名卡片'}</div>
-                                        <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>
-                                            {TEMPLATE_LABEL[c.template] || c.template} · {c.width} × {c.height} · {fmtDate(c.created_at)}
-                                        </div>
-                                    </div>
-                                    <Dropdown trigger={['click']} menu={{
-                                        items: [
-                                            { key: 'save', label: '保存图片', icon: <I name="DownloadOutlined" /> },
-                                            { key: 'copy', label: '复制图片', icon: <I name="CopyOutlined" /> },
-                                            { key: 'share', label: '分享', icon: <I name="ShareAltOutlined" /> },
-                                            { type: 'divider' },
-                                            { key: 'delete', label: '删除', icon: <I name="DeleteOutlined" />, danger: true }
-                                        ], onClick: ({ key }) => {
-                                            if (key === 'save') saveCard(c);
-                                            if (key === 'copy') copyCard(c);
-                                            if (key === 'share') setShareCard(c);
-                                            if (key === 'delete') {
-                                                Modal.confirm({
-                                                    title: '删除这张卡片？',
-                                                    content: '相关分享链接会立即失效，且无法恢复。',
-                                                    okText: '删除', okType: 'danger', cancelText: '取消',
-                                                    onOk: async () => {
-                                                        const d = await api('/api/private/cards/' + c.id, { method: 'DELETE' });
-                                                        if (ok(d)) { message.success('卡片已删除'); load(); }
-                                                        else message.error('删除失败');
-                                                    }
-                                                });
-                                            }
-                                        }
-                                    }}>
-                                        <Button size="small" type="text" icon={<I name="MoreOutlined" />} />
-                                    </Dropdown>
+                    {loading && cards.length === 0 && (
+                        <div className="masonry-skel">{Array.from({ length: 8 }, (_, i) => <div className="sk" key={i} />)}</div>
+                    )}
+                    {!loading && cards.length === 0 && (
+                        <Empty description="还没有生成过卡片，在手记上点击「生成卡片」试试" style={{ marginTop: 60 }} />
+                    )}
+                    {cards.length > 0 && (
+                        <div className="masonry">
+                            {cols.map((col, ci) => (
+                                <div className="masonry-col" key={ci}>
+                                    {col.map(c => {
+                                        const idx = indexMap.get(c.id);
+                                        const ar = (c.width && c.height) ? c.width + ' / ' + c.height : '4 / 3';
+                                        // 整卡可点进入沉浸式预览；操作按钮区 stopPropagation 不触发查看
+                                        return (
+                                            <figure className="mcard" key={c.id} onClick={() => setViewIdx(idx)}>
+                                                <div className="mcard-media" style={{ aspectRatio: ar }}>
+                                                    <CardImg c={c} />
+                                                    <div className="mcard-actions" onClick={e => e.stopPropagation()}>
+                                                        <button className="mbtn opt" title="预览" onClick={() => setViewIdx(idx)}><I name="ZoomInOutlined" /></button>
+                                                        <button className="mbtn opt" title="保存图片" onClick={() => saveCard(c)}><I name="DownloadOutlined" /></button>
+                                                        <button className="mbtn opt" title="分享" onClick={() => setShareCard(c)}><I name="ShareAltOutlined" /></button>
+                                                        <Dropdown trigger={['click']} menu={cardMenu(c)}>
+                                                            <button className="mbtn" title="更多"><I name="MoreOutlined" /></button>
+                                                        </Dropdown>
+                                                    </div>
+                                                </div>
+                                                <figcaption className="mcard-info">
+                                                    <div className="mcard-title">{mdStrip(c.title) || '未命名卡片'}</div>
+                                                    <div className="mcard-meta">
+                                                        <I name="PictureOutlined" />
+                                                        <span>{TEMPLATE_LABEL[c.template] || c.template} · {c.width} × {c.height} · {fmtDate(c.created_at)}</span>
+                                                    </div>
+                                                </figcaption>
+                                            </figure>
+                                        );
+                                    })}
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-                    {!loading && cards.length === 0 && <Empty description="还没有生成过卡片，在手记上点击「生成卡片」试试" style={{ marginTop: 60 }} />}
+                            ))}
+                        </div>
+                    )
+                    }
+                    {
+                        viewIdx >= 0 && (
+                            <CardViewer cards={cards} index={viewIdx} onNav={setViewIdx}
+                                onClose={() => setViewIdx(-1)} onSave={saveCard} onShare={setShareCard} />
+                        )
+                    }
                     {shareCard && <ShareModal open={!!shareCard} card={shareCard} onClose={() => setShareCard(null)} />}
-                </div>
+                </div >
             );
+        }
+
+        // ==================== 错误边界：捕获子组件渲染崩溃，避免整页白屏，直接显示错误便于定位 ====================
+        class ErrorBoundary extends React.Component {
+            constructor(props) { super(props); this.state = { err: null }; }
+            static getDerivedStateFromError(err) { return { err }; }
+            render() {
+                if (this.state.err) {
+                    const e = this.state.err;
+                    const msg = (e && (e.stack || e.message)) || String(e);
+                    return (
+                        <div style={{ padding: 32, color: '#ff4d4f', fontSize: 13, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                            <div style={{ fontWeight: 600, marginBottom: 8 }}>页面渲染出错，请把以下内容反馈给开发者：</div>
+                            {msg}
+                            <div style={{ marginTop: 16 }}><Button onClick={() => this.setState({ err: null })}>重试</Button></div>
+                        </div>
+                    );
+                }
+                return this.props.children;
+            }
         }
 
         // ==================== 密码验证 ====================
@@ -3963,10 +4597,11 @@
                     setExporting(false);
                 }
             };
-            // 回到顶部：与跳转同款单段 easeInOutQuint 缓动，时长按距离自适应（600-900ms）
+            // 回到顶部：两段式动画——长距离先瞬移至距顶约 1.2 屏处（顶部内容早已加载，
+            // 停 2 帧即完成绘制），再平滑滑完剩余短距离，避免长距离连续滚动途中白屏
             const scrollToTop = () => {
                 if (window.scrollY <= 0) return;
-                animateScrollTo(0, Math.min(900, Math.max(600, window.scrollY * 0.45)));
+                animateScrollTo(0, 600);
             };
             const bottomNav = [
                 { key: 'timeline', label: '时间线', icon: 'ClockCircleOutlined' },
@@ -4012,9 +4647,11 @@
                                     ]}
                                 />
                             )}
-                            {tab === 'timeline' && <TimelineView notes={notes} isDark={isDark} highlight={searchQ} onEdit={n => { setEditing(n); setEditorOpen(true); }} onDelete={onDelete} onCard={n => setCardNote(n)} />}
-                            {tab === 'tags' && <TagsTab notes={allNotes} onViewNote={n => { setEditing(n); setEditorOpen(true); }} onCard={n => setCardNote(n)} />}
-                            {tab === 'cards' && <CardsTab isDark={isDark} />}
+                            <ErrorBoundary>
+                                {tab === 'timeline' && <TimelineView notes={notes} isDark={isDark} highlight={searchQ} onEdit={n => { setEditing(n); setEditorOpen(true); }} onDelete={onDelete} onCard={n => setCardNote(n)} />}
+                                {tab === 'tags' && <TagsTab notes={allNotes} onViewNote={n => { setEditing(n); setEditorOpen(true); }} onCard={n => setCardNote(n)} />}
+                                {tab === 'cards' && <CardsTab isDark={isDark} />}
+                            </ErrorBoundary>
                         </div>
                         {isMobile && (
                             <Button className="pv-fab-mobile" type="primary" shape="circle" icon={<I name="PlusOutlined" />} onClick={() => { setEditing(null); setEditorOpen(true); }} />
