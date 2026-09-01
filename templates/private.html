@@ -142,6 +142,10 @@
             transition: border-color .15s ease;
             scroll-margin-top: 66px;
             /* 保存后定位新帖：避开吸顶顶栏 */
+            /* 长列表滚动优化：视口外的卡片跳过渲染布局，滚动与跳转动画更流畅
+               （auto 让浏览器记住已渲染过的真实高度，避免滚动条跳动） */
+            content-visibility: auto;
+            contain-intrinsic-size: auto 320px;
         }
 
         .note-card:hover {
@@ -3478,13 +3482,21 @@
                 setPop({ key, items, left, top: r.bottom - cr.top + 10 });
             };
 
-            // 跳转：瞬时定位到对应手记（或当日分组）并闪烁高亮。
-            // 不用 smooth 长途滚动：页面内容重（懒加载图片多），跨屏平滑滚动会一路白屏掉帧
+            // 跳转：两段式动画——先瞬时到达目标上方约 1.2 屏（让附近懒加载图提前启动），
+            // 再平滑滚完最后一小段。既保留动画感，又避免跨整页长途平滑滚动一路白屏。
             const jumpTo = (key, id) => {
                 setPop(null);
                 const el = document.getElementById(id ? 'note-' + id : 'day-' + key);
                 if (!el) return;
-                el.scrollIntoView({ block: id ? 'center' : 'start' });
+                const block = id ? 'center' : 'start';
+                const rect = el.getBoundingClientRect();
+                const target = block === 'center'
+                    ? window.scrollY + rect.top - window.innerHeight / 2
+                    : window.scrollY + rect.top - 70;
+                window.scrollTo(0, Math.max(0, target - window.innerHeight * 1.2));
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    el.scrollIntoView({ behavior: 'smooth', block });
+                }));
                 const card = el.classList.contains('note-card') ? el : el.querySelector('.note-card');
                 const t = card || el;
                 t.classList.add('note-flash');
@@ -3929,6 +3941,21 @@
                     setExporting(false);
                 }
             };
+            // 回到顶部：rAF 缓动动画（easeOutCubic），距离越远时长略增（上限 700ms），比原生 smooth 更顺滑可控
+            const scrollToTop = () => {
+                const from = window.scrollY;
+                if (from <= 0) return;
+                const dur = Math.min(700, 300 + from / 4);
+                let start = null;
+                const ease = t => 1 - Math.pow(1 - t, 3);
+                const step = (ts) => {
+                    if (start === null) start = ts;
+                    const p = Math.min(1, (ts - start) / dur);
+                    window.scrollTo(0, from * (1 - ease(p)));
+                    if (p < 1) requestAnimationFrame(step);
+                };
+                requestAnimationFrame(step);
+            };
             const bottomNav = [
                 { key: 'timeline', label: '时间线', icon: 'ClockCircleOutlined' },
                 { key: 'tags', label: '标签', icon: 'TagsOutlined' },
@@ -3986,7 +4013,7 @@
                                 shape="circle"
                                 aria-label="回到顶部"
                                 icon={<I name="VerticalAlignTopOutlined" />}
-                                onClick={() => window.scrollTo({ top: 0 })}
+                                onClick={scrollToTop}
                             />
                         </Tooltip>
                         {isMobile && (
