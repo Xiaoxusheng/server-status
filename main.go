@@ -2019,6 +2019,7 @@ func killProcessHandler(w http.ResponseWriter, r *http.Request) {
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Remember bool   `json:"remember"` // 记住我：延长会话空闲超时与绝对寿命（30 天），否则 24h/7d
 }
 
 type Session struct {
@@ -2030,6 +2031,7 @@ type Session struct {
 	LastAccess time.Time `json:"last_access"`
 	ExpiresAt  time.Time `json:"expires_at"`
 	CSRFToken  string    `json:"csrf_token,omitempty"` // 会话绑定的随机 CSRF Token（不与浏览器共享密钥）
+	Remember   bool      `json:"remember,omitempty"`   // 记住我：空闲超时 30 天/绝对寿命 30 天，否则 24h/7d
 }
 
 type UserManager struct {
@@ -3422,6 +3424,28 @@ func generateSessionID() string {
 // sessionMaxLifetime 会话绝对寿命上限：无论多活跃，超过上限必须重新登录（防止被盗 Cookie 永久有效）
 const sessionMaxLifetime = 7 * 24 * time.Hour
 
+// 记住我会话的空闲超时与绝对寿命（勾选后免登录窗口从 24h/7d 延长到 30 天/30 天）
+const (
+	rememberIdleTimeout = 30 * 24 * time.Hour
+	rememberMaxLifetime = 30 * 24 * time.Hour
+)
+
+// sessionIdleTimeout 会话空闲超时：记住我 30 天，否则 24 小时
+func sessionIdleTimeout(s *Session) time.Duration {
+	if s != nil && s.Remember {
+		return rememberIdleTimeout
+	}
+	return sessionTimeout
+}
+
+// sessionAbsoluteCap 会话绝对寿命：记住我 30 天，否则 7 天（到期强制重新登录）
+func sessionAbsoluteCap(s *Session) time.Duration {
+	if s != nil && s.Remember {
+		return rememberMaxLifetime
+	}
+	return sessionMaxLifetime
+}
+
 func validateSession(sessionID string) (*Session, bool) {
 	// 使用写锁：本函数会更新 LastAccess 并在失效时删除会话，读锁下写入属于数据竞争
 	userManager.Lock()
@@ -3440,7 +3464,7 @@ func validateSession(sessionID string) (*Session, bool) {
 	}
 
 	// 会话绝对寿命：自创建起超过上限强制失效（滑动续期不能突破）
-	if now.Sub(session.CreatedAt) > sessionMaxLifetime {
+	if now.Sub(session.CreatedAt) > sessionAbsoluteCap(session) {
 		delete(userManager.Sessions, sessionID)
 		return nil, false
 	}
@@ -3451,15 +3475,15 @@ func validateSession(sessionID string) (*Session, bool) {
 		return nil, false
 	}
 
-	// 更新最后访问时间
+	// 更新最后访问时间（滑动续期按会话自身的记住我时长）
 	session.LastAccess = now
-	session.ExpiresAt = now.Add(sessionTimeout)
+	session.ExpiresAt = now.Add(sessionIdleTimeout(session))
 
 	return session, true
 }
 
 // createSession 签发一个具备防篡改特性的新会话并挂载至活跃序列
-func createSession(username string, r *http.Request) string {
+func createSession(username string, remember bool, r *http.Request) string {
 	sessionID := generateSessionID()
 	now := time.Now()
 
@@ -3472,8 +3496,9 @@ func createSession(username string, r *http.Request) string {
 		UserAgent:  r.UserAgent(),
 		CreatedAt:  now,
 		LastAccess: now,
-		ExpiresAt:  now.Add(sessionTimeout),
+		ExpiresAt:  now.Add(sessionIdleTimeout(&Session{Remember: remember})),
 		CSRFToken:  csrf,
+		Remember:   remember,
 	}
 
 	userManager.Lock()
@@ -3604,6 +3629,24 @@ func (g *loginGuard) reset(key string) {
 	delete(g.failures, key)
 }
 
+// sessionCookieFor 为已验证会话构造会话 Cookie：有效期与会话空闲超时一致；
+// 仅当配置了真实域名（非 localhost、非 IP 直连）时限定 Domain，便于子域共享会话
+func sessionCookieFor(sessionID string, s *Session) *http.Cookie {
+	c := &http.Cookie{
+		Name:     "session_id",
+		Value:    sessionID,
+		Expires:  time.Now().Add(sessionIdleTimeout(s)),
+		HttpOnly: true,
+		Secure:   true, // 仅在HTTPS下传输
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	}
+	if tlsDomain != "localhost" && net.ParseIP(tlsDomain) == nil {
+		c.Domain = tlsDomain
+	}
+	return c
+}
+
 // loginHandler HTTP 端点：响应前端登录凭据并赋予访问 Token Cookie
 func loginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -3648,29 +3691,17 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	loginLimiter.reset(clientIP)
 
-	// 创建会话
-	sessionID := createSession(req.Username, r)
-	if s, ok := validateSession(sessionID); ok {
-		setCSRFCookie(w, s)
+	// 创建会话（记住我 → 会话时长 30 天，否则 24 小时）
+	sessionID := createSession(req.Username, req.Remember, r)
+	session, _ := validateSession(sessionID)
+	if session != nil {
+		setCSRFCookie(w, session)
 	}
 	// 登录时 session 尚未随请求携带，显式指定操作人
-	auditActionAs(r, user.Username, "auth.login", fmt.Sprintf("user=%s ip=%s", user.Username, clientIP))
+	auditActionAs(r, user.Username, "auth.login", fmt.Sprintf("user=%s ip=%s remember=%v", user.Username, clientIP, req.Remember))
 
-	// 设置会话Cookie
-	sessionCookie := &http.Cookie{
-		Name:     "session_id",
-		Value:    sessionID,
-		Expires:  time.Now().Add(sessionTimeout),
-		HttpOnly: true,
-		Secure:   true,                 // 仅在HTTPS下传输
-		SameSite: http.SameSiteLaxMode, // 或者 http.SameSiteNoneMode
-		Path:     "/",
-	}
-	// 仅当配置了真实域名（非 localhost、非 IP 直连）时限定 Domain，便于子域共享会话
-	if tlsDomain != "localhost" && net.ParseIP(tlsDomain) == nil {
-		sessionCookie.Domain = tlsDomain
-	}
-	http.SetCookie(w, sessionCookie)
+	// 设置会话Cookie（有效期与会话空闲超时一致）
+	http.SetCookie(w, sessionCookieFor(sessionID, session))
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -3750,6 +3781,11 @@ func checkAuthHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 确保 CSRF Cookie 已就绪（Double-Submit Token 来源）
 	setCSRFCookie(w, session)
+	// 滑动续期同步刷新浏览器 Cookie：服务端会话在续期，但 Cookie 若仍是登录时签发的
+	// 固定 24h 有效期，会先于服务端过期，导致“明明还登录着却要求重新登录”
+	if cookie, err := r.Cookie("session_id"); err == nil && cookie.Value != "" {
+		http.SetCookie(w, sessionCookieFor(cookie.Value, session))
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -3966,7 +4002,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	auditActionAs(r, newUser.Username, "auth.register", fmt.Sprintf("user=%s email=%s ip=%s", newUser.Username, newUser.Email, getClientIP(r)))
 
 	// 创建会话并自动登录
-	sessionID := createSession(newUser.Username, r)
+	sessionID := createSession(newUser.Username, false, r)
 	if s, ok := validateSession(sessionID); ok {
 		setCSRFCookie(w, s)
 	}

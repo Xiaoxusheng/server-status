@@ -694,7 +694,7 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         credentials: 'include',
-                        body: JSON.stringify(mode === 'login' ? { username: v.username, password: v.password } : { username: v.username, email: v.email, password: v.password })
+                        body: JSON.stringify(mode === 'login' ? { username: v.username, password: v.password, remember: !!v.remember } : { username: v.username, email: v.email, password: v.password })
                     });
                     const d = await r.json();
                     if (d.code === 200) {
