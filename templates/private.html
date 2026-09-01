@@ -878,6 +878,12 @@
         }
 
         /* ================= 日历热力图（GitHub 贡献图风格） ================= */
+        /* 跳转锚点预留吸顶栏高度，避免目标藏在顶栏底下 */
+        [id^='note-'],
+        [id^='day-'] {
+            scroll-margin-top: 70px;
+        }
+
         .cal-card {
             position: relative;
             /* 悬浮预览卡的定位基准 */
@@ -3472,12 +3478,13 @@
                 setPop({ key, items, left, top: r.bottom - cr.top + 10 });
             };
 
-            // 跳转：滚动到对应手记（或当日分组）并闪烁高亮
+            // 跳转：瞬时定位到对应手记（或当日分组）并闪烁高亮。
+            // 不用 smooth 长途滚动：页面内容重（懒加载图片多），跨屏平滑滚动会一路白屏掉帧
             const jumpTo = (key, id) => {
                 setPop(null);
                 const el = document.getElementById(id ? 'note-' + id : 'day-' + key);
                 if (!el) return;
-                el.scrollIntoView({ behavior: 'smooth', block: id ? 'center' : 'start' });
+                el.scrollIntoView({ block: id ? 'center' : 'start' });
                 const card = el.classList.contains('note-card') ? el : el.querySelector('.note-card');
                 const t = card || el;
                 t.classList.add('note-flash');
@@ -3979,7 +3986,7 @@
                                 shape="circle"
                                 aria-label="回到顶部"
                                 icon={<I name="VerticalAlignTopOutlined" />}
-                                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                                onClick={() => window.scrollTo({ top: 0 })}
                             />
                         </Tooltip>
                         {isMobile && (
