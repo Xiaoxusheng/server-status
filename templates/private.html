@@ -3482,7 +3482,7 @@
                 setPop({ key, items, left, top: r.bottom - cr.top + 10 });
             };
 
-            // 跳转：两段式动画——第一段 150ms easeOut 快速滚到目标上方约 1.2 屏（让附近懒加载图提前启动），
+            // 跳转：两段式动画——第一段 280ms easeOut 滚到目标上方约 1.2 屏（让附近懒加载图提前启动），
             // 第二段平滑滚完最后一小段。分段避免跨整页长途平滑滚动一路白屏，快滚段消除瞬移突兀感。
             const jumpTo = (key, id) => {
                 setPop(null);
@@ -3505,9 +3505,9 @@
                 const finish = () => requestAnimationFrame(() => requestAnimationFrame(() => {
                     el.scrollIntoView({ behavior: 'smooth', block });
                 }));
-                // 第一段：距离过短直接进入第二段；否则 150ms 快速过渡
+                // 第一段：距离过短直接进入第二段；否则 280ms 快速过渡
                 if (Math.abs(dist) < 2) { finish(); return; }
-                const dur = 150;
+                const dur = 280;
                 let start = null;
                 const ease = t2 => 1 - Math.pow(1 - t2, 3);
                 const step = (ts) => {
