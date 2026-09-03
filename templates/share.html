@@ -381,9 +381,14 @@
         /* ================= 沉浸式图片预览 ================= */
         .viewer {
             position: fixed;
-            inset: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
             z-index: 1000;
             background: rgba(0, 0, 0, .93);
+            /* 独立合成层：修复 iOS Safari 下子元素 transform 动画导致遮罩背景不被绘制的合成 bug */
+            transform: translateZ(0);
             opacity: 0;
             visibility: hidden;
             transition: opacity .2s ease, visibility .2s ease;
@@ -434,7 +439,10 @@
 
         .viewer-stage {
             position: absolute;
-            inset: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -447,18 +455,7 @@
             border-radius: 8px;
             user-select: none;
             -webkit-user-drag: none;
-            transition: opacity .2s ease;
-            animation: vIn .2s ease;
-        }
-
-        @keyframes vIn {
-            from {
-                opacity: 0;
-            }
-
-            to {
-                opacity: 1;
-            }
+            transition: opacity .2s ease, transform .2s ease;
         }
 
         .viewer-nav {
@@ -547,7 +544,10 @@
         /* ================= 二维码浮层 ================= */
         .qr-mask {
             position: fixed;
-            inset: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            left: 0;
             z-index: 1100;
             background: rgba(0, 0, 0, .55);
             display: flex;
@@ -854,10 +854,6 @@
                 dl.style.display = viewerAllow ? '' : 'none';
                 document.getElementById('viewer-prev').style.visibility = (viewerImgs.length > 1 && viewerIdx > 0) ? 'visible' : 'hidden';
                 document.getElementById('viewer-next').style.visibility = (viewerImgs.length > 1 && viewerIdx < viewerImgs.length - 1) ? 'visible' : 'hidden';
-                // 重新触发淡入动画
-                img.style.animation = 'none';
-                void img.offsetWidth;
-                img.style.animation = '';
             }
 
             function openViewer() {
@@ -876,11 +872,29 @@
                 document.body.style.overflow = '';
             }
 
+            // 切换（带滑动动画）：当前图向运动方向淡出 160ms → 换 src → 新图从来向滑入；动画期间加锁
             function viewerNav(dir) {
                 var ni = viewerIdx + dir;
                 if (ni < 0 || ni >= viewerImgs.length) return;
-                viewerIdx = ni;
-                renderViewer();
+                var img = document.getElementById('viewer-img');
+                if (img.dataset.busy) return;
+                img.dataset.busy = '1';
+                // 滑出：向运动方向淡出
+                img.style.opacity = '0';
+                img.style.transform = 'translateX(' + (-dir * 48) + 'px)';
+                setTimeout(function () {
+                    viewerIdx = ni;
+                    renderViewer();
+                    // 滑入：新图先置于来向，再无过渡跳位后过渡回中
+                    img.style.transition = 'none';
+                    img.style.transform = 'translateX(' + (dir * 48) + 'px)';
+                    img.style.opacity = '0';
+                    void img.offsetWidth; // 强制回流，确保起始位置生效
+                    img.style.transition = '';
+                    img.style.transform = '';
+                    img.style.opacity = '';
+                    img.dataset.busy = '';
+                }, 160);
             }
 
             function bindViewer() {

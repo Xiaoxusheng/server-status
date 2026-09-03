@@ -542,14 +542,59 @@ func buildShellEnv() []string {
 		}
 		env = append(env, kv)
 	}
+	// PATH 补充 /usr/local/go/bin：systemd 启动的进程 PATH 精简，
+	// 且非登录 shell 不读取 /etc/profile.d，缺少会导致 go 等命令 not found
+	for i, kv := range env {
+		if j := strings.IndexByte(kv, '='); j > 0 && strings.EqualFold(kv[:j], "PATH") {
+			if !strings.Contains(kv, "/usr/local/go/bin") {
+				env[i] = kv + ":/usr/local/go/bin"
+			}
+			break
+		}
+	}
 	env = append(env,
 		"TERM=xterm-256color",
 		"COLORTERM=truecolor",
-		"LANG=C.UTF-8",
-		"LC_ALL=C.UTF-8",
 		"SHELL="+resolveShell(),
 	)
+	// 仅当宿主机存在对应 locale 时才设置，避免 setlocale 警告（CentOS 7 无 C.UTF-8）
+	shellLocaleOnce.Do(detectShellLocale)
+	if shellLocale != "" {
+		env = append(env, "LANG="+shellLocale, "LC_ALL="+shellLocale)
+	}
 	return env
+}
+
+var (
+	shellLocaleOnce sync.Once
+	shellLocale     string // 检测到的可用 UTF-8 locale；空串表示不做 locale 设置
+)
+
+// detectShellLocale 检测宿主机可用的 UTF-8 locale（进程内仅执行一次并缓存）。
+// 依次尝试 C.utf8 / en_US.utf8 / zh_CN.utf8，都不存在则不设置 locale 相关变量。
+func detectShellLocale() {
+	out, err := exec.Command("locale", "-a").Output()
+	if err != nil {
+		return
+	}
+	has := func(name string) bool {
+		for _, l := range strings.Split(string(out), "\n") {
+			if strings.EqualFold(strings.TrimSpace(l), name) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, cand := range []struct{ raw, set string }{
+		{"C.utf8", "C.UTF-8"},
+		{"en_US.utf8", "en_US.UTF-8"},
+		{"zh_CN.utf8", "zh_CN.UTF-8"},
+	} {
+		if has(cand.raw) {
+			shellLocale = cand.set
+			return
+		}
+	}
 }
 
 // validShellPassword 校验 Shell 密码强度：≥12 位、含字母、含数字、含特殊字符

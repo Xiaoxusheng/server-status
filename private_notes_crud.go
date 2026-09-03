@@ -361,6 +361,7 @@ func (s *PrivateStore) reorderImages(userID, noteID string, ids []string) error 
 	return nil
 }
 
+// imageFilePath 返回图片的绝对路径与展示文件名（本地读取）
 func (s *PrivateStore) imageFilePath(userID, noteID, imageID string) (string, string, error) {
 	if !s.noteOwnedBy(userID, noteID) {
 		return "", "", fmt.Errorf("手记不存在")
@@ -437,6 +438,7 @@ func (s *PrivateStore) deleteAudio(userID, noteID, audioID string) error {
 	return err
 }
 
+// audioFilePath 返回语音的绝对路径与展示文件名（本地读取）
 func (s *PrivateStore) audioFilePath(userID, noteID, audioID string) (string, string, error) {
 	if !s.noteOwnedBy(userID, noteID) {
 		return "", "", fmt.Errorf("手记不存在")

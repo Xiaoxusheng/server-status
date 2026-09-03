@@ -6049,6 +6049,10 @@ func main() {
 	http.HandleFunc("POST /api/files/upload", authMiddleware(requirePermission("files:manage", securityMiddleware(uploadFileHandler))))
 	http.HandleFunc("POST /api/files/mkdir", authMiddleware(requirePermission("files:manage", securityMiddleware(mkdirFileHandler))))
 	http.HandleFunc("DELETE /api/files", authMiddleware(requirePermission("files:manage", securityMiddleware(deleteFileHandler))))
+	// 文件收藏（按用户持久化到 favorites.json；写操作由 authMiddleware 做会话绑定 CSRF 校验）
+	http.HandleFunc("GET /api/files/favorites", authMiddleware(requirePermission("files:manage", securityMiddleware(favoritesHandler))))
+	http.HandleFunc("POST /api/files/favorites", authMiddleware(requirePermission("files:manage", securityMiddleware(favoritesHandler))))
+	http.HandleFunc("DELETE /api/files/favorites", authMiddleware(requirePermission("files:manage", securityMiddleware(favoritesHandler))))
 	http.HandleFunc("GET /api/media", authMiddleware(requirePermission("files:manage", securityMiddleware(mediaStreamHandler))))
 	http.HandleFunc("GET /api/processes", authMiddleware(requirePermission("system:process", securityMiddleware(listProcessesHandler))))
 	http.HandleFunc("GET /api/processes/{pid}", authMiddleware(requirePermission("system:process", securityMiddleware(getProcessDetailHandler))))
@@ -6129,10 +6133,16 @@ func main() {
 
 	fmt.Printf("Server running on %s (HTTPS)\n", listenAddr)
 	log.Printf("服务器启动时间: %s", serverStartTime.Format("2006-01-02 15:04:05"))
-	// 启用 TLS 1.2+，禁用老旧弱协议
+	// 启用 TLS 1.2+，禁用老旧弱协议。
+	// NextProtos 仅声明 http/1.1：Go 内建 HTTP/2 服务端不支持 RFC 8441 extended CONNECT，
+	// 若 ALPN 协商出 h2，浏览器 wss:// WebSocket 握手会以 protocol error 被静默掐断
+	//（服务端无日志、前端表现为"正在连接"无限转圈）。禁 h2 换取全部 WS 端点可用。
 	srv := &http.Server{
-		Addr:      listenAddr,
-		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12},
+		Addr: listenAddr,
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+			NextProtos: []string{"http/1.1"},
+		},
 	}
 	log.Fatal(srv.ListenAndServeTLS(tlsCertFile, tlsKeyFile))
 }

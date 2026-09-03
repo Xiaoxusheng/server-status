@@ -344,9 +344,21 @@ func TestShellBuildEnvStripsSensitive(t *testing.T) {
 	os.Setenv("SERVER_STATUS_ENCRYPT_KEY", "topsecret")
 	os.Setenv("SERVER_STATUS_SIGNING_KEY", "topsecret2")
 	os.Setenv("SHELL_PASSWORD_HASH", "$2a$10$abcdefghijklmnopqrstuv")
-	defer os.Unsetenv("SERVER_STATUS_ENCRYPT_KEY")
-	defer os.Unsetenv("SERVER_STATUS_SIGNING_KEY")
-	defer os.Unsetenv("SHELL_PASSWORD_HASH")
+	// 清掉系统预置的 locale 变量，确保断言针对 buildShellEnv 自身注入的值
+	oldLang, oldLC := os.Getenv("LANG"), os.Getenv("LC_ALL")
+	os.Unsetenv("LANG")
+	os.Unsetenv("LC_ALL")
+	defer func() {
+		os.Unsetenv("SERVER_STATUS_ENCRYPT_KEY")
+		os.Unsetenv("SERVER_STATUS_SIGNING_KEY")
+		os.Unsetenv("SHELL_PASSWORD_HASH")
+		if oldLang != "" {
+			os.Setenv("LANG", oldLang)
+		}
+		if oldLC != "" {
+			os.Setenv("LC_ALL", oldLC)
+		}
+	}()
 
 	env := buildShellEnv()
 	joined := strings.Join(env, "\n")
@@ -355,10 +367,26 @@ func TestShellBuildEnvStripsSensitive(t *testing.T) {
 			t.Fatalf("Shell 环境不应包含敏感项 %q", bad)
 		}
 	}
-	// 必要的终端变量应存在
-	for _, need := range []string{"TERM=xterm-256color", "COLORTERM=truecolor", "LANG=C.UTF-8"} {
+	// 必要的终端变量应存在；locale 仅在宿主机检测到可用 UTF-8 locale 时才设置
+	// （CentOS 7 等无 C.UTF-8，强制设置会触发 setlocale 警告），且 LANG/LC_ALL 必须一致
+	for _, need := range []string{"TERM=xterm-256color", "COLORTERM=truecolor", "/usr/local/go/bin"} {
 		if !strings.Contains(joined, need) {
 			t.Fatalf("Shell 环境应包含 %q", need)
+		}
+	}
+	allowedLocales := map[string]bool{"C.UTF-8": true, "en_US.UTF-8": true, "zh_CN.UTF-8": true}
+	var langVal string
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "LANG=") {
+			langVal = strings.TrimPrefix(kv, "LANG=")
+		}
+	}
+	if langVal != "" {
+		if !allowedLocales[langVal] {
+			t.Fatalf("LANG 应为检测过的可用 locale, got %q", langVal)
+		}
+		if !strings.Contains(joined, "LC_ALL="+langVal) {
+			t.Fatalf("LC_ALL 应与 LANG 一致: %q", langVal)
 		}
 	}
 }

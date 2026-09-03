@@ -794,6 +794,7 @@
             const [logFilter, setLogFilter] = useState('');
             const [autoScroll, setAutoScroll] = useState(true);
             const [wsConnected, setWsConnected] = useState(false);
+            const [logConnTick, setLogConnTick] = useState(0);   // 手动重连计数器：变更后触发日志 WS 重建
             const [modalOpen, setModalOpen] = useState(false);
             const [editing, setEditing] = useState(null);
             const [submitting, setSubmitting] = useState(false);
@@ -808,7 +809,8 @@
             const listWsRef = useRef(null);
             const listWsOkRef = useRef(false);      // WS 在线标志：在线时后台轮询跳过 HTTP
             const listWsGotRef = useRef(false);     // 是否已收到含 services 的首帧
-            const listWsRetryRef = useRef(0);       // WS 重连次数（指数退避，最多 10 次）
+            const listWsRetryRef = useRef(0);       // WS 重连次数（指数退避基数，成功归零）
+            const listWsRetryTimerRef = useRef(null); // 挂起的重连定时器句柄（立即重连/卸载前需清除）
             const isMobile = useIsMobile();
 
             const load = useCallback(async (manual) => {
@@ -847,11 +849,19 @@
 
             // /ws/ports 页面级推送连接（与端口面板同一端点，此处仅消费 services 字段）：
             // 连接后首帧即服务端缓存数据（秒开），之后每 5 秒推送一次；
-            // 断线自动重连（指数退避，最多 10 次），彻底不可用时由 HTTP 轮询兜底
+            // 断线自动重连（指数退避 3s 起步、封顶 15s，最多 10 次，成功归零），页面回前台/网络恢复立即重连；
+            // 彻底不可用时由 HTTP 轮询兜底
             useEffect(() => {
                 let closed = false;
+                // clearRetryTimer: 取消挂起的重连定时器，防止立即重连与退避重连叠加产生重复连接
+                const clearRetryTimer = () => {
+                    if (listWsRetryTimerRef.current) { clearTimeout(listWsRetryTimerRef.current); listWsRetryTimerRef.current = null; }
+                };
                 const connect = () => {
                     if (closed) return;
+                    clearRetryTimer();
+                    // 丢弃在途旧连接（半开连接不会触发 onclose，直接重建最可靠）
+                    if (listWsRef.current) { listWsRef.current.onclose = null; try { listWsRef.current.close(); } catch (e) { /* 忽略 */ } }
                     const ws = new WebSocket(baseUrl.replace(/^http/, 'ws') + '/ws/ports');
                     listWsRef.current = ws;
                     ws.onopen = () => { listWsOkRef.current = true; listWsRetryRef.current = 0; };
@@ -873,14 +883,27 @@
                     ws.onclose = () => {
                         listWsOkRef.current = false;
                         if (!closed && listWsRetryRef.current < 10) {
+                            clearRetryTimer();
                             const delay = Math.min(3000 * ++listWsRetryRef.current, 15000);
-                            setTimeout(connect, delay);
+                            listWsRetryTimerRef.current = setTimeout(connect, delay);
                         }
                     };
                 };
+                // wakeReconnect: 页面回到前台或网络恢复时立即重连，不等下一轮退避定时器
+                const wakeReconnect = () => {
+                    if (closed || listWsOkRef.current || document.hidden) return;
+                    clearRetryTimer();
+                    connect();
+                };
+                const onVis = () => { if (!document.hidden) wakeReconnect(); };
+                document.addEventListener('visibilitychange', onVis);
+                window.addEventListener('online', wakeReconnect);
                 connect();
                 return () => {
                     closed = true;
+                    document.removeEventListener('visibilitychange', onVis);
+                    window.removeEventListener('online', wakeReconnect);
+                    clearRetryTimer();
                     listWsOkRef.current = false;
                     if (listWsRef.current) { listWsRef.current.onclose = null; listWsRef.current.close(); listWsRef.current = null; }
                 };
@@ -932,24 +955,65 @@
                 if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
             };
 
-            // 实时日志 WebSocket
+            // 实时日志 WebSocket：带指数退避自动重连 + HTTP 历史日志兜底。
+            // 背景：WS 一次失败（服务端高负载/手机切后台/网络抖动）后旧版永久沉默，
+            // 用户只会看到"等待日志输出..."，因此这里断开后先拉 HTTP 历史再自动重连。
             useEffect(() => {
                 if (!drawerOpen || detailTab !== 'logs' || !current) return;
-                setLogs([]);
-                const url = baseUrl.replace(/^http/, 'ws') + '/ws/service-logs?service=' + encodeURIComponent(current) + '&tail=300';
-                const s = new WebSocket(url);
-                wsRef.current = s;
-                s.onopen = () => setWsConnected(true);
-                s.onclose = () => setWsConnected(false);
-                s.onerror = () => setWsConnected(false);
-                s.onmessage = e => {
-                    setLogs(prev => {
-                        const next = prev.concat(e.data);
-                        return next.length > 2000 ? next.slice(next.length - 2000) : next;
-                    });
+                let disposed = false;      // effect 是否已被清理（防止陈旧连接写入状态）
+                let ws = null;             // 当前 WebSocket 实例
+                let retryTimer = null;     // 重连定时器句柄
+                let retryCount = 0;        // 连续重连次数（指数退避基数）
+                let histLoaded = false;    // HTTP 历史日志是否已加载（每次 effect 周期只兜底一次）
+                const svc = current;
+
+                // httpFallback: WS 不可用时通过一次性 journalctl 接口拉取最近日志，
+                // 保证断连状态下用户也能立即看到内容（仅在当前无日志时写入，避免覆盖 WS 流）
+                const httpFallback = async () => {
+                    if (disposed || histLoaded) return;
+                    histLoaded = true;
+                    try {
+                        const r = await secureFetch(baseUrl + '/api/services/' + encodeURIComponent(svc) + '/logs?tail=300');
+                        const d = await r.json();
+                        if (!disposed && d.code === 200 && Array.isArray(d.data)) {
+                            setLogs(prev => prev.length ? prev : d.data);
+                        }
+                    } catch (e) { /* 拉取失败静默：等待 WS 重连 */ }
                 };
-                return () => { s.close(); if (wsRef.current === s) wsRef.current = null; };
-            }, [drawerOpen, detailTab, current]);
+
+                // connect: 建立 WS 连接并绑定事件；成功后重置退避计数，
+                // 断开时先触发 HTTP 兜底，再按 1s/2s/4s...（上限 10s）指数退避重连
+                const connect = () => {
+                    if (disposed) return;
+                    setLogs([]); // journalctl -n 会重放最近 tail 条，先清空避免与兜底数据重复
+                    const s = new WebSocket(baseUrl.replace(/^http/, 'ws') + '/ws/service-logs?service=' + encodeURIComponent(svc) + '&tail=300');
+                    ws = s;
+                    wsRef.current = s;
+                    s.onopen = () => { if (!disposed) { retryCount = 0; setWsConnected(true); } };
+                    s.onmessage = e => {
+                        if (disposed) return;
+                        setLogs(prev => {
+                            const next = prev.concat(e.data);
+                            return next.length > 2000 ? next.slice(next.length - 2000) : next;
+                        });
+                    };
+                    s.onclose = () => {
+                        if (disposed) return;
+                        setWsConnected(false);
+                        httpFallback();
+                        retryTimer = setTimeout(connect, Math.min(1000 * Math.pow(2, retryCount++), 10000));
+                    };
+                    s.onerror = () => { try { s.close(); } catch (e) { /* 忽略重复关闭 */ } };
+                };
+                connect();
+
+                return () => {
+                    disposed = true;
+                    if (retryTimer) clearTimeout(retryTimer);
+                    if (ws) { ws.onclose = null; ws.close(); }
+                    if (wsRef.current === ws) wsRef.current = null;
+                };
+            }, [drawerOpen, detailTab, current, logConnTick]);
 
             useEffect(() => {
                 if (autoScroll && logBoxRef.current) {
@@ -1250,6 +1314,10 @@
                     <div>
                         <Space wrap style={{ marginBottom: 10 }}>
                             <Badge status={wsConnected ? 'processing' : 'default'} text={wsConnected ? '实时推送中' : '已断开'} />
+                            {!wsConnected && (
+                                <Button size="small" type="link" danger style={{ padding: 0 }}
+                                    onClick={() => setLogConnTick(t => t + 1)}>重新连接</Button>
+                            )}
                             <Switch checked={autoScroll} onChange={setAutoScroll} checkedChildren="自动滚动" unCheckedChildren="暂停" />
                             <Button size="small" icon={<UIIcon name="ClearOutlined" />} onClick={() => setLogs([])}>清空显示</Button>
                             <Button size="small" icon={<UIIcon name="DownloadOutlined" />} onClick={() => {
@@ -1263,7 +1331,7 @@
                             <Input allowClear placeholder="按时间/内容筛选" style={{ width: 200 }} onChange={e => setLogFilter(e.target.value)} />
                         </Space>
                         <div className={'log-box' + (isDark ? '' : ' light')} ref={logBoxRef}>
-                            {filteredLogs.length ? filteredLogs.join('\n') : '等待日志输出...'}
+                            {filteredLogs.length ? filteredLogs.join('\n') : (wsConnected ? '等待日志输出...' : '连接已断开，正在自动重连...（或点击上方「重新连接」）')}
                         </div>
                     </div>
                 );
@@ -1285,7 +1353,7 @@
                     { key: 'group', label: '运行组', children: c.group || '-' },
                     { key: 'restart', label: 'Restart', children: c.restart || 'no' },
                     { key: 'restart_sec', label: 'RestartSec', children: c.restart_sec ? c.restart_sec + 's' : '-' },
-                    { key: 'env', label: '环境变量', children: (c.environment || []).filter(e => e.key).map(e => <div key={e.key}><Typography.Text code>{e.key}={e.value}</Typography.Text></div>) || '-' },
+                    { key: 'env', label: '环境  变量', children: (c.environment || []).filter(e => e.key).map(e => <div key={e.key}><Typography.Text code>{e.key}={e.value}</Typography.Text></div>) || '-' },
                     { key: 'timeout_s', label: 'TimeoutStartSec', children: c.timeout_start_sec || '-' },
                     { key: 'timeout_e', label: 'TimeoutStopSec', children: c.timeout_stop_sec || '-' },
                     { key: 'nofile', label: 'LimitNOFILE', children: c.limit_nofile || '-' },
@@ -1580,7 +1648,8 @@
             const wsRef = useRef(null);
             const wsOkRef = useRef(false);       // WS 在线标志：在线时后台轮询跳过 HTTP
             const wsGotFrameRef = useRef(false); // 是否已收到 WS 首帧（决定是否回退 HTTP 首载）
-            const wsRetryRef = useRef(0);        // WS 重连次数（指数退避，最多 10 次）
+            const wsRetryRef = useRef(0);        // WS 重连次数（指数退避基数，成功归零）
+            const wsRetryTimerRef = useRef(null); // 挂起的重连定时器句柄（立即重连/卸载前需清除）
 
             const load = useCallback(async (manual) => {
                 if (manual) setRefreshing(true);
@@ -1616,11 +1685,19 @@
             }, [load, paused]);
 
             // WebSocket 推送通道：连接后首帧即服务端缓存数据（秒开），之后每 5 秒推送一次；
-            // 断线自动重连（指数退避，最多 10 次），彻底不可用时由 HTTP 轮询兜底
+            // 断线自动重连（指数退避 3s 起步、封顶 15s，最多 10 次，成功归零），页面回前台/网络恢复立即重连；
+            // 彻底不可用时由 HTTP 轮询兜底
             useEffect(() => {
                 let closed = false;
+                // clearRetryTimer: 取消挂起的重连定时器，防止立即重连与退避重连叠加产生重复连接
+                const clearRetryTimer = () => {
+                    if (wsRetryTimerRef.current) { clearTimeout(wsRetryTimerRef.current); wsRetryTimerRef.current = null; }
+                };
                 const connect = () => {
                     if (closed) return;
+                    clearRetryTimer();
+                    // 丢弃在途旧连接（半开连接不会触发 onclose，直接重建最可靠）
+                    if (wsRef.current) { wsRef.current.onclose = null; try { wsRef.current.close(); } catch (e) { /* 忽略 */ } }
                     const ws = new WebSocket(baseUrl.replace(/^http/, 'ws') + '/ws/ports');
                     wsRef.current = ws;
                     ws.onopen = () => { wsOkRef.current = true; wsRetryRef.current = 0; };
@@ -1640,14 +1717,27 @@
                     ws.onclose = () => {
                         wsOkRef.current = false;
                         if (!closed && wsRetryRef.current < 10) {
+                            clearRetryTimer();
                             const delay = Math.min(3000 * ++wsRetryRef.current, 15000);
-                            setTimeout(connect, delay);
+                            wsRetryTimerRef.current = setTimeout(connect, delay);
                         }
                     };
                 };
+                // wakeReconnect: 页面回到前台或网络恢复时立即重连，不等下一轮退避定时器
+                const wakeReconnect = () => {
+                    if (closed || wsOkRef.current || document.hidden) return;
+                    clearRetryTimer();
+                    connect();
+                };
+                const onVis = () => { if (!document.hidden) wakeReconnect(); };
+                document.addEventListener('visibilitychange', onVis);
+                window.addEventListener('online', wakeReconnect);
                 connect();
                 return () => {
                     closed = true;
+                    document.removeEventListener('visibilitychange', onVis);
+                    window.removeEventListener('online', wakeReconnect);
+                    clearRetryTimer();
                     wsOkRef.current = false;
                     if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); wsRef.current = null; }
                 };

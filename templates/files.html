@@ -385,6 +385,75 @@
             box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
         }
 
+        /* 卡片右上角收藏星标 */
+        .fm-fav {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 2;
+            font-size: 16px;
+            line-height: 1;
+            padding: 4px;
+            border-radius: 6px;
+            color: rgba(0, 0, 0, 0.35);
+            background: rgba(255, 255, 255, 0.78);
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            transition: color 0.2s, transform 0.15s;
+        }
+
+        .fm-fav:hover,
+        .fm-fav.on {
+            color: #faad14;
+        }
+
+        .fm-fav:hover {
+            transform: scale(1.12);
+        }
+
+        html.dark .fm-fav {
+            color: rgba(255, 255, 255, 0.45);
+            background: rgba(0, 0, 0, 0.45);
+        }
+
+        html.dark .fm-fav.on,
+        html.dark .fm-fav:hover {
+            color: #faad14;
+        }
+
+        /* 列表模式行内收藏星标 */
+        .fm-fav-row {
+            cursor: pointer;
+            font-size: 15px;
+            color: rgba(0, 0, 0, 0.25);
+            transition: color 0.2s;
+        }
+
+        .fm-fav-row:hover,
+        .fm-fav-row.on {
+            color: #faad14;
+        }
+
+        html.dark .fm-fav-row {
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* 收藏下拉项：长路径省略显示，悬停 title 提示完整路径 */
+        .fm-fav-item {
+            display: inline-block;
+            max-width: 360px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
+        }
+
+        @media (max-width: 768px) {
+            .fm-fav-item {
+                max-width: 58vw;
+            }
+        }
+
         /* 名称：最多 2 行省略 */
         .fm-name {
             font-size: 13px;
@@ -587,8 +656,9 @@
             }
 
             .fm-select {
-                flex: 1;
-                min-width: 0;
+                /* 保持最小可用宽度：新增收藏按钮后同行空间不足时自动换行，而不是被压成细条 */
+                flex: 1 1 104px;
+                min-width: 104px;
             }
 
             .fm-toolbar .ant-segmented {
@@ -905,6 +975,10 @@
             const [tokenListOpen, setTokenListOpen] = useState(false);
             const [tokenListLoading, setTokenListLoading] = useState(false);
             const [tokenListData, setTokenListData] = useState([]);
+            // 收藏的文件/目录列表（{path,name,is_dir}，后端持久化，登录后从服务端加载）
+            const [favs, setFavs] = useState([]);
+            // 只看收藏（当前目录过滤开关）
+            const [favOnly, setFavOnly] = useState(false);
 
             const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
 
@@ -945,14 +1019,38 @@
                 document.body.style.background = isDark ? '#141414' : '#f5f5f5';
             }, [isDark]);
             useEffect(() => { localStorage.setItem('filesView', viewMode); }, [viewMode]);
-            // 目录 / 搜索 / 筛选 / 排序变化时重置「加载更多」与选中状态
-            useEffect(() => { setShown(50); setSelected([]); }, [path, search, typeFilter, sortBy, sortOrder]);
+            // 收藏 API：加载 / 切换 / 删除均走后端持久化（POST/DELETE 自动带 CSRF 头）
+            const loadFavs = useCallback(async () => {
+                try {
+                    const r = await secureFetch(baseUrl + '/api/files/favorites');
+                    const d = await r.json();
+                    if (d.code !== 200) return;
+                    const list = d.data || [];
+                    if (list.length) { setFavs(list); return; }
+                    // 一次性迁移：服务端为空且本地有旧版 localStorage 收藏时自动上传
+                    let local = [];
+                    try { local = JSON.parse(localStorage.getItem('fileFavs') || '[]'); } catch (e) { }
+                    if (!Array.isArray(local) || !local.length) { setFavs([]); return; }
+                    for (const x of local) {
+                        if (!x || !x.path) continue;
+                        try { await secureFetch(baseUrl + '/api/files/favorites', { method: 'POST', body: JSON.stringify({ path: x.path, name: x.name || x.path, is_dir: !!x.is_dir }) }); } catch (e) { }
+                    }
+                    localStorage.removeItem('fileFavs');
+                    const r2 = await secureFetch(baseUrl + '/api/files/favorites');
+                    const d2 = await r2.json();
+                    if (d2.code === 200) setFavs(d2.data || []);
+                } catch (e) { message.error('加载收藏失败: ' + e.message); }
+            }, []);
+            useEffect(() => { if (auth.ok) loadFavs(); }, [auth.ok, loadFavs]);
+            // 目录 / 搜索 / 筛选 / 排序 / 收藏过滤变化时重置「加载更多」与选中状态
+            useEffect(() => { setShown(50); setSelected([]); }, [path, search, typeFilter, sortBy, sortOrder, favOnly]);
 
             // 前端过滤 + 排序（useMemo 避免频繁重算；文件夹始终排在文件前）
             const visibleFiles = useMemo(() => {
                 const kw = search.trim().toLowerCase();
                 let list = files.filter(f => {
                     if (kw && !f.name.toLowerCase().includes(kw)) return false;
+                    if (favOnly && !favs.some(x => x.path === f.path)) return false;
                     if (typeFilter !== 'all') {
                         const c = f.is_dir ? 'folder' : fileCategory(f.name);
                         if (c !== typeFilter) return false;
@@ -970,7 +1068,7 @@
                     return r * dir;
                 });
                 return list;
-            }, [files, search, typeFilter, sortBy, sortOrder]);
+            }, [files, search, typeFilter, sortBy, sortOrder, favOnly, favs]);
 
             // 滚动接近底部（400px 内）时自动追加渲染数量（节流 300ms 防连触翻倍）；
             // 自动加载未触发或失败时，仍保留下方「加载更多」按钮手动兜底
@@ -1076,11 +1174,38 @@
                 setSelected(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
             };
 
+            // 切换收藏状态（传入文件/目录条目对象；乐观更新 UI 后同步服务端，失败回滚）
+            const toggleFav = (f) => {
+                const had = favs.some(x => x.path === f.path);
+                const entry = { path: f.path, name: f.name, is_dir: !!f.is_dir };
+                setFavs(v => had ? v.filter(x => x.path !== f.path) : [...v, entry]);
+                const req = had
+                    ? secureFetch(baseUrl + '/api/files/favorites?path=' + encodeURIComponent(f.path), { method: 'DELETE' })
+                    : secureFetch(baseUrl + '/api/files/favorites', { method: 'POST', body: JSON.stringify(entry) });
+                req.catch(() => {
+                    setFavs(v => had ? [...v, entry] : v.filter(x => x.path !== f.path));
+                    message.error(had ? '取消收藏失败' : '收藏失败');
+                });
+            };
+
+            // 从收藏下拉快速跳转：目录直接进入；文件进入其所在目录并自动填充搜索关键字定位
+            const jumpToFav = async (p) => {
+                const item = favs.find(x => x.path === p);
+                const segs = p.split('/');
+                const name = segs[segs.length - 1];
+                const parent = segs.slice(0, -1).join('/');
+                if (item && item.is_dir) { setSearch(''); await load(p); return; }
+                if (parent === path) { setSearch(name); return; }
+                await load(parent);
+                setSearch(name);
+            };
+
             // 文件卡片的 [...] 下拉菜单（详情 / 复制路径 / 签发令牌 / 删除）
             const fileMenu = (f) => ({
                 items: [
                     { key: 'detail', icon: <UIIcon name="EyeOutlined" />, label: '查看详情' },
                     { key: 'copy', icon: <UIIcon name="CopyOutlined" />, label: '复制文件路径' },
+                    { key: 'fav', icon: <UIIcon name={favs.some(x => x.path === f.path) ? 'StarFilled' : 'StarOutlined'} />, label: favs.some(x => x.path === f.path) ? '取消收藏' : '收藏' },
                     { key: 'token', icon: <UIIcon name="SafetyCertificateOutlined" />, label: '签发下载令牌' },
                     { type: 'divider' },
                     { key: 'del', icon: <UIIcon name="DeleteOutlined" />, label: '删除文件', danger: true }
@@ -1088,6 +1213,7 @@
                 onClick: ({ key }) => {
                     if (key === 'detail') setDrawerFile(f);
                     else if (key === 'copy') copyPath(f.path);
+                    else if (key === 'fav') toggleFav(f);
                     else if (key === 'token') openToken(f.path);
                     else if (key === 'del') del(f);
                 }
@@ -1097,11 +1223,13 @@
             const dirMenu = (f) => ({
                 items: [
                     { key: 'open', icon: <UIIcon name="FolderOpenOutlined" />, label: '打开目录' },
+                    { key: 'fav', icon: <UIIcon name={favs.some(x => x.path === f.path) ? 'StarFilled' : 'StarOutlined'} />, label: favs.some(x => x.path === f.path) ? '取消收藏' : '收藏' },
                     { type: 'divider' },
                     { key: 'del', icon: <UIIcon name="DeleteOutlined" />, label: '删除目录', danger: true }
                 ],
                 onClick: ({ key }) => {
                     if (key === 'open') load(f.path);
+                    else if (key === 'fav') toggleFav(f);
                     else if (key === 'del') del(f);
                 }
             });
@@ -1138,7 +1266,12 @@
                         try {
                             const r = await secureFetch(baseUrl + '/api/files?path=' + encodeURIComponent(rec.path), { method: 'DELETE' });
                             const d = await r.json();
-                            if (d.code === 200) { message.success('删除成功'); load(path); }
+                            if (d.code === 200) {
+                                setFavs(v => v.filter(x => x.path !== rec.path));
+                                secureFetch(baseUrl + '/api/files/favorites?path=' + encodeURIComponent(rec.path), { method: 'DELETE' }).catch(() => { });
+                                message.success('删除成功');
+                                load(path);
+                            }
                             else message.error(d.message || '删除失败');
                         } catch (e) {
                             message.error('删除失败: ' + e.message);
@@ -1178,6 +1311,10 @@
                         }
                         if (ok) message.success(`已删除 ${ok} 项`);
                         if (fail) message.error(`${fail} 项删除失败`);
+                        setFavs(v => v.filter(x => !targets.some(t => t.path === x.path)));
+                        for (const t of targets) {
+                            secureFetch(baseUrl + '/api/files/favorites?path=' + encodeURIComponent(t.path), { method: 'DELETE' }).catch(() => { });
+                        }
                         setSelected([]);
                         load(path);
                     }
@@ -1269,10 +1406,16 @@
             // 渲染文件夹卡片：点击整体进入目录，checkbox 与 [...] 均不触发进入
             const renderFolderCard = (f) => {
                 const checked = selected.includes(f.path);
+                const faved = favs.some(x => x.path === f.path);
                 return (
                     <div key={f.path} className={'fm-card' + (checked ? ' fm-checked' : '')} onClick={() => load(f.path)}>
                         <div className="fm-card-media">
                             <Checkbox className="fm-check" checked={checked} onClick={e => e.stopPropagation()} onChange={() => toggleSelect(f.path)} />
+                            <Tooltip title={faved ? '取消收藏' : '收藏'} placement="left">
+                                <span className={'fm-fav' + (faved ? ' on' : '')} onClick={e => { e.stopPropagation(); toggleFav(f); }}>
+                                    <UIIcon name={faved ? 'StarFilled' : 'StarOutlined'} />
+                                </span>
+                            </Tooltip>
                             <span className="fm-big-icon fm-folder-icon"><UIIcon name="FolderOutlined" /></span>
                         </div>
                         <Tooltip title={f.name} placement="top">
@@ -1297,10 +1440,16 @@
                 const cat = fileCategory(f.name);
                 const meta = CAT_META[cat];
                 const checked = selected.includes(f.path);
+                const faved = favs.some(x => x.path === f.path);
                 return (
                     <div key={f.path} className={'fm-card' + (checked ? ' fm-checked' : '')} onClick={() => setDrawerFile(f)}>
                         <div className="fm-card-media">
                             <Checkbox className="fm-check" checked={checked} onClick={e => e.stopPropagation()} onChange={() => toggleSelect(f.path)} />
+                            <Tooltip title={faved ? '取消收藏' : '收藏'} placement="left">
+                                <span className={'fm-fav' + (faved ? ' on' : '')} onClick={e => { e.stopPropagation(); toggleFav(f); }}>
+                                    <UIIcon name={faved ? 'StarFilled' : 'StarOutlined'} />
+                                </span>
+                            </Tooltip>
                             <span className="fm-big-icon" style={{ color: meta.color }}><UIIcon name={fileIconName(f.name)} /></span>
                             {cat === 'image' && (
                                 <img className="fm-media-img" loading="lazy" alt={f.name}
@@ -1328,6 +1477,19 @@
 
             // 列表模式列定义（保留 Table，样式精简 + 下拉操作）
             const listColumns = [
+                {
+                    title: '', key: 'fav', width: 36,
+                    render: (_, rec) => {
+                        const faved = favs.some(x => x.path === rec.path);
+                        return (
+                            <Tooltip title={faved ? '取消收藏' : '收藏'}>
+                                <span className={'fm-fav-row' + (faved ? ' on' : '')} onClick={() => toggleFav(rec)}>
+                                    <UIIcon name={faved ? 'StarFilled' : 'StarOutlined'} />
+                                </span>
+                            </Tooltip>
+                        );
+                    }
+                },
                 {
                     title: '名称', dataIndex: 'name', key: 'name',
                     render: (v, rec) => rec.is_dir
@@ -1418,6 +1580,22 @@
                                         <Button icon={<UIIcon name={sortOrder === 'asc' ? 'SortAscendingOutlined' : 'SortDescendingOutlined'} />}
                                             onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')} />
                                     </Tooltip>
+                                    {/* 收藏快速跳转：列出全部收藏，点击进入所在目录（文件自动搜索定位） */}
+                                    <Dropdown
+                                        trigger={['click']}
+                                        disabled={!favs.length}
+                                        menu={{
+                                            items: favs.map(x => ({ key: x.path, icon: <UIIcon name={x.is_dir ? 'FolderOutlined' : 'FileOutlined'} />, label: <span className="fm-fav-item" title={x.path}>{x.path}</span> })),
+                                            onClick: ({ key }) => jumpToFav(key)
+                                        }}
+                                    >
+                                        <Button icon={<UIIcon name="StarOutlined" />}>收藏{favs.length ? ` (${favs.length})` : ''}</Button>
+                                    </Dropdown>
+                                    {/* 只看收藏：过滤当前目录列表 */}
+                                    <Tooltip title="只看收藏">
+                                        <Button type={favOnly ? 'primary' : 'default'} icon={<UIIcon name={favOnly ? 'StarFilled' : 'StarOutlined'} />}
+                                            onClick={() => setFavOnly(!favOnly)} />
+                                    </Tooltip>
                                     <div style={{ flex: 1 }} />
                                     <Segmented
                                         value={viewMode}
@@ -1448,7 +1626,7 @@
                                             {visibleFiles.slice(0, shown).map(f => f.is_dir ? renderFolderCard(f) : renderFileCard(f))}
                                         </div>
                                         {!loading && !visibleFiles.length && (
-                                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={files.length ? '无匹配文件' : '空目录'} style={{ padding: 40 }} />
+                                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={favOnly ? '当前目录暂无收藏' : (files.length ? '无匹配文件' : '空目录')} style={{ padding: 40 }} />
                                         )}
                                         {visibleFiles.length > shown && (
                                             <div style={{ textAlign: 'center', marginTop: 12 }}>
@@ -1466,7 +1644,7 @@
                                         scroll={{ x: 760 }}
                                         rowSelection={{ selectedRowKeys: selected, onChange: keys => setSelected(keys) }}
                                         pagination={visibleFiles.length > 20 ? { pageSize: 20, showSizeChanger: true, showTotal: t => `共 ${t} 项` } : false}
-                                        locale={{ emptyText: files.length ? '无匹配文件' : '空目录' }}
+                                        locale={{ emptyText: favOnly ? '当前目录暂无收藏' : (files.length ? '无匹配文件' : '空目录') }}
                                     />
                                 )}
                             </Card>
@@ -1479,11 +1657,11 @@
 
                         {/* 签发下载令牌 Modal（保留原逻辑） */}
                         <Modal
-                            title={<Space size={6}><UIIcon name="SafetyCertificateOutlined" />签发下载令牌：{tokenFile || ''}</Space>}
+                            title={<Space size={6} align="top" style={{ maxWidth: '100%' }}><UIIcon name="SafetyCertificateOutlined" style={{ flexShrink: 0, marginTop: 3 }} /><span style={{ wordBreak: 'break-all', lineHeight: 1.5 }}>签发下载令牌：{tokenFile || ''}</span></Space>}
                             open={tokenModal}
                             onCancel={() => setTokenModal(false)}
                             footer={null}
-                            width={560}
+                            width={isMobile ? 'calc(100vw - 24px)' : 560}
                         >
                             <Form form={form} layout="vertical" onFinish={issue}>
                                 <Form.Item name="username" label="签发给用户（留空 = 自己）">
@@ -1535,7 +1713,7 @@
                             open={tokenListOpen}
                             onCancel={() => setTokenListOpen(false)}
                             footer={<Button onClick={() => setTokenListOpen(false)}>关闭</Button>}
-                            width={820}
+                            width={isMobile ? 'calc(100vw - 24px)' : 820}
                         >
                             <Table
                                 rowKey="token_id"
@@ -1543,6 +1721,7 @@
                                 loading={tokenListLoading}
                                 dataSource={tokenListData}
                                 pagination={{ pageSize: 8, showTotal: t => `共 ${t} 个` }}
+                                scroll={{ x: 560 }}
                                 locale={{ emptyText: '暂无令牌' }}
                                 columns={[
                                     {
@@ -1601,6 +1780,8 @@
                             footer={drawerFile && (
                                 <Space wrap style={{ display: 'flex', justifyContent: 'flex-end' }}>
                                     <Button icon={<UIIcon name="CopyOutlined" />} onClick={() => copyPath(drawerFile.path)}>复制路径</Button>
+                                    <Button icon={<UIIcon name={favs.some(x => x.path === drawerFile.path) ? 'StarFilled' : 'StarOutlined'} />}
+                                        onClick={() => toggleFav(drawerFile)}>{favs.some(x => x.path === drawerFile.path) ? '取消收藏' : '收藏'}</Button>
                                     <Button danger onClick={() => { const f = drawerFile; setDrawerFile(null); del(f); }}>删除</Button>
                                     <Button type="primary" icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => openToken(drawerFile.path)}>签发令牌</Button>
                                 </Space>

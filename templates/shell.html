@@ -794,10 +794,25 @@
             return fetch(url, { method, headers, credentials: 'include', body: options.body });
         }
 
+        // 终端配色（与 xterm ITheme 同源；容器背景经 --term-bg 同步，避免画布与容器双色断层）
+        const termThemeObj = (dark) => dark ? {
+            background: '#0d1117', foreground: '#d5dce4',
+            cursor: '#7fd99e', cursorAccent: '#0d1117',
+            selectionBackground: 'rgba(127,217,158,0.28)',
+            black: '#3b4048', red: '#e06c75', green: '#98c379', yellow: '#e5c07b',
+            blue: '#61afef', magenta: '#c678dd', cyan: '#56b6c2', white: '#d5dce4',
+        } : {
+            background: '#1e2430', foreground: '#d8dee6',
+            cursor: '#a3b3c8', cursorAccent: '#1e2430',
+            selectionBackground: 'rgba(163,179,200,0.3)',
+            black: '#2d333b', red: '#e06c75', green: '#8cc57a', yellow: '#d9b45b',
+            blue: '#5d9bd4', magenta: '#bf7fd6', cyan: '#5bb8c4', white: '#d8dee6',
+        };
+
         function App() {
             const [auth, setAuth] = React.useState({ loading: true, ok: false, user: null });
             const [isDark, setIsDark] = React.useState(() => localStorage.getItem('theme') === 'dark');
-            const [terminalDark, setTerminalDark] = React.useState(() => (localStorage.getItem('theme') !== 'light'));
+            const [terminalDark, setTerminalDark] = React.useState(() => (localStorage.getItem('termTheme') !== 'light'));
             const [conn, setConn] = React.useState('idle'); // idle | connecting | connected | disconnected
             const [connBad, setConnBad] = React.useState(false); // 是否曾发生真实连接错误
             const [authOpen, setAuthOpen] = React.useState(false);
@@ -938,30 +953,30 @@
                 sendWS({ type: 'input', data: text });
             }
 
-            // 初始化 / 重建 xterm 实例（切换终端主题时也重建）
+            // 终端主题热切换：仅更新 xterm 主题 + 同步容器背景 CSS 变量。
+            // 不 dispose/重建实例——重建会清空屏幕与回滚缓冲区（切换后黑屏丢内容）。
+            React.useEffect(() => {
+                document.documentElement.style.setProperty('--term-bg', terminalDark ? '#0d1117' : '#1e2430');
+                localStorage.setItem('termTheme', terminalDark ? 'dark' : 'light');
+                const t = termInst.current;
+                if (!t) return;
+                try {
+                    if (typeof t.setOption === 'function') t.setOption('theme', termThemeObj(terminalDark));
+                    else t.options.theme = termThemeObj(terminalDark);
+                } catch (e) { }
+            }, [terminalDark]);
+
+            // 初始化 xterm 实例（仅随会话建立/断开重建，不再跟随主题切换重建）
             React.useEffect(() => {
                 if (!auth.ok || !termRef.current) return;
                 if (termInst.current) { try { termInst.current.dispose(); } catch (e) { } termInst.current = null; }
-                const themeObj = terminalDark ? {
-                    background: '#0d1117', foreground: '#d5dce4',
-                    cursor: '#7fd99e', cursorAccent: '#0d1117',
-                    selectionBackground: 'rgba(127,217,158,0.28)',
-                    black: '#3b4048', red: '#e06c75', green: '#98c379', yellow: '#e5c07b',
-                    blue: '#61afef', magenta: '#c678dd', cyan: '#56b6c2', white: '#d5dce4',
-                } : {
-                    background: '#1e2430', foreground: '#d8dee6',
-                    cursor: '#a3b3c8', cursorAccent: '#1e2430',
-                    selectionBackground: 'rgba(163,179,200,0.3)',
-                    black: '#2d333b', red: '#e06c75', green: '#8cc57a', yellow: '#d9b45b',
-                    blue: '#5d9bd4', magenta: '#bf7fd6', cyan: '#5bb8c4', white: '#d8dee6',
-                };
                 const term = new window.Terminal({
                     fontSize: 14,
                     lineHeight: 1.25,
                     cursorBlink: true,
                     scrollback: 5000,
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
-                    theme: themeObj,
+                    theme: termThemeObj(terminalDark),
                     convertEol: false,
                 });
                 const fit = new window.FitAddon.FitAddon();
@@ -1057,11 +1072,11 @@
                 dispatchResize();
                 return () => {
                     ro.disconnect();
-                    // 同步移除终端区域监听器，防止主题切换重建后重复触发
+                    // 同步移除终端区域监听器，防止会话重建后重复触发
                     termEl.removeEventListener('contextmenu', onContextMenu);
                     termEl.removeEventListener('click', onFocusClick);
                 };
-            }, [auth.ok, terminalDark]);
+            }, [auth.ok]);
 
             function sendWS(msg) {
                 const ws = wsRef.current;
