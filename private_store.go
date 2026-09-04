@@ -6,14 +6,18 @@ package main
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -85,6 +89,7 @@ type PrivateNote struct {
 	Longitude    *float64          `json:"longitude"`
 	Images       []PrivateImage    `json:"images"`
 	Audio        []PrivateAudio    `json:"audio"`
+	Videos       []PrivateVideo    `json:"videos,omitempty"`
 	Tags         []string          `json:"tags"`
 	Cards        []PrivateCardMeta `json:"cards,omitempty"`
 }
@@ -107,6 +112,19 @@ type PrivateAudio struct {
 	URL       string  `json:"url"`
 	Duration  float64 `json:"duration"`
 	CreatedAt string  `json:"created_at"`
+}
+
+// PrivateVideo 手记视频（分块加密存储，支持 Range 流式播放）
+type PrivateVideo struct {
+	ID         string  `json:"id"`
+	NoteID     string  `json:"note_id"`
+	FilePath   string  `json:"-"`
+	PosterPath string  `json:"-"`
+	URL        string  `json:"url"`
+	PosterURL  string  `json:"poster_url"`
+	Duration   float64 `json:"duration"`
+	Size       int64   `json:"size"`
+	CreatedAt  string  `json:"created_at"`
 }
 
 // PrivateCardMeta 卡片元信息
@@ -226,6 +244,244 @@ func servePrivateMediaFile(w http.ResponseWriter, r *http.Request, abs, name str
 	http.ServeContent(w, r, name, modTime, bytes.NewReader(data))
 }
 
+// ==================== 视频分块加密存储 ====================
+// 视频体积大且播放需要按块随机读：采用分块 AES-GCM 流式格式（PVVIDEO1），
+// 每块独立加解密，Range 请求只解密命中的块，避免整文件解密的内存与延迟开销。
+//
+// 文件布局：
+//   magic "PVVIDEO1"(8) | baseNonce(12) | chunkSize(4 BE) | totalChunks(4 BE) | plainSize(8 BE)
+//   chunk_0 密文+GCM tag | chunk_1 ... （每块 nonce = baseNonce 高4字节 + 块序号8字节BE；AAD = 文件头36字节）
+//
+// 块序号写入 nonce 低 8 字节（base 生成时低 8 字节置零），保证同文件内 nonce 绝不重复。
+
+var (
+	videoMagic      = []byte("PVVIDEO1")
+	videoHeaderSize = len(videoMagic) + 12 + 4 + 4 + 8 // 36 字节
+	videoChunkSize  = 1 << 20                          // 1MiB 明文/块
+	videoMaxSize    = int64(200) << 20                 // 上传上限 200MB
+)
+
+// mediaGCM 构建与用户数据一致的 AES-GCM（密钥 = sha256(encryptionKey)），
+// 供图片/语音整块加密与视频分块加密共用
+func mediaGCM() (cipher.AEAD, error) {
+	key := sha256.Sum256([]byte(encryptionKey))
+	block, err := aes.NewCipher(key[:])
+	if err != nil {
+		return nil, err
+	}
+	return cipher.NewGCM(block)
+}
+
+// isVideoEncrypted 判断磁盘文件是否为视频分块加密格式
+func isVideoEncrypted(raw []byte) bool {
+	return bytes.HasPrefix(raw, videoMagic)
+}
+
+// videoNonceForChunk 生成第 idx 块的 12 字节 nonce：base 高 4 字节 + 块序号 8 字节 BE
+func videoNonceForChunk(base []byte, idx uint64) []byte {
+	nonce := make([]byte, 12)
+	copy(nonce, base[:4])
+	binary.BigEndian.PutUint64(nonce[4:], idx)
+	return nonce
+}
+
+// videoHeader 构建文件头（同时用作各块 GCM 的 AAD，绑定头部完整性）
+func videoHeader(baseNonce []byte, chunkSize, totalChunks uint32, plainSize int64) []byte {
+	h := make([]byte, 0, videoHeaderSize)
+	h = append(h, videoMagic...)
+	h = append(h, baseNonce...)
+	var be4 [4]byte
+	var be8 [8]byte
+	binary.BigEndian.PutUint32(be4[:], chunkSize)
+	h = append(h, be4[:]...)
+	binary.BigEndian.PutUint32(be4[:], totalChunks)
+	h = append(h, be4[:]...)
+	binary.BigEndian.PutUint64(be8[:], uint64(plainSize))
+	h = append(h, be8[:]...)
+	return h
+}
+
+// encryptVideoStream 流式分块加密视频到 dst，返回密文总字节数
+func encryptVideoStream(src io.Reader, dst io.Writer, plainSize int64) (int64, error) {
+	gcm, err := mediaGCM()
+	if err != nil {
+		return 0, err
+	}
+	base := make([]byte, 12)
+	if _, err := rand.Read(base); err != nil {
+		return 0, err
+	}
+	for i := 4; i < 12; i++ {
+		base[i] = 0 // 低 8 字节留空给块序号
+	}
+	chunkSize := int64(videoChunkSize)
+	totalChunks := uint32((plainSize + chunkSize - 1) / chunkSize)
+	header := videoHeader(base, uint32(videoChunkSize), totalChunks, plainSize)
+	if _, err := dst.Write(header); err != nil {
+		return 0, err
+	}
+	written := int64(len(header))
+	buf := make([]byte, videoChunkSize)
+	var idx uint64
+	for {
+		n, rerr := io.ReadFull(src, buf)
+		if n > 0 {
+			nonce := videoNonceForChunk(base, idx)
+			// 每块密文前置 4 字节明文长度（末块不足 1MiB），再接 GCM 密文+tag
+			out := gcm.Seal(nil, nonce, buf[:n], header)
+			var be4 [4]byte
+			binary.BigEndian.PutUint32(be4[:], uint32(n))
+			if _, err := dst.Write(be4[:]); err != nil {
+				return written, err
+			}
+			if _, err := dst.Write(out); err != nil {
+				return written, err
+			}
+			written += int64(4 + len(out))
+			idx++
+		}
+		if rerr == io.EOF || rerr == io.ErrUnexpectedEOF {
+			break
+		}
+		if rerr != nil {
+			return written, rerr
+		}
+	}
+	return written, nil
+}
+
+// videoReader 支持随机读的分块解密流（实现 io.ReadSeeker，供 http.ServeContent 处理 Range）
+type videoReader struct {
+	f           *os.File
+	header      []byte
+	gcm         cipher.AEAD
+	chunkSize   int64
+	totalChunks int64
+	plainSize   int64
+	pos         int64 // 当前明文绝对偏移
+	chunkIdx    int64 // 已缓存块序号，-1 无缓存
+	chunkBuf    []byte
+}
+
+// openVideoReader 打开并校验视频文件头
+func openVideoReader(abs string) (*videoReader, error) {
+	f, err := os.Open(abs)
+	if err != nil {
+		return nil, err
+	}
+	header := make([]byte, videoHeaderSize)
+	if _, err := io.ReadFull(f, header); err != nil {
+		f.Close()
+		return nil, err
+	}
+	if !bytes.HasPrefix(header, videoMagic) {
+		f.Close()
+		return nil, fmt.Errorf("视频文件格式无效")
+	}
+	gcm, err := mediaGCM()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	chunkSize := int64(binary.BigEndian.Uint32(header[20:24]))
+	totalChunks := int64(binary.BigEndian.Uint32(header[24:28]))
+	plainSize := int64(binary.BigEndian.Uint64(header[28:36]))
+	if chunkSize <= 0 || plainSize < 0 {
+		f.Close()
+		return nil, fmt.Errorf("视频文件头无效")
+	}
+	return &videoReader{
+		f: f, header: header, gcm: gcm,
+		chunkSize: chunkSize, totalChunks: totalChunks, plainSize: plainSize,
+		pos: 0, chunkIdx: -1,
+	}, nil
+}
+
+// loadChunk 解密并缓存第 idx 块
+func (v *videoReader) loadChunk(idx int64) error {
+	if idx < 0 || idx >= v.totalChunks {
+		return io.EOF
+	}
+	// 块在磁盘上：4 字节明文长度 + 密文(tag 含在内)
+	if _, err := v.f.Seek(int64(videoHeaderSize)+idx*(v.chunkSize+4+16), io.SeekStart); err != nil {
+		return err
+	}
+	var be4 [4]byte
+	if _, err := io.ReadFull(v.f, be4[:]); err != nil {
+		return err
+	}
+	plainLen := int64(binary.BigEndian.Uint32(be4[:]))
+	enc := make([]byte, plainLen+16)
+	if _, err := io.ReadFull(v.f, enc); err != nil {
+		return err
+	}
+	// 与加密端一致：nonce = base 高4字节 + 块序号
+	base := v.header[8:20]
+	nonce := make([]byte, 12)
+	copy(nonce, base[:4])
+	binary.BigEndian.PutUint64(nonce[4:], uint64(idx))
+	plain, err := v.gcm.Open(nil, nonce, enc, v.header)
+	if err != nil {
+		return fmt.Errorf("视频块解密失败: %w", err)
+	}
+	v.chunkBuf = plain
+	v.chunkIdx = idx
+	return nil
+}
+
+func (v *videoReader) Read(p []byte) (int, error) {
+	if v.pos >= v.plainSize {
+		return 0, io.EOF
+	}
+	idx := v.pos / v.chunkSize
+	if v.chunkIdx != idx {
+		if err := v.loadChunk(idx); err != nil {
+			return 0, err
+		}
+	}
+	off := v.pos - idx*v.chunkSize
+	n := copy(p, v.chunkBuf[off:])
+	v.pos += int64(n)
+	return n, nil
+}
+
+func (v *videoReader) Seek(offset int64, whence int) (int64, error) {
+	var abs int64
+	switch whence {
+	case io.SeekStart:
+		abs = offset
+	case io.SeekCurrent:
+		abs = v.pos + offset
+	case io.SeekEnd:
+		abs = v.plainSize + offset
+	default:
+		return 0, fmt.Errorf("无效的 whence")
+	}
+	if abs < 0 {
+		return 0, fmt.Errorf("非法偏移")
+	}
+	v.pos = abs
+	return abs, nil
+}
+
+func (v *videoReader) Close() error { return v.f.Close() }
+
+// servePrivateVideoFile 以分块解密的 ReadSeeker 提供视频（http.ServeContent 自动处理 Range/206）
+func servePrivateVideoFile(w http.ResponseWriter, r *http.Request, abs, name string) {
+	vr, err := openVideoReader(abs)
+	if err != nil {
+		log.Printf("私人视频打开失败 %s: %v", abs, err)
+		http.Error(w, "文件解密失败", http.StatusInternalServerError)
+		return
+	}
+	defer vr.Close()
+	modTime := time.Time{}
+	if info, err := os.Stat(abs); err == nil {
+		modTime = info.ModTime()
+	}
+	http.ServeContent(w, r, name, modTime, vr)
+}
+
 // migratePlainMedia 将历史明文媒体文件原位加密（幂等：已带 magic 头的跳过）
 func (s *PrivateStore) migratePlainMedia() (int, error) {
 	migrated := 0
@@ -237,7 +493,8 @@ func (s *PrivateStore) migratePlainMedia() (int, error) {
 		if err != nil {
 			return err
 		}
-		if isMediaEncrypted(raw) {
+		// 视频分块格式（PVVIDEO1）本身已加密，且不可整块重加密，直接跳过
+		if isMediaEncrypted(raw) || isVideoEncrypted(raw) {
 			return nil
 		}
 		enc, err := encryptMediaBytes(raw)
@@ -354,6 +611,12 @@ func (s *PrivateStore) migrate() error {
 			duration REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
 			FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE)`,
 		`CREATE INDEX IF NOT EXISTS idx_note_audio_note ON note_audio(note_id)`,
+		`CREATE TABLE IF NOT EXISTS note_videos (
+			id TEXT PRIMARY KEY, note_id TEXT NOT NULL, file_path TEXT NOT NULL,
+			poster_path TEXT NOT NULL DEFAULT '', duration REAL NOT NULL DEFAULT 0,
+			size INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL,
+			FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE)`,
+		`CREATE INDEX IF NOT EXISTS idx_note_videos_note ON note_videos(note_id)`,
 		`CREATE TABLE IF NOT EXISTS note_tags (
 			id INTEGER PRIMARY KEY AUTOINCREMENT, note_id TEXT NOT NULL, tag TEXT NOT NULL,
 			FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE)`,
@@ -371,6 +634,12 @@ func (s *PrivateStore) migrate() error {
 			created_at TEXT NOT NULL, revoked_at TEXT,
 			FOREIGN KEY(card_id) REFERENCES note_cards(id) ON DELETE CASCADE)`,
 		`CREATE INDEX IF NOT EXISTS idx_note_shares_card ON note_shares(card_id)`,
+		`CREATE TABLE IF NOT EXISTS note_audio_shares (
+			id TEXT PRIMARY KEY, note_id TEXT NOT NULL, user_id TEXT NOT NULL,
+			token_hash TEXT NOT NULL UNIQUE, expires_at TEXT,
+			created_at TEXT NOT NULL, revoked_at TEXT,
+			FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE)`,
+		`CREATE INDEX IF NOT EXISTS idx_note_audio_shares_note ON note_audio_shares(note_id)`,
 		`CREATE TABLE IF NOT EXISTS private_note_sessions (
 			id TEXT PRIMARY KEY, user_id TEXT NOT NULL, session_hash TEXT NOT NULL UNIQUE,
 			created_at TEXT NOT NULL, expires_at TEXT NOT NULL, last_access_at TEXT NOT NULL)`,

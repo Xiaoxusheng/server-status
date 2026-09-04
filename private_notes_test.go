@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"image"
 	"image/png"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,6 +22,112 @@ func newTestStore(t *testing.T) *PrivateStore {
 	}
 	t.Cleanup(func() { st.Close() })
 	return st
+}
+
+// TestVideoChunkedCryptoRoundTrip 验证视频分块加密格式：整读一致 + 随机 Seek 读取与原文对齐
+func TestVideoChunkedCryptoRoundTrip(t *testing.T) {
+	// 2.5 个块：覆盖整块与不足块的末块
+	plain := make([]byte, videoChunkSize*2+videoChunkSize/2)
+	for i := range plain {
+		plain[i] = byte(i % 251)
+	}
+	encBuf := &bytes.Buffer{}
+	if _, err := encryptVideoStream(bytes.NewReader(plain), encBuf, int64(len(plain))); err != nil {
+		t.Fatalf("encryptVideoStream: %v", err)
+	}
+
+	// 落盘后用读取器整读，必须与原文一致
+	enc := encBuf.Bytes()
+	vr, err := openVideoReaderFile(t, enc)
+	if err != nil {
+		t.Fatalf("openVideoReader: %v", err)
+	}
+	defer vr.Close()
+	got := &bytes.Buffer{}
+	if _, err := io.Copy(got, vr); err != nil {
+		t.Fatalf("full read: %v", err)
+	}
+	if !bytes.Equal(got.Bytes(), plain) {
+		t.Fatalf("整读结果与原文不一致")
+	}
+
+	// 随机 Seek：模拟 Range 请求的多段读取
+	cs := int64(videoChunkSize)
+	offsets := []int64{0, 17, cs - 5, cs, cs + 123, int64(len(plain)) - 7}
+	for _, off := range offsets {
+		if _, err := vr.Seek(off, io.SeekStart); err != nil {
+			t.Fatalf("Seek(%d): %v", off, err)
+		}
+		want := plain[off:]
+		gotChunk := make([]byte, len(want))
+		n, err := io.ReadFull(vr, gotChunk)
+		if err != nil {
+			t.Fatalf("read at %d: %v", off, err)
+		}
+		if n != len(want) || !bytes.Equal(gotChunk, want) {
+			t.Fatalf("偏移 %d 处读取内容不一致", off)
+		}
+	}
+
+	// SeekEnd：明文总长
+	if n, _ := vr.Seek(0, io.SeekEnd); n != int64(len(plain)) {
+		t.Fatalf("SeekEnd = %d, want %d", n, len(plain))
+	}
+}
+
+// openVideoReaderFile 将加密字节写入临时文件后打开读取器（openVideoReader 以文件为输入）
+func openVideoReaderFile(t *testing.T, enc []byte) (*videoReader, error) {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "v.bin")
+	if err := os.WriteFile(p, enc, 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	return openVideoReader(p)
+}
+
+// TestVideoFFmpegMetaFallback 验证服务器端兜底：加密视频 → ffmpeg 抽帧 + ffprobe 时长（本机/服务器需有 ffmpeg，缺失则跳过）
+func TestVideoFFmpegMetaFallback(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg 不可用，跳过")
+	}
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		t.Skip("ffprobe 不可用，跳过")
+	}
+	// 用 ffmpeg 生成 2 秒测试视频（testsrc 彩条）
+	src := filepath.Join(t.TempDir(), "src.mp4")
+	if err := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=duration=2:size=1280x720:rate=30",
+		"-pix_fmt", "yuv420p", "-y", src).Run(); err != nil {
+		t.Fatalf("生成测试视频失败: %v", err)
+	}
+	raw, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("read src: %v", err)
+	}
+
+	// 加密为 PVVIDEO1 格式
+	enc := &bytes.Buffer{}
+	if _, err := encryptVideoStream(bytes.NewReader(raw), enc, int64(len(raw))); err != nil {
+		t.Fatalf("encryptVideoStream: %v", err)
+	}
+	encFile := filepath.Join(t.TempDir(), "enc.bin")
+	if err := os.WriteFile(encFile, enc.Bytes(), 0644); err != nil {
+		t.Fatalf("write enc: %v", err)
+	}
+
+	duration, poster, err := extractVideoMetaWithFFmpeg(encFile)
+	if err != nil {
+		t.Fatalf("extractVideoMetaWithFFmpeg: %v", err)
+	}
+	if duration < 1.5 || duration > 2.5 {
+		t.Fatalf("时长异常: %v", duration)
+	}
+	if len(poster) == 0 {
+		t.Fatalf("未抽取到封面")
+	}
+	// 封面应为有效 JPEG（FFD8 开头）
+	if len(poster) < 3 || poster[0] != 0xFF || poster[1] != 0xD8 {
+		t.Fatalf("封面不是有效 JPEG")
+	}
 }
 
 func TestPrivatePasswordAndUnlock(t *testing.T) {

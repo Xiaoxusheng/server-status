@@ -41,3 +41,6 @@ templates/pv-*.html
 dev/
 temp/
 .testrun/
+
+# 部署/备份运维脚本（内含 WebDAV 口令与备份加密密钥，严禁入库）
+deploy/

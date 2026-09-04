@@ -5286,11 +5286,22 @@ func getTemplateEntry(name string) *templateCacheEntry {
 }
 
 // serveTemplateCached 以内存缓存 + 按需 gzip 的方式提供模板文件。
+// 带 ETag 协商缓存：模板未变时 If-None-Match 命中直接 304（0 字节回包），避免每次进页面完整重下；
+// ETag 派生自 mtime+size，沿用「改模板文件即生效」的部署习惯——文件一变 ETag 随之变化，浏览器立刻拿到新版。
 // 返回 false 表示缓存中不存在该文件，调用方需自行回退处理。
 func serveTemplateCached(w http.ResponseWriter, r *http.Request, name string) bool {
 	entry := getTemplateEntry(name)
 	if entry == nil {
 		return false
+	}
+	etag := `"` + strconv.FormatInt(entry.modTime.UnixNano(), 36) + "-" + strconv.FormatInt(entry.size, 36) + `"`
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "private, no-cache")
+	w.Header().Set("Vary", "Accept-Encoding")
+	// If-None-Match 可能带 W/ 前缀或列表，子串匹配已覆盖本服务产生的形态
+	if inm := r.Header.Get("If-None-Match"); inm != "" && strings.Contains(inm, etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return true
 	}
 	// 按扩展名显式设置 Content-Type（等价于原 http.FileServer 行为）
 	if ct := mime.TypeByExtension(path.Ext(name)); ct != "" {
@@ -5298,7 +5309,6 @@ func serveTemplateCached(w http.ResponseWriter, r *http.Request, name string) bo
 	}
 	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && entry.gzipped != nil {
 		w.Header().Set("Content-Encoding", "gzip")
-		w.Header().Set("Vary", "Accept-Encoding")
 		w.Header().Set("Content-Length", strconv.Itoa(len(entry.gzipped)))
 		w.Write(entry.gzipped)
 		return true
@@ -5992,9 +6002,8 @@ func main() {
 				return
 			}
 		}
-		// 模板页面禁止缓存：认证/CSRF 逻辑随版本演进，旧模板 JS 会导致写请求缺 X-CSRF-Token 而 403
-		w.Header().Set("Cache-Control", "no-store")
-		// 优先走内存缓存 + gzip（含启动时预压缩），消除每请求磁盘读；未命中时回退磁盘直读
+		// 模板缓存命中时由 serveTemplateCached 设置 ETag 协商缓存（no-cache：每次校验、未变 304），
+		// 未命中回退路径保持 no-store，防止敏感文件被缓存
 		name := path.Base(r.URL.Path)
 		if name == "/" || name == "." {
 			name = "index.html"
@@ -6002,6 +6011,7 @@ func main() {
 		if serveTemplateCached(w, r, name) {
 			return
 		}
+		w.Header().Set("Cache-Control", "no-store")
 		http.FileServer(http.Dir(indexPath)).ServeHTTP(w, r)
 	}))
 	http.HandleFunc("/ws", authMiddleware(requirePermission("system:view", securityMiddleware(wsHandler))))

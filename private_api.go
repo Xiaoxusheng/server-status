@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -48,14 +47,11 @@ func privatePageHandler(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/index.html", http.StatusFound)
 		return
 	}
-	data, err := os.ReadFile(filepath.Join(indexPath, "private.html"))
-	if err != nil {
-		http.Error(w, "页面不存在", http.StatusNotFound)
+	// 走模板内存缓存 + ETag 协商缓存：未变时 304，避免每次进私人空间完整重下整页
+	if serveTemplateCached(w, r, "private.html") {
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.Write(data)
+	http.Error(w, "页面不存在", http.StatusNotFound)
 }
 
 // registerPrivateRoutes 注册隐藏私人空间全部路由（含公开分享页）
@@ -90,6 +86,12 @@ func registerPrivateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/private/notes/{id}/audio/{audio_id}", authMiddleware(securityMiddleware(privateAuthMiddleware(privateDeleteAudioHandler))))
 	mux.HandleFunc("GET /api/private/notes/{id}/audio/{audio_id}/file", authMiddleware(securityMiddleware(privateAuthMiddleware(privateAudioFileHandler))))
 
+	// 视频：分块加密存储，播放接口支持 Range 流式拖动
+	mux.HandleFunc("POST /api/private/notes/{id}/video", authMiddleware(securityMiddleware(privateAuthMiddleware(privateUploadVideoHandler))))
+	mux.HandleFunc("DELETE /api/private/notes/{id}/video/{video_id}", authMiddleware(securityMiddleware(privateAuthMiddleware(privateDeleteVideoHandler))))
+	mux.HandleFunc("GET /api/private/notes/{id}/video/{video_id}/file", authMiddleware(securityMiddleware(privateAuthMiddleware(privateVideoFileHandler))))
+	mux.HandleFunc("GET /api/private/notes/{id}/video/{video_id}/poster", authMiddleware(securityMiddleware(privateAuthMiddleware(privateVideoPosterHandler))))
+
 	// 标签 / 搜索 / 导出
 	mux.HandleFunc("GET /api/private/tags", authMiddleware(securityMiddleware(privateAuthMiddleware(privateTagsHandler))))
 	mux.HandleFunc("GET /api/private/search", authMiddleware(securityMiddleware(privateAuthMiddleware(privateSearchHandler))))
@@ -108,6 +110,7 @@ func registerPrivateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/private/shares", authMiddleware(securityMiddleware(privateAuthMiddleware(privateCreateShareAliasHandler))))
 	mux.HandleFunc("GET /api/private/shares", authMiddleware(securityMiddleware(privateAuthMiddleware(privateListSharesHandler))))
 	mux.HandleFunc("POST /api/private/shares/{token}/revoke", authMiddleware(securityMiddleware(privateAuthMiddleware(privateRevokeShareHandler))))
+	mux.HandleFunc("GET /api/private/notes/{id}/audio-share/qr", authMiddleware(securityMiddleware(privateAuthMiddleware(privateAudioShareQRHandler))))
 
 	// 公开分享（无需登录；密码分享需验证）
 	mux.HandleFunc("GET /card/{token}", securityMiddleware(sharePageHandler))
@@ -115,6 +118,11 @@ func registerPrivateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/share/{token}/verify", securityMiddleware(shareVerifyHandler))
 	mux.HandleFunc("GET /api/share/{token}/image", securityMiddleware(shareImageHandler))
 	mux.HandleFunc("GET /api/share/{token}/qr", securityMiddleware(shareQRHandler))
+
+	// 公开语音分享（卡片二维码扫码播放，无需登录）
+	mux.HandleFunc("GET /audio/{token}", securityMiddleware(audioSharePageHandler))
+	mux.HandleFunc("GET /api/ashare/{token}/data", securityMiddleware(audioShareDataHandler))
+	mux.HandleFunc("GET /api/ashare/{token}/audio/{aid}", securityMiddleware(audioShareAudioHandler))
 }
 
 // ==================== 解锁 / 锁定 / Session ====================
@@ -397,7 +405,7 @@ func privateImageFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
-	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	servePrivateMediaFile(w, r, abs, name)
 }
 
@@ -448,7 +456,84 @@ func privateAudioFileHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
-	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	servePrivateMediaFile(w, r, abs, name)
+}
+
+// ==================== 视频处理器 ====================
+
+// privateUploadVideoHandler POST /api/private/notes/{id}/video
+// multipart：file=视频本体（≤200MB），poster=首帧封面图（可选，≤5MB），duration=时长秒
+func privateUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	session, _ := getSessionFromRequest(r)
+	noteID := r.PathValue("id")
+	if err := r.ParseMultipartForm(34 << 20); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "上传数据无效")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "缺少视频文件")
+		return
+	}
+	defer file.Close()
+	poster, posterHeader, perr := r.FormFile("poster")
+	if perr != nil {
+		poster, posterHeader = nil, nil
+	} else {
+		defer poster.Close()
+	}
+	duration, _ := strconv.ParseFloat(r.FormValue("duration"), 64)
+	v, err := privateStore.addVideo(session.Username, noteID, file, header, poster, posterHeader, duration)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if v.PosterPath != "" {
+		v.PosterURL = fmt.Sprintf("/api/private/notes/%s/video/%s/poster", noteID, v.ID)
+	}
+	privateStore.auditPrivate(r, session.Username, "private_note.video_upload")
+	writeJSON(w, http.StatusOK, "视频上传成功", v)
+}
+
+func privateDeleteVideoHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	session, _ := getSessionFromRequest(r)
+	if err := privateStore.deleteVideo(session.Username, r.PathValue("id"), r.PathValue("video_id")); err != nil {
+		writeJSONError(w, http.StatusNotFound, "视频不存在")
+		return
+	}
+	privateStore.auditPrivate(r, session.Username, "private_note.video_delete")
+	writeJSON(w, http.StatusOK, "视频已删除", nil)
+}
+
+// privateVideoFileHandler GET /api/private/notes/{id}/video/{video_id}/file
+// 分块解密 + http.ServeContent：支持 Range 拖动进度条播放
+func privateVideoFileHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	session, _ := getSessionFromRequest(r)
+	abs, name, err := privateStore.videoFilePath(session.Username, r.PathValue("id"), r.PathValue("video_id"), "file")
+	if err != nil {
+		writeJSONError(w, http.StatusNotFound, "视频不存在")
+		return
+	}
+	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	servePrivateVideoFile(w, r, abs, name)
+}
+
+// privateVideoPosterHandler GET /api/private/notes/{id}/video/{video_id}/poster
+func privateVideoPosterHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	session, _ := getSessionFromRequest(r)
+	abs, name, err := privateStore.videoFilePath(session.Username, r.PathValue("id"), r.PathValue("video_id"), "poster")
+	if err != nil {
+		writeJSONError(w, http.StatusNotFound, "视频封面不存在")
+		return
+	}
+	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	servePrivateMediaFile(w, r, abs, name)
 }
 

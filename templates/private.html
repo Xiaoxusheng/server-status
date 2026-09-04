@@ -142,8 +142,12 @@
             transition: border-color .15s ease;
             scroll-margin-top: 66px;
             /* 保存后定位新帖：避开吸顶顶栏 */
-            /* 长列表滚动优化：视口外的卡片跳过渲染布局，滚动与跳转动画更流畅
-               （auto 让浏览器记住已渲染过的真实高度，避免滚动条跳动） */
+        }
+
+        /* 长列表滚动优化仅在手记较多时启用（TimelineView 加 pv-list-heavy）：
+           content-visibility:auto 会让视口外卡片变成空占位盒，快速滚动/回顶动画经过时
+           来不及重绘就露白——小列表（几十条）全量渲染毫无压力，禁用后彻底无空白 */
+        .pv-list-heavy .note-card {
             content-visibility: auto;
             contain-intrinsic-size: auto 320px;
         }
@@ -271,6 +275,112 @@
             margin-top: 10px;
         }
 
+        /* ================= 编辑器视频条目 ================= */
+        .pv-vid-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            margin-bottom: 6px;
+            background: var(--hover);
+        }
+
+        .pv-vid-thumb {
+            position: relative;
+            width: 96px;
+            height: 54px;
+            border-radius: 4px;
+            overflow: hidden;
+            background: rgba(0, 0, 0, .6);
+            flex: none;
+        }
+
+        .pv-vid-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .pv-vid-noimg {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255, 255, 255, .75);
+            font-size: 18px;
+        }
+
+        .pv-vid-play {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 22px;
+            text-shadow: 0 1px 4px rgba(0, 0, 0, .55);
+            pointer-events: none;
+        }
+
+        /* ================= 手记卡片视频行 ================= */
+        .note-vids {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .note-vids .nv {
+            position: relative;
+            width: 148px;
+            height: 84px;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            cursor: pointer;
+            background: rgba(0, 0, 0, .65);
+        }
+
+        .note-vids .nv img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .note-vids .nv .nv-play {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 26px;
+            text-shadow: 0 1px 5px rgba(0, 0, 0, .6);
+        }
+
+        .note-vids .nv .nv-dur {
+            position: absolute;
+            right: 4px;
+            bottom: 4px;
+            padding: 0 5px;
+            border-radius: 4px;
+            background: rgba(0, 0, 0, .6);
+            color: #fff;
+            font-size: 11px;
+            line-height: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .note-vids .nv {
+                width: calc(50% - 3px);
+                height: 96px;
+            }
+        }
+
         .note-imgs.n1 {
             grid-template-columns: 1fr;
         }
@@ -282,9 +392,11 @@
         .note-imgs.n3 {
             grid-template-columns: 2fr 1fr;
             grid-template-rows: 1fr 1fr;
+            height: 360px;
         }
 
-        .note-imgs.n3 img:nth-child(1) {
+        /* 跨行规则必须作用于网格项 .ni（img 不是网格项，写在 img 上不生效） */
+        .note-imgs.n3 .ni:nth-child(1) {
             grid-row: span 2;
         }
 
@@ -322,16 +434,8 @@
         }
 
         .note-imgs.n3 .ni {
-            aspect-ratio: auto;
-        }
-
-        .note-imgs.n3 .ni:nth-child(1) {
-            min-height: 220px;
-        }
-
-        .note-imgs.n3 .ni:nth-child(2),
-        .note-imgs.n3 .ni:nth-child(3) {
-            min-height: 106px;
+            height: 100%;
+            min-height: 0;
         }
 
         .note-imgs.n4 .ni {
@@ -784,6 +888,22 @@
             line-height: 18px;
             text-align: center;
             font-weight: 600;
+        }
+
+        /* 视频素材角标：左上角摄像机图标 */
+        .cg-ip-v {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 18px;
+            height: 18px;
+            border-radius: 9px;
+            background: rgba(0, 0, 0, .6);
+            color: #fff;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .cg-footer-left {
@@ -1463,6 +1583,124 @@
             }
         }
 
+        /* ================= 手记图片全屏查看器（自研轻量版，替代 antd Image.PreviewGroup） ================= */
+        .pv-imgview {
+            position: fixed;
+            inset: 0;
+            z-index: 2200;
+            background: rgba(0, 0, 0, .92);
+            /* translateZ 强制独立合成层：修复 iOS Safari 下 fixed 遮罩背景不绘制的合成 bug */
+            transform: translateZ(0);
+            animation: pvViewerIn .18s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pv-imgview-bar {
+            flex: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            color: #fff;
+        }
+
+        .pv-imgview-count {
+            font-size: 14px;
+            color: rgba(255, 255, 255, .85);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .pv-imgview-x {
+            width: 38px;
+            height: 38px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .12);
+            color: #fff;
+            font-size: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .pv-imgview-x:active {
+            background: rgba(255, 255, 255, .22);
+        }
+
+        .pv-imgview-stage {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            min-height: 0;
+        }
+
+        .pv-imgview-stage img {
+            max-width: 94vw;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 4px;
+            transition: opacity .15s ease;
+            -webkit-user-drag: none;
+            user-select: none;
+        }
+
+        .pv-imgview-loading,
+        .pv-imgview-err {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255, 255, 255, .75);
+            font-size: 14px;
+        }
+
+        .pv-imgview-nav {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 44px;
+            height: 44px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, .14);
+            color: #fff;
+            font-size: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 2;
+        }
+
+        .pv-imgview-nav:active {
+            background: rgba(255, 255, 255, .28);
+        }
+
+        .pv-imgview-nav.prev {
+            left: 12px;
+        }
+
+        .pv-imgview-nav.next {
+            right: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .pv-imgview-stage img {
+                max-width: 100vw;
+            }
+
+            .pv-imgview-nav {
+                width: 38px;
+                height: 38px;
+            }
+        }
+
         /* ================= 沉浸式卡片预览（深色遮罩 + 居中大图，非默认 Modal 观感） ================= */
         .pv-viewer {
             position: fixed;
@@ -1911,13 +2149,8 @@
                 max-height: 300px;
             }
 
-            .note-imgs.n3 .ni:nth-child(1) {
-                min-height: 150px;
-            }
-
-            .note-imgs.n3 .ni:nth-child(2),
-            .note-imgs.n3 .ni:nth-child(3) {
-                min-height: 72px;
+            .note-imgs.n3 {
+                height: 250px;
             }
 
             .note-actions {
@@ -1963,7 +2196,7 @@
     <script type="text/babel">
         const { Modal, Input, Button, Form, Card, Tabs, Tag, Space, Typography, ConfigProvider, theme, message,
             Drawer, Select, Popconfirm, Dropdown, Empty, Spin, Alert, Switch, Segmented, Tooltip, Image, Divider,
-            Popover, InputNumber, Checkbox } = window.antd;
+            Popover, InputNumber, Checkbox, Progress } = window.antd;
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
         const { darkAlgorithm } = theme;
         const IconSet = window.icons || {};
@@ -2015,6 +2248,11 @@
         const fmtClock = s => { const d = parseISO(s); return d ? pad(d.getHours()) + ':' + pad(d.getMinutes()) : ''; };
         const fmtDate = s => { const d = parseISO(s); return d ? d.getFullYear() + '.' + pad(d.getMonth() + 1) + '.' + pad(d.getDate()) : ''; };
         const fmtFull = s => { const d = parseISO(s); return d ? fmtDate(s) + ' ' + fmtClock(s) : ''; };
+        // 秒 → m:ss（视频/语音时长展示）
+        const fmtSecs = s => {
+            const n = Math.max(0, Math.round(Number(s) || 0));
+            return Math.floor(n / 60) + ':' + pad(n % 60);
+        };
         // 统一滚动动画（两段式，根治长距离滚动白屏）：
         // 长距离连续滚动时，途经的懒加载图片 / content-visibility 未渲染卡片来不及绘制，
         // 会出现滑动途中白屏。策略：
@@ -2024,6 +2262,30 @@
         // to 支持传函数：瞬移后邻近卡片真实渲染，高度可能与估算不同，收尾前取实时坐标。
         // 动画期间用户滚轮/触摸立即接管并终止动画；重复调用自动取消上一次动画。
         let scrollAnimSeq = 0;
+        // 等待瞬移落点附近区域真实绘制完成：基线 3 帧 + 落点视口内未完成图片全部解码（单张上限 300ms）。
+        // 根治长距离瞬移（回顶/日历跳转）途中白屏——content-visibility 卡片重新布局绘制、懒加载图片解码
+        // 都需要时间，固定停 2 帧在长页面上经常不够。滑动进入的一屏范围也纳入检查（多留半屏余量）。
+        function waitPainted(done) {
+            let frames = 0, decoded = false, called = false;
+            const vh = window.innerHeight;
+            const imgs = Array.from(document.querySelectorAll('.note-card img, .note-vids img')).filter(im => {
+                const r = im.getBoundingClientRect();
+                return r.top < vh * 1.5 && r.bottom > -vh * 0.5 && !im.complete;
+            });
+            const finish = () => {
+                if (called || frames < 3 || !decoded) return;
+                called = true;
+                done();
+            };
+            if (imgs.length === 0) {
+                decoded = true;
+            } else {
+                Promise.all(imgs.map(im => Promise.race([im.decode().catch(() => { }), new Promise(r => setTimeout(r, 300))])))
+                    .then(() => { decoded = true; finish(); });
+            }
+            const tick = () => { frames++; finish(); if (!called) requestAnimationFrame(tick); };
+            requestAnimationFrame(tick);
+        }
         function animateScrollTo(to, dur) {
             // 解析目标位置（函数形式每次取实时值，且不允许滚出页面顶部）
             const resolveTo = () => Math.max(0, typeof to === 'function' ? to() : to);
@@ -2039,14 +2301,17 @@
             };
             // easeOutCubic：起步快、收尾缓，衔接瞬移后的观感最自然
             const easeOut = t => 1 - Math.pow(1 - t, 3);
-            // rAF 驱动一段平滑滚动，ms 为时长，结束回调 onDone
-            const rafScroll = (fromY, toY, ms, onDone) => {
+            // easeInOutCubic：起步缓→中段快→收尾缓，整段连贯滑升用（回顶全程滑动画不突兀）
+            const easeInOut = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+            // rAF 驱动一段平滑滚动，ms 为时长，easing 可指定缓动曲线，结束回调 onDone
+            const rafScroll = (fromY, toY, ms, easing, onDone) => {
+                const ease = easing || easeOut;
                 let start = null;
                 const step = ts => {
                     if (!alive()) return cleanup();
                     if (start === null) start = ts;
                     const p = Math.min(1, (ts - start) / ms);
-                    window.scrollTo(0, fromY + (toY - fromY) * easeOut(p));
+                    window.scrollTo(0, fromY + (toY - fromY) * ease(p));
                     if (p < 1) requestAnimationFrame(step);
                     else { cleanup(); if (onDone) onDone(); }
                 };
@@ -2061,13 +2326,22 @@
                 rafScroll(window.scrollY, target, Math.min(700, Math.max(350, dist * 0.6)));
                 return;
             }
-            // 长距离两段式：瞬移到目标外侧 1.2 屏 → 停 2 帧等浏览器绘制 → 平滑滑完剩余
+            if (!document.querySelector('.pv-list-heavy')) {
+                // 小列表（全量渲染，无 content-visibility 占位盒）：整段连贯滑升——
+                // easeInOutCubic 起步缓→中段快→减速入顶，从底部一路滑上去不跳段不空白
+                rafScroll(window.scrollY, target, Math.min(1600, Math.max(650, dist * 0.18)), easeInOut);
+                return;
+            }
+            // 大列表（cv 开启，视口外是空占位盒）：连贯滑会露白，退回瞬移到目标外侧
+            // 1.2 屏 → 等落点重绘 → 平滑收尾的两段式
             const dir = target > window.scrollY ? 1 : -1;
             window.scrollTo(0, Math.max(0, target - dir * window.innerHeight * 1.2));
             requestAnimationFrame(() => requestAnimationFrame(() => {
                 if (!alive()) return cleanup();
-                // 重新解析目标：瞬移后附近卡片真实渲染，高度可能与估算不同
-                rafScroll(window.scrollY, resolveTo(), 480);
+                waitPainted(() => {
+                    if (!alive()) return cleanup();
+                    rafScroll(window.scrollY, resolveTo(), 480);
+                });
             }));
         }
 
@@ -2316,6 +2590,24 @@
                 setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
             }
         }
+        // 生成小尺寸缩略 blob URL（编辑器图片条专用）：手机原图 4000×3000 每张解码约 48MB 位图，
+        // 多张并发解码会塞满主线程导致保存按钮等 UI 卡死；缩略图 240px 解码成本可忽略。
+        // 失败（如解码器不支持）返回 null，调用方回退原图 URL
+        async function makeThumbUrl(file, max) {
+            max = max || 240;
+            try {
+                if (!window.createImageBitmap) return null;
+                const bmp = await createImageBitmap(file);
+                const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+                const cv = document.createElement('canvas');
+                cv.width = Math.max(1, Math.round(bmp.width * scale));
+                cv.height = Math.max(1, Math.round(bmp.height * scale));
+                cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+                if (bmp.close) bmp.close();
+                const blob = await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.8));
+                return blob ? URL.createObjectURL(blob) : null;
+            } catch (e) { return null; }
+        }
         function coverRect(sw, sh, dw, dh, x, y) {
             const s = Math.max(dw / sw, dh / sh);
             const w = sw * s, h = sh * s;
@@ -2366,7 +2658,7 @@
         async function renderCard(opts) {
             const {
                 template, width, height, title, content, time, location, tags, images, brand, server,
-                locationName, latitude, longitude,
+                locationName, latitude, longitude, audioQR,
                 show = {}, locationMode = 'name', background = 'white', autoLayout = true,
                 fold = false, foldLines = 8, fontScale = 1
             } = opts;
@@ -2401,6 +2693,44 @@
             const metaTxt = [timeTxt, locText].filter(Boolean).join('   ·   ');
             const brandTxt = showBrand && brand ? String(brand) : '';
             const tagList = showTags && tags ? tags.map(t => '#' + String(t).replace(/^#/, '')) : [];
+
+            // ==================== 语音二维码（手记有语音时）====================
+            // audioQRBox 只算几何（供排版预留空间防遮挡），drawAudioQR 真正取图绘制
+            const audioQRBox = (pos) => {
+                if (!audioQR) return null;
+                const qp = width * 0.014;  // 盒内边距
+                const qs = width * 0.15;   // 二维码边长（≥160px@1080，保证可扫）
+                const qt = width * 0.03;   // 说明文字高度
+                const bw = qs + qp * 2;
+                const bh = qp + qs + qt + qp * 0.55;
+                const bx = width - padX - bw;
+                const by = pos === 'topright'
+                    ? height * 0.055
+                    : height - height * (brandTxt ? 0.095 : 0.045) - bh;
+                return { bx, by, bw, bh };
+            };
+            const drawAudioQR = async (pos) => {
+                const box = audioQRBox(pos);
+                if (!box) return;
+                try {
+                    const img = await loadImg(audioQR);
+                    const qp = width * 0.014, qs = width * 0.15, qt = width * 0.03;
+                    ctx.save();
+                    // 白底圆角盒：二维码必须高对比度才可扫，深色/图片背景下也统一白底
+                    ctx.fillStyle = 'rgba(255,255,255,.94)';
+                    roundRect(ctx, box.bx, box.by, box.bw, box.bh, width * 0.02);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(0,0,0,.1)';
+                    ctx.lineWidth = Math.max(1, width * 0.0015);
+                    ctx.stroke();
+                    ctx.drawImage(img, box.bx + qp, box.by + qp, qs, qs);
+                    ctx.fillStyle = '#595959';
+                    ctx.font = `500 ${qt}px ${fontFamily}`;
+                    ctx.textAlign = 'center';
+                    ctx.fillText('扫码听语音', box.bx + box.bw / 2, box.by + qp + qs + qt * 0.95);
+                    ctx.restore();
+                } catch (e) { /* 二维码加载失败不阻塞出卡 */ }
+            };
 
             // 调色板：页面主题与卡片模板完全独立
             const darkPal = { bg: '#141414', text: 'rgba(255,255,255,.92)', secondary: 'rgba(255,255,255,.55)', muted: 'rgba(255,255,255,.35)' };
@@ -2446,10 +2776,44 @@
                 if (tagList.length) need += baseLH.tag + width * 0.012;
                 return need;
             };
+            // 自动排版：按模板分别计算文字可用高度，长文（小作文）自动缩小字号尽量完整容纳。
+            // 图片模板先按「未缩放文字需求」压缩图片区，再让文字在剩余区域内缩放，二者互相让步。
+            const tplImgs = (showImages && images ? images.slice(0, 9) : []);
+            let cardImgH = 0; // 图片模板的图片区高度（其余模板为 0）
             let scale = 1;
             let availH = height * 0.72;
-            if (autoLayout && textNeed() > availH) {
-                scale = Math.max(0.62, Math.min(1, availH / textNeed()));
+            if (template === 'image' && tplImgs.length) {
+                const qrbImg = audioQRBox('bottomright');
+                const textH = textNeed() + height * 0.1 + (qrbImg ? qrbImg.bh : 0);
+                if (tplImgs.length === 1) {
+                    // 单图：文字多时图片区最低压到 0.30h，给长文腾出 2/3 版面
+                    cardImgH = Math.round(Math.min(height * 0.72, Math.max(height * 0.30, height - textH)));
+                } else {
+                    const cols = tplImgs.length === 2 || tplImgs.length === 4 ? 2 : 3;
+                    const rows = Math.ceil(tplImgs.length / cols);
+                    cardImgH = Math.round(Math.min(height * 0.78, Math.max(height * 0.30, rows * (width / cols))));
+                    if (qrbImg) cardImgH = Math.max(0, cardImgH - Math.round(qrbImg.bh));
+                }
+                // 图片下方文字带：扣除顶部留白与底部余量
+                availH = (height - cardImgH) - height * 0.05 - height * 0.03;
+            } else if (template === 'travel') {
+                // 旅行模板：文字区在 0.27h ~ 缩略图上沿(约 0.62h) 之间
+                availH = height * 0.62 - height * 0.27 - width * 0.03;
+            } else if (template === 'xhs' || template === 'server') {
+                // 小红书按剩余空间自行裁行、服务器为固定数据布局：不参与整体缩放
+                availH = -1;
+            } else {
+                // 简洁/深色/浅灰/图片背景：文字从 0.13h 起排，底部到二维码盒上沿或 0.965h
+                const top = height * 0.13;
+                let bottom = height * 0.965;
+                const qrbText = audioQRBox('bottomright');
+                if (qrbText) bottom = Math.min(bottom, qrbText.by - width * 0.03);
+                availH = bottom - top;
+            }
+            // 缩放下限 0.5：1080 宽卡片正文约 17px，全屏看卡片仍清晰可读；
+            // 配合更高的可用区，竖版/长图卡片可容纳 60+ 行（约 1500 字）小作文
+            if (availH > 0 && autoLayout && textNeed() > availH) {
+                scale = Math.max(0.5, Math.min(1, availH / textNeed()));
                 canvas.fitScale = scale;
                 canvas.fitHint = scale < 0.999;
             }
@@ -2584,6 +2948,7 @@
                     ctx.fillStyle = palette.muted;
                     ctx.fillText(timeTxt, padX, height - height * 0.08);
                 }
+                await drawAudioQR('bottomright');
                 drawBrand();
                 return canvas;
             }
@@ -2591,28 +2956,21 @@
             // ==================== 图片模板（上方大图 + 下方文字）====================
             if (template === 'image') {
                 await fillBackground();
-                const imgs = showImages && images ? images.slice(0, 9) : [];
-                // 图片高度随文字量自适应：文字少→图占更大区域，避免大面积留白；
-                // 多图时按宫格行数尽量取方形格子（微信九宫格风格），同时保证文字区可用
-                const textH = textNeed() + height * 0.1;
-                let imgH = 0;
-                if (imgs.length) {
-                    if (imgs.length === 1) {
-                        imgH = Math.round(Math.min(height * 0.72, Math.max(height * 0.4, height - textH)));
-                    } else {
-                        const cols = imgs.length === 2 || imgs.length === 4 ? 2 : 3;
-                        const rows = Math.ceil(imgs.length / cols);
-                        imgH = Math.round(Math.min(height * 0.8, Math.max(height * 0.35, rows * (width / cols))));
-                    }
-                }
+                const imgs = tplImgs;
+                // cardImgH 已在排版阶段按「文字越多图越小」预算好（单图最低 0.30h）；
+                // 无图时全部版面留给文字
+                const imgH = imgs.length ? cardImgH : 0;
                 if (imgs.length) {
                     await drawCollage(0, 0, width, imgH, 0);
                     ctx.fillStyle = palette.bg;
                     ctx.fillRect(0, imgH, width, height - imgH);
                 }
                 const rest = height - imgH;
-                let y = imgH + Math.max(height * 0.045, (rest - textNeed()) / 2);
+                // 居中按缩放后的实际文字高度计算，长文自动从顶部留白开始排，不与二维码重叠
+                const scaledNeed = textNeed() * scale;
+                let y = imgH + Math.max(height * 0.045, (rest - scaledNeed) / 2);
                 y = drawText(y);
+                await drawAudioQR('bottomright');
                 drawBrand();
                 return canvas;
             }
@@ -2639,6 +2997,7 @@
                         await drawImageCover(ctx, imgs[k], padX + k * (thumbW + gap), ty, thumbW, thumbH, 12);
                     }
                 }
+                await drawAudioQR('topright');
                 drawBrand();
                 return canvas;
             }
@@ -2674,7 +3033,9 @@
                 if (showContent && content) {
                     ctx.font = `400 ${width * 0.03 * fontScale}px ${fontFamily}`;
                     const cLH = width * 0.047 * fontScale;
-                    const reserve = height * 0.16 + (tagList.length ? width * 0.07 : 0);
+                    // 有语音二维码时正文预留区加上二维码盒高度，防止末行被遮挡
+                    const qrbRes = audioQRBox('bottomright');
+                    const reserve = height * 0.16 + (tagList.length ? width * 0.07 : 0) + (qrbRes ? qrbRes.bh : 0);
                     const availH = Math.max(cLH, height - y - reserve);
                     let cLs = wrapText(ctx, mdStrip(content), maxW);
                     let maxLines = Math.max(1, Math.floor(availH / cLH));
@@ -2687,14 +3048,16 @@
                     cLs.forEach((l, i) => ctx.fillText(l, padX, y + i * cLH));
                     y += cLs.length * cLH + width * 0.02;
                 }
-                // 标签胶囊（小红书红描边，最多 6 个）
+                // 标签胶囊（小红书红描边，最多 6 个）；有语音二维码时右边界让位给二维码盒
                 if (tagList.length) {
+                    const qrbXhs = audioQRBox('bottomright');
+                    const tagRight = qrbXhs ? qrbXhs.bx - width * 0.025 : width - padX;
                     ctx.font = `500 ${width * 0.028}px ${fontFamily}`;
                     let tx = padX;
                     const ty = height * 0.865;
                     tagList.slice(0, 6).forEach(t => {
                         const tw = ctx.measureText(t).width + width * 0.05;
-                        if (tx + tw > width - padX) return;
+                        if (tx + tw > tagRight) return;
                         ctx.strokeStyle = xhs.red;
                         ctx.lineWidth = Math.max(1.5, width * 0.0032);
                         roundRect(ctx, tx, ty - width * 0.037, tw, width * 0.06, width * 0.03);
@@ -2708,13 +3071,14 @@
                 ctx.font = `400 ${width * 0.024}px ${fontFamily}`;
                 ctx.fillStyle = xhs.secondary;
                 ctx.fillText([timeTxt, locText].filter(Boolean).join(' · '), padX, height - height * 0.05);
+                await drawAudioQR('bottomright');
                 drawBrand();
                 return canvas;
             }
 
             // ==================== 简洁 / 深色 / 浅灰（纯文字排版）====================
             await fillBackground();
-            let y = height * 0.15;
+            let y = height * 0.13;
             y = drawText(y);
             drawBrand();
             return canvas;
@@ -2819,9 +3183,43 @@
             { name: '东京 · 涩谷', lat: 35.6580, lng: 139.7016 },
             { name: '大阪', lat: 34.6937, lng: 135.5023 }
         ];
+        // 反向地理编码：GPS 坐标 → 真实地名（nominatim → BigDataCloud → 坐标兜底）
+        // 供浏览器定位与照片 EXIF 定位共用；任一服务 5s 无响应即切换下一级
+        function reverseGeo(lat, lng, setName, fallbackCoord) {
+            const fetchTimeout = (url, ms) => {
+                const ctl = new AbortController();
+                const t = setTimeout(() => ctl.abort(), ms);
+                return fetch(url, { signal: ctl.signal }).finally(() => clearTimeout(t));
+            };
+            const bdc = () => fetchTimeout('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' + lat + '&longitude=' + lng + '&localityLanguage=zh', 5000)
+                .then(r => r.json())
+                .then(d => {
+                    const info = (d.localityInfo && d.localityInfo.informative) || [];
+                    // 最具体的一条（如街道/地标）排在最后取用
+                    const detail = info.length ? info[info.length - 1].name : '';
+                    const name = [d.city || d.locality, d.principalSubdivision, detail].filter(Boolean).join(' · ');
+                    if (name) setName(name); else fallbackCoord();
+                })
+                .catch(fallbackCoord);
+            // zoom=18 为建筑物级，可拿到门牌号与 POI 名称
+            fetchTimeout('https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&accept-language=zh-CN&lat=' + lat + '&lon=' + lng, 5000)
+                .then(r => r.json())
+                .then(d => {
+                    const a = (d && d.address) || {};
+                    const road = [a.road, a.house_number].filter(Boolean).join(' ') || a.neighbourhood || a.hamlet || '';
+                    const parts = [a.city || a.town || a.county, a.suburb || a.city_district || a.district, road].filter(Boolean);
+                    // POI 名（门店/小区等）最具体，未重复时放最前
+                    const poi = d.name && d.name !== a.road ? d.name : '';
+                    if (poi && !parts.includes(poi)) parts.unshift(poi);
+                    const name = parts.join(' · ');
+                    if (name || (d && d.display_name)) setName(name || d.display_name); else bdc();
+                })
+                .catch(bdc);
+        }
         function LocationPicker({ value, onChange, exif }) {
             const [search, setSearch] = useState('');
             const [geoLoading, setGeoLoading] = useState(false);
+            const [exifLoading, setExifLoading] = useState(false);
             const [manual, setManual] = useState(false);
             const [manualName, setManualName] = useState('');
             const [manualLat, setManualLat] = useState('');
@@ -2841,34 +3239,13 @@
                     return;
                 }
                 setGeoLoading(true);
-                // 带超时的 fetch：反向地理编码服务国内直连可能长时间挂起，不能让它卡住定位结果
-                const fetchTimeout = (url, ms) => {
-                    const ctl = new AbortController();
-                    const t = setTimeout(() => ctl.abort(), ms);
-                    return fetch(url, { signal: ctl.signal }).finally(() => clearTimeout(t));
-                };
                 navigator.geolocation.getCurrentPosition(pos => {
                     setGeoLoading(false);
                     const lat = pos.coords.latitude, lng = pos.coords.longitude;
                     const fallbackCoord = () => onChange({ location_name: lat.toFixed(4) + ', ' + lng.toFixed(4), latitude: lat, longitude: lng });
                     const setName = name => onChange({ location_name: name, latitude: lat, longitude: lng });
                     // 反向地理编码：GPS 坐标 → 真实地名（城市 · 区县 · 道路）
-                    // nominatim 国内手机网络常超时，5s 内无响应回退 BigDataCloud，再失败回退显示坐标
-                    const bdc = () => fetchTimeout('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' + lat + '&longitude=' + lng + '&localityLanguage=zh', 5000)
-                        .then(r => r.json())
-                        .then(d => {
-                            const name = [d.city || d.locality, d.principalSubdivision].filter(Boolean).join(' · ');
-                            if (name) setName(name); else fallbackCoord();
-                        })
-                        .catch(fallbackCoord);
-                    fetchTimeout('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=zh-CN&lat=' + lat + '&lon=' + lng, 5000)
-                        .then(r => r.json())
-                        .then(d => {
-                            const a = (d && d.address) || {};
-                            const name = [a.city || a.town || a.county, a.suburb || a.city_district || a.district, a.road].filter(Boolean).join(' · ');
-                            if (name || (d && d.display_name)) setName(name || d.display_name); else bdc();
-                        })
-                        .catch(bdc);
+                    reverseGeo(lat, lng, setName, fallbackCoord);
                 }, err => {
                     setGeoLoading(false);
                     const why = {
@@ -2879,6 +3256,16 @@
                     message.warning(why);
                     setManual(true);
                 }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+            };
+            // 使用照片 EXIF GPS：先解析出坐标，再反向地理编码成真实地名，失败回退显示坐标
+            const usePhotoLoc = () => {
+                if (!exif || exif.gpsLat == null || exifLoading) return;
+                const lat = exif.gpsLatRef === 'S' ? -exif.gpsLat : exif.gpsLat;
+                const lng = exif.gpsLonRef === 'W' ? -exif.gpsLon : exif.gpsLon;
+                setExifLoading(true);
+                const fallbackCoord = () => { setExifLoading(false); onChange({ location_name: lat.toFixed(4) + ', ' + lng.toFixed(4), latitude: lat, longitude: lng }); };
+                const setName = name => { setExifLoading(false); onChange({ location_name: name, latitude: lat, longitude: lng }); };
+                reverseGeo(lat, lng, setName, fallbackCoord);
             };
             const results = search.trim() ? builtinPlaces.filter(p => p.name.includes(search.trim())) : [];
             return (
@@ -2893,7 +3280,7 @@
                     {exif && (exif.gpsLat != null || exif.time) && (
                         <div style={{ marginTop: 6, fontSize: 12, color: 'rgba(0,0,0,.45)' }}>
                             {exif.gpsLat != null && (
-                                <Button size="small" type="link" style={{ padding: 0 }} onClick={() => apply({ name: '照片定位', lat: exif.gpsLatRef === 'S' ? -exif.gpsLat : exif.gpsLat, lng: exif.gpsLonRef === 'W' ? -exif.gpsLon : exif.gpsLon })}>
+                                <Button size="small" type="link" style={{ padding: 0 }} loading={exifLoading} onClick={usePhotoLoc}>
                                     使用照片位置
                                 </Button>
                             )}
@@ -2971,13 +3358,78 @@
             );
         }
 
+        // NoteImageViewer 手记图片全屏查看器：
+        // 不使用 antd Image.PreviewGroup（历史上多次出现隐藏 Image 抢带宽 / items 配置 /
+        // 受控预览在滚动跳转后空白白屏等问题），改为自研 Portal 浮层，行为完全可控：
+        // 点遮罩关闭、左右箭头 / 键盘 ←→ / 移动端左右滑动切换、Esc 关闭、加载中转圈、失败提示。
+        function NoteImageViewer({ imgs, index, onClose, onNav }) {
+            const total = imgs.length;
+            const cur = Math.min(Math.max(index, 0), total - 1);
+            const src = imgs[cur] ? imgs[cur].url : '';
+            const [loaded, setLoaded] = useState(false);
+            const [loadErr, setLoadErr] = useState(false);
+            const touchX = useRef(null);
+            // 切图后重置加载态
+            useEffect(() => { setLoaded(false); setLoadErr(false); }, [src]);
+            // 键盘导航 / 关闭
+            useEffect(() => {
+                const onKey = e => {
+                    if (e.key === 'Escape') onClose();
+                    else if (e.key === 'ArrowLeft' && cur > 0) onNav(cur - 1);
+                    else if (e.key === 'ArrowRight' && cur < total - 1) onNav(cur + 1);
+                };
+                window.addEventListener('keydown', onKey);
+                // 查看器打开时锁定背景滚动
+                const prev = document.body.style.overflow;
+                document.body.style.overflow = 'hidden';
+                return () => {
+                    window.removeEventListener('keydown', onKey);
+                    document.body.style.overflow = prev;
+                };
+            }, [cur, total]);
+            const nav = d => { const n = cur + d; if (n >= 0 && n < total) onNav(n); };
+            return ReactDOM.createPortal(
+                <div className="pv-imgview" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+                    <div className="pv-imgview-bar">
+                        <span className="pv-imgview-count">{cur + 1} / {total}</span>
+                        <button className="pv-imgview-x" onClick={onClose} aria-label="关闭"><I name="CloseOutlined" /></button>
+                    </div>
+                    <div className="pv-imgview-stage"
+                        onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+                        onTouchStart={e => { touchX.current = e.touches[0].clientX; }}
+                        onTouchEnd={e => {
+                            if (touchX.current === null) return;
+                            const dx = e.changedTouches[0].clientX - touchX.current;
+                            touchX.current = null;
+                            // 滑动超过 50px 切换上/下一张
+                            if (dx < -50) nav(1);
+                            else if (dx > 50) nav(-1);
+                        }}>
+                        {!loaded && !loadErr && <div className="pv-imgview-loading"><Spin size="large" /></div>}
+                        {loadErr && <div className="pv-imgview-err">图片加载失败，请稍后重试</div>}
+                        {!loadErr && (
+                            <img key={src} src={src} alt="" draggable={false}
+                                onLoad={() => setLoaded(true)}
+                                onError={() => setLoadErr(true)}
+                                style={{ opacity: loaded ? 1 : 0 }} />
+                        )}
+                        {cur > 0 && <button className="pv-imgview-nav prev" onClick={e => { e.stopPropagation(); nav(-1); }} aria-label="上一张"><I name="LeftOutlined" /></button>}
+                        {cur < total - 1 && <button className="pv-imgview-nav next" onClick={e => { e.stopPropagation(); nav(1); }} aria-label="下一张"><I name="RightOutlined" /></button>}
+                    </div>
+                </div>,
+                document.body
+            );
+        }
+
         function NoteCard({ note, onEdit, onDelete, onCard, highlight }) {
             const [openIdx, setOpenIdx] = useState(-1);
+            const [playing, setPlaying] = useState(null); // 当前播放的视频对象，null = 关闭
             const [expanded, setExpanded] = useState(false);
             const contentLong = !!(note.content && note.content.length > 300);
             const imgs = note.images || [];
             const shown = imgs.slice(0, 4);
             const extra = imgs.length - 4;
+            const vids = note.videos || [];
             const loc = locLabel(note);
             const menu = (
                 <Dropdown menu={{
@@ -3019,26 +3471,45 @@
                         <div className={'note-imgs n' + Math.min(imgs.length, 4)}>
                             {shown.map((img, i) => (
                                 <div key={img.id} className="ni" onClick={() => setOpenIdx(i)}>
-                                    <img src={img.url} alt="" loading="lazy" />
+                                    <img src={img.url} alt="" loading="lazy" decoding="async" />
                                     {i === shown.length - 1 && extra > 0 && <span className="ni-more">+{extra}</span>}
                                 </div>
                             ))}
                         </div>
                     )}
-                    {imgs.length > 0 && (
-                        <Image.PreviewGroup
-                            preview={{
-                                visible: openIdx >= 0,
-                                current: Math.max(openIdx, 0),
-                                onVisibleChange: v => { if (!v) setOpenIdx(-1); },
-                                onChange: cur => setOpenIdx(cur)
-                            }}
-                        >
-                            {imgs.map(img => (
-                                <Image key={img.id} src={img.url} style={{ display: 'none' }} />
-                            ))}
-                        </Image.PreviewGroup>
+                    {imgs.length > 0 && openIdx >= 0 && (
+                        /* 自研全屏查看器（Portal 挂 body）：替代 antd Image.PreviewGroup，
+                           彻底避免受控预览在日历跳转/长列表场景下空白、白屏问题 */
+                        <NoteImageViewer
+                            imgs={imgs}
+                            index={openIdx}
+                            onClose={() => setOpenIdx(-1)}
+                            onNav={i => setOpenIdx(i)}
+                        />
                     )}
+                    {vids.length > 0 && (
+                        <div className="note-vids">
+                            {vids.map(v => (
+                                <div key={v.id} className="nv" onClick={() => setPlaying(v)}>
+                                    {v.poster_url ? <img src={v.poster_url} alt="" loading="lazy" /> : <div className="pv-vid-noimg"><I name="VideoCameraOutlined" /></div>}
+                                    <span className="nv-play"><I name="PlayCircleFilled" /></span>
+                                    {v.duration > 0 && <span className="nv-dur">{fmtSecs(v.duration)}</span>}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {/* 视频播放弹窗：destroyOnClose 确保关闭即停止播放 */}
+                    <Modal
+                        open={!!playing}
+                        title={playing ? '视频 · ' + fmtSecs(playing.duration) : ''}
+                        footer={null}
+                        width={720}
+                        destroyOnClose
+                        onCancel={() => setPlaying(null)}
+                        centered
+                    >
+                        {playing && <video src={playing.url} poster={playing.poster_url} controls autoPlay style={{ width: '100%', maxHeight: '70vh', borderRadius: 6, background: '#000' }} />}
+                    </Modal>
                     {note.audio && note.audio.length > 0 && (
                         <div className="note-audio">
                             {note.audio.map(a => <VoicePlayer key={a.id} src={a.url} duration={a.duration} />)}
@@ -3074,7 +3545,7 @@
                 return <Empty description="还没有手记，点击右下角开始记录" style={{ marginTop: 60 }} />;
             }
             return (
-                <div className="tl-wrap">
+                <div className={'tl-wrap' + ((notes || []).length > 80 ? ' pv-list-heavy' : '')}>
                     {/* 顶部记录日历：热力图 + 悬浮预览卡，点击跳转到下方对应手记 */}
                     <NoteCalendar groups={groups} />
                     {groups.map(g => {
@@ -3136,10 +3607,13 @@
             };
             const [images, setImages] = useState([]);
             const [audioList, setAudioList] = useState([]);
+            const [videos, setVideos] = useState([]);
+            const [vidProg, setVidProg] = useState(null); // 视频上传进度百分比，null = 未在上传
             const [saving, setSaving] = useState(false);
             const [exif, setExif] = useState(null);
             const [dragging, setDragging] = useState(false);
             const fileRef = useRef(null);
+            const videoFileRef = useRef(null);
             const [emojiTab, setEmojiTab] = useState(0);
             // 同步防重锁：保存进行中时忽略后续触发（状态更新是异步的，快速连点会穿透 loading）
             const savingRef = useRef(false);
@@ -3182,8 +3656,13 @@
                 setTimeVal(n && n.created_at ? toLocalInput(n.created_at) : '');
                 setLoc({ location_name: n && n.location_name || '', latitude: n ? n.latitude : null, longitude: n ? n.longitude : null });
                 setTags(n && n.tags ? n.tags.slice() : []);
-                setImages(n && n.images ? n.images.slice() : []);
+                // 换手记/重开编辑器时释放上一组本地缩略 blob，防泄漏（服务端 URL 的项无 thumb 字段不受影响）
+                setImages(prev => {
+                    prev.forEach(x => { if (x.thumb && x.thumb.indexOf('blob:') === 0) URL.revokeObjectURL(x.thumb); });
+                    return n && n.images ? n.images.slice() : [];
+                });
                 setAudioList(n && n.audio ? n.audio.slice() : []);
+                setVideos(n && n.videos ? n.videos.slice() : []);
                 setExif(null);
                 draftRef.current = n && n.id ? n.id : null;
             };
@@ -3206,7 +3685,9 @@
                         });
                         const d = await r.json();
                         if (ok(d) && d.data && d.data.id) {
-                            setImages(prev => prev.concat({ id: d.data.id, url: d.data.url, sort_order: d.data.sort_order }));
+                            // 编辑器预览条用本地缩略图显示（原图照常入库），避免多张原图解码卡死 UI
+                            const thumb = await makeThumbUrl(f);
+                            setImages(prev => prev.concat({ id: d.data.id, url: d.data.url, sort_order: d.data.sort_order, thumb: thumb || d.data.url }));
                             const ex = await readExif(f);
                             if (ex && (ex.gpsLat != null || ex.time)) setExif(ex);
                         } else {
@@ -3243,9 +3724,123 @@
                 }
                 uploadFiles(good);
             };
+            // 客户端截取视频封面并读取时长：loadedmetadata 记时长 → seek 到视频前段 → 捕获真实呈现帧绘制 JPEG
+            // 时长独立于封面成败始终返回；解码失败（如 Chrome 不支持 HEVC）时仅封面为 null
+            const makeVideoPoster = (file) => new Promise(resolve => {
+                const v = document.createElement('video'); // 勿用 new Image/Video 构造器
+                v.muted = true;
+                v.playsInline = true;
+                v.preload = 'auto';
+                const url = URL.createObjectURL(file);
+                let done = false;
+                let duration = 0;
+                let retried = false;
+                const finish = blob => {
+                    if (done) return;
+                    done = true;
+                    clearTimeout(timer);
+                    URL.revokeObjectURL(url);
+                    resolve({ blob: blob || null, duration: isFinite(duration) ? duration : 0 });
+                };
+                // 取视频 25% 处的帧：开头常见黑场/未出画，最深不超过 2 秒
+                const seekTo = () => {
+                    const d = isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
+                    return Math.min(Math.max(d * 0.25, 0.1), 2);
+                };
+                // 重试：回退到 0 帧再画一次；仍失败则放弃封面（时长已拿到）
+                const retry = () => {
+                    if (retried) { finish(null); return; }
+                    retried = true;
+                    try { v.currentTime = 0; } catch (e) { finish(null); }
+                };
+                const draw = () => {
+                    try {
+                        const cv = document.createElement('canvas');
+                        const w = v.videoWidth || 720, h = v.videoHeight || 405;
+                        const scale = Math.min(1, 720 / w);
+                        cv.width = Math.round(w * scale);
+                        cv.height = Math.round(h * scale);
+                        cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height);
+                        cv.toBlob(b => { if (b) finish(b); else retry(); }, 'image/jpeg', 0.82);
+                    } catch (e) { retry(); }
+                };
+                const timer = setTimeout(() => finish(null), 15000);
+                v.onloadedmetadata = () => { duration = v.duration; };
+                v.onseeked = () => {
+                    // requestVideoFrameCallback：等真实呈现的帧再画，避免画到未就绪的黑帧；400ms 兜底防 rVFC 不触发
+                    if (v.requestVideoFrameCallback) {
+                        v.requestVideoFrameCallback(() => draw());
+                        setTimeout(() => { if (!done) draw(); }, 400);
+                    } else {
+                        draw();
+                    }
+                };
+                v.onloadeddata = () => {
+                    try { v.currentTime = seekTo(); } catch (e) { finish(null); }
+                };
+                v.onerror = () => finish(null);
+                v.src = url;
+            });
+            // XHR 上传单个视频（fetch 无上传进度；视频大必须展示进度条）
+            // poster = { blob, duration }：blob 为 null（解码失败）时仅上传时长
+            const uploadOneVideo = (f, noteId, poster) => new Promise(resolve => {
+                const fd = new FormData();
+                fd.append('file', f);
+                fd.append('duration', String((poster && poster.duration) || 0));
+                if (poster && poster.blob) {
+                    fd.append('poster', poster.blob, 'poster.jpg');
+                }
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', baseUrl + '/api/private/notes/' + noteId + '/video');
+                xhr.withCredentials = true;
+                xhr.setRequestHeader('X-CSRF-Token', getCsrfToken());
+                xhr.upload.onprogress = e => {
+                    if (e.lengthComputable) setVidProg(Math.min(99, Math.round(e.loaded / e.total * 100)));
+                };
+                xhr.onload = () => {
+                    setVidProg(null);
+                    try {
+                        const d = JSON.parse(xhr.responseText);
+                        if (ok(d) && d.data) { setVideos(prev => prev.concat(d.data)); resolve(true); return; }
+                        message.error('视频上传失败：' + (d.message || ''));
+                    } catch (e) { message.error('视频上传失败'); }
+                    resolve(false);
+                };
+                xhr.onerror = () => { setVidProg(null); message.error('视频上传失败，请检查网络'); resolve(false); };
+                setVidProg(0);
+                xhr.send(fd);
+            });
+            const onVideoFiles = async (list) => {
+                if (!list || !list.length) return;
+                const good = [], skipped = [];
+                Array.from(list).forEach(f => {
+                    const sizeOk = f.size <= 200 * 1024 * 1024;
+                    if ((/^video\//.test(f.type) || /\.(mp4|m4v|webm|mov)$/i.test(f.name || '')) && sizeOk) good.push(f);
+                    else skipped.push(f);
+                });
+                if (skipped.length) {
+                    message.warning(skipped.length === Array.from(list).length
+                        ? '所选视频格式不支持或超过 200MB（支持 mp4 / mov / webm）'
+                        : `${skipped.length} 个视频格式不支持或超限已跳过`);
+                }
+                if (!good.length) return;
+                // 与图片一致：尚无手记时先静默建草稿（复用 draftRef 防重复建稿）
+                let noteId = (note && note.id) || draftRef.current;
+                if (!noteId) {
+                    const saved = await doSave(true);
+                    if (!saved) return;
+                    note = saved;
+                    draftRef.current = saved.id;
+                    noteId = saved.id;
+                }
+                for (const f of good) {
+                    const poster = await makeVideoPoster(f);
+                    await uploadOneVideo(f, noteId, poster);
+                }
+            };
             const doSave = async (silent) => {
                 if (savingRef.current) return null;
-                if (!content.trim() && !title.trim() && images.length === 0) { message.warning('请输入正文或标题'); return null; }
+                if (!content.trim() && !title.trim() && images.length === 0 && videos.length === 0) { message.warning('请输入正文或标题'); return null; }
                 savingRef.current = true;
                 setSaving(true);
                 const body = {
@@ -3346,6 +3941,8 @@
                         <div className="pv-editor-toolbar" style={{ marginTop: 10 }}>
                             <Button icon={<I name="PictureOutlined" />} onClick={() => fileRef.current && fileRef.current.click()}>拍照 / 相册</Button>
                             <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { onFiles(e.target.files); e.target.value = ''; }} />
+                            <Button icon={<I name="VideoCameraOutlined" />} onClick={() => videoFileRef.current && videoFileRef.current.click()}>视频</Button>
+                            <input ref={videoFileRef} type="file" accept="video/mp4,video/webm,video/quicktime,video/*" multiple style={{ display: 'none' }} onChange={e => { onVideoFiles(e.target.files); e.target.value = ''; }} />
                             <div style={{ display: 'inline-block' }}
                                 onDragOver={e => { e.preventDefault(); setDragging(true); }}
                                 onDragLeave={() => setDragging(false)}
@@ -3389,7 +3986,7 @@
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10, minHeight: dragging ? 92 : 0, border: dragging ? '2px dashed #1677ff' : 'none', borderRadius: 8, padding: dragging ? 4 : 0, alignItems: 'center' }}>
                                 {images.map((img, idx) => (
                                     <div key={img.id} className="pv-img-item">
-                                        <img src={img.url} alt="" />
+                                        <img src={img.thumb || img.url} alt="" decoding="async" />
                                         <div className="pv-img-move">
                                             <Button size="small" type="text" style={{ color: '#fff', background: 'rgba(0,0,0,.45)' }} disabled={idx === 0} icon={<I name="ArrowLeftOutlined" />} onClick={() => moveImg(idx, -1)} />
                                             <Button size="small" type="text" style={{ color: '#fff', background: 'rgba(0,0,0,.45)' }} disabled={idx === images.length - 1} icon={<I name="ArrowRightOutlined" />} onClick={() => moveImg(idx, 1)} />
@@ -3397,9 +3994,13 @@
                                         <Button className="pv-img-del" size="small" type="text" danger icon={<I name="CloseOutlined" />} onClick={async () => {
                                             if (note) {
                                                 const d = await api('/api/private/notes/' + note.id + '/images/' + img.id, { method: 'DELETE' });
-                                                if (ok(d)) setImages(prev => prev.filter(x => x.id !== img.id));
+                                                if (ok(d)) {
+                                                    if (img.thumb && img.thumb.indexOf('blob:') === 0) URL.revokeObjectURL(img.thumb);
+                                                    setImages(prev => prev.filter(x => x.id !== img.id));
+                                                }
                                                 else message.error('删除失败');
                                             } else {
+                                                if (img.thumb && img.thumb.indexOf('blob:') === 0) URL.revokeObjectURL(img.thumb);
                                                 setImages(prev => prev.filter(x => x.id !== img.id));
                                             }
                                         }} />
@@ -3409,6 +4010,32 @@
                                     <I name="PlusOutlined" style={{ fontSize: 20 }} />
                                     <span>添加图片</span>
                                 </div>
+                            </div>
+                        )}
+                        {(videos.length > 0 || vidProg != null) && (
+                            <div style={{ marginBottom: 10 }}>
+                                {videos.map(v => (
+                                    <div key={v.id} className="pv-vid-item">
+                                        <div className="pv-vid-thumb">
+                                            {v.poster_url ? <img src={v.poster_url} alt="" /> : <div className="pv-vid-noimg"><I name="VideoCameraOutlined" /></div>}
+                                            <span className="pv-vid-play"><I name="PlayCircleFilled" /></span>
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ fontSize: 13 }}>视频 · {fmtSecs(v.duration)}</div>
+                                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>{Math.round((v.size || 0) / 1024 / 1024 * 10) / 10} MB</Typography.Text>
+                                        </div>
+                                        <Button size="small" type="text" danger icon={<I name="DeleteOutlined" />} onClick={async () => {
+                                            const d = await api('/api/private/notes/' + note.id + '/video/' + v.id, { method: 'DELETE' });
+                                            if (ok(d)) { setVideos(prev => prev.filter(x => x.id !== v.id)); message.success('视频已删除'); }
+                                            else message.error('删除失败');
+                                        }} />
+                                    </div>
+                                ))}
+                                {vidProg != null && (
+                                    <div style={{ marginTop: 6 }}>
+                                        <Progress percent={vidProg} size="small" status="active" />
+                                    </div>
+                                )}
                             </div>
                         )}
                         <Divider style={{ margin: '10px 0' }} />
@@ -3505,7 +4132,8 @@
 
         function CardModal({ open, note, onClose }) {
             const [template, setTemplate] = useState('simple');
-            const [foldLong, setFoldLong] = useState(true);
+            // 长文折叠默认关闭：小作文自动缩字完整排版，需要截断时再手动开启
+            const [foldLong, setFoldLong] = useState(false);
             const [foldLineN, setFoldLineN] = useState(8);
             // 正文字号缩放（0.85 小 / 1 标准 / 1.2 大 / 1.4 特大），仅影响正文不影响标题/时间等
             const [fontScale, setFontScale] = useState(1);
@@ -3528,6 +4156,27 @@
             const [retryTick, setRetryTick] = useState(0);
             // 卡片选图：默认全选手记图片（最多 9 张），点选控制用哪几张及排列顺序
             const [selImgs, setSelImgs] = useState([]);
+            // 语音二维码：手记有语音时向服务端申请分享令牌并取回二维码 PNG，
+            // 打开弹窗期间缓存为 blob URL 供 renderCard 绘制；失败静默不阻塞卡片生成。
+            // audioQROn 为用户开关：关闭时不绘制二维码（长文卡片可腾出更多排版空间）
+            const [audioQR, setAudioQR] = useState(null);
+            const [audioQROn, setAudioQROn] = useState(true);
+            const audioQRRef = useRef(null);
+            useEffect(() => {
+                if (!open || !audioQROn || !note || !note.audio || !note.audio.length) return;
+                if (audioQRRef.current) return; // 本次打开已申请过，切回开关时复用缓存
+                let cancelled = false;
+                fetch(baseUrl + '/api/private/notes/' + note.id + '/audio-share/qr', { credentials: 'include' })
+                    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+                    .then(b => {
+                        if (cancelled) return;
+                        const u = URL.createObjectURL(b);
+                        audioQRRef.current = u;
+                        setAudioQR(u);
+                    })
+                    .catch(() => { });
+                return () => { cancelled = true; };
+            }, [open, note && note.id, audioQROn]);
             const stageRef = useRef(null);
             const previewRef = useRef(null);
             const timer = useRef(null);
@@ -3546,6 +4195,8 @@
                 tags: note ? note.tags : [],
                 // 卡片图片 = 用户点选的子集（顺序即点选顺序），而非手记全量图片
                 images: selImgs.map(u => u),
+                // 语音二维码受开关控制：关闭时画布不绘制二维码
+                audioQR: audioQROn ? audioQR : null,
                 brand: show.brand ? brandText : false,
                 server,
                 show,
@@ -3565,10 +4216,17 @@
             }, [open]);
 
             useEffect(() => {
-                if (!open) return;
-                setTemplate(note && note.images && note.images.length ? 'image' : 'simple');
+                // 关闭时立即释放二维码 blob：若拖到下次打开才清理，
+                // fetch effect 会因 ref 残留误判"已申请过"而跳过申请，旧 blob 又被当次 reset revoke，二维码将永远缺失
+                if (!open) {
+                    if (audioQRRef.current) { URL.revokeObjectURL(audioQRRef.current); audioQRRef.current = null; }
+                    setAudioQR(null);
+                    return;
+                }
+                const hasCardImg = !!(note && ((note.images && note.images.length) || (note.videos && note.videos.some(v => v.poster_url))));
+                setTemplate(hasCardImg ? 'image' : 'simple');
                 setSize(0);
-                setFoldLong(true);
+                setFoldLong(false);
                 setFoldLineN(8);
                 setFontScale(1);
                 setBackground('white');
@@ -3583,7 +4241,12 @@
                 setFitHint(false);
                 setRenderErr(false);
                 setRetryTick(0);
-                setSelImgs(note && note.images ? note.images.slice(0, 9).map(i => i.url) : []);
+                setAudioQROn(true);
+                setSelImgs(note && (note.images || note.videos)
+                    ? (note.images || []).slice(0, 9).map(i => i.url)
+                        .concat((note.videos || []).filter(v => v.poster_url).map(v => v.poster_url))
+                        .slice(0, 9)
+                    : []);
             }, [open, note && note.id]);
 
             useEffect(() => {
@@ -3608,8 +4271,9 @@
                     } catch (e) { console.error('卡片预览渲染失败:', e); setRenderErr(true); }
                 }, 200);
                 // deps 必须包含 foldLong/foldLineN/fontScale：否则折叠行数与字号变化不触发预览重渲染（点击看似无效）
+                // audioQR：二维码 blob URL 到位后需重绘预览，否则卡片上看不到语音二维码
                 // eslint-disable-next-line react-hooks/exhaustive-deps
-            }, [open, template, size, background, locationMode, autoLayout, show, brandText, server, note && note.id, retryTick, selImgs, foldLong, foldLineN, fontScale]);
+            }, [open, template, size, background, locationMode, autoLayout, show, brandText, server, note && note.id, retryTick, selImgs, foldLong, foldLineN, fontScale, audioQR, audioQROn]);
 
             // 预览缩放：只改变显示尺寸，内部保持真实分辨率
             useEffect(() => {
@@ -3810,6 +4474,15 @@
                                         )}
                                     </Space>
                                 </div>
+                                {note && note.audio && note.audio.length > 0 && (
+                                    <div className="cg-section">
+                                        <div className="cg-label">
+                                            <span className="cg-label-t">语音二维码</span>
+                                            <span className="cg-sub">卡片角落绘制二维码，扫码即可收听本条手记的语音；长文卡片可关闭以腾出排版空间</span>
+                                        </div>
+                                        <Switch checked={audioQROn} onChange={setAudioQROn} checkedChildren="开" unCheckedChildren="关" />
+                                    </div>
+                                )}
                                 <div className="cg-section">
                                     <div className="cg-label"><span className="cg-label-t">正文字号</span> <span className="cg-sub">调整卡片正文文字大小，标题与时间不受影响</span></div>
                                     <Segmented size="small" value={fontScale} onChange={setFontScale} options={[
@@ -3819,28 +4492,31 @@
                                         { value: 1.4, label: '特大' }
                                     ]} />
                                 </div>
-                                {note && note.images && note.images.length > 0 && show.images && (
+                                {note && (note.images || note.videos) && (note.images || []).length + (note.videos || []).filter(v => v.poster_url).length > 0 && show.images && (
                                     <div className="cg-section">
                                         <div className="cg-label">
                                             <span className="cg-label-t">选择图片</span>
-                                            <span className="cg-sub">已选 {selImgs.length} / {note.images.length} 张（最多 9 张），点击缩略图选取，角标即卡片排列顺序</span>
+                                            <span className="cg-sub">已选 {selImgs.length} / {(note.images || []).length + (note.videos || []).filter(v => v.poster_url).length} 张（最多 9 张），点击缩略图选取，角标即卡片排列顺序；视频取首帧</span>
                                         </div>
                                         <div className="cg-img-pick">
-                                            {note.images.map(img => {
-                                                const idx = selImgs.indexOf(img.url);
-                                                const dis = idx < 0 && selImgs.length >= 9;
-                                                return (
-                                                    <div key={img.id || img.url}
-                                                        className={'cg-ip' + (idx >= 0 ? ' on' : '') + (dis ? ' dis' : '')}
-                                                        onClick={() => {
-                                                            if (dis) return;
-                                                            setSelImgs(idx >= 0 ? selImgs.filter(u => u !== img.url) : [...selImgs, img.url]);
-                                                        }}>
-                                                        <img src={img.url} alt="" loading="lazy" />
-                                                        {idx >= 0 && <span className="cg-ip-n">{idx + 1}</span>}
-                                                    </div>
-                                                );
-                                            })}
+                                            {(note.images || []).map(img => ({ key: img.id || img.url, url: img.url, video: false }))
+                                                .concat((note.videos || []).filter(v => v.poster_url).map(v => ({ key: 'v-' + v.id, url: v.poster_url, video: true })))
+                                                .map(m => {
+                                                    const idx = selImgs.indexOf(m.url);
+                                                    const dis = idx < 0 && selImgs.length >= 9;
+                                                    return (
+                                                        <div key={m.key}
+                                                            className={'cg-ip' + (idx >= 0 ? ' on' : '') + (dis ? ' dis' : '')}
+                                                            onClick={() => {
+                                                                if (dis) return;
+                                                                setSelImgs(idx >= 0 ? selImgs.filter(u => u !== m.url) : [...selImgs, m.url]);
+                                                            }}>
+                                                            <img src={m.url} alt="" loading="lazy" />
+                                                            {m.video && <span className="cg-ip-v"><I name="VideoCameraOutlined" /></span>}
+                                                            {idx >= 0 && <span className="cg-ip-n">{idx + 1}</span>}
+                                                        </div>
+                                                    );
+                                                })}
                                         </div>
                                     </div>
                                 )}
@@ -4761,6 +5437,77 @@
             );
         }
 
+        // ReloginModal 站点登录态过期的就地重登浮层：
+        // 刷新时 /api/private/session 返回 401，不再跳转主页丢弃私人空间位置；
+        // 就地输入账号密码重新登录，成功后自动回到私人空间
+        function ReloginModal({ onLogin }) {
+            const [name, setName] = useState('');
+            const [pw, setPw] = useState('');
+            const [remember, setRemember] = useState(false);
+            const [loading, setLoading] = useState(false);
+            const [err, setErr] = useState('');
+            const submit = async () => {
+                if (!name.trim() || !pw) { setErr('请输入用户名和密码'); return; }
+                setLoading(true); setErr('');
+                try {
+                    // /login 失败返回纯文本错误体（http.Error），成功/限流返回 JSON：按文本读取后再尝试解析
+                    const r = await fetch(baseUrl + '/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ username: name.trim(), password: pw, remember })
+                    });
+                    const text = await r.text();
+                    let d = null;
+                    try { d = JSON.parse(text); } catch (e) { }
+                    if (r.ok) { setPw(''); onLogin(); return; }
+                    if (d && d.code === 429) setErr(d.message || '登录尝试过于频繁，请稍后再试');
+                    else setErr(text || '用户名或密码错误');
+                } catch (e) { setErr('网络错误，请重试'); }
+                finally { setLoading(false); }
+            };
+            return (
+                <Modal
+                    open
+                    title={<span><I name="UserOutlined" /> 登录已过期</span>}
+                    closable={false}
+                    width={360}
+                    footer={null}
+                    destroyOnClose
+                >
+                    <div style={{ paddingTop: 4 }}>
+                        <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                            站点登录状态已失效，重新登录后将自动回到私人空间。
+                        </Typography.Text>
+                        <Input
+                            size="large"
+                            placeholder="用户名"
+                            prefix={<I name="UserOutlined" />}
+                            value={name}
+                            onChange={e => setName(e.target.value)}
+                            onPressEnter={submit}
+                            autoFocus
+                            style={{ marginTop: 12 }}
+                        />
+                        <Input.Password
+                            size="large"
+                            placeholder="密码"
+                            value={pw}
+                            onChange={e => setPw(e.target.value)}
+                            onPressEnter={submit}
+                            style={{ marginTop: 10 }}
+                        />
+                        <Checkbox checked={remember} onChange={e => setRemember(e.target.checked)} style={{ marginTop: 10 }}>记住我（30 天）</Checkbox>
+                        {err && <Alert type="error" message={err} showIcon style={{ marginTop: 10 }} />}
+                        <Button type="primary" size="large" block loading={loading} onClick={submit} style={{ marginTop: 14 }}>重新登录</Button>
+                        <div style={{ textAlign: 'center', marginTop: 8 }}>
+                            <Button type="text" size="small" onClick={() => window.location.href = 'index.html'}>返回主页</Button>
+                        </div>
+                    </div>
+                </Modal>
+            );
+        }
+
         // ==================== 主应用 ====================
         function PrivateApp() {
             const [phase, setPhase] = useState('loading');
@@ -4774,6 +5521,8 @@
             const [searchQ, setSearchQ] = useState('');
             // 会话过期重新验证浮层：任意 API 被锁定拦截时弹出，解锁后自动续做刚才的操作
             const [reauth, setReauth] = useState(false);
+            // 站点登录态失效重登浮层：刷新时 /api/private/session 401 后就地重登，不再跳转主页
+            const [relogin, setRelogin] = useState(false);
             // 全量备份导出进行中标记（hook 必须声明在下方 phase 提前 return 之前，否则锁定态会因 hooks 数量减少而崩溃）
             const [exporting, setExporting] = useState(false);
             const phaseRef = useRef(phase);
@@ -4801,10 +5550,22 @@
                 // 确认登录并确保会话绑定的 CSRF Cookie 就绪（Double-Submit 的 Token 来源）
                 fetch(baseUrl + '/check-auth', { credentials: 'include' }).catch(() => { });
                 api('/api/private/session').then(d => {
-                    if (d.code === 401) { window.location.href = 'index.html'; return; }
+                    // 站点登录态失效：就地弹出重登浮层，不再跳转主页丢弃私人空间位置
+                    if (d.code === 401) { setPhase('locked'); setRelogin(true); return; }
                     setPhase(ok(d) && d.data && d.data.unlocked ? 'open' : 'locked');
                 }).catch(() => setPhase('locked'));
             }, []);
+
+            // 就地重登成功：关闭浮层并重新检查私人空间会话状态，恢复进入流程
+            const onRelogin = () => {
+                setRelogin(false);
+                message.success('登录成功');
+                api('/api/private/session').then(d => {
+                    const opened = ok(d) && d.data && d.data.unlocked;
+                    setPhase(opened ? 'open' : 'locked');
+                    if (opened) loadAllNotes();
+                }).catch(() => setPhase('locked'));
+            };
 
             const loadAllNotes = useCallback(() => {
                 return api('/api/private/notes').then(d => {
@@ -4841,6 +5602,8 @@
             if (phase === 'locked') return (
                 <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
                     <PasswordGate isDark={isDark} onUnlocked={() => { setPhase('open'); loadAllNotes(); }} />
+                    {/* 站点登录态失效时压在密码门之上的就地重登浮层 */}
+                    {relogin && <ReloginModal onLogin={onRelogin} />}
                 </ConfigProvider>
             );
 
@@ -4951,7 +5714,7 @@
                                 {tab === 'cards' && <CardsTab isDark={isDark} />}
                             </ErrorBoundary>
                         </div>
-                        {isMobile && (
+                        {isMobile && tab === 'timeline' && (
                             <Button className="pv-fab-mobile" type="primary" shape="circle" icon={<I name="PlusOutlined" />} onClick={() => { setEditing(null); setEditorOpen(true); }} />
                         )}
                         <Tooltip title="回到顶部">

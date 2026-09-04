@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow">
+    <title>语音手记</title>
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2042.4-50%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
+    <!-- 公开语音播放页：零外部依赖（不加载 React/antd/Babel CDN），扫码访客任何网络环境都能秒开 -->
+    <link rel="stylesheet" href="/ui.css">
+    <style>
+        html,
+        body,
+        #root {
+            margin: 0;
+            min-height: 100%;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        /* 页面容器：内容纵列居中 */
+        .au-wrap {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 28px 16px 22px;
+        }
+
+        .au-page {
+            width: 100%;
+            max-width: 460px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: au-up .25s ease both;
+        }
+
+        @keyframes au-up {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: none;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .au-page {
+                animation: none;
+            }
+        }
+
+        /* 顶部轻量标识 */
+        .au-top {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            letter-spacing: 2px;
+            color: var(--secondary);
+            margin-bottom: 14px;
+        }
+
+        .au-card {
+            width: 100%;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px 18px;
+            box-shadow: var(--shadow-overlay);
+        }
+
+        .au-title {
+            font-size: 18px;
+            font-weight: 600;
+            line-height: 1.4;
+            word-break: break-word;
+            margin: 0 0 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .au-title .au-ico {
+            flex: none;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: var(--color-primary-bg, rgba(22, 119, 255, .12));
+            color: var(--primary);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .au-sub {
+            font-size: 12px;
+            color: var(--secondary);
+            margin: 0 0 16px 42px;
+        }
+
+        /* 语音条目 */
+        .au-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 12px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-top: 10px;
+            background: var(--bg);
+            transition: border-color .2s;
+        }
+
+        .au-item.on {
+            border-color: var(--primary);
+        }
+
+        .au-play {
+            flex: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: var(--primary);
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 0;
+            transition: transform .15s, background .2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .au-play:active {
+            transform: scale(.92);
+        }
+
+        .au-play[disabled] {
+            background: var(--border-strong);
+            cursor: default;
+        }
+
+        .au-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .au-name {
+            font-size: 13px;
+            color: var(--text);
+            margin-bottom: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .au-bar {
+            height: 6px;
+            border-radius: 3px;
+            background: var(--hover);
+            cursor: pointer;
+            position: relative;
+            touch-action: none;
+        }
+
+        .au-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 0%;
+            border-radius: 3px;
+            background: var(--primary);
+        }
+
+        /* 播放中的呼吸进度头 */
+        .au-item.on .au-fill::after {
+            content: '';
+            position: absolute;
+            right: -3px;
+            top: 50%;
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--primary);
+            transform: translateY(-50%);
+        }
+
+        .au-time {
+            flex: none;
+            font-size: 12px;
+            color: var(--secondary);
+            font-variant-numeric: tabular-nums;
+            min-width: 74px;
+            text-align: right;
+        }
+
+        /* 底部标识 */
+        .au-foot {
+            margin-top: 14px;
+            font-size: 12px;
+            letter-spacing: 1px;
+            color: var(--secondary);
+        }
+
+        /* 失效 / 加载态 */
+        .au-state {
+            text-align: center;
+            padding: 26px 10px;
+            color: var(--secondary);
+            font-size: 14px;
+        }
+
+        .au-state svg {
+            display: block;
+            margin: 0 auto 10px;
+            opacity: .5;
+        }
+
+        .au-err {
+            color: var(--danger);
+        }
+
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: 34px;
+            transform: translateX(-50%) translateY(10px);
+            background: rgba(0, 0, 0, .78);
+            color: #fff;
+            font-size: 13px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .2s, transform .2s;
+            z-index: 99;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+    <script>
+        (function () {
+            try {
+                // 访客无历史偏好时回退跟随系统深浅色
+                var dark = localStorage.getItem('theme');
+                if (dark === null) {
+                    dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                }
+                document.documentElement.classList.toggle('dark', dark === 'dark' || dark === true);
+            } catch (e) { }
+        })();
+    </script>
+</head>
+
+<body>
+    <div class="au-wrap">
+        <div class="au-page">
+            <div class="au-top">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round" width="14" height="14">
+                    <path d="M9 18V5l12-2v13" />
+                    <circle cx="6" cy="18" r="3" />
+                    <circle cx="18" cy="16" r="3" />
+                </svg>
+                语音手记
+            </div>
+            <div class="au-card">
+                <div id="au-body">
+                    <div class="au-state">加载中…</div>
+                </div>
+            </div>
+            <div class="au-foot">扫码收听 · 来自私人手记</div>
+        </div>
+    </div>
+    <div class="toast" id="toast"></div>
+
+    <script>
+        (function () {
+            // token 取自路径 /audio/{token}
+            var token = window.location.pathname.replace(/^\/audio\//, '').replace(/\/+$/, '') || '';
+            var body = document.getElementById('au-body');
+            var toastTimer = null;
+
+            // ==================== 工具 ====================
+            function escHtml(s) {
+                return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            }
+            function fmtDur(s) {
+                s = Math.max(0, Math.round(s || 0));
+                var m = Math.floor(s / 60), r = s % 60;
+                return m + ':' + (r < 10 ? '0' : '') + r;
+            }
+            function toast(msg) {
+                var t = document.getElementById('toast');
+                t.textContent = msg;
+                t.classList.add('show');
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1800);
+            }
+            // 内联 SVG（零依赖）
+            function svg(paths, size) {
+                return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="'
+                    + (size || 16) + '" height="' + (size || 16) + '">' + paths + '</svg>';
+            }
+            var IC_PLAY = '<polygon points="6 4 20 12 6 20 6 4" fill="currentColor" stroke="none"/>';
+            var IC_PAUSE = '<rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" stroke="none"/>';
+            var IC_VOICE = '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>';
+            var IC_WARN = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>';
+
+            // ==================== 渲染 ====================
+            function stateHtml(icon, text, cls) {
+                return '<div class="au-state ' + (cls || '') + '">' + svg(icon, 30) + escHtml(text) + '</div>';
+            }
+
+            // items: [{id,duration,url}]，渲染播放列表
+            function renderList(data) {
+                var title = (data.title && String(data.title).trim()) || '语音手记';
+                var items = data.audios || [];
+                var html = '<h1 class="au-title"><span class="au-ico">' + svg(IC_VOICE, 18) + '</span>'
+                    + '<span style="min-width:0">' + escHtml(title) + '</span></h1>';
+                html += '<div class="au-sub">' + items.length + ' 条语音 · 轻触播放</div>';
+                if (!items.length) {
+                    html += stateHtml(IC_WARN, '这条手记暂无语音');
+                    body.innerHTML = html;
+                    return;
+                }
+                items.forEach(function (a, i) {
+                    html += '<div class="au-item" data-i="' + i + '">'
+                        + '<button class="au-play" aria-label="播放">' + svg(IC_PLAY, 18) + '</button>'
+                        + '<div class="au-main">'
+                        + '<div class="au-name">语音 ' + (i + 1) + '</div>'
+                        + '<div class="au-bar"><div class="au-fill"></div></div>'
+                        + '</div>'
+                        + '<div class="au-time">0:00 / ' + fmtDur(a.duration) + '</div>'
+                        + '</div>';
+                });
+                body.innerHTML = html;
+                bindPlayers(items);
+            }
+
+            // ==================== 播放逻辑（共享一个 audio 元素，同一时间只播一条） ====================
+            var audioEl = null;
+            var curIdx = -1;
+            function rowAt(i) { return body.querySelector('.au-item[data-i="' + i + '"]'); }
+
+            function bindPlayers(items) {
+                audioEl = document.createElement('audio');
+                audioEl.preload = 'none';
+                audioEl.style.display = 'none';
+                document.body.appendChild(audioEl);
+
+                // 元数据就绪后校正时长（MediaRecorder 产出的 webm 时长可能为 Infinity）
+                audioEl.addEventListener('loadedmetadata', function () {
+                    if (curIdx < 0 || !isFinite(audioEl.duration)) return;
+                    var it = items[curIdx];
+                    var total = isFinite(audioEl.duration) && audioEl.duration > 0 ? audioEl.duration : (it && it.duration) || 0;
+                    var row = rowAt(curIdx);
+                    if (row) row.querySelector('.au-time').textContent = '0:00 / ' + fmtDur(total);
+                });
+                audioEl.addEventListener('timeupdate', function () {
+                    if (curIdx < 0) return;
+                    var it = items[curIdx];
+                    var total = isFinite(audioEl.duration) && audioEl.duration > 0 ? audioEl.duration : (it && it.duration) || 0;
+                    var pct = total > 0 ? Math.min(100, audioEl.currentTime / total * 100) : 0;
+                    var row = rowAt(curIdx);
+                    if (row) {
+                        row.querySelector('.au-fill').style.width = pct.toFixed(2) + '%';
+                        row.querySelector('.au-time').textContent = fmtDur(audioEl.currentTime) + ' / ' + fmtDur(total);
+                    }
+                });
+                audioEl.addEventListener('ended', function () {
+                    if (curIdx < 0) return;
+                    var row = rowAt(curIdx);
+                    if (row) setRowPlaying(row, false);
+                    toast('播放结束');
+                });
+                audioEl.addEventListener('error', function () {
+                    if (curIdx < 0) return;
+                    var row = rowAt(curIdx);
+                    if (row) setRowPlaying(row, false);
+                    toast('加载失败，请稍后重试');
+                });
+
+                Array.prototype.forEach.call(body.querySelectorAll('.au-item'), function (row) {
+                    var i = parseInt(row.getAttribute('data-i'), 10);
+                    var btn = row.querySelector('.au-play');
+                    var bar = row.querySelector('.au-bar');
+                    // 播放/暂停：首次播放时才设置 src（避免预下载全部语音）
+                    btn.addEventListener('click', function () {
+                        if (curIdx === i && !audioEl.paused) {
+                            audioEl.pause();
+                            setRowPlaying(row, false);
+                            return;
+                        }
+                        if (curIdx !== i) {
+                            if (curIdx >= 0) {
+                                var old = rowAt(curIdx);
+                                if (old) setRowPlaying(old, false);
+                            }
+                            curIdx = i;
+                            audioEl.src = items[i].url;
+                        }
+                        setRowPlaying(row, true);
+                        var p = audioEl.play();
+                        if (p && p.catch) p.catch(function () { setRowPlaying(row, false); toast('播放失败'); });
+                    });
+                    // 进度条点按 seek
+                    bar.addEventListener('click', function (e) {
+                        if (curIdx !== i || !isFinite(audioEl.duration) || !(audioEl.duration > 0)) return;
+                        var rect = bar.getBoundingClientRect();
+                        var ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+                        audioEl.currentTime = ratio * audioEl.duration;
+                    });
+                });
+            }
+
+            // 切换行内播放/暂停按钮图标与高亮态
+            function setRowPlaying(row, playing) {
+                if (!row) return;
+                row.classList.toggle('on', playing);
+                row.querySelector('.au-play').innerHTML = svg(playing ? IC_PAUSE : IC_PLAY, 18);
+            }
+
+            // ==================== 入口 ====================
+            if (!token) {
+                body.innerHTML = stateHtml(IC_WARN, '分享不存在或已失效', 'au-err');
+                return;
+            }
+            fetch('/api/ashare/' + encodeURIComponent(token) + '/data', { credentials: 'include' })
+                .then(function (r) { return r.json().catch(function () { return null; }); })
+                .then(function (d) {
+                    if (!d || d.code !== 200 || !d.data) {
+                        body.innerHTML = stateHtml(IC_WARN, '分享不存在或已失效', 'au-err');
+                        return;
+                    }
+                    if (d.data.invalid) {
+                        body.innerHTML = stateHtml(IC_WARN, '分享已过期或已撤销', 'au-err');
+                        return;
+                    }
+                    renderList(d.data);
+                })
+                .catch(function () {
+                    body.innerHTML = stateHtml(IC_WARN, '加载失败，请稍后重试', 'au-err');
+                });
+        })();
+    </script>
+</body>
+
+</html>

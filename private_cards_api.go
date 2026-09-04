@@ -492,7 +492,7 @@ func shareImageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "private, max-age=600")
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	servePrivateMediaFile(w, r, abs, "card.png")
 }
 
@@ -522,7 +522,7 @@ func shareQRHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "private, max-age=600")
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	w.Write(png)
 }
 
@@ -606,7 +606,7 @@ func privateCardImageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
-	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	servePrivateMediaFile(w, r, abs, name)
 }
 

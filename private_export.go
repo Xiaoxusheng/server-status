@@ -7,6 +7,7 @@ import (
 	"archive/zip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -55,6 +56,21 @@ func (s *PrivateStore) readPrivateMedia(rel string) ([]byte, error) {
 	return decryptMediaBytes(raw)
 }
 
+// copyPrivateVideo 将分块加密视频解密后流式拷贝到 w（避免大视频整体读入内存）
+func (s *PrivateStore) copyPrivateVideo(rel string, w io.Writer) error {
+	abs, err := s.safeFilePath(rel)
+	if err != nil {
+		return err
+	}
+	vr, err := openVideoReader(abs)
+	if err != nil {
+		return err
+	}
+	defer vr.Close()
+	_, err = io.Copy(w, vr)
+	return err
+}
+
 // privateExportAllHandler GET /api/private/export/all
 // 全量导出当前用户的手记备份 zip（流式写出，不落临时文件）：
 //
@@ -81,14 +97,14 @@ func privateExportAllHandler(w http.ResponseWriter, r *http.Request) {
 
 	zw := zip.NewWriter(w)
 	defer zw.Close()
-	noteCount, imgCount, audioCount := 0, 0, 0
+	noteCount, imgCount, audioCount, videoCount := 0, 0, 0, 0
 
 	for _, n := range notes {
 		noteCount++
 		day := noteLocalDay(n.CreatedAt)
 		base := fmt.Sprintf("%s_%s_%s", day, sanitizeZipName(firstLineOrTitle(n), 40), n.ID)
 
-		// 1. Markdown 正文：结构与单条导出一致，图片/语音改为 zip 内相对路径（自包含）
+		// 1. Markdown 正文：结构与单条导出一致，图片/语音/视频改为 zip 内相对路径（自包含）
 		var b strings.Builder
 		b.WriteString(fmt.Sprintf("# %s\n\n", firstLineOrTitle(n)))
 		b.WriteString(fmt.Sprintf("> 时间：%s\n", n.CreatedAt))
@@ -104,6 +120,9 @@ func privateExportAllHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		for i, a := range n.Audio {
 			b.WriteString(fmt.Sprintf("\n[语音%d](../audio/%s/audio-%02d%s)\n", i+1, n.ID, i+1, strings.ToLower(filepath.Ext(a.FilePath))))
+		}
+		for i, v := range n.Videos {
+			b.WriteString(fmt.Sprintf("\n[视频%d](../videos/%s/video-%02d%s)\n", i+1, n.ID, i+1, strings.ToLower(filepath.Ext(v.FilePath))))
 		}
 		if f, err := zw.Create("notes/" + base + ".md"); err == nil {
 			_, _ = f.Write([]byte(b.String()))
@@ -134,9 +153,28 @@ func privateExportAllHandler(w http.ResponseWriter, r *http.Request) {
 				audioCount++
 			}
 		}
+
+		// 4. 视频：分块格式流式解密拷入；封面随后写入
+		for i, v := range n.Videos {
+			if f, err := zw.Create(fmt.Sprintf("videos/%s/video-%02d%s", n.ID, i+1, strings.ToLower(filepath.Ext(v.FilePath)))); err == nil {
+				if err := privateStore.copyPrivateVideo(v.FilePath, f); err != nil {
+					log.Printf("备份导出：视频读取失败 note=%s video=%s: %v", n.ID, v.ID, err)
+				} else {
+					videoCount++
+				}
+			}
+			if v.PosterPath == "" {
+				continue
+			}
+			if data, err := privateStore.readPrivateMedia(v.PosterPath); err != nil {
+				log.Printf("备份导出：视频封面读取失败 note=%s video=%s: %v", n.ID, v.ID, err)
+			} else if f, err := zw.Create(fmt.Sprintf("videos/%s/poster-%02d%s", n.ID, i+1, strings.ToLower(filepath.Ext(v.PosterPath)))); err == nil {
+				_, _ = f.Write(data)
+			}
+		}
 	}
 
-	// 4. manifest.json 备份元信息
+	// 5. manifest.json 备份元信息
 	if f, err := zw.Create("manifest.json"); err == nil {
 		meta, _ := json.MarshalIndent(map[string]interface{}{
 			"exported_at": time.Now().Format(time.RFC3339),
@@ -144,6 +182,7 @@ func privateExportAllHandler(w http.ResponseWriter, r *http.Request) {
 			"notes":       noteCount,
 			"images":      imgCount,
 			"audio":       audioCount,
+			"videos":      videoCount,
 			"version":     1,
 		}, "", "  ")
 		_, _ = f.Write(meta)
