@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
     <title>Web Shell - Server Status</title>
     <link rel="icon"
         href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3C/svg%3E">
@@ -86,6 +87,8 @@
             --green: #16a34a;
             --yellow: #d69e2e;
             --red: #dc2626;
+            /* 终端容器背景默认值；实际由 .sp-app 内联 style 跟随「终端深色」开关注入，
+               与终端画布背景严格一致，避免画布下方出现双色断层（页面深浅色与其无关） */
             --term-bg: #1e2430;
             /* Light 模式终端用柔和深灰，非纯黑 */
             background: var(--bg);
@@ -100,7 +103,6 @@
             --txt: #e7eaee;
             --muted: #8b939c;
             --accent-weak: #162a46;
-            --term-bg: #0d1117;
         }
 
         /* ========== 页面骨架 ========== */
@@ -118,7 +120,9 @@
         }
 
         .sp-app {
-            min-height: 100vh;
+            /* 移动端动态视口：dvh 随地址栏/软键盘正确收缩（桌面回退 100vh），避免底部快捷键盘被浏览器 UI 遮挡 */
+            height: 100vh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
             box-sizing: border-box;
@@ -574,10 +578,6 @@
             }
         }
 
-        .sp-app.dark .ws-termstatus {
-            background: #0d1117;
-        }
-
         /* ========== 底部 Session 状态栏 ========== */
         .ws-footer {
             display: flex;
@@ -710,10 +710,29 @@
 
         /* ========== 响应式 ========== */
         @media (max-width: 768px) {
+
+            /* Header：品牌/状态一行，操作按钮自然换行到第二行 */
             .ws-header {
-                padding: 0 10px;
+                flex-wrap: wrap;
                 height: auto;
-                min-height: 52px;
+                min-height: 0;
+                padding: 6px 10px;
+                row-gap: 6px;
+            }
+
+            .ws-h-left {
+                flex-wrap: wrap;
+                row-gap: 4px;
+            }
+
+            .ws-h-right {
+                flex-wrap: wrap;
+                row-gap: 4px;
+            }
+
+            /* 权限 Tag 手机上隐藏（能打开本页即有权限），省出横向空间 */
+            .ws-perm-tag {
+                display: none;
             }
 
             .ws-sub,
@@ -729,6 +748,11 @@
 
             .ws-toolstrip {
                 padding: 6px 8px;
+                gap: 6px;
+            }
+
+            .ws-right-actions {
+                margin-left: auto;
             }
 
             .ws-termhead {
@@ -746,13 +770,20 @@
                 display: flex;
             }
 
+            /* 快捷键盘加大触控面积（≥40px 高） */
+            .pad .btn {
+                padding: 10px 6px;
+                font-size: 13px;
+            }
+
             .ws-footer {
                 gap: 4px 10px;
                 font-size: 11px;
             }
 
-            .ws-right-actions .ws-hint {
-                display: none;
+            /* iOS：输入框 ≥16px 防止聚焦时页面自动放大 */
+            .ant-modal .ant-input {
+                font-size: 16px;
             }
         }
     </style>
@@ -850,7 +881,7 @@
                 secureFetch(baseUrl + '/check-auth')
                     .then(r => r.json())
                     .then(d => {
-                        if (d.code === 200 && (d.user.permissions || []).some(x => x === '*' || x === 'system:exec')) {
+                        if (d.code === 200 && (d.user.permissions || []).some(x => x === '*' || x === 'shell:use')) {
                             setAuth({ loading: false, ok: true, user: d.user });
                             setAuthOpen(true); // 每次进入都先要求二次认证
                         } else {
@@ -953,10 +984,11 @@
                 sendWS({ type: 'input', data: text });
             }
 
-            // 终端主题热切换：仅更新 xterm 主题 + 同步容器背景 CSS 变量。
+            // 终端主题热切换：仅更新 xterm 主题与 localStorage；容器背景 --term-bg 由
+            // .sp-app 的内联 style 跟随 terminalDark 在渲染时注入（旧实现写在 <html> 上，
+            // 会被 .sp-app 类声明按页面主题覆盖，导致页面浅色+终端深色时画布下方出现双色断层）。
             // 不 dispose/重建实例——重建会清空屏幕与回滚缓冲区（切换后黑屏丢内容）。
             React.useEffect(() => {
-                document.documentElement.style.setProperty('--term-bg', terminalDark ? '#0d1117' : '#1e2430');
                 localStorage.setItem('termTheme', terminalDark ? 'dark' : 'light');
                 const t = termInst.current;
                 if (!t) return;
@@ -1062,6 +1094,13 @@
                 };
                 const ro = new ResizeObserver(dispatchResize);
                 ro.observe(termRef.current);
+                // 移动端软键盘弹出/收起不改变布局容器（iOS 尤甚），ResizeObserver 收不到；
+                // 监听 visualViewport 变化同步 refit 并把新行列上报给 PTY
+                let vvResize = null;
+                if (window.visualViewport) {
+                    vvResize = () => dispatchResize();
+                    window.visualViewport.addEventListener('resize', vvResize);
+                }
 
                 termInst.current = term;
                 fitRef.current = fit;
@@ -1075,6 +1114,9 @@
                     // 同步移除终端区域监听器，防止会话重建后重复触发
                     termEl.removeEventListener('contextmenu', onContextMenu);
                     termEl.removeEventListener('click', onFocusClick);
+                    if (vvResize && window.visualViewport) {
+                        window.visualViewport.removeEventListener('resize', vvResize);
+                    }
                 };
             }, [auth.ok]);
 
@@ -1280,8 +1322,11 @@
                 setShowScrollBottom(false);
             }
 
-            // 移动端快捷键：向终端写入控制字节
+            // 移动端快捷键：向终端写入控制字节。
+            // 额外提供 / 空格 - 回车：iOS 虚拟键盘在部分场景下输入不可见/无法执行时，
+            // 可通过点按按键输入路径类命令（如 /cleanup.sh）并回车执行
             const padKeys = [
+                { k: 'ENTER', v: '\r', accent: true }, { k: '/', v: '/' }, { k: '空格', v: ' ' }, { k: '-', v: '-' },
                 { k: 'ESC', v: '\x1b' }, { k: 'TAB', v: '\x09' },
                 { k: '↑', v: '\x1b[A' }, { k: '↓', v: '\x1b[B' }, { k: '←', v: '\x1b[D' }, { k: '→', v: '\x1b[C' },
                 { k: 'HOME', v: '\x1b[1~' }, { k: 'END', v: '\x1b[4~' },
@@ -1337,7 +1382,10 @@
 
             return (
                 <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#14171b' : '#f5f6f8', colorBgContainer: isDark ? '#1b1f24' : '#ffffff', colorPrimary: '#1677ff' } }}>
-                    <div className={'sp-app' + (isDark ? ' dark' : '')}>
+                    {/* --term-bg 跟随「终端深色」开关（而非页面深浅色），内联 style 优先级
+                        高于类声明，保证终端容器/遮罩背景与 xterm 画布背景严格一致不出现双色断层 */}
+                    <div className={'sp-app' + (isDark ? ' dark' : '')}
+                        style={{ '--term-bg': terminalDark ? '#0d1117' : '#1e2430' }}>
 
                         {/* ===== 顶部 Header（antd 组件统一） ===== */}
                         <header className="ws-header">
@@ -1351,7 +1399,7 @@
                                 </div>
                                 <span className="ws-head-sep"></span>
                                 <Badge status={connState === 'ok' ? 'success' : connState === 'proc' ? 'processing' : connState === 'err' ? 'error' : 'default'} text={statusText} />
-                                <Tag color={execOk ? 'blue' : 'orange'} style={{ marginInlineEnd: 0 }}>system:exec</Tag>
+                                <Tag className="ws-perm-tag" color={execOk ? 'blue' : 'orange'} style={{ marginInlineEnd: 0 }}>shell:use</Tag>
                             </div>
                             <div className="ws-h-right">
                                 <Tooltip title="清空终端显示（不影响连接）">
@@ -1371,7 +1419,7 @@
 
                         {!execOk ? (
                             <div style={{ padding: 24 }}>
-                                <Alert type="warning" showIcon message="您没有 system:exec 权限，无法使用 Web Shell。" action={<Button size="small" onClick={() => window.location.href = 'index.html'}>返回首页</Button>} />
+                                <Alert type="warning" showIcon message="您没有 shell:use 权限，无法使用 Web Shell。" action={<Button size="small" onClick={() => window.location.href = 'index.html'}>返回首页</Button>} />
                             </div>
                         ) : (
                             <div className="ws-stage">

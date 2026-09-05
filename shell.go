@@ -556,7 +556,14 @@ func buildShellEnv() []string {
 		"TERM=xterm-256color",
 		"COLORTERM=truecolor",
 		"SHELL="+resolveShell(),
+		// 提示符带实时路径：\w 随 cd 更新（家目录缩写 ~），深浅两种终端配色下都可读。
+		// 真实 tty 下 bash（含以 sh 名义运行）会把继承的 PS1 重置为默认 \s-\v\$，
+		// 因此这里同时保留 PS1 兜底，并通过 POSIX $ENV rc 文件注入（见 ensureShellRC）
+		"PS1=[\\u@\\h \\w]\\$ ",
 	)
+	if rc := ensureShellRC(); rc != "" {
+		env = append(env, "ENV="+rc)
+	}
 	// 仅当宿主机存在对应 locale 时才设置，避免 setlocale 警告（CentOS 7 无 C.UTF-8）
 	shellLocaleOnce.Do(detectShellLocale)
 	if shellLocale != "" {
@@ -569,6 +576,38 @@ var (
 	shellLocaleOnce sync.Once
 	shellLocale     string // 检测到的可用 UTF-8 locale；空串表示不做 locale 设置
 )
+
+var (
+	shellRCOnce sync.Once
+	shellRCPath string // 提示符 rc 文件路径；创建失败时为空（提示符退化为默认，不带路径）
+)
+
+// ensureShellRC 写出 Web Shell 提示符 rc 文件并返回路径（进程内一次）。
+// 实测（CentOS 7，/bin/sh -> bash）：真实 tty 下交互 bash 会把继承的 PS1 重置为
+// 默认 \s-\v\$（不带路径），仅 -i + 管道 stdin 时才保留；而 POSIX 交互 shell 会
+// 读取 $ENV 指向的 rc 文件，因此通过 ENV 注入 PS1 是稳定生效的方式。
+// rc 文件只设置提示符（\w 随 cd 实时显示当前路径，家目录缩写 ~），不改动其他环境
+func ensureShellRC() string {
+	shellRCOnce.Do(func() {
+		f, err := os.CreateTemp("", "pv-shellrc-*.rc")
+		if err != nil {
+			log.Printf("WebShell 提示符 rc 文件创建失败（提示符将不带路径）: %v", err)
+			return
+		}
+		content := "# Server Status Web Shell prompt: \\w shows live cwd (~ = home)\nPS1='[\\u@\\h \\w]\\$ '\n"
+		if _, err := f.WriteString(content); err != nil {
+			f.Close()
+			log.Printf("WebShell 提示符 rc 文件写入失败: %v", err)
+			return
+		}
+		if err := f.Close(); err != nil {
+			log.Printf("WebShell 提示符 rc 文件关闭失败: %v", err)
+			return
+		}
+		shellRCPath = f.Name()
+	})
+	return shellRCPath
+}
 
 // detectShellLocale 检测宿主机可用的 UTF-8 locale（进程内仅执行一次并缓存）。
 // 依次尝试 C.utf8 / en_US.utf8 / zh_CN.utf8，都不存在则不设置 locale 相关变量。
