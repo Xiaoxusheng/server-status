@@ -8,6 +8,7 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"net/http"
@@ -42,11 +43,14 @@ func (s *PrivateStore) createAudioShare(userID, noteID string) (string, error) {
 	if n == 0 {
 		return "", fmt.Errorf("该手记没有语音")
 	}
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
+	// 16 字节（128 位熵）经 base64url 编码仅 22 字符：token 越短 URL 越短，
+	// 二维码模块数从 32 字节 hex 时的 Version 8（49×49）降到 Version 3（29×29），
+	// 卡片缩放后仍易扫；防暴力猜测强度依旧足够（2^128）
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
 		return "", err
 	}
-	token := fmt.Sprintf("%x", tokenBytes)
+	token := base64.RawURLEncoding.EncodeToString(buf)
 	_, err := s.db.Exec(`
 		INSERT INTO note_audio_shares (id, note_id, user_id, token_hash, expires_at, created_at, revoked_at)
 		VALUES (?, ?, ?, ?, NULL, ?, NULL)`,
@@ -164,7 +168,8 @@ func privateAudioShareQRHandler(w http.ResponseWriter, r *http.Request) {
 		scheme = "http"
 	}
 	shareURL := fmt.Sprintf("%s://%s/audio/%s", scheme, r.Host, token)
-	png, err := qrcode.Encode(shareURL, qrcode.Medium, 320)
+	// Highest 纠错 + 512px：卡片缩放/轻微遮挡后仍可扫（token 已缩短，高纠错不会明显加大密度）
+	png, err := qrcode.Encode(shareURL, qrcode.Highest, 512)
 	if err != nil {
 		log.Printf("PRIVATE audio-share qr error: %v", err)
 		writeJSONError(w, http.StatusInternalServerError, "二维码生成失败")

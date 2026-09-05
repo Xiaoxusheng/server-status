@@ -83,11 +83,22 @@ func (s *PrivateStore) createCard(userID string, req createCardRequest) (*Privat
 		title = title[:200]
 	}
 	if _, err := s.db.Exec(`
-		INSERT INTO note_cards (id, note_id, user_id, template, file_path, width, height, title, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			INSERT INTO note_cards (id, note_id, user_id, template, file_path, width, height, title, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, nullIfEmpty(req.NoteID), userID, req.Template, rel, req.Width, req.Height, title, nowUTC()); err != nil {
 		os.Remove(abs)
 		return nil, err
+	}
+	// 语音二维码令牌与卡片生命周期绑定：把该手记最近一个未绑定卡片的分享令牌挂到新卡片上，
+	// 卡片删除时令牌随卡失效（生成卡片的 CardModal 打开时申请令牌，保存卡片前二维码已绘制完成）
+	if req.NoteID != "" {
+		if _, err := s.db.Exec(`
+			UPDATE note_audio_shares SET card_id = ? WHERE id = (
+				SELECT id FROM note_audio_shares
+				WHERE note_id = ? AND card_id IS NULL AND revoked_at IS NULL
+				ORDER BY rowid DESC LIMIT 1)`, id, req.NoteID); err != nil {
+			log.Printf("PRIVATE card.audioshare.link error: %v", err)
+		}
 	}
 	return &PrivateCardMeta{
 		ID: id, NoteID: req.NoteID, Template: req.Template, FilePath: rel,
@@ -164,8 +175,23 @@ func (s *PrivateStore) deleteCard(userID, cardID string) error {
 	if abs, err := s.safeFilePath(c.FilePath); err == nil {
 		os.Remove(abs)
 	}
-	_, err = s.db.Exec(`DELETE FROM note_cards WHERE id = ? AND user_id = ?`, cardID, userID)
-	return err
+	if _, err := s.db.Exec(`DELETE FROM note_cards WHERE id = ? AND user_id = ?`, cardID, userID); err != nil {
+		return err
+	}
+	// 语音二维码令牌随卡片失效：
+	// 1) 绑定了该卡片的令牌直接删除，扫码页显示「分享不存在或已失效」；
+	// 2) 未绑定令牌（历史数据/打开弹窗后未保存卡片）在该手记已无任何剩余卡片时一并删除——
+	//    此时已不存在携带二维码的卡片，令牌不应继续有效；仍有剩余卡片则保留（其他卡片可能印有该码）
+	if c.NoteID != "" {
+		if _, err := s.db.Exec(`
+			DELETE FROM note_audio_shares WHERE note_id = ? AND (
+				card_id = ?
+				OR (card_id IS NULL AND NOT EXISTS (SELECT 1 FROM note_cards WHERE note_id = ?))
+			)`, c.NoteID, cardID, c.NoteID); err != nil {
+			log.Printf("PRIVATE card.audioshare.cleanup error: %v", err)
+		}
+	}
+	return nil
 }
 
 func (s *PrivateStore) cardFilePath(userID, cardID string) (string, string, error) {

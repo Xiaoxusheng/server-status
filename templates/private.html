@@ -2698,8 +2698,8 @@
             // audioQRBox 只算几何（供排版预留空间防遮挡），drawAudioQR 真正取图绘制
             const audioQRBox = (pos) => {
                 if (!audioQR) return null;
-                const qp = width * 0.014;  // 盒内边距
-                const qs = width * 0.15;   // 二维码边长（≥160px@1080，保证可扫）
+                const qs = width * 0.19;   // 二维码边长：卡片缩放分享后仍要保证每模块足够像素可扫
+                const qp = Math.max(width * 0.016, qs * 0.1); // 盒内边距兼作二维码静区，过小会扫不出
                 const qt = width * 0.03;   // 说明文字高度
                 const bw = qs + qp * 2;
                 const bh = qp + qs + qt + qp * 0.55;
@@ -2707,14 +2707,15 @@
                 const by = pos === 'topright'
                     ? height * 0.055
                     : height - height * (brandTxt ? 0.095 : 0.045) - bh;
-                return { bx, by, bw, bh };
+                // 几何参数随盒一并返回，绘制端直接取用，避免两处尺寸不同步
+                return { bx, by, bw, bh, qs, qp, qt };
             };
             const drawAudioQR = async (pos) => {
                 const box = audioQRBox(pos);
                 if (!box) return;
                 try {
                     const img = await loadImg(audioQR);
-                    const qp = width * 0.014, qs = width * 0.15, qt = width * 0.03;
+                    const { qs, qp, qt } = box;
                     ctx.save();
                     // 白底圆角盒：二维码必须高对比度才可扫，深色/图片背景下也统一白底
                     ctx.fillStyle = 'rgba(255,255,255,.94)';

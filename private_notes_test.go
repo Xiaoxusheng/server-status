@@ -456,3 +456,86 @@ func TestMediaEncryptionRoundtrip(t *testing.T) {
 		t.Fatalf("迁移后解密回环失败: %v", err)
 	}
 }
+
+// TestAudioShareCardLifecycle 语音二维码令牌随卡片删除而失效：
+// 绑定令牌在所属卡片删除后必须失效；未绑定令牌在手记无剩余卡片时一并失效
+func TestAudioShareCardLifecycle(t *testing.T) {
+	st := newTestStore(t)
+	now := time.Now().UTC().Format(time.RFC3339)
+	// 手记 + 语音（createAudioShare 的前置条件）
+	noteID := "note-as-life"
+	if _, err := st.db.Exec(`INSERT INTO notes (id, user_id, title, created_at, updated_at) VALUES (?, 'alice', '语音手记', ?, ?)`,
+		noteID, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.db.Exec(`INSERT INTO note_audio (id, note_id, file_path, duration, created_at) VALUES ('aud-1', ?, 'audio/a.webm', 3, ?)`,
+		noteID, now); err != nil {
+		t.Fatal(err)
+	}
+	// 生成 1x1 PNG（卡片图片入参）
+	img := image.NewRGBA(image.Rect(0, 0, 2, 2))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	pngB64 := "data:image/png;base64," + base64.StdEncoding.EncodeToString(buf.Bytes())
+	newCard := func() *PrivateCardMeta {
+		t.Helper()
+		c, err := st.createCard("alice", createCardRequest{
+			NoteID: noteID, Template: "simple", Width: 1080, Height: 1080, Image: pngB64,
+		})
+		if err != nil {
+			t.Fatalf("createCard: %v", err)
+		}
+		return c
+	}
+	shareAlive := func(token string) bool {
+		t.Helper()
+		_, err := st.getAudioShareByToken(token)
+		return err == nil
+	}
+
+	// 场景 1：两次打开弹窗各产生一个令牌 → 各绑定到一张卡片 → 删一张卡只失效自己的令牌
+	tok1, err := st.createAudioShare("alice", noteID)
+	if err != nil {
+		t.Fatalf("createAudioShare: %v", err)
+	}
+	tok2, err := st.createAudioShare("alice", noteID)
+	if err != nil {
+		t.Fatalf("createAudioShare: %v", err)
+	}
+	card1 := newCard() // 绑定 tok2（最新未绑定令牌）
+	card2 := newCard() // 绑定 tok1
+	if err := st.deleteCard("alice", card1.ID); err != nil {
+		t.Fatalf("deleteCard: %v", err)
+	}
+	if shareAlive(tok2) {
+		t.Fatal("卡片删除后其绑定的语音分享令牌应失效")
+	}
+	if !shareAlive(tok1) {
+		t.Fatal("未删除卡片（card2）的令牌不应被误删")
+	}
+
+	// 场景 2：删除最后一张卡片后，未绑定令牌（历史数据/未保存卡片）一并失效
+	tok3, err := st.createAudioShare("alice", noteID)
+	if err != nil {
+		t.Fatalf("createAudioShare: %v", err)
+	}
+	if !shareAlive(tok3) {
+		t.Fatal("新令牌应有效")
+	}
+	if err := st.deleteCard("alice", card2.ID); err != nil {
+		t.Fatalf("deleteCard: %v", err)
+	}
+	if shareAlive(tok1) || shareAlive(tok3) {
+		t.Fatal("手记无剩余卡片后，剩余令牌应全部失效")
+	}
+
+	// 场景 3：无语音的手记不能创建语音分享（回归确认）
+	if _, err := st.db.Exec(`DELETE FROM note_audio WHERE id = 'aud-1'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.createAudioShare("alice", noteID); err == nil {
+		t.Fatal("无语音手记不应创建语音分享")
+	}
+}

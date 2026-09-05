@@ -636,7 +636,7 @@ func (s *PrivateStore) migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_note_shares_card ON note_shares(card_id)`,
 		`CREATE TABLE IF NOT EXISTS note_audio_shares (
 			id TEXT PRIMARY KEY, note_id TEXT NOT NULL, user_id TEXT NOT NULL,
-			token_hash TEXT NOT NULL UNIQUE, expires_at TEXT,
+			card_id TEXT, token_hash TEXT NOT NULL UNIQUE, expires_at TEXT,
 			created_at TEXT NOT NULL, revoked_at TEXT,
 			FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE)`,
 		`CREATE INDEX IF NOT EXISTS idx_note_audio_shares_note ON note_audio_shares(note_id)`,
@@ -653,6 +653,11 @@ func (s *PrivateStore) migrate() error {
 		if _, err := s.db.Exec(q); err != nil {
 			return err
 		}
+	}
+	// 迁移：note_audio_shares 补充 card_id 列（旧库无此列）；列已存在时忽略 duplicate 错误
+	if _, err := s.db.Exec(`ALTER TABLE note_audio_shares ADD COLUMN card_id TEXT`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column name") {
+		return err
 	}
 	return nil
 }
