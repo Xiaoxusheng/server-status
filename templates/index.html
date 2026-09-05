@@ -79,6 +79,27 @@
             background: #f5f5f5;
         }
 
+        /* 修复浏览器密码自动填充（Chrome/Edge autofill）只给文本区上淡蓝底、
+           不盖住圆角与密码可见切换图标区域，看起来“颜色没有填满输入框”的问题：
+           用 1000px 内阴影把底色铺满整个输入框 */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus {
+            -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+            -webkit-text-fill-color: #1f2328;
+            caret-color: #1f2328;
+            border-radius: inherit;
+            transition: background-color 99999s ease-out;
+        }
+
+        html.dark input:-webkit-autofill,
+        html.dark input:-webkit-autofill:hover,
+        html.dark input:-webkit-autofill:focus {
+            -webkit-box-shadow: 0 0 0 1000px #1b1f24 inset;
+            -webkit-text-fill-color: #e7eaee;
+            caret-color: #e7eaee;
+        }
+
         #root {
             min-height: 100vh;
         }
@@ -387,11 +408,14 @@
             font-weight: 600;
             border-bottom: 1px solid var(--color-border);
             cursor: move;
-            touch-action: none; /* 标题栏承担拖动，触摸拖动时不滚动页面 */
+            touch-action: none;
+            /* 标题栏承担拖动，触摸拖动时不滚动页面 */
         }
 
         .media-head .ant-btn,
-        .media-head .ant-slider { cursor: pointer; }
+        .media-head .ant-slider {
+            cursor: pointer;
+        }
 
         /* 磁盘分区：主机信息卡下方的紧凑横条 */
         .disk-strip {
