@@ -150,9 +150,10 @@ jobs:
           RANGE="${PREV_TAG:+${PREV_TAG}..}${GITHUB_REF_NAME}"
           echo "release notes range: $RANGE"
           LOG=$(git log --no-merges --pretty=format:"- %s (%h)" "$RANGE")
-          FEATS=$(echo "$LOG" | grep "^- feat:" | sed 's/^- feat: /- /' || true)
-          FIXES=$(echo "$LOG" | grep "^- fix:" | sed 's/^- fix: /- /' || true)
-          OTHERS=$(echo "$LOG" | grep -v -e "^- feat:" -e "^- fix:" || true)
+          # 提交类型带 scope（如 feat(private):）时同样归组：按前缀匹配，subject 前缀整体剥掉
+          FEATS=$(echo "$LOG" | grep "^- feat" | sed 's/^- feat[^:]*: /- /' || true)
+          FIXES=$(echo "$LOG" | grep "^- fix" | sed 's/^- fix[^:]*: /- /' || true)
+          OTHERS=$(echo "$LOG" | grep -v -e "^- feat" -e "^- fix" || true)
           {
             echo "body<<__NOTES_EOF__"
             echo "## What's Changed"
