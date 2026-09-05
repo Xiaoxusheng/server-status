@@ -156,20 +156,32 @@
             border-color: var(--color-border-strong);
         }
 
+        /* 高亮描边用伪元素 + opacity 动画：合成器直接合成，不触发卡片逐帧重绘——
+           box-shadow 动画会在整个 1.6s 内每帧重绘整张大卡片，跳转落地时造成掉帧 */
         @keyframes noteFlash {
 
             0%,
             55% {
-                box-shadow: 0 0 0 2px #4096ff;
+                opacity: 1;
             }
 
             100% {
-                box-shadow: none;
+                opacity: 0;
             }
         }
 
         .note-card.note-flash {
-            animation: noteFlash 1.6s ease;
+            position: relative;
+        }
+
+        .note-card.note-flash::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: inherit;
+            border: 2px solid #4096ff;
+            pointer-events: none;
+            animation: noteFlash 1.6s ease forwards;
         }
 
         .note-card .ant-card-body {
@@ -1053,12 +1065,13 @@
             display: inline-block;
         }
 
+        /* 暗色卡面 #1f1f1f，空格子不能再用同色：整体提亮并拉开相邻色阶的亮度差 */
         html.dark .cal-inner {
-            --cal-0: #1f1f1f;
-            --cal-1: #033a16;
-            --cal-2: #196c2e;
-            --cal-3: #2ea043;
-            --cal-4: #39d353;
+            --cal-0: #2b3038;
+            --cal-1: #14683c;
+            --cal-2: #1c7f42;
+            --cal-3: #2aa84f;
+            --cal-4: #3fd35f;
         }
 
         .cal-months {
@@ -1187,7 +1200,11 @@
         }
 
         .cal-pop-item:hover {
-            background: var(--color-bg, rgba(0, 0, 0, .04));
+            background: rgba(0, 0, 0, .04);
+        }
+
+        html.dark .cal-pop-item:hover {
+            background: rgba(255, 255, 255, .08);
         }
 
         .cal-pop-item-t {
@@ -2253,96 +2270,34 @@
             const n = Math.max(0, Math.round(Number(s) || 0));
             return Math.floor(n / 60) + ':' + pad(n % 60);
         };
-        // 统一滚动动画（两段式，根治长距离滚动白屏）：
-        // 长距离连续滚动时，途经的懒加载图片 / content-visibility 未渲染卡片来不及绘制，
-        // 会出现滑动途中白屏。策略：
-        //   长距离 → 瞬时定位到目标外侧约 1.2 屏处，停 2 帧待目标区域真实渲染完成，
-        //            再对剩余短距离做 rAF easeOutCubic 平滑收尾（短距离新内容极少，不会白屏）；
-        //   短距离（<1.5 屏）→ 单段 easeOutCubic 缓出一次到位。
-        // to 支持传函数：瞬移后邻近卡片真实渲染，高度可能与估算不同，收尾前取实时坐标。
-        // 动画期间用户滚轮/触摸立即接管并终止动画；重复调用自动取消上一次动画。
-        let scrollAnimSeq = 0;
-        // 等待瞬移落点附近区域真实绘制完成：基线 3 帧 + 落点视口内未完成图片全部解码（单张上限 300ms）。
-        // 根治长距离瞬移（回顶/日历跳转）途中白屏——content-visibility 卡片重新布局绘制、懒加载图片解码
-        // 都需要时间，固定停 2 帧在长页面上经常不够。滑动进入的一屏范围也纳入检查（多留半屏余量）。
-        function waitPainted(done) {
-            let frames = 0, decoded = false, called = false;
-            const vh = window.innerHeight;
-            const imgs = Array.from(document.querySelectorAll('.note-card img, .note-vids img')).filter(im => {
-                const r = im.getBoundingClientRect();
-                return r.top < vh * 1.5 && r.bottom > -vh * 0.5 && !im.complete;
-            });
-            const finish = () => {
-                if (called || frames < 3 || !decoded) return;
-                called = true;
-                done();
-            };
-            if (imgs.length === 0) {
-                decoded = true;
-            } else {
-                Promise.all(imgs.map(im => Promise.race([im.decode().catch(() => { }), new Promise(r => setTimeout(r, 300))])))
-                    .then(() => { decoded = true; finish(); });
-            }
-            const tick = () => { frames++; finish(); if (!called) requestAnimationFrame(tick); };
-            requestAnimationFrame(tick);
-        }
+        // 统一滚动动画：全部走浏览器原生平滑滚动（behavior:'smooth'）——动画由合成器线程驱动，
+        // 即使主线程正被图片解码 / content-visibility 布局占用，滚动运动依然满帧不卡顿；
+        // 之前 rAF 逐帧 window.scrollTo 的动画跑在主线程上，和落点区域的解码绘制抢线程，
+        // 正是「点击后滑动一顿一顿」的根源。用户滚轮/触摸会自然接管取消原生平滑滚动。
+        // 长距离大列表（cv 开启，视口外是空占位盒）仍先瞬移到目标外侧约 1 屏再原生平滑收尾，
+        // 避免连续滚过整页未渲染区域造成大片占位空白；to 支持传函数：瞬移布局稳定后取实时坐标。
+        let smoothSeq = 0;
         function animateScrollTo(to, dur) {
-            // 解析目标位置（函数形式每次取实时值，且不允许滚出页面顶部）
+            // 序号令牌：连点时新动画让旧动画的延迟收尾自动作废，避免两次动画互相抢滚动条
+            const seq = ++smoothSeq;
             const resolveTo = () => Math.max(0, typeof to === 'function' ? to() : to);
-            const seq = ++scrollAnimSeq;
-            const alive = () => seq === scrollAnimSeq;
-            // 用户主动滚动立即终止动画，避免与用户抢滚动条
-            const takeover = () => { scrollAnimSeq++; };
-            window.addEventListener('wheel', takeover, { passive: true });
-            window.addEventListener('touchstart', takeover, { passive: true });
-            const cleanup = () => {
-                window.removeEventListener('wheel', takeover);
-                window.removeEventListener('touchstart', takeover);
+            const smooth = top => {
+                if (seq !== smoothSeq) return;
+                try { window.scrollTo({ top, behavior: 'smooth' }); }
+                catch (e) { window.scrollTo(0, top); } // 老浏览器不支持选项形式：直接瞬移，保证可用
             };
-            // easeOutCubic：起步快、收尾缓，衔接瞬移后的观感最自然
-            const easeOut = t => 1 - Math.pow(1 - t, 3);
-            // easeInOutCubic：起步缓→中段快→收尾缓，整段连贯滑升用（回顶全程滑动画不突兀）
-            const easeInOut = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-            // rAF 驱动一段平滑滚动，ms 为时长，easing 可指定缓动曲线，结束回调 onDone
-            const rafScroll = (fromY, toY, ms, easing, onDone) => {
-                const ease = easing || easeOut;
-                let start = null;
-                const step = ts => {
-                    if (!alive()) return cleanup();
-                    if (start === null) start = ts;
-                    const p = Math.min(1, (ts - start) / ms);
-                    window.scrollTo(0, fromY + (toY - fromY) * ease(p));
-                    if (p < 1) requestAnimationFrame(step);
-                    else { cleanup(); if (onDone) onDone(); }
-                };
-                requestAnimationFrame(step);
-            };
-
             const target = resolveTo();
             const dist = Math.abs(target - window.scrollY);
-            if (dist < 2) { cleanup(); return; }
-            if (dist < window.innerHeight * 1.5) {
-                // 短距离：单段缓出，一次到位
-                rafScroll(window.scrollY, target, Math.min(700, Math.max(350, dist * 0.6)));
+            if (dist < 2) return;
+            if (document.querySelector('.pv-list-heavy') && dist >= window.innerHeight * 1.5) {
+                const dir = target > window.scrollY ? 1 : -1;
+                // 瞬移本身会立即中断正在进行的原生平滑滚动，天然完成上一次动画的取消
+                window.scrollTo(0, Math.max(0, target - dir * window.innerHeight));
+                requestAnimationFrame(() => requestAnimationFrame(() => smooth(resolveTo())));
                 return;
             }
-            if (!document.querySelector('.pv-list-heavy')) {
-                // 小列表（全量渲染，无 content-visibility 占位盒）：整段连贯滑升——
-                // easeInOutCubic 起步缓→中段快→减速入顶，从底部一路滑上去不跳段不空白
-                rafScroll(window.scrollY, target, Math.min(1600, Math.max(650, dist * 0.18)), easeInOut);
-                return;
-            }
-            // 大列表（cv 开启，视口外是空占位盒）：连贯滑会露白，退回瞬移到目标外侧
-            // 1.2 屏 → 等落点重绘 → 平滑收尾的两段式
-            const dir = target > window.scrollY ? 1 : -1;
-            window.scrollTo(0, Math.max(0, target - dir * window.innerHeight * 1.2));
-            requestAnimationFrame(() => requestAnimationFrame(() => {
-                if (!alive()) return cleanup();
-                waitPainted(() => {
-                    if (!alive()) return cleanup();
-                    rafScroll(window.scrollY, resolveTo(), 480);
-                });
-            }));
+            // 短距离 / 小列表：整段原生平滑一次到位
+            smooth(target);
         }
 
         const dayKey = s => { const d = parseISO(s); return d ? d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) : ''; };
@@ -4704,6 +4659,13 @@
                 return { cols, todayEnd };
             }, []);
 
+            // 日期 → 分组 Map：格子渲染 O(1) 取当天手记，取代逐格 groups.find 线性扫
+            const groupMap = useMemo(() => {
+                const m = {};
+                groups.forEach(g => { m[g.key] = g; });
+                return m;
+            }, [groups]);
+
             // 月份标注：某列首格所在月份与前列不同 → 该列顶部标注月份
             const monthLabels = useMemo(() => {
                 const labels = []; let last = -1;
@@ -4721,23 +4683,42 @@
             const showPop = (key, items, cell) => {
                 const card = cardRef.current;
                 if (!card) return;
+                prefetchDayImgs(key, items);
                 const cr = card.getBoundingClientRect();
                 const r = cell.getBoundingClientRect();
                 const left = Math.max(110, Math.min(r.left - cr.left + r.width / 2, cr.width - 110));
                 setPop({ key, items, left, top: r.bottom - cr.top + 10 });
             };
 
-            // 目标区域懒加载图提前转 eager 并触发解码：瞬移落地即成图，不闪白
+            // 目标区域懒加载图提前转 eager：瞬移落地即开始加载。
+            // 不主动调用 img.decode()——多张大图集中解码会阻塞主线程造成卡顿，
+            // 交给浏览器随绘制渐进解码更流畅，占位背景兜底不会闪白。
             const predecodeImgs = root => {
                 if (!root) return;
-                root.querySelectorAll('img[loading="lazy"]').forEach(img => {
-                    img.loading = 'eager';
-                    if (img.decode) img.decode().catch(() => { });
+                root.querySelectorAll('img[loading="lazy"]').forEach(img => { img.loading = 'eager'; });
+            };
+
+            // 弹层打开即预取当天手记图片（前 6 条）：预览浮层显示与用户点选之间有天然时间差，
+            // 把图片网络加载与解码提前铺进这段空闲——等真正点击跳转、瞬移落地时，
+            // 落点视口的图片已在缓存且已解码，绘制开销趋近于零，不再有落地卡顿。
+            // 已预取的日期直接跳过：桌面端悬停扫过一排格子时不重复扫 DOM / 触发解码
+            const prefetchedRef = useRef(null);
+            const prefetchDayImgs = (key, items) => {
+                if (!prefetchedRef.current) prefetchedRef.current = new Set();
+                if (prefetchedRef.current.has(key)) return;
+                prefetchedRef.current.add(key);
+                (items || []).slice(0, 6).forEach(n => {
+                    const card = document.querySelector('[data-note-id="' + n.id + '"]');
+                    if (!card) return;
+                    card.querySelectorAll('img[loading="lazy"]').forEach(img => {
+                        img.loading = 'eager';
+                        if (img.decode) img.decode().catch(() => { });
+                    });
                 });
             };
 
-            // 跳转动画（两段式）：长距离先瞬移到目标外侧约 1.2 屏、停帧渲染后平滑收尾，
-            // 途经内容不再参与逐帧渲染，杜绝滑动途中白屏；短距离则单段缓出一次到位。
+            // 跳转动画：长距离先瞬移到目标外侧约 1 屏、停 2 帧待布局稳定，
+            // 再原生平滑滚动收尾（合成器驱动，落地绘制忙也不掉帧）；短距离整段平滑一次到位。
             const jumpTo = (key, id) => {
                 setPop(null);
                 const el = document.getElementById(id ? 'note-' + id : 'day-' + key);
@@ -4771,6 +4752,20 @@
                 return () => document.removeEventListener('click', onDoc);
             }, []);
 
+            // 格子节点整体 memo：pop 开/关只重渲染浮层本身，React 对引用不变的
+            // 365 个格子子树直接跳过 reconcile，点按日历跟手不迟滞
+            const cells = useMemo(() => weeks.cols.map((col, w) => col.map((dt, d) => {
+                const key = dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
+                const future = dt > weeks.todayEnd;
+                const c = counts[key] || 0;
+                const items = c ? (groupMap[key] || {}).items : null;
+                const cls = 'cal-cell' + (future ? ' future' : ' cal-l' + level(c));
+                return <div key={w + '-' + d} className={cls}
+                    title={future ? '' : key + (c ? ' · ' + c + ' 篇' : '')}
+                    onMouseEnter={c ? (e) => showPop(key, items, e.currentTarget) : undefined}
+                    onClick={c ? (e) => showPop(key, items, e.currentTarget) : undefined} />;
+            })), [weeks, counts, groupMap]);
+
             return (
                 <div className="cal-card" ref={cardRef} onMouseLeave={() => setPop(null)}>
                     <div className="cal-head">
@@ -4790,17 +4785,7 @@
                                     <span>一</span><span></span><span>三</span><span></span><span>五</span><span></span><span>日</span>
                                 </div>
                                 <div className="cal-grid">
-                                    {weeks.cols.map((col, w) => col.map((dt, d) => {
-                                        const key = dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
-                                        const future = dt > weeks.todayEnd;
-                                        const c = counts[key] || 0;
-                                        const items = c ? (groups.find(x => x.key === key) || {}).items : null;
-                                        const cls = 'cal-cell' + (future ? ' future' : ' cal-l' + level(c));
-                                        return <div key={w + '-' + d} className={cls}
-                                            title={future ? '' : key + (c ? ' · ' + c + ' 篇' : '')}
-                                            onMouseEnter={c ? (e) => showPop(key, items, e.currentTarget) : undefined}
-                                            onClick={c ? (e) => showPop(key, items, e.currentTarget) : undefined} />;
-                                    }))}
+                                    {cells}
                                 </div>
                             </div>
                             <div className="cal-legend">
@@ -5008,6 +4993,10 @@
 
             // 拖拽：放大态平移；未放大时横向滑动切换
             const onPointerDown = e => {
+                // 箭头按钮是 stage 的子元素：若此处对 stage setPointerCapture，
+                // 后续 click 会被重定向到 stage（按钮收不到），反而命中 onStageClick 的
+                // target===currentTarget 关闭逻辑 → 点箭头=退出预览。起点在箭头上时直接跳过
+                if (e.target.closest && e.target.closest('.pv-viewer-nav')) return;
                 dragRef.current = { sx: e.clientX, sy: e.clientY, ox: off.x, oy: off.y, moved: false };
                 suppressClickRef.current = false;
                 setDragging(true);
@@ -5659,8 +5648,8 @@
                     setExporting(false);
                 }
             };
-            // 回到顶部：两段式动画——长距离先瞬移至距顶约 1.2 屏处（顶部内容早已加载，
-            // 停 2 帧即完成绘制），再平滑滑完剩余短距离，避免长距离连续滚动途中白屏
+            // 回到顶部：长距离先瞬移至距顶约 1 屏处（顶部内容早已加载，停 2 帧即稳定），
+            // 再原生平滑滚动滑完剩余短距离——合成器驱动的动画，主线程忙也不卡
             const scrollToTop = () => {
                 if (window.scrollY <= 0) return;
                 animateScrollTo(0, 600);
