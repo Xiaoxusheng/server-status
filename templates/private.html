@@ -2424,11 +2424,13 @@
                     const type = u16(e + 2);
                     const n = u32(e + 4);
                     const off = valOffset(e, type, n);
-                    if (tag === 0x0132 || tag === 0x9003) {
+                    // 0x9003 拍摄时间优先于 0x0132：照片被转存/编辑后，文件修改时间不再是拍摄时刻
+                    if (tag === 0x9003 || tag === 0x0132) {
                         const chars = [];
                         for (let k = 0; k < n; k++) chars.push(String.fromCharCode(dv.getUint8(start + off + k)));
-                        const s = chars.join('').trim();
-                        if (s && !res.time) res.time = s;
+                        // EXIF ASCII 以 \0 结尾，trim 去不掉，需单独清理
+                        const s = chars.join('').replace(/\0/g, '').trim();
+                        if (s && (tag === 0x9003 || !res.time)) res.time = s;
                     }
                     if (tag === 0x8825) res.gpsOff = u32(e + 8);
                     if (tag === 0x8769) res.exifOff = u32(e + 8);
@@ -2472,6 +2474,11 @@
                 case 5: case 10: case 12: return 8;
                 default: return 1;
             }
+        }
+        // EXIF 时间 "YYYY:MM:DD HH:MM:SS" → datetime-local 值；EXIF 不带时区，按拍摄时的墙上时间理解
+        function exifToInput(s) {
+            const m = /^(\d{4})[-:](\d{2})[-:](\d{2})[ T](\d{2}):(\d{2})/.exec(String(s || ''));
+            return m ? m[1] + '-' + m[2] + '-' + m[3] + 'T' + m[4] + ':' + m[5] : '';
         }
 
         // ==================== 卡片渲染器（Canvas）====================
@@ -3172,7 +3179,7 @@
                 })
                 .catch(bdc);
         }
-        function LocationPicker({ value, onChange, exif }) {
+        function LocationPicker({ value, onChange, exif, onUseTime }) {
             const [search, setSearch] = useState('');
             const [geoLoading, setGeoLoading] = useState(false);
             const [exifLoading, setExifLoading] = useState(false);
@@ -3223,6 +3230,16 @@
                 const setName = name => { setExifLoading(false); onChange({ location_name: name, latitude: lat, longitude: lng }); };
                 reverseGeo(lat, lng, setName, fallbackCoord);
             };
+            // 照片带 GPS 且手记还没有位置时自动采用：每次编辑会话只尝试一次，已有位置绝不覆盖
+            const autoLocRef = useRef(false);
+            useEffect(() => {
+                if (!exif) { autoLocRef.current = false; return; }
+                if (autoLocRef.current || exif.gpsLat == null) return;
+                autoLocRef.current = true;
+                if (value && (value.location_name || value.latitude != null || value.longitude != null)) return;
+                message.info('已自动填入照片位置');
+                usePhotoLoc();
+            }, [exif]);
             const results = search.trim() ? builtinPlaces.filter(p => p.name.includes(search.trim())) : [];
             return (
                 <div>
@@ -3240,7 +3257,12 @@
                                     使用照片位置
                                 </Button>
                             )}
-                            {exif.time && <span style={{ marginLeft: 8 }}>拍摄时间：{exif.time}</span>}
+                            {exif.time && (
+                                <Button size="small" type="link" style={{ padding: 0, marginLeft: 8 }} title="将手记时间改为照片拍摄时间"
+                                    onClick={() => { const t = exifToInput(exif.time); if (t && onUseTime) onUseTime(t); }}>
+                                    拍摄时间：{exif.time}（点击采用）
+                                </Button>
+                            )}
                         </div>
                     )}
                     {valueStr && <div className="pv-loc-tip">📍 {valueStr}</div>}
@@ -3605,11 +3627,18 @@
             };
             // 未入库草稿的 id：选图/录音会自动创建草稿，重试时复用，避免生成多条空手记
             const draftRef = useRef(null);
+            // EXIF 自动回填：整个编辑会话最多自动填一次拍摄时间；用户手动改过时间或编辑老手记时不动
+            const autoExifRef = useRef(false);
+            const timeTouchedRef = useRef(false);
+            const hadNoteRef = useRef(false);
 
             const reset = (n) => {
                 setTitle(n && n.title ? n.title : '');
                 setContent(n && n.content ? n.content : '');
                 setTimeVal(n && n.created_at ? toLocalInput(n.created_at) : '');
+                autoExifRef.current = false;
+                timeTouchedRef.current = false;
+                hadNoteRef.current = !!(n && n.id);
                 setLoc({ location_name: n && n.location_name || '', latitude: n ? n.latitude : null, longitude: n ? n.longitude : null });
                 setTags(n && n.tags ? n.tags.slice() : []);
                 // 换手记/重开编辑器时释放上一组本地缩略 blob，防泄漏（服务端 URL 的项无 thumb 字段不受影响）
@@ -3645,7 +3674,18 @@
                             const thumb = await makeThumbUrl(f);
                             setImages(prev => prev.concat({ id: d.data.id, url: d.data.url, sort_order: d.data.sort_order, thumb: thumb || d.data.url }));
                             const ex = await readExif(f);
-                            if (ex && (ex.gpsLat != null || ex.time)) setExif(ex);
+                            if (ex && (ex.gpsLat != null || ex.time)) {
+                                setExif(ex);
+                                // 自动回填拍摄时间：整个编辑会话只做一次，且仅在新建手记、用户未动过时间时
+                                if (!autoExifRef.current) {
+                                    autoExifRef.current = true;
+                                    const t = exifToInput(ex.time);
+                                    if (t && !hadNoteRef.current && !timeTouchedRef.current) {
+                                        setTimeVal(t);
+                                        message.info('已按照片拍摄时间回填手记时间');
+                                    }
+                                }
+                            }
                         } else {
                             message.error('图片上传失败：' + (d.message || ''));
                         }
@@ -3997,11 +4037,11 @@
                         <Divider style={{ margin: '10px 0' }} />
                         <div style={{ marginBottom: 12 }}>
                             <div style={{ marginBottom: 6, fontWeight: 500 }}>时间</div>
-                            <Input type="datetime-local" value={timeVal} onChange={e => setTimeVal(e.target.value)} />
+                            <Input type="datetime-local" value={timeVal} onChange={e => { timeTouchedRef.current = true; setTimeVal(e.target.value); }} />
                         </div>
                         <div style={{ marginBottom: 12 }}>
                             <div style={{ marginBottom: 6, fontWeight: 500 }}>位置</div>
-                            <LocationPicker value={loc} onChange={setLoc} exif={exif} />
+                            <LocationPicker value={loc} onChange={setLoc} exif={exif} onUseTime={t => { timeTouchedRef.current = true; setTimeVal(t); }} />
                         </div>
                         <div style={{ marginBottom: 12 }}>
                             <div style={{ marginBottom: 6, fontWeight: 500 }}>标签</div>
