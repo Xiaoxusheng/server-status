@@ -9,6 +9,7 @@
     <link rel="icon"
         href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2042.4-50%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
     <!-- 公开语音播放页：零外部依赖（不加载 React/antd/Babel CDN），扫码访客任何网络环境都能秒开 -->
+    <!-- 视觉风格与 share.html（卡片分享页）统一：同一套 token / toast / 底部品牌行 / 极简失效态 -->
     <link rel="stylesheet" href="/ui.css">
     <style>
         html,
@@ -87,7 +88,7 @@
         }
 
         .au-title {
-            font-size: 18px;
+            font-size: 17px;
             font-weight: 600;
             line-height: 1.4;
             word-break: break-word;
@@ -213,15 +214,16 @@
             text-align: right;
         }
 
-        /* 底部标识 */
+        /* 底部品牌行：与 share.html 的 .share-brand 同款（极弱、不抢焦点） */
         .au-foot {
-            margin-top: 14px;
-            font-size: 12px;
-            letter-spacing: 1px;
+            margin-top: 22px;
+            font-size: 11px;
+            letter-spacing: .3px;
             color: var(--secondary);
+            opacity: .65;
         }
 
-        /* 失效 / 加载态 */
+        /* 失效 / 加载态：极简灰态（细线图标 + 标题 + 描述），两个分享页统一 */
         .au-state {
             text-align: center;
             padding: 26px 10px;
@@ -235,20 +237,49 @@
             opacity: .5;
         }
 
-        .au-err {
-            color: var(--danger);
+        .au-state .st-title {
+            font-size: 15px;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+
+        .au-state .st-desc {
+            font-size: 13px;
+        }
+
+        /* 加载态：与 share.html 同款 spinner */
+        .au-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 26px 10px;
+        }
+
+        .spin {
+            width: 32px;
+            height: 32px;
+            border: 3px solid rgba(22, 119, 255, .2);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         .toast {
             position: fixed;
             left: 50%;
             bottom: 34px;
-            transform: translateX(-50%) translateY(10px);
+            transform: translateX(-50%) translateY(8px);
             background: rgba(0, 0, 0, .78);
             color: #fff;
             font-size: 13px;
             padding: 8px 16px;
-            border-radius: 8px;
+            border-radius: 18px;
             opacity: 0;
             pointer-events: none;
             transition: opacity .2s, transform .2s;
@@ -288,7 +319,9 @@
             </div>
             <div class="au-card">
                 <div id="au-body">
-                    <div class="au-state">加载中…</div>
+                    <div class="au-loading">
+                        <div class="spin"></div>
+                    </div>
                 </div>
             </div>
             <div class="au-foot">扫码收听 · 来自私人手记</div>
@@ -331,13 +364,22 @@
             var IC_WARN = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>';
 
             // ==================== 渲染 ====================
-            function stateHtml(icon, text, cls) {
-                return '<div class="au-state ' + (cls || '') + '">' + svg(icon, 30) + escHtml(text) + '</div>';
+            // 极简灰态（细线图标 + 标题 + 可选描述）：空内容 / 失效 / 加载失败共用，
+            // 与 share.html 卡片分享页的失效提示保持一致，不使用警示配色与图标
+            function stateHtml(icon, title, desc) {
+                return '<div class="au-state">' + svg(icon, 30)
+                    + '<div class="st-title">' + escHtml(title) + '</div>'
+                    + (desc ? '<div class="st-desc">' + escHtml(desc) + '</div>' : '')
+                    + '</div>';
             }
+
+            var ERR_INVALID_DESC = '链接可能已过期、被撤销或链接不完整，请联系分享者重新获取。';
 
             // items: [{id,duration,url}]，渲染播放列表
             function renderList(data) {
                 var title = (data.title && String(data.title).trim()) || '语音手记';
+                // 标签页标题跟随手记标题，与 share.html 卡片分享页行为一致
+                document.title = ((data.title && String(data.title).trim()) ? title + ' · ' : '') + '语音手记';
                 var items = data.audios || [];
                 var html = '<h1 class="au-title"><span class="au-ico">' + svg(IC_VOICE, 18) + '</span>'
                     + '<span style="min-width:0">' + escHtml(title) + '</span></h1>';
@@ -446,24 +488,24 @@
 
             // ==================== 入口 ====================
             if (!token) {
-                body.innerHTML = stateHtml(IC_WARN, '分享不存在或已失效', 'au-err');
+                body.innerHTML = stateHtml(IC_WARN, '分享不存在或已失效', ERR_INVALID_DESC);
                 return;
             }
             fetch('/api/ashare/' + encodeURIComponent(token) + '/data', { credentials: 'include' })
                 .then(function (r) { return r.json().catch(function () { return null; }); })
                 .then(function (d) {
                     if (!d || d.code !== 200 || !d.data) {
-                        body.innerHTML = stateHtml(IC_WARN, '分享不存在或已失效', 'au-err');
+                        body.innerHTML = stateHtml(IC_WARN, '分享不存在或已失效', ERR_INVALID_DESC);
                         return;
                     }
                     if (d.data.invalid) {
-                        body.innerHTML = stateHtml(IC_WARN, '分享已过期或已撤销', 'au-err');
+                        body.innerHTML = stateHtml(IC_WARN, '分享已过期或已撤销', ERR_INVALID_DESC);
                         return;
                     }
                     renderList(d.data);
                 })
                 .catch(function () {
-                    body.innerHTML = stateHtml(IC_WARN, '加载失败，请稍后重试', 'au-err');
+                    body.innerHTML = stateHtml(IC_WARN, '加载失败，请稍后重试', '网络异常或服务暂不可用，请稍后重试。');
                 });
         })();
     </script>
