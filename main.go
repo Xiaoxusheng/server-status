@@ -6054,6 +6054,13 @@ func main() {
 	http.HandleFunc("GET /api/logs/files", authMiddleware(requirePermission("system:log", securityMiddleware(listLogFilesHandler))))
 	http.HandleFunc("GET /api/logs", authMiddleware(requirePermission("system:log", securityMiddleware(logContentHandler))))
 
+	// 云备份展示（只读）：执行计划 / 上传记录 / 原始日志
+	http.HandleFunc("GET /api/backup/summary", authMiddleware(requirePermission("system:log", securityMiddleware(backupSummaryHandler))))
+	http.HandleFunc("GET /api/backup/records", authMiddleware(requirePermission("system:log", securityMiddleware(backupRecordsHandler))))
+	http.HandleFunc("GET /api/backup/log", authMiddleware(requirePermission("system:log", securityMiddleware(backupRawLogHandler))))
+	// 修改备份执行计划（时间/频率）：管理员权限 + CSRF（写请求由 authMiddleware 强制校验）
+	http.HandleFunc("POST /api/backup/schedule", authMiddleware(requirePermission("role:manage", securityMiddleware(backupScheduleUpdateHandler))))
+
 	// 文件管理与进程监控接口
 	http.HandleFunc("GET /api/files", authMiddleware(requirePermission("files:manage", securityMiddleware(listFilesHandler))))
 	http.HandleFunc("POST /api/files/upload", authMiddleware(requirePermission("files:manage", securityMiddleware(uploadFileHandler))))

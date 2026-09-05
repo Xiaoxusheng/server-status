@@ -941,6 +941,7 @@
             if (hasPerm('files:manage')) navBtns.push(<Button key="files" icon={<UIIcon name="FolderOutlined" />} onClick={() => window.location.href = 'files.html'}>文件管理</Button>);
             if (hasPerm('system:process')) navBtns.push(<Button key="proc" icon={<UIIcon name="SettingOutlined" />} onClick={() => window.location.href = 'process.html'}>进程</Button>);
             if (hasPerm('system:log')) navBtns.push(<Button key="logs" icon={<UIIcon name="FileSearchOutlined" />} onClick={() => window.location.href = 'log.html'}>日志</Button>);
+            if (hasPerm('system:log')) navBtns.push(<Button key="backup" icon={<UIIcon name="CloudUploadOutlined" />} onClick={() => window.location.href = 'backup.html'}>云备份</Button>);
             if (hasPerm('files:download')) navBtns.push(<Button key="dl" icon={<UIIcon name="DownloadOutlined" />} onClick={() => window.location.href = 'download.html'}>安全下载</Button>);
             if (hasPerm('user:manage') || hasPerm('role:manage')) navBtns.push(<Button key="rbac" icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => window.location.href = 'rbac.html'}>权限管理</Button>);
             if (hasPerm('files:view')) navBtns.push(<Button key="mediawin" className="nav-media-btn" icon={<UIIcon name="VideoCameraOutlined" />} type={mediaClosed ? 'default' : 'primary'}

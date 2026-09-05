@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow">
+    <title>私人手记云备份 - Server Status</title>
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="stylesheet" href="/ui.css">
+    <style>
+        /* 页面私有样式只保留布局；颜色/圆角/阴影一律使用 ui.css 令牌 */
+
+        #root {
+            min-height: 100vh;
+        }
+
+        .bk-topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            height: 56px;
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .bk-topbar .ant-btn {
+            font-size: 13px;
+        }
+
+        .bk-topbar .tb-text {
+            margin-left: 4px;
+        }
+
+        .tb-page {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--color-text);
+            white-space: nowrap;
+        }
+
+        .tb-page .anticon {
+            color: var(--color-primary);
+        }
+
+        .bk-page-wrap {
+            padding: 16px 24px 64px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .bk-page-head .ph-sub .bk-mono {
+            font-size: 12px;
+        }
+
+        /* ===== 状态卡：1px 边框 + 背景色，无阴影 ===== */
+        .bk-stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .bk-stat {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            padding: 12px 16px;
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .bk-stat .bs-label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: var(--color-text-tertiary);
+        }
+
+        .bk-stat .bs-label .status-dot {
+            margin-left: auto;
+        }
+
+        .bk-stat .bs-value {
+            margin-top: 4px;
+            font-size: 20px;
+            font-weight: 600;
+            line-height: 1.3;
+            color: var(--color-text);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .bk-stat .bs-sub {
+            margin-top: 2px;
+            font-size: 12px;
+            color: var(--color-text-tertiary);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .bk-stat .bs-sub .bk-err-text {
+            color: var(--color-error);
+        }
+
+        /* ===== 记录表 / 执行方式 ===== */
+        .bk-card-sub {
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--color-text-tertiary);
+            margin-left: 8px;
+        }
+
+        .bk-steps {
+            max-width: 640px;
+            margin-bottom: 4px;
+        }
+
+        .bk-mono {
+            font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+        }
+
+        .bk-cell-mono {
+            font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+            font-size: 12px;
+        }
+
+        .bk-detail-text {
+            font-size: 12px;
+            color: var(--color-text-tertiary);
+        }
+
+        .bk-detail-text.bk-fail {
+            color: var(--color-error);
+        }
+
+        /* ===== 原始日志 ===== */
+        .bk-rawlog {
+            margin: 0;
+            padding: 12px 14px;
+            background: var(--color-bg);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--color-text-secondary);
+            overflow: auto;
+            max-height: 320px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .bk-rawlog .ln-err {
+            color: var(--color-error);
+        }
+
+        .bk-rawlog .ln-ok {
+            color: var(--color-success);
+        }
+
+        @media (max-width: 768px) {
+            .bk-topbar {
+                padding: 0 12px;
+            }
+
+            .bk-topbar .tb-text {
+                display: none;
+            }
+
+            .bk-page-wrap {
+                padding: 12px 12px 48px;
+            }
+
+            .bk-stat-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .bk-stat .bs-value {
+                font-size: 18px;
+            }
+
+            /* 只收本页内容区卡片；!important 用于压过 antd styles 传入的内联 padding，
+               避免波及加载态/无权限页的独立 Card */
+            .bk-page-wrap .ant-card-body {
+                padding: 12px !important;
+            }
+        }
+    </style>
+    <script>
+        // 防闪烁：React 挂载前先按本地存储恢复暗色主题（与其他页面一致）
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) { }
+        })();
+    </script>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <script type="text/babel">
+        const { Card, Button, Table, Tag, Tooltip, Space, ConfigProvider, theme, message, Steps, Descriptions, Collapse, Empty, Modal, Segmented, Select, InputNumber, Typography } = window.antd;
+        const { useState, useEffect } = React;
+        const { darkAlgorithm } = theme;
+        const IconSet = window.icons || {};
+        const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
+
+        const baseUrl = window.location.origin;
+
+        function getCsrfToken() { const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+        function secureFetch(url, options = {}) {
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) { const tok = getCsrfToken(); if (tok) headers['X-CSRF-Token'] = tok; }
+            return fetch(url, { method, headers, credentials: 'include', body: options.body });
+        }
+        async function getJSON(url) {
+            const r = await secureFetch(url);
+            const d = await r.json();
+            if (d.code !== 200) throw new Error(d.message || ('HTTP ' + r.status));
+            return d.data;
+        }
+        async function postJSON(url, body) {
+            const r = await secureFetch(url, { method: 'POST', body: JSON.stringify(body) });
+            const d = await r.json();
+            if (d.code !== 200) throw new Error(d.message || ('HTTP ' + r.status));
+            return d.data;
+        }
+
+        function relTime(s) {
+            if (!s) return '暂无记录';
+            const diff = dayjs().diff(dayjs(s), 'second');
+            if (diff < 60) return '刚刚';
+            if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
+            if (diff < 86400) return Math.floor(diff / 3600) + ' 小时前';
+            const days = Math.floor(diff / 86400);
+            if (days < 30) return days + ' 天前';
+            return dayjs(s).format('YYYY-MM-DD');
+        }
+
+        function useIsMobile() {
+            const [m, setM] = useState(window.innerWidth <= 768);
+            useEffect(() => {
+                const on = () => setM(window.innerWidth <= 768);
+                window.addEventListener('resize', on);
+                return () => window.removeEventListener('resize', on);
+            }, []);
+            return m;
+        }
+
+        // 原始日志行着色：失败红、完成绿，与日志页同思路
+        function renderRawLine(line, idx) {
+            let cls = '';
+            if (line.indexOf('失败') >= 0) cls = 'ln-err';
+            else if (line.indexOf('✔') >= 0) cls = 'ln-ok';
+            return <span key={idx} className={cls}>{line + '\n'}</span>;
+        }
+
+        // ===== 备份计划表单：频率 → 5 段 cron 表达式 =====
+        const pad2 = (n) => (n < 10 ? '0' + n : '' + n);
+        const WEEK_OPTS = [
+            { value: 1, label: '周一' }, { value: 2, label: '周二' }, { value: 3, label: '周三' },
+            { value: 4, label: '周四' }, { value: 5, label: '周五' }, { value: 6, label: '周六' }, { value: 0, label: '周日' },
+        ];
+        const HOUR_OPTS = Array.from({ length: 24 }, (_, h) => ({ value: h, label: pad2(h) + ' 点' }));
+        const MINUTE_OPTS = Array.from({ length: 60 }, (_, m) => ({ value: m, label: pad2(m) + ' 分' }));
+        function buildCron(f) {
+            if (f.freq === 'daily') return f.minute + ' ' + f.hour + ' * * *';
+            if (f.freq === 'weekly') return f.minute + ' ' + f.hour + ' * * ' + f.week;
+            if (f.freq === 'hours') return f.minute + ' */' + f.interval + ' * * *';
+            return '*/' + f.interval + ' * * * *';
+        }
+        function cronText(f) {
+            const hm = pad2(f.hour) + ':' + pad2(f.minute);
+            if (f.freq === 'daily') return '每天 ' + hm;
+            if (f.freq === 'weekly') return '每' + (WEEK_OPTS.find(w => w.value === f.week) || {}).label + ' ' + hm;
+            if (f.freq === 'hours') return '每 ' + f.interval + ' 小时（第 ' + pad2(f.minute) + ' 分执行）';
+            return '每 ' + f.interval + ' 分钟';
+        }
+        // 把现有 cron 反推回表单；识别不了时回退为每天 03:30
+        function parseCronToForm(cron) {
+            const form = { freq: 'daily', hour: 3, minute: 30, week: 1, interval: 6 };
+            const m = (cron || '').trim().split(/\s+/);
+            if (m.length !== 5) return form;
+            const num = (s) => (/^\d+$/.test(s) ? parseInt(s, 10) : null);
+            const step = (s) => (s && s.indexOf('*/') === 0 && /^\*\/\d+$/.test(s) ? parseInt(s.slice(2), 10) : null);
+            let v;
+            if ((v = num(m[0])) !== null && (v = num(m[1])) !== null && m[2] === '*' && m[3] === '*' && m[4] === '*') {
+                return { ...form, freq: 'daily', hour: num(m[1]), minute: num(m[0]) };
+            }
+            if ((v = num(m[1])) !== null && m[2] === '*' && m[3] === '*' && num(m[4]) !== null) {
+                return { ...form, freq: 'weekly', hour: num(m[1]), minute: num(m[0]), week: num(m[4]) };
+            }
+            if (num(m[0]) !== null && (v = step(m[1])) !== null && m[2] === '*' && m[3] === '*' && m[4] === '*') {
+                return { ...form, freq: 'hours', minute: num(m[0]), interval: v };
+            }
+            if ((v = step(m[0])) !== null && m[1] === '*' && m[2] === '*' && m[3] === '*' && m[4] === '*') {
+                return { ...form, freq: 'minutes', interval: v };
+            }
+            return form;
+        }
+
+        function App() {
+            const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const [summary, setSummary] = useState(null);
+            const [records, setRecords] = useState(null);
+            const [rawLog, setRawLog] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [updatedAt, setUpdatedAt] = useState('');
+            const isMobile = useIsMobile();
+            const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+            const hasPermLog = hasPerm('system:log');
+            const hasPermManage = hasPerm('role:manage');
+
+            // ===== 修改备份计划 =====
+            const [schedOpen, setSchedOpen] = useState(false);
+            const [schedForm, setSchedForm] = useState({ freq: 'daily', hour: 3, minute: 30, week: 1, interval: 6 });
+            const [schedSaving, setSchedSaving] = useState(false);
+            const openSched = () => { setSchedForm(parseCronToForm(s && s.schedule_cron)); setSchedOpen(true); };
+            const saveSched = async () => {
+                setSchedSaving(true);
+                try {
+                    await postJSON(baseUrl + '/api/backup/schedule', { cron: buildCron(schedForm) });
+                    message.success('备份计划已更新，下次备份按新计划执行');
+                    setSchedOpen(false);
+                    load();
+                } catch (e) {
+                    message.error('保存失败：' + (e.message || e));
+                } finally {
+                    setSchedSaving(false);
+                }
+            };
+
+            useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
+                        else window.location.href = 'index.html';
+                    })
+                    .catch(() => { window.location.href = 'index.html'; });
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+            }, [isDark]);
+
+            const load = async () => {
+                setLoading(true);
+                try {
+                    const [s, rec, lg] = await Promise.all([
+                        getJSON(baseUrl + '/api/backup/summary'),
+                        getJSON(baseUrl + '/api/backup/records?limit=50'),
+                        getJSON(baseUrl + '/api/backup/log?lines=50'),
+                    ]);
+                    setSummary(s || {});
+                    setRecords(Array.isArray(rec) ? rec : []);
+                    setRawLog((lg && lg.lines) || []);
+                    setUpdatedAt(s && s.updated_at ? dayjs(s.updated_at).format('HH:mm:ss') : dayjs().format('HH:mm:ss'));
+                } catch (e) {
+                    message.error('加载失败：' + (e.message || e));
+                } finally {
+                    setLoading(false);
+                }
+            };
+            useEffect(() => { if (auth.ok && hasPermLog) load(); }, [auth.ok]);
+
+            if (auth.loading) {
+                return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}><Card loading style={{ width: 320 }} /></div>;
+            }
+
+            if (!hasPermLog) {
+                return (
+                    <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
+                            <Card style={{ width: 400, textAlign: 'center' }}>
+                                <div style={{ fontSize: 40, marginBottom: 8 }}><UIIcon name="StopOutlined" /></div>
+                                <Typography.Title level={4}>没有访问权限</Typography.Title>
+                                <Typography.Text type="secondary">当前账号没有「云备份查看」权限（system:log），请联系管理员开通。</Typography.Text>
+                                <div style={{ marginTop: 16 }}>
+                                    <Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>
+                                </div>
+                            </Card>
+                        </div>
+                    </ConfigProvider>
+                );
+            }
+
+            const s = summary || {};
+            const lastDot = (() => {
+                if (!s.last_time) return '';
+                if (s.last_status === 'fail') return 'err';
+                const h = dayjs().diff(dayjs(s.last_time), 'hour');
+                if (h > 50) return 'err';
+                if (h > 26) return 'warn';
+                return 'ok';
+            })();
+
+            const columns = [
+                {
+                    title: '备份时间', dataIndex: 'time', key: 'time', width: 120,
+                    render: (t) => <Tooltip title={t}><span className="tnum">{dayjs(t).format('MM-DD HH:mm')}</span></Tooltip>
+                },
+                {
+                    title: '备份文件', dataIndex: 'file', key: 'file', ellipsis: true,
+                    render: (f) => f ? <Tooltip title={f} placement="topLeft"><span className="bk-cell-mono">{f}</span></Tooltip> : <span className="bk-detail-text">—</span>
+                },
+                { title: '大小', dataIndex: 'size', key: 'size', width: 90, align: 'right', render: (v) => <span className="tnum">{v || '—'}</span> },
+                { title: '耗时', dataIndex: 'duration', key: 'duration', width: 90, align: 'right', render: (v) => <span className="tnum">{v || '—'}</span> },
+                {
+                    title: '状态', dataIndex: 'status', key: 'status', width: 80,
+                    render: (v) => v === 'fail' ? <Tag color="red">失败</Tag> : <Tag color="green">成功</Tag>
+                },
+                {
+                    title: '说明', dataIndex: 'detail', key: 'detail',
+                    render: (v, row) => v ? <span className={'bk-detail-text' + (row.status === 'fail' ? ' bk-fail' : '')}>{v}</span> : <span className="bk-detail-text">—</span>
+                },
+            ].filter(c => !(isMobile && (c.key === 'duration' || c.key === 'detail')));
+
+            const stepItems = [
+                { title: 'SQLite 在线备份', description: 'sqlite3 .backup，WAL 安全不停服' },
+                { title: '打包 tar.gz', description: '数据库 + 配置 + 加密媒体目录' },
+                { title: 'AES-256 加密', description: 'openssl enc -aes-256-cbc -md sha256' },
+                { title: '上传 WebDAV', description: 'curl 上传至 OpenList 挂载的移动云盘' },
+                { title: '清理旧份', description: '保留最近 ' + (s.keep_count || '—') + ' 份，超出删除最旧' },
+                { title: '写日志', description: '全程记录，供本页展示' },
+            ];
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <div className="bk-topbar">
+                            <span className="tb-page"><UIIcon name="CloudUploadOutlined" />私人手记云备份</span>
+                            <Space>
+                                <Button icon={<UIIcon name="HomeOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>
+                                <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                                    <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                                </Tooltip>
+                                <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={() => secureFetch(baseUrl + '/logout', { method: 'POST' }).finally(() => window.location.href = 'index.html')}><span className="tb-text">退出</span></Button>
+                            </Space>
+                        </div>
+
+                        <div className="bk-page-wrap">
+                            <div className="page-head bk-page-head">
+                                <div>
+                                    <div className="ph-title"><UIIcon name="CloudServerOutlined" />备份概览</div>
+                                    <div className="ph-sub">pv-backup.sh · cron 定时加密备份至移动云盘<span className="bk-mono bk-card-sub">{s.schedule_cron || ''}</span></div>
+                                </div>
+                                <div className="ph-actions">
+                                    <span className="status-dot">更新于 <span className="tnum">{updatedAt || '—'}</span></span>
+                                    <Tooltip title="刷新">
+                                        <Button icon={<UIIcon name={loading ? 'LoadingOutlined' : 'ReloadOutlined'} />} loading={loading} onClick={load}>刷新</Button>
+                                    </Tooltip>
+                                </div>
+                            </div>
+
+                            <div className="bk-stat-grid">
+                                <div className="bk-stat">
+                                    <div className="bs-label"><UIIcon name="ClockCircleOutlined" />最近一次备份{lastDot && <span className={'status-dot ' + lastDot} />}</div>
+                                    <div className="bs-value">{relTime(s.last_time)}</div>
+                                    <div className="bs-sub">
+                                        {s.last_time ? <span>{s.last_time}{s.last_status === 'fail' && <span className="bk-err-text"> · 上次备份失败</span>}</span> : '日志中暂无备份记录'}
+                                    </div>
+                                </div>
+                                <div className="bk-stat">
+                                    <div className="bs-label"><UIIcon name="FieldTimeOutlined" />近 30 天</div>
+                                    <div className="bs-value">
+                                        成功 {s.success_30d == null ? '—' : s.success_30d}
+                                        <span style={{ color: 'var(--color-text-tertiary)', fontWeight: 400 }}> · </span>
+                                        <span style={{ color: (s.fail_30d || 0) > 0 ? 'var(--color-error)' : 'inherit' }}>失败 {s.fail_30d == null ? '—' : s.fail_30d}</span>
+                                    </div>
+                                    <div className="bs-sub">按日志运行记录统计</div>
+                                </div>
+                                <div className="bk-stat">
+                                    <div className="bs-label"><UIIcon name="ScheduleOutlined" />备份策略</div>
+                                    <div className="bs-value">{s.schedule_desc || '未配置'}</div>
+                                    <div className="bs-sub">{s.keep_count ? '云端保留最近 ' + s.keep_count + ' 份，超出自动清理' : '脚本未配置保留份数'}</div>
+                                </div>
+                            </div>
+
+                            <Card title={<span>上传记录<span className="bk-card-sub bk-mono">来自 {s.log_file || '备份日志'}</span></span>} styles={{ body: { padding: '4px 16px 12px' } }}>
+                                <Table
+                                    size="middle"
+                                    rowKey={(r) => (r.time || '') + (r.file || '')}
+                                    columns={columns}
+                                    dataSource={records || []}
+                                    loading={records === null}
+                                    pagination={{ pageSize: 15, size: 'default', hideOnSinglePage: true, showTotal: (t) => '共 ' + t + ' 条' }}
+                                    locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无备份记录" /> }}
+                                />
+                            </Card>
+
+                            <div style={{ height: 16 }} />
+
+                            <Card title="执行方式" extra={hasPermManage && (
+                                <Button size="small" icon={<UIIcon name="ScheduleOutlined" />} onClick={openSched}>修改计划</Button>
+                            )}>
+                                <Steps className="bk-steps" direction="vertical" size="small" current={stepItems.length} items={stepItems} />
+                                <Descriptions
+                                    style={{ marginTop: 16 }}
+                                    bordered
+                                    size="small"
+                                    column={1}
+                                    items={[
+                                        { key: 'plan', label: '执行计划', children: <span>{s.schedule_desc || '—'}{s.schedule_cron && <span className="bk-cell-mono bk-card-sub">cron: {s.schedule_cron}</span>}</span> },
+                                        { key: 'script', label: '脚本路径', children: s.script_path ? <span className="bk-cell-mono">{s.script_path}</span> : '—' },
+                                        { key: 'remote', label: '远端目录', children: s.remote_dir ? <span className="bk-cell-mono">{s.remote_dir}</span> : '—' },
+                                        { key: 'enc', label: '加密方式', children: s.enc || '—' },
+                                        { key: 'keep', label: '保留份数', children: s.keep_count ? s.keep_count + ' 份' : '—' },
+                                        { key: 'log', label: '日志文件', children: s.log_file ? <span className="bk-cell-mono">{s.log_file}</span> : '—' },
+                                    ]}
+                                />
+                            </Card>
+
+                            <div style={{ height: 16 }} />
+
+                            <Card styles={{ body: { padding: '0 16px 16px' } }}>
+                                <Collapse
+                                    ghost
+                                    items={[{
+                                        key: 'rawlog',
+                                        label: '查看原始日志（最近 50 行）',
+                                        children: rawLog && rawLog.length
+                                            ? <pre className="bk-rawlog">{rawLog.map(renderRawLine)}</pre>
+                                            : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="日志文件为空或尚未生成" />,
+                                    }]}
+                                />
+                            </Card>
+
+                            <Modal
+                                title="修改备份计划"
+                                open={schedOpen}
+                                onCancel={() => setSchedOpen(false)}
+                                onOk={saveSched}
+                                confirmLoading={schedSaving}
+                                okText="保存"
+                                cancelText="取消"
+                                width={420}
+                            >
+                                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                                    <div>
+                                        <div className="bk-detail-text" style={{ marginBottom: 6 }}>执行频率</div>
+                                        <Segmented
+                                            value={schedForm.freq}
+                                            onChange={(v) => setSchedForm({ ...schedForm, freq: v })}
+                                            options={[
+                                                { label: '每天', value: 'daily' },
+                                                { label: '每周', value: 'weekly' },
+                                                { label: '每 N 小时', value: 'hours' },
+                                                { label: '每 N 分钟', value: 'minutes' },
+                                            ]}
+                                        />
+                                    </div>
+                                    {(schedForm.freq === 'daily' || schedForm.freq === 'weekly') && (
+                                        <Space wrap>
+                                            {schedForm.freq === 'weekly' && (
+                                                <div>
+                                                    <div className="bk-detail-text" style={{ marginBottom: 6 }}>星期</div>
+                                                    <Select style={{ width: 96 }} value={schedForm.week} onChange={(v) => setSchedForm({ ...schedForm, week: v })} options={WEEK_OPTS} />
+                                                </div>
+                                            )}
+                                            <div>
+                                                <div className="bk-detail-text" style={{ marginBottom: 6 }}>小时</div>
+                                                <Select style={{ width: 90 }} value={schedForm.hour} onChange={(v) => setSchedForm({ ...schedForm, hour: v })} options={HOUR_OPTS} />
+                                            </div>
+                                            <div>
+                                                <div className="bk-detail-text" style={{ marginBottom: 6 }}>分钟</div>
+                                                <Select style={{ width: 90 }} value={schedForm.minute} onChange={(v) => setSchedForm({ ...schedForm, minute: v })} options={MINUTE_OPTS} />
+                                            </div>
+                                        </Space>
+                                    )}
+                                    {schedForm.freq === 'hours' && (
+                                        <Space wrap>
+                                            <div>
+                                                <div className="bk-detail-text" style={{ marginBottom: 6 }}>间隔（小时）</div>
+                                                <InputNumber min={1} max={23} value={schedForm.interval} onChange={(v) => setSchedForm({ ...schedForm, interval: v || 1 })} />
+                                            </div>
+                                            <div>
+                                                <div className="bk-detail-text" style={{ marginBottom: 6 }}>执行分钟</div>
+                                                <Select style={{ width: 90 }} value={schedForm.minute} onChange={(v) => setSchedForm({ ...schedForm, minute: v })} options={MINUTE_OPTS} />
+                                            </div>
+                                        </Space>
+                                    )}
+                                    {schedForm.freq === 'minutes' && (
+                                        <div>
+                                            <div className="bk-detail-text" style={{ marginBottom: 6 }}>间隔（分钟）</div>
+                                            <InputNumber min={1} max={59} value={schedForm.interval} onChange={(v) => setSchedForm({ ...schedForm, interval: v || 1 })} />
+                                        </div>
+                                    )}
+                                    <div className="bk-detail-text">
+                                        将写入计划：<span className="bk-cell-mono">{buildCron(schedForm)}</span>（{cronText(schedForm)}）
+                                    </div>
+                                    <div className="bk-detail-text">保存后立即生效，无需重启服务。</div>
+                                </Space>
+                            </Modal>
+                        </div>
+                    </div>
+                </ConfigProvider>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>
