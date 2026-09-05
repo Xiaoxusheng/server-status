@@ -215,6 +215,10 @@ var allPermissions = []PermissionDef{
 	{Key: "docker:view", Name: "查看 Docker 容器", Group: "服务与端口", Description: "查看容器列表、状态、资源占用与日志"},
 	{Key: "docker:manage", Name: "管理 Docker 容器", Group: "服务与端口", Description: "启动、停止、重启容器"},
 	{Key: "private:view", Name: "访问隐藏私人空间", Group: "系统", Description: "通过隐藏入口进入私人空间（默认仅超级管理员拥有）"},
+	{Key: "shell:use", Name: "使用 Web Shell", Group: "系统", Description: "通过 Web 终端登录主机 Shell（等同主机用户权限，高危，默认仅超级管理员）"},
+	{Key: "trojan:view", Name: "查看 Trojan-Go", Group: "服务与端口", Description: "查看 Trojan-Go 状态、用户列表与连接信息（只读）"},
+	{Key: "user:resetpw", Name: "重置用户密码", Group: "用户", Description: "替其他用户重置登录密码（高危）"},
+	{Key: "audit:view", Name: "查看审计日志", Group: "用户", Description: "查看系统操作审计日志"},
 }
 
 // defaultRoles 返回系统内置的默认角色
@@ -1216,6 +1220,12 @@ func updateRbacUserHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		userManager.RUnlock()
+	}
+
+	// 替用户重置密码是独立的高危操作：user:manage 不默认包含，需显式授予 user:resetpw
+	if req.Password != "" && !hasPermission(session.Username, "user:resetpw") {
+		writeJSONError(w, http.StatusForbidden, "重置用户密码需要 user:resetpw 权限")
+		return
 	}
 
 	// 校验密码强度
@@ -3192,12 +3202,14 @@ func revokeDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !hasPermission(session.Username, "token:revoke") && token.Username != session.Username {
+	// 撤销令牌统一要求 token:revoke 权限（高危操作）：
+	// 普通用户即使是自己签发的令牌也不能撤销，避免令牌被滥用后销毁痕迹
+	if !hasPermission(session.Username, "token:revoke") {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusForbidden,
-			"message": "无权操作此令牌",
+			"message": "撤销令牌需要 token:revoke 权限",
 		})
 		return
 	}
@@ -6025,18 +6037,19 @@ func main() {
 	http.HandleFunc("GET /epub", authMiddleware(requirePermission("files:view", securityMiddleware(epubFileHandler))))
 
 	// Trojan-Go 状态与用户管理接口
-	http.HandleFunc("GET /api/trojan/status", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanStatusHandler))))
-	http.HandleFunc("GET /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUsersHandler))))
+	// Trojan-Go 只读接口走 trojan:view；变更与凭据/配置下载（含密码明文）仍需 trojan:manage
+	http.HandleFunc("GET /api/trojan/status", authMiddleware(requirePermission("trojan:view", securityMiddleware(trojanStatusHandler))))
+	http.HandleFunc("GET /api/trojan/users", authMiddleware(requirePermission("trojan:view", securityMiddleware(trojanUsersHandler))))
 	http.HandleFunc("POST /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
 	http.HandleFunc("PUT /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
 	http.HandleFunc("DELETE /api/trojan/users", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanUserMutationHandler))))
 	http.HandleFunc("POST /api/trojan/users/traffic-reset", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanTrafficResetHandler))))
-	http.HandleFunc("GET /api/trojan/users/{hash}/connection", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanConnectionHandler))))
+	http.HandleFunc("GET /api/trojan/users/{hash}/connection", authMiddleware(requirePermission("trojan:view", securityMiddleware(trojanConnectionHandler))))
 	http.HandleFunc("POST /api/trojan/users/{hash}/credential", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanCredentialHandler))))
-	http.HandleFunc("GET /api/trojan/users/{hash}/connection/test", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanConnectionTestHandler))))
+	http.HandleFunc("GET /api/trojan/users/{hash}/connection/test", authMiddleware(requirePermission("trojan:view", securityMiddleware(trojanConnectionTestHandler))))
 	http.HandleFunc("GET /api/trojan/users/{hash}/clash/download", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanClashDownloadHandler))))
 	http.HandleFunc("GET /api/trojan/users/{hash}/singbox/download", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanSingboxDownloadHandler))))
-	http.HandleFunc("/trojan", authMiddleware(requirePermission("trojan:manage", securityMiddleware(trojanPageHandler))))
+	http.HandleFunc("/trojan", authMiddleware(requirePermission("trojan:view", securityMiddleware(trojanPageHandler))))
 
 	// RBAC 权限管理接口
 	http.HandleFunc("GET /api/rbac/permissions", authMiddleware(requirePermission("role:manage", securityMiddleware(listPermissionsHandler))))
@@ -6050,7 +6063,7 @@ func main() {
 	http.HandleFunc("PUT /api/rbac/users/{username}", authMiddleware(requirePermission("user:manage", securityMiddleware(updateRbacUserHandler))))
 	http.HandleFunc("DELETE /api/rbac/users/{username}", authMiddleware(requirePermission("user:manage", securityMiddleware(deleteRbacUserHandler))))
 	http.HandleFunc("GET /api/rbac/online-count", authMiddleware(requireAnyPermission([]string{"role:manage", "user:manage", "user:view"}, securityMiddleware(onlineCountHandler))))
-	http.HandleFunc("/api/audit", authMiddleware(requireAnyPermission([]string{"role:manage", "user:manage"}, securityMiddleware(auditQueryHandler))))
+	http.HandleFunc("/api/audit", authMiddleware(requireAnyPermission([]string{"role:manage", "user:manage", "audit:view"}, securityMiddleware(auditQueryHandler))))
 	http.HandleFunc("GET /api/logs/files", authMiddleware(requirePermission("system:log", securityMiddleware(listLogFilesHandler))))
 	http.HandleFunc("GET /api/logs", authMiddleware(requirePermission("system:log", securityMiddleware(logContentHandler))))
 
@@ -6125,15 +6138,17 @@ func main() {
 
 	// ==================== Web Shell / Web Terminal ====================
 	// 复用 system:exec 权限；每次启动 Shell 均需独立二次认证 + 一次性 Token
-	http.HandleFunc("GET /shell.html", authMiddleware(requirePermission("system:exec", securityMiddleware(shellPageHandler))))
-	http.HandleFunc("POST /api/shell/setup-password", authMiddleware(requirePermission("system:exec", securityMiddleware(shellSetupPasswordHandler))))
-	http.HandleFunc("POST /api/shell/auth", authMiddleware(requirePermission("system:exec", securityMiddleware(shellAuthHandler))))
-	http.HandleFunc("POST /api/shell/change-password", authMiddleware(requirePermission("system:exec", securityMiddleware(shellChangePasswordHandler))))
-	http.HandleFunc("GET /api/shell/sessions", authMiddleware(requirePermission("system:exec", securityMiddleware(shellListSessionsHandler))))
-	http.HandleFunc("DELETE /api/shell/sessions/{id}", authMiddleware(requirePermission("system:exec", securityMiddleware(shellDeleteSessionHandler))))
-	http.HandleFunc("DELETE /api/shell/auth-sessions/{id}", authMiddleware(requirePermission("system:exec", securityMiddleware(shellDeleteAuthSessionHandler))))
-	http.HandleFunc("POST /api/shell/revoke-all", authMiddleware(requirePermission("system:exec", securityMiddleware(shellRevokeAllHandler))))
-	http.HandleFunc("GET /ws/shell", authMiddleware(requirePermission("system:exec", securityMiddleware(shellWSHandler))))
+	// Web Shell 全链路使用独立的 shell:use 权限（等同主机用户权限，高危）；
+	// 不再与 system:exec（白名单快捷命令）混用，避免持有快捷命令权限的账号默认获得主机 Shell
+	http.HandleFunc("GET /shell.html", authMiddleware(requirePermission("shell:use", securityMiddleware(shellPageHandler))))
+	http.HandleFunc("POST /api/shell/setup-password", authMiddleware(requirePermission("shell:use", securityMiddleware(shellSetupPasswordHandler))))
+	http.HandleFunc("POST /api/shell/auth", authMiddleware(requirePermission("shell:use", securityMiddleware(shellAuthHandler))))
+	http.HandleFunc("POST /api/shell/change-password", authMiddleware(requirePermission("shell:use", securityMiddleware(shellChangePasswordHandler))))
+	http.HandleFunc("GET /api/shell/sessions", authMiddleware(requirePermission("shell:use", securityMiddleware(shellListSessionsHandler))))
+	http.HandleFunc("DELETE /api/shell/sessions/{id}", authMiddleware(requirePermission("shell:use", securityMiddleware(shellDeleteSessionHandler))))
+	http.HandleFunc("DELETE /api/shell/auth-sessions/{id}", authMiddleware(requirePermission("shell:use", securityMiddleware(shellDeleteAuthSessionHandler))))
+	http.HandleFunc("POST /api/shell/revoke-all", authMiddleware(requirePermission("shell:use", securityMiddleware(shellRevokeAllHandler))))
+	http.HandleFunc("GET /ws/shell", authMiddleware(requirePermission("shell:use", securityMiddleware(shellWSHandler))))
 
 	// ==================== 隐藏私人空间路由 ====================
 	registerPrivateRoutes(http.DefaultServeMux)

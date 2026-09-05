@@ -549,6 +549,46 @@ func TestDownloadTokenFullFlow(t *testing.T) {
 	}
 }
 
+// TestTokenRevokeRequiresPermission 撤销令牌必须持有 token:revoke 权限：
+// 即使是令牌属主（自己签发）也没有隐式撤销权，仅持 token:issue 的用户撤销应 403
+func TestTokenRevokeRequiresPermission(t *testing.T) {
+	oldUM := userManager
+	oldDTM := downloadTokenManager
+	defer func() { userManager = oldUM; downloadTokenManager = oldDTM }()
+
+	userManager = &UserManager{
+		RWMutex: sync.RWMutex{},
+		UserInfos: map[string]*Users{
+			"issuer":  {Username: "issuer", IsActive: true, Permissions: []string{"token:issue"}},
+			"revoker": {Username: "revoker", IsActive: true, Permissions: []string{"token:issue", "token:revoke"}},
+		},
+		Sessions: make(map[string]*Session),
+	}
+	downloadTokenManager = &DownloadTokenManager{Tokens: map[string]*DownloadToken{
+		"tok-1": {TokenID: "tok-1", Token: "tk", Username: "issuer", IsActive: true},
+	}}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /revoke-download-token", authMiddleware(securityMiddleware(revokeDownloadTokenHandler)))
+
+	// 属主（仅 token:issue）撤销自己的令牌 → 403
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, secureReq(newTestSession("issuer"), "POST", "/revoke-download-token?token_id=tok-1", "", true))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("属主无 token:revoke 撤销应 403, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 持 token:revoke 的用户撤销 → 200 且令牌停用
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, secureReq(newTestSession("revoker"), "POST", "/revoke-download-token?token_id=tok-1", "", true))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("token:revoke 撤销应 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if downloadTokenManager.Tokens["tok-1"].IsActive {
+		t.Fatal("撤销后令牌应为停用状态")
+	}
+}
+
 // Docker 路由的 RBAC 与 CSRF 保护回归测试。
 func TestDockerRoutesProtected(t *testing.T) {
 	oldUM := userManager

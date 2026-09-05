@@ -553,6 +553,8 @@
             };
 
             const hasPerm = p => (user && (user.permissions || []).some(x => x === '*' || x === p));
+            // 只读 = trojan:view 或 trojan:manage；增删改/凭据补录/配置下载 = trojan:manage
+            const canManage = hasPerm('trojan:manage');
             const connected = !!(status && status.connected);
 
             useEffect(() => {
@@ -610,7 +612,7 @@
             };
 
             useEffect(() => {
-                if (checking || !user || !hasPerm('trojan:manage')) return;
+                if (checking || !user || !(hasPerm('trojan:view') || hasPerm('trojan:manage'))) return;
                 if (chartRef.current && !chartInst.current) {
                     chartInst.current = echarts.init(chartRef.current);
                     updateChart(null, isDark);
@@ -633,7 +635,7 @@
 
             // 从后端读取用户列表（增删改/手动刷新；平时由 WebSocket 推送更新）
             const loadUsers = useCallback(async () => {
-                if (!hasPerm('trojan:manage')) return;
+                if (!(hasPerm('trojan:view') || hasPerm('trojan:manage'))) return;
                 try {
                     const response = await secureFetch(baseUrl + '/api/trojan/users');
                     const payload = unwrapResponse(await response.json());
@@ -642,7 +644,7 @@
                 } catch (e) { message.error(e.message || '获取 Trojan-Go 用户失败'); }
             }, [user]);
 
-            useEffect(() => { if (user && hasPerm('trojan:manage')) loadUsers(); }, [user]);
+            useEffect(() => { if (user && (hasPerm('trojan:view') || hasPerm('trojan:manage'))) loadUsers(); }, [user]);
 
             const refreshAll = async () => {
                 setRefreshing(true);
@@ -1014,11 +1016,11 @@
                 {
                     title: '操作', width: 290, fixed: 'right', render: (_, r) => (
                         <Space size={4}>
-                            <Button size="small" type="primary" ghost onClick={() => openConnection(r)}>连接</Button>
+                            {canManage && <Button size="small" type="primary" ghost onClick={() => openConnection(r)}>连接</Button>}
                             <Button size="small" onClick={() => setDetail(r)}>详情</Button>
-                            <Button size="small" onClick={() => openEdit(r)}>编辑</Button>
-                            <Button size="small" onClick={() => confirmTrafficReset(r)}>重置</Button>
-                            <Button size="small" danger onClick={() => confirmDelete(r)}>删除</Button>
+                            {canManage && <Button size="small" onClick={() => openEdit(r)}>编辑</Button>}
+                            {canManage && <Button size="small" onClick={() => confirmTrafficReset(r)}>重置</Button>}
+                            {canManage && <Button size="small" danger onClick={() => confirmDelete(r)}>删除</Button>}
                         </Space>
                     )
                 }
@@ -1030,7 +1032,8 @@
                 </div>;
             }
 
-            if (!hasPerm('trojan:manage')) {
+            // 页面门槛：trojan:view 或 trojan:manage 均可查看；增删改/凭据/配置下载需 trojan:manage
+            if (!(hasPerm('trojan:view') || hasPerm('trojan:manage'))) {
                 return (
                     <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
                         <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
@@ -1122,7 +1125,7 @@
 
                             <Card size="small"
                                 title={<Space size={8}><UIIcon name="SafetyCertificateOutlined" />Trojan 用户<span style={{ fontSize: 12, color: 'var(--secondary)', fontWeight: 400 }}>（{users.length}）</span></Space>}
-                                extra={<Button type="primary" size="small" icon={<UIIcon name="PlusOutlined" />} onClick={openAdd}>添加用户</Button>}>
+                                extra={canManage && <Button type="primary" size="small" icon={<UIIcon name="PlusOutlined" />} onClick={openAdd}>添加用户</Button>}>
                                 <Table size="small" rowKey="hash" dataSource={users} columns={columns} loading={false}
                                     pagination={users.length > 10 ? { pageSize: 10, showSizeChanger: false, showTotal: t => '共 ' + t + ' 个用户' } : false}
                                     scroll={{ x: 'max-content' }}
@@ -1132,7 +1135,7 @@
 
                         <Drawer title={liveDetail ? <Space size={6}><UIIcon name="UserOutlined" />客户端详情</Space> : '客户端详情'}
                             width={isMobile ? '100%' : 520} open={!!liveDetail} onClose={() => setDetail(null)}
-                            footer={liveDetail && (
+                            footer={liveDetail && canManage && (
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                                     <Button onClick={() => { setDetail(null); openEdit(liveDetail); }}>编辑</Button>
                                     <Button danger onClick={() => { setDetail(null); confirmDelete(liveDetail); }}>删除</Button>

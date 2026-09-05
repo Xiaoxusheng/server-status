@@ -49,7 +49,7 @@ func setupShellTest(t *testing.T, adminSession string, password string) (*http.S
 		RWMutex: sync.RWMutex{},
 		UserInfos: map[string]*Users{
 			"admin": {Username: "admin", IsActive: true, Permissions: []string{"*"}},
-			"nolab": {Username: "nolab", IsActive: true, Permissions: []string{"system:view"}}, // 无 system:exec
+			"nolab": {Username: "nolab", IsActive: true, Permissions: []string{"system:view"}}, // 无 shell:use
 		},
 		Sessions: make(map[string]*Session),
 	}
@@ -63,14 +63,14 @@ func setupShellTest(t *testing.T, adminSession string, password string) (*http.S
 // shellTestMux 注册与 main() 相同保护链的 Web Shell 路由集
 func shellTestMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/shell/auth", authMiddleware(requirePermission("system:exec", securityMiddleware(shellAuthHandler))))
-	mux.HandleFunc("POST /api/shell/setup-password", authMiddleware(requirePermission("system:exec", securityMiddleware(shellSetupPasswordHandler))))
-	mux.HandleFunc("POST /api/shell/change-password", authMiddleware(requirePermission("system:exec", securityMiddleware(shellChangePasswordHandler))))
-	mux.HandleFunc("GET /api/shell/sessions", authMiddleware(requirePermission("system:exec", securityMiddleware(shellListSessionsHandler))))
-	mux.HandleFunc("DELETE /api/shell/sessions/{id}", authMiddleware(requirePermission("system:exec", securityMiddleware(shellDeleteSessionHandler))))
-	mux.HandleFunc("DELETE /api/shell/auth-sessions/{id}", authMiddleware(requirePermission("system:exec", securityMiddleware(shellDeleteAuthSessionHandler))))
-	mux.HandleFunc("POST /api/shell/revoke-all", authMiddleware(requirePermission("system:exec", securityMiddleware(shellRevokeAllHandler))))
-	mux.HandleFunc("GET /ws/shell", authMiddleware(requirePermission("system:exec", securityMiddleware(shellWSHandler))))
+	mux.HandleFunc("POST /api/shell/auth", authMiddleware(requirePermission("shell:use", securityMiddleware(shellAuthHandler))))
+	mux.HandleFunc("POST /api/shell/setup-password", authMiddleware(requirePermission("shell:use", securityMiddleware(shellSetupPasswordHandler))))
+	mux.HandleFunc("POST /api/shell/change-password", authMiddleware(requirePermission("shell:use", securityMiddleware(shellChangePasswordHandler))))
+	mux.HandleFunc("GET /api/shell/sessions", authMiddleware(requirePermission("shell:use", securityMiddleware(shellListSessionsHandler))))
+	mux.HandleFunc("DELETE /api/shell/sessions/{id}", authMiddleware(requirePermission("shell:use", securityMiddleware(shellDeleteSessionHandler))))
+	mux.HandleFunc("DELETE /api/shell/auth-sessions/{id}", authMiddleware(requirePermission("shell:use", securityMiddleware(shellDeleteAuthSessionHandler))))
+	mux.HandleFunc("POST /api/shell/revoke-all", authMiddleware(requirePermission("shell:use", securityMiddleware(shellRevokeAllHandler))))
+	mux.HandleFunc("GET /ws/shell", authMiddleware(requirePermission("shell:use", securityMiddleware(shellWSHandler))))
 	return mux
 }
 
@@ -109,12 +109,12 @@ func TestShellUnauthenticated401(t *testing.T) {
 	}
 }
 
-// 已登录但无 system:exec → 403
+// 已登录但无 shell:use → 403
 func TestShellRBACDenied403(t *testing.T) {
 	mux, sess := setupShellTest(t, "nolab", testShellPassword)
 	code, _ := execPOST(t, mux, sess, "/api/shell/auth", `{"password":"`+testShellPassword+`"}`)
 	if code != http.StatusForbidden {
-		t.Fatalf("无 system:exec 应 403, got %d", code)
+		t.Fatalf("无 shell:use 应 403, got %d", code)
 	}
 }
 

@@ -320,6 +320,7 @@
 
             const hasPerm = p => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
             const canIssue = hasPerm('token:issue');
+            const canRevoke = hasPerm('token:revoke'); // 撤销为独立高危权限，属主也不例外
             const canDownload = hasPerm('files:download') || canIssue;
 
             useEffect(() => {
@@ -475,7 +476,7 @@
                                 </div>
                             });
                         }}>查看</Button>
-                        {t.is_active && <Popconfirm title="撤销该令牌？" onConfirm={async () => {
+                        {canRevoke && t.is_active && <Popconfirm title="撤销该令牌？" onConfirm={async () => {
                             try { await api('/revoke-download-token?token_id=' + encodeURIComponent(t.token_id), 'POST'); message.success('已撤销'); loadTokens(); } catch (e) { message.error(e.message); }
                         }}><Button size="small" danger>撤销</Button></Popconfirm>}
                     </Space>
@@ -581,7 +582,7 @@
                                                                 </div>
                                                             });
                                                         }}>查看</Button>
-                                                        {t.is_active && <Button size="small" danger onClick={() => {
+                                                        {canRevoke && t.is_active && <Button size="small" danger onClick={() => {
                                                             Modal.confirm({
                                                                 title: '撤销令牌', content: '确定撤销该令牌吗？', okText: '撤销', okButtonProps: { danger: true }, onOk: async () => {
                                                                     try { await api('/revoke-download-token?token_id=' + encodeURIComponent(t.token_id), 'POST'); message.success('已撤销'); loadTokens(); } catch (e) { message.error(e.message); }
