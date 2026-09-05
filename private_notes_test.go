@@ -6,10 +6,14 @@ import (
 	"image"
 	"image/png"
 	"io"
+	"mime/multipart"
+	"net/textproto"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -271,6 +275,208 @@ func TestPrivatePathSafety(t *testing.T) {
 	base, _ := filepath.Abs(st.storageDir)
 	if !strings.HasPrefix(abs, base) {
 		t.Fatalf("路径越界: %s", abs)
+	}
+}
+
+// TestImageThumbGeneration 验证缩略图链路：上传即生成持久缩略图（最长边 480，不放大小图）、
+// 加密落盘且可解密回读、宽高元数据正确、列表携带 thumb_url、越权拒绝、删除图片同步清理缩略图
+func TestImageThumbGeneration(t *testing.T) {
+	st := newTestStore(t)
+	note, err := st.createNote("alice", createNoteRequest{Title: "图片手记"})
+	if err != nil {
+		t.Fatalf("createNote: %v", err)
+	}
+
+	upload := func(w, h int) *PrivateImage {
+		t.Helper()
+		img := image.NewRGBA(image.Rect(0, 0, w, h))
+		var buf bytes.Buffer
+		if err := png.Encode(&buf, img); err != nil {
+			t.Fatal(err)
+		}
+		tmp := filepath.Join(t.TempDir(), "upload.png")
+		if err := os.WriteFile(tmp, buf.Bytes(), 0644); err != nil {
+			t.Fatal(err)
+		}
+		f, err := os.Open(tmp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		hdr := &multipart.FileHeader{
+			Filename: "test.png",
+			Header:   textproto.MIMEHeader{"Content-Type": []string{"image/png"}},
+			Size:     int64(buf.Len()),
+		}
+		uploaded, err := st.addImage("alice", note.ID, f, hdr)
+		if err != nil {
+			t.Fatalf("addImage(%dx%d): %v", w, h, err)
+		}
+		return uploaded
+	}
+
+	// 小图（20x40）：最长边 ≤480 不放大，缩略宽高保持原值
+	small := upload(20, 40)
+	if small.ThumbURL == "" || small.URL == "" {
+		t.Fatal("上传后应同时返回 url 与 thumb_url")
+	}
+	if small.Width != 20 || small.Height != 40 || small.ThumbWidth != 20 || small.ThumbHeight != 40 {
+		t.Fatalf("小图宽高应保持原值: %dx%d thumb %dx%d", small.Width, small.Height, small.ThumbWidth, small.ThumbHeight)
+	}
+
+	// 大图（1000x500）：缩略图最长边应为 480 → 480x240
+	big := upload(1000, 500)
+	if big.ThumbWidth != 480 || big.ThumbHeight != 240 {
+		t.Fatalf("缩略图尺寸应为 480x240: %dx%d", big.ThumbWidth, big.ThumbHeight)
+	}
+
+	// 缩略图文件加密落盘且可解密回读为有效 PNG
+	abs, name, err := st.imageThumbPath("alice", note.ID, big.ID)
+	if err != nil {
+		t.Fatalf("imageThumbPath: %v", err)
+	}
+	if !strings.HasSuffix(name, ".thumb.png") {
+		t.Fatalf("缩略图文件名异常: %s", name)
+	}
+	raw, err := os.ReadFile(abs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isMediaEncrypted(raw) {
+		t.Fatal("缩略图应与原图一样加密存储")
+	}
+	data, err := decryptMediaBytes(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || format != "png" {
+		t.Fatalf("缩略图应为有效 PNG: %v %v", format, err)
+	}
+	if cfg.Width != 480 || cfg.Height != 240 {
+		t.Fatalf("缩略图实际尺寸 %dx%d", cfg.Width, cfg.Height)
+	}
+
+	// 列表接口应携带 thumb_url 与宽高
+	notes, err := st.listNotes("alice", "", "")
+	if err != nil || len(notes) != 1 {
+		t.Fatalf("listNotes: %v %d", err, len(notes))
+	}
+	if len(notes[0].Images) != 2 {
+		t.Fatalf("应有 2 张图片: %d", len(notes[0].Images))
+	}
+	for _, im := range notes[0].Images {
+		if im.ThumbURL == "" || im.URL == "" {
+			t.Fatal("列表图片应同时返回 url 与 thumb_url")
+		}
+	}
+
+	// 越权：其他用户不可读取缩略图
+	if _, _, err := st.imageThumbPath("bob", note.ID, big.ID); err == nil {
+		t.Fatal("其他用户不应读取缩略图")
+	}
+
+	// 删除图片应同步清理缩略图文件
+	if err := st.deleteImage("alice", note.ID, big.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(abs); !os.IsNotExist(err) {
+		t.Fatal("删除图片后缩略图文件应被清理")
+	}
+}
+
+// TestImageThumbLazyBackfill 验证历史图片兼容：DB 中 thumb_path 为空的旧图片
+// 首次访问 thumb 接口时按需生成并回写，后续直接复用
+func TestImageThumbLazyBackfill(t *testing.T) {
+	st := newTestStore(t)
+	note, err := st.createNote("alice", createNoteRequest{Title: "历史图片"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	img := image.NewRGBA(image.Rect(0, 0, 960, 480))
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatal(err)
+	}
+	tmp := filepath.Join(t.TempDir(), "old.png")
+	if err := os.WriteFile(tmp, buf.Bytes(), 0644); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	hdr := &multipart.FileHeader{
+		Filename: "old.png",
+		Header:   textproto.MIMEHeader{"Content-Type": []string{"image/png"}},
+		Size:     int64(buf.Len()),
+	}
+	uploaded, err := st.addImage("alice", note.ID, f, hdr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 模拟历史数据：清空缩略图列
+	if _, err := st.db.Exec(`UPDATE note_images SET thumb_path = '', width = 0, height = 0, thumb_width = 0, thumb_height = 0 WHERE id = ?`, uploaded.ID); err != nil {
+		t.Fatal(err)
+	}
+	// 首次访问：按需生成
+	rel, tw, th, w, h, err := st.ensureImageThumb(note.ID, uploaded.ID)
+	if err != nil {
+		t.Fatalf("ensureImageThumb: %v", err)
+	}
+	if rel == "" || tw != 480 || th != 240 || w != 960 || h != 480 {
+		t.Fatalf("历史图片按需生成结果异常: rel=%s %dx%d %dx%d", rel, tw, th, w, h)
+	}
+	// 并发访问：singleflight 去重不报错，结果一致
+	var wg sync.WaitGroup
+	errs := make([]error, 8)
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			r, _, _, _, _, e := st.ensureImageThumb(note.ID, uploaded.ID)
+			if e != nil || r == "" {
+				errs[i] = e
+			}
+		}(i)
+	}
+	wg.Wait()
+	for _, e := range errs {
+		if e != nil {
+			t.Fatalf("并发 ensureImageThumb: %v", e)
+		}
+	}
+}
+
+// TestNotesPagination 验证手记分页查询：total/页大小/倒序页序正确，全量模式保持旧结构
+func TestNotesPagination(t *testing.T) {
+	st := newTestStore(t)
+	for i := 0; i < 25; i++ {
+		// created_at 秒级精度，逐条错开保证排序稳定
+		createdAt := time.Now().UTC().Add(-time.Duration(25-i) * time.Hour).Format(time.RFC3339)
+		if _, err := st.createNote("alice", createNoteRequest{Title: strconv.Itoa(i), CreatedAt: createdAt}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := st.createNote("bob", createNoteRequest{Title: "bob 的手记"}); err != nil {
+		t.Fatal(err)
+	}
+	page1, total, err := st.listNotesPaged("alice", "", "", 1, 20)
+	if err != nil || total != 25 || len(page1) != 20 {
+		t.Fatalf("page1: total=%d len=%d err=%v", total, len(page1), err)
+	}
+	page2, total2, err := st.listNotesPaged("alice", "", "", 2, 20)
+	if err != nil || total2 != 25 || len(page2) != 5 {
+		t.Fatalf("page2: total=%d len=%d err=%v", total2, len(page2), err)
+	}
+	if page1[0].CreatedAt <= page2[0].CreatedAt {
+		t.Fatalf("应按 created_at 倒序: %s vs %s", page1[0].CreatedAt, page2[0].CreatedAt)
+	}
+	// 全量模式（不带 page 参数）与分页模式数据一致
+	all, err := st.listNotes("alice", "", "")
+	if err != nil || len(all) != 25 {
+		t.Fatalf("全量模式应返回 25 条: %v %d", err, len(all))
 	}
 }
 

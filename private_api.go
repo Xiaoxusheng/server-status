@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -80,6 +82,7 @@ func registerPrivateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/private/notes/{id}/images/order", authMiddleware(securityMiddleware(privateAuthMiddleware(privateReorderImagesHandler))))
 	mux.HandleFunc("DELETE /api/private/notes/{id}/images/{image_id}", authMiddleware(securityMiddleware(privateAuthMiddleware(privateDeleteImageHandler))))
 	mux.HandleFunc("GET /api/private/notes/{id}/images/{image_id}/file", authMiddleware(securityMiddleware(privateAuthMiddleware(privateImageFileHandler))))
+	mux.HandleFunc("GET /api/private/notes/{id}/images/{image_id}/thumb", authMiddleware(securityMiddleware(privateAuthMiddleware(privateImageThumbHandler))))
 
 	// 语音
 	mux.HandleFunc("POST /api/private/notes/{id}/audio", authMiddleware(securityMiddleware(privateAuthMiddleware(privateUploadAudioHandler))))
@@ -267,18 +270,57 @@ func privateAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 // ==================== 手记处理器 ====================
 
+// parsePageParams 解析 page / page_size 查询参数（默认第 1 页、每页 20，上限 100）
+func parsePageParams(r *http.Request) (int, int) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(r.URL.Query().Get("page_size"))
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	return page, pageSize
+}
+
+// writePagedNotes 输出分页手记响应（items/page/page_size/total/has_more）
+func writePagedNotes(w http.ResponseWriter, notes []*PrivateNote, page, pageSize, total int) {
+	writeJSON(w, http.StatusOK, "获取手记成功", map[string]interface{}{
+		"items":     notes,
+		"page":      page,
+		"page_size": pageSize,
+		"total":     total,
+		"has_more":  page*pageSize < total,
+	})
+}
+
+// privateListNotesHandler GET /api/private/notes
+// 带 page / page_size 参数时返回分页对象 {items,page,page_size,total,has_more}；
+// 不带分页参数时保持旧行为返回全量数组（旧调用完全兼容）
 func privateListNotesHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	session, _ := getSessionFromRequest(r)
-	notes, err := privateStore.listNotes(session.Username, r.URL.Query().Get("tag"), strings.TrimSpace(r.URL.Query().Get("q")))
+	tag := r.URL.Query().Get("tag")
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if r.URL.Query().Get("page") == "" && r.URL.Query().Get("page_size") == "" {
+		notes, err := privateStore.listNotes(session.Username, tag, q)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "获取手记失败")
+			return
+		}
+		writeJSON(w, http.StatusOK, "获取手记成功", notes)
+		return
+	}
+	page, pageSize := parsePageParams(r)
+	notes, total, err := privateStore.listNotesPaged(session.Username, tag, q, page, pageSize)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "获取手记失败")
 		return
 	}
-	if notes == nil {
-		notes = []*PrivateNote{}
-	}
-	writeJSON(w, http.StatusOK, "获取手记成功", notes)
+	writePagedNotes(w, notes, page, pageSize, total)
 }
 
 func privateGetNoteHandler(w http.ResponseWriter, r *http.Request) {
@@ -345,6 +387,8 @@ func privateDeleteNoteHandler(w http.ResponseWriter, r *http.Request) {
 // ==================== 图片处理器 ====================
 
 // privateUploadImageHandler POST /api/private/notes/{id}/images
+// 上传成功即返回 {id,url,thumb_url,width,height,...}：前端直接局部更新当前手记，
+// 不重新拉取全部 notes
 func privateUploadImageHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	session, _ := getSessionFromRequest(r)
@@ -364,7 +408,6 @@ func privateUploadImageHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	img.URL = fmt.Sprintf("/api/private/notes/%s/images/%s/file", noteID, img.ID)
 	writeJSON(w, http.StatusOK, "图片上传成功", img)
 }
 
@@ -395,17 +438,53 @@ func privateDeleteImageHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, "图片已删除", nil)
 }
 
+// etagForFile 基于资源 id + 文件修改时间 + 版本号生成强 ETag；
+// 配合 http.ServeContent 的 If-None-Match 处理，文件未变化时浏览器直接 304 命中缓存
+func etagForFile(id, abs string, version int) string {
+	var mt int64
+	if info, err := os.Stat(abs); err == nil {
+		mt = info.ModTime().Unix()
+	}
+	return fmt.Sprintf(`"%s-%d-%d"`, id, mt, version)
+}
+
 // privateImageFileHandler GET /api/private/notes/{id}/images/{image_id}/file
+// 原图访问（仅全屏查看器/下载/卡片生成等确需原图的场景调用）
 func privateImageFileHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	session, _ := getSessionFromRequest(r)
-	abs, name, err := privateStore.imageFilePath(session.Username, r.PathValue("id"), r.PathValue("image_id"))
+	noteID, imageID := r.PathValue("id"), r.PathValue("image_id")
+	abs, name, err := privateStore.imageFilePath(session.Username, noteID, imageID)
 	if err != nil {
 		writeJSONError(w, http.StatusNotFound, "图片不存在")
 		return
 	}
 	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	w.Header().Set("ETag", etagForFile("pvimg-"+imageID, abs, 1))
+	servePrivateMediaFile(w, r, abs, name)
+}
+
+// privateImageThumbHandler GET /api/private/notes/{id}/images/{image_id}/thumb
+// 缩略图访问：双层认证 + note 归属校验（image_id 越权直接 404，不泄露存在性）。
+// thumb 不存在时按需生成（singleflight 去重，历史图片首次访问自动补齐并持久化）。
+// immutable 长缓存 + ETag（image id + 文件修改时间 + 缩略图版本）保证未变化时零流量
+func privateImageThumbHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	session, _ := getSessionFromRequest(r)
+	noteID, imageID := r.PathValue("id"), r.PathValue("image_id")
+	abs, name, err := privateStore.imageThumbPath(session.Username, noteID, imageID)
+	if err != nil {
+		writeJSONError(w, http.StatusNotFound, "图片不存在")
+		return
+	}
+	// 显式 Content-Type（.thumb.jpg/.thumb.png/回退原图 webp/gif），不依赖扩展名探测
+	if ct := mime.TypeByExtension(strings.ToLower(filepath.Ext(name))); ct != "" {
+		w.Header().Set("Content-Type", ct)
+	}
+	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	w.Header().Set("ETag", etagForFile("pvthumb-"+imageID, abs, 1))
 	servePrivateMediaFile(w, r, abs, name)
 }
 
@@ -553,23 +632,46 @@ func privateTagsHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, "获取标签成功", tags)
 }
 
+// privateSearchHandler GET /api/private/search?q=xxx[&page=1&page_size=20]
+// 搜索结果同样分页；不带分页参数时保持旧行为返回全量数组（旧调用完全兼容）
 func privateSearchHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	session, _ := getSessionFromRequest(r)
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	paged := r.URL.Query().Get("page") != "" || r.URL.Query().Get("page_size") != ""
 	if q == "" {
-		writeJSON(w, http.StatusOK, "搜索成功", []*PrivateNote{})
+		if paged {
+			page, pageSize := parsePageParams(r)
+			writeJSON(w, http.StatusOK, "搜索成功", map[string]interface{}{
+				"items": []*PrivateNote{}, "page": page, "page_size": pageSize, "total": 0, "has_more": false,
+			})
+		} else {
+			writeJSON(w, http.StatusOK, "搜索成功", []*PrivateNote{})
+		}
 		return
 	}
-	notes, err := privateStore.listNotes(session.Username, "", q)
+	if !paged {
+		notes, err := privateStore.listNotes(session.Username, "", q)
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "搜索失败")
+			return
+		}
+		writeJSON(w, http.StatusOK, "搜索成功", notes)
+		return
+	}
+	page, pageSize := parsePageParams(r)
+	notes, total, err := privateStore.listNotesPaged(session.Username, "", q, page, pageSize)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "搜索失败")
 		return
 	}
-	if notes == nil {
-		notes = []*PrivateNote{}
-	}
-	writeJSON(w, http.StatusOK, "搜索成功", notes)
+	writeJSON(w, http.StatusOK, "搜索成功", map[string]interface{}{
+		"items":     notes,
+		"page":      page,
+		"page_size": pageSize,
+		"total":     total,
+		"has_more":  page*pageSize < total,
+	})
 }
 
 func privateExportHandler(w http.ResponseWriter, r *http.Request) {

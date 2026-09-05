@@ -174,6 +174,49 @@ func TestPrivateHTTPFlow(t *testing.T) {
 		t.Fatalf("图片回读失败: %d %s", rec.Code, rec.Header().Get("Content-Type"))
 	}
 
+	// 6.6 缩略图接口：200 + immutable 缓存头 + ETag 未变化 304
+	imgThumbURL := "/api/private/notes/" + noteID + "/images/" + imgID + "/thumb"
+	rec = do(newReq("GET", imgThumbURL, ""))
+	if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "image/") {
+		t.Fatalf("缩略图访问失败: %d %s", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	if rec.Header().Get("Cache-Control") != "private, max-age=31536000, immutable" {
+		t.Fatalf("缩略图缓存头异常: %s", rec.Header().Get("Cache-Control"))
+	}
+	etag := rec.Header().Get("ETag")
+	if etag == "" {
+		t.Fatal("缩略图应返回 ETag")
+	}
+	req304 := newReq("GET", imgThumbURL, "")
+	req304.Header.Set("If-None-Match", etag)
+	if rec = do(req304); rec.Code != http.StatusNotModified {
+		t.Fatalf("ETag 未变化应 304, got %d", rec.Code)
+	}
+
+	// 6.7 分页列表：{items,page,page_size,total,has_more} 结构 + 图片携带 thumb_url
+	rec = do(newReq("GET", "/api/private/notes?page=1&page_size=1", ""))
+	d = decode(rec)
+	paged, _ := d["data"].(map[string]interface{})
+	if d["code"].(float64) != 200 || paged == nil ||
+		paged["total"].(float64) != 1 || paged["page"].(float64) != 1 ||
+		paged["page_size"].(float64) != 1 || paged["has_more"] != false ||
+		len(paged["items"].([]interface{})) != 1 {
+		t.Fatalf("分页列表结构异常: %s", rec.Body.String())
+	}
+	if imgs, ok := paged["items"].([]interface{})[0].(map[string]interface{})["images"].([]interface{}); ok && len(imgs) > 0 {
+		im := imgs[0].(map[string]interface{})
+		if im["thumb_url"] == nil || im["url"] == nil {
+			t.Fatalf("列表图片应返回 url 与 thumb_url: %v", im)
+		}
+	}
+
+	// 6.8 旧调用兼容：不带分页参数仍返回数组
+	rec = do(newReq("GET", "/api/private/notes", ""))
+	d = decode(rec)
+	if _, ok := d["data"].([]interface{}); !ok {
+		t.Fatalf("旧调用应返回数组: %s", rec.Body.String())
+	}
+
 	// 7. 生成卡片（提交前端渲染的 PNG）
 	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
 	var buf bytes.Buffer

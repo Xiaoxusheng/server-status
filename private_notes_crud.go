@@ -3,7 +3,14 @@ package main
 // 私人空间手记 CRUD 与附件文件管理。
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
+	"image"
+	"image/draw"
+	_ "image/gif" // 注册 GIF 解码器（image.Decode 按内容分发）
+	"image/jpeg"
+	"image/png"
 	"io"
 	"log"
 	"math"
@@ -33,30 +40,53 @@ func scanNote(sc interface{ Scan(...interface{}) error }) (*noteRow, error) {
 }
 
 func (s *PrivateStore) listNotes(userID, tag, q string) ([]*PrivateNote, error) {
-	query := `SELECT ` + noteColumns + ` FROM notes WHERE user_id = ?`
+	notes, _, err := s.queryNotes(userID, tag, q, 0, 0)
+	return notes, err
+}
+
+// listNotesPaged 分页查询手记（page 从 1 起，pageSize 已由调用方钳制上限）
+func (s *PrivateStore) listNotesPaged(userID, tag, q string, page, pageSize int) ([]*PrivateNote, int, error) {
+	return s.queryNotes(userID, tag, q, page, pageSize)
+}
+
+// queryNotes 手记列表查询：page/pageSize 均 <=0 时为全量模式（兼容旧调用，不分页）。
+// 详情（图片/语音/视频/标签）先查 notes 再按 note_id 批量 IN 查询后内存聚合，
+// 取代旧版逐条 fillNoteDetails 的 N+1 查询；返回 JSON 结构与旧版完全一致
+func (s *PrivateStore) queryNotes(userID, tag, q string, page, pageSize int) ([]*PrivateNote, int, error) {
+	where := ` WHERE user_id = ?`
 	args := []interface{}{userID}
 	if tag != "" {
-		query += ` AND id IN (SELECT note_id FROM note_tags WHERE tag = ?)`
+		where += ` AND id IN (SELECT note_id FROM note_tags WHERE tag = ?)`
 		args = append(args, tag)
 	}
 	if q != "" {
-		query += ` AND (title LIKE ? OR content LIKE ? OR location_name LIKE ?
+		where += ` AND (title LIKE ? OR content LIKE ? OR location_name LIKE ?
 			OR id IN (SELECT note_id FROM note_tags WHERE tag LIKE ?))`
 		like := "%" + q + "%"
 		args = append(args, like, like, like, like)
 	}
-	query += ` ORDER BY created_at DESC`
 
-	rows, err := s.db.Query(query, args...)
+	total := 0
+	query := `SELECT ` + noteColumns + ` FROM notes` + where + ` ORDER BY created_at DESC`
+	qargs := append([]interface{}{}, args...)
+	if page > 0 && pageSize > 0 {
+		if err := s.db.QueryRow(`SELECT COUNT(*) FROM notes`+where, args...).Scan(&total); err != nil {
+			return nil, 0, err
+		}
+		query += ` LIMIT ? OFFSET ?`
+		qargs = append(qargs, pageSize, (page-1)*pageSize)
+	}
+
+	rows, err := s.db.Query(query, qargs...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
-	var notes []*PrivateNote
+	notes := []*PrivateNote{}
 	for rows.Next() {
 		row, err := scanNote(rows)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		notes = append(notes, &PrivateNote{
 			ID: row.id, UserID: row.userID, Title: row.title, Content: row.content,
@@ -65,14 +95,12 @@ func (s *PrivateStore) listNotes(userID, tag, q string) ([]*PrivateNote, error) 
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	for _, n := range notes {
-		if err := s.fillNoteDetails(n); err != nil {
-			return nil, err
-		}
+	if err := s.fillNotesDetailsBatch(notes); err != nil {
+		return nil, 0, err
 	}
-	return notes, nil
+	return notes, total, nil
 }
 
 func (s *PrivateStore) getNote(userID, id string) (*PrivateNote, error) {
@@ -85,94 +113,161 @@ func (s *PrivateStore) getNote(userID, id string) (*PrivateNote, error) {
 		CreatedAt: row.createdAt, UpdatedAt: row.updatedAt, LocationName: row.locationName,
 		Latitude: row.latitude, Longitude: row.longitude,
 	}
-	if err := s.fillNoteDetails(n); err != nil {
+	if err := s.fillNotesDetailsBatch([]*PrivateNote{n}); err != nil {
 		return nil, err
 	}
 	return n, nil
 }
 
-func (s *PrivateStore) fillNoteDetails(n *PrivateNote) error {
-	if err := s.fillNoteImages(n); err != nil {
-		return err
+// batchChunk 批量 IN 查询的分块大小（防占位符超过 SQLite 变量上限）
+const batchChunk = 400
+
+// chunkIDs 把 note_id 列表切成 ≤batchChunk 的分块
+func chunkIDs(ids []string, size int) [][]string {
+	var out [][]string
+	for i := 0; i < len(ids); i += size {
+		end := i + size
+		if end > len(ids) {
+			end = len(ids)
+		}
+		out = append(out, ids[i:end])
 	}
-	if err := s.fillNoteAudio(n); err != nil {
-		return err
-	}
-	if err := s.fillNoteVideos(n); err != nil {
-		return err
-	}
-	return s.fillNoteTags(n)
+	return out
 }
 
-func (s *PrivateStore) fillNoteImages(n *PrivateNote) error {
-	rows, err := s.db.Query(`SELECT id, note_id, file_path, sort_order, created_at FROM note_images WHERE note_id = ? ORDER BY sort_order ASC, created_at ASC`, n.ID)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var img PrivateImage
-		if err := rows.Scan(&img.ID, &img.NoteID, &img.FilePath, &img.SortOrder, &img.CreatedAt); err != nil {
-			return err
-		}
-		img.URL = fmt.Sprintf("/api/private/notes/%s/images/%s/file", n.ID, img.ID)
-		n.Images = append(n.Images, img)
-	}
-	return rows.Err()
+// placeholders 生成 n 个 "?" 占位符（逗号分隔）
+func placeholders(n int) string {
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
 }
 
-func (s *PrivateStore) fillNoteAudio(n *PrivateNote) error {
-	rows, err := s.db.Query(`SELECT id, note_id, file_path, duration, created_at FROM note_audio WHERE note_id = ? ORDER BY created_at ASC`, n.ID)
-	if err != nil {
-		return err
+// toArgs []string 转 []interface{}（database/sql 参数）
+func toArgs(ss []string) []interface{} {
+	out := make([]interface{}, len(ss))
+	for i, v := range ss {
+		out[i] = v
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var a PrivateAudio
-		if err := rows.Scan(&a.ID, &a.NoteID, &a.FilePath, &a.Duration, &a.CreatedAt); err != nil {
-			return err
-		}
-		a.URL = fmt.Sprintf("/api/private/notes/%s/audio/%s/file", n.ID, a.ID)
-		n.Audio = append(n.Audio, a)
-	}
-	return rows.Err()
+	return out
 }
 
-// fillNoteVideos 填充手记视频列表（含播放与海报 URL）
-func (s *PrivateStore) fillNoteVideos(n *PrivateNote) error {
-	rows, err := s.db.Query(`SELECT id, note_id, file_path, poster_path, duration, size, created_at FROM note_videos WHERE note_id = ? ORDER BY created_at ASC`, n.ID)
-	if err != nil {
-		return err
+// fillNotesDetailsBatch 批量填充手记详情：图片/语音/视频/标签各按 note_id IN 分块查询，
+// 聚合挂回各手记，消除逐条查询的 N+1 开销
+func (s *PrivateStore) fillNotesDetailsBatch(notes []*PrivateNote) error {
+	if len(notes) == 0 {
+		return nil
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var v PrivateVideo
-		if err := rows.Scan(&v.ID, &v.NoteID, &v.FilePath, &v.PosterPath, &v.Duration, &v.Size, &v.CreatedAt); err != nil {
-			return err
-		}
-		v.URL = fmt.Sprintf("/api/private/notes/%s/video/%s/file", n.ID, v.ID)
-		if v.PosterPath != "" {
-			v.PosterURL = fmt.Sprintf("/api/private/notes/%s/video/%s/poster", n.ID, v.ID)
-		}
-		n.Videos = append(n.Videos, v)
+	byID := make(map[string]*PrivateNote, len(notes))
+	var ids []string
+	for _, n := range notes {
+		byID[n.ID] = n
+		ids = append(ids, n.ID)
 	}
-	return rows.Err()
-}
 
-func (s *PrivateStore) fillNoteTags(n *PrivateNote) error {
-	rows, err := s.db.Query(`SELECT tag FROM note_tags WHERE note_id = ? ORDER BY id ASC`, n.ID)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var tag string
-		if err := rows.Scan(&tag); err != nil {
+	// 图片（含缩略图路径与宽高元数据）
+	for _, chunk := range chunkIDs(ids, batchChunk) {
+		rows, err := s.db.Query(`SELECT id, note_id, file_path, thumb_path, width, height, thumb_width, thumb_height, sort_order, created_at
+			FROM note_images WHERE note_id IN (`+placeholders(len(chunk))+`) ORDER BY sort_order ASC, created_at ASC`, toArgs(chunk)...)
+		if err != nil {
 			return err
 		}
-		n.Tags = append(n.Tags, tag)
+		err = func() error {
+			defer rows.Close()
+			for rows.Next() {
+				var img PrivateImage
+				if err := rows.Scan(&img.ID, &img.NoteID, &img.FilePath, &img.ThumbPath, &img.Width, &img.Height, &img.ThumbWidth, &img.ThumbHeight, &img.SortOrder, &img.CreatedAt); err != nil {
+					return err
+				}
+				img.URL = fmt.Sprintf("/api/private/notes/%s/images/%s/file", img.NoteID, img.ID)
+				img.ThumbURL = fmt.Sprintf("/api/private/notes/%s/images/%s/thumb", img.NoteID, img.ID)
+				if n := byID[img.NoteID]; n != nil {
+					n.Images = append(n.Images, img)
+				}
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
+		}
 	}
-	return rows.Err()
+
+	// 语音
+	for _, chunk := range chunkIDs(ids, batchChunk) {
+		rows, err := s.db.Query(`SELECT id, note_id, file_path, duration, created_at
+			FROM note_audio WHERE note_id IN (`+placeholders(len(chunk))+`) ORDER BY created_at ASC`, toArgs(chunk)...)
+		if err != nil {
+			return err
+		}
+		err = func() error {
+			defer rows.Close()
+			for rows.Next() {
+				var a PrivateAudio
+				if err := rows.Scan(&a.ID, &a.NoteID, &a.FilePath, &a.Duration, &a.CreatedAt); err != nil {
+					return err
+				}
+				a.URL = fmt.Sprintf("/api/private/notes/%s/audio/%s/file", a.NoteID, a.ID)
+				if n := byID[a.NoteID]; n != nil {
+					n.Audio = append(n.Audio, a)
+				}
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
+		}
+	}
+
+	// 视频（含播放与海报 URL）
+	for _, chunk := range chunkIDs(ids, batchChunk) {
+		rows, err := s.db.Query(`SELECT id, note_id, file_path, poster_path, duration, size, created_at
+			FROM note_videos WHERE note_id IN (`+placeholders(len(chunk))+`) ORDER BY created_at ASC`, toArgs(chunk)...)
+		if err != nil {
+			return err
+		}
+		err = func() error {
+			defer rows.Close()
+			for rows.Next() {
+				var v PrivateVideo
+				if err := rows.Scan(&v.ID, &v.NoteID, &v.FilePath, &v.PosterPath, &v.Duration, &v.Size, &v.CreatedAt); err != nil {
+					return err
+				}
+				v.URL = fmt.Sprintf("/api/private/notes/%s/video/%s/file", v.NoteID, v.ID)
+				if v.PosterPath != "" {
+					v.PosterURL = fmt.Sprintf("/api/private/notes/%s/video/%s/poster", v.NoteID, v.ID)
+				}
+				if n := byID[v.NoteID]; n != nil {
+					n.Videos = append(n.Videos, v)
+				}
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
+		}
+	}
+
+	// 标签
+	for _, chunk := range chunkIDs(ids, batchChunk) {
+		rows, err := s.db.Query(`SELECT note_id, tag FROM note_tags WHERE note_id IN (`+placeholders(len(chunk))+`) ORDER BY id ASC`, toArgs(chunk)...)
+		if err != nil {
+			return err
+		}
+		err = func() error {
+			defer rows.Close()
+			for rows.Next() {
+				var noteID, tag string
+				if err := rows.Scan(&noteID, &tag); err != nil {
+					return err
+				}
+				if n := byID[noteID]; n != nil {
+					n.Tags = append(n.Tags, tag)
+				}
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type createNoteRequest struct {
@@ -256,6 +351,12 @@ func (s *PrivateStore) deleteNote(userID, id string) error {
 	for _, img := range n.Images {
 		if abs, err := s.safeFilePath(img.FilePath); err == nil {
 			os.Remove(abs)
+		}
+		// 同步清理缩略图文件（缩略图回退引用原图时两者相同，跳过）
+		if img.ThumbPath != "" && img.ThumbPath != img.FilePath {
+			if abs, err := s.safeFilePath(img.ThumbPath); err == nil {
+				os.Remove(abs)
+			}
 		}
 	}
 	for _, a := range n.Audio {
@@ -369,19 +470,34 @@ func (s *PrivateStore) addImage(userID, noteID string, file multipart.File, head
 		os.Remove(abs)
 		return nil, err
 	}
-	return &PrivateImage{ID: id, NoteID: noteID, FilePath: filepath.ToSlash(rel), SortOrder: maxOrder + 1, CreatedAt: nowUTC()}, nil
+	img := &PrivateImage{
+		ID: id, NoteID: noteID, FilePath: filepath.ToSlash(rel), SortOrder: maxOrder + 1, CreatedAt: nowUTC(),
+		URL:      fmt.Sprintf("/api/private/notes/%s/images/%s/file", noteID, id),
+		ThumbURL: fmt.Sprintf("/api/private/notes/%s/images/%s/thumb", noteID, id),
+	}
+	// 上传时同步生成持久缩略图（480px）：失败不阻塞上传（thumb_url 仍有效，首次访问按需生成）
+	if _, tw, th, w, h, terr := s.ensureImageThumb(noteID, id); terr == nil {
+		img.ThumbWidth, img.ThumbHeight, img.Width, img.Height = tw, th, w, h
+	}
+	return img, nil
 }
 
 func (s *PrivateStore) deleteImage(userID, noteID, imageID string) error {
 	if !s.noteOwnedBy(userID, noteID) {
 		return fmt.Errorf("手记不存在")
 	}
-	var rel string
-	if err := s.db.QueryRow(`SELECT file_path FROM note_images WHERE id = ? AND note_id = ?`, imageID, noteID).Scan(&rel); err != nil {
+	var rel, thumbRel string
+	if err := s.db.QueryRow(`SELECT file_path, thumb_path FROM note_images WHERE id = ? AND note_id = ?`, imageID, noteID).Scan(&rel, &thumbRel); err != nil {
 		return err
 	}
 	if abs, err := s.safeFilePath(rel); err == nil {
 		os.Remove(abs)
+	}
+	// 同步清理缩略图文件（缩略图回退引用原图时两者相同，跳过）
+	if thumbRel != "" && thumbRel != rel {
+		if abs, err := s.safeFilePath(thumbRel); err == nil {
+			os.Remove(abs)
+		}
 	}
 	_, err := s.db.Exec(`DELETE FROM note_images WHERE id = ? AND note_id = ?`, imageID, noteID)
 	return err
@@ -410,6 +526,333 @@ func (s *PrivateStore) imageFilePath(userID, noteID, imageID string) (string, st
 	}
 	abs, err := s.safeFilePath(rel)
 	return abs, filepath.Base(abs), err
+}
+
+// ==================== 缩略图 ====================
+// 缩略图规格：最长边 480px，JPEG 质量 82（PNG 源保留透明通道）。
+// 说明：Go 标准库无 WebP 编码器，按"优先标准库、不引入重量级图片依赖"约束输出 JPEG，
+// 480px q82 普通照片普遍 30~80KB，满足 <100KB 目标。
+// 历史图片（thumb_path 为空）不在启动时批量生成：首次访问 thumb 接口时按需生成并持久化，
+// 后续直接读取；并发访问通过 per-image singleflight 去重。
+
+// thumbMaxEdge 缩略图最长边
+const thumbMaxEdge = 480
+
+// imageThumbPath 返回缩略图绝对路径与文件名（不存在时按需生成）
+func (s *PrivateStore) imageThumbPath(userID, noteID, imageID string) (string, string, error) {
+	if !s.noteOwnedBy(userID, noteID) {
+		return "", "", fmt.Errorf("手记不存在")
+	}
+	rel, _, _, _, _, err := s.ensureImageThumb(noteID, imageID)
+	if err != nil {
+		return "", "", err
+	}
+	abs, err := s.safeFilePath(rel)
+	if err != nil {
+		return "", "", err
+	}
+	return abs, filepath.Base(abs), nil
+}
+
+// lookupImageThumb 读取图片行中已持久化的缩略图路径与宽高；thumb_path 为空表示尚未生成
+func (s *PrivateStore) lookupImageThumb(noteID, imageID string) (thumbRel string, tw, th, w, h int, err error) {
+	err = s.db.QueryRow(`SELECT file_path, thumb_path, width, height, thumb_width, thumb_height
+		FROM note_images WHERE id = ? AND note_id = ?`, imageID, noteID).
+		Scan(new(string), &thumbRel, &w, &h, &tw, &th)
+	return
+}
+
+// ensureImageThumb 确保缩略图已生成并返回（thumbRel, thumbW, thumbH, origW, origH, err）。
+// 已存在直接返回；不存在时经 singleflight 生成（并发请求只生成一次，其余等待后重查）
+func (s *PrivateStore) ensureImageThumb(noteID, imageID string) (string, int, int, int, int, error) {
+	if rel, tw, th, w, h, err := s.lookupImageThumb(noteID, imageID); err == nil && rel != "" {
+		return rel, tw, th, w, h, nil
+	}
+	key := noteID + "/" + imageID
+	s.thumbMu.Lock()
+	if s.thumbCalls == nil {
+		s.thumbCalls = make(map[string]*thumbCall)
+	}
+	if c, ok := s.thumbCalls[key]; ok {
+		// 已有同一图片的生成任务：等待完成后重查（任务完成后 thumb_path 必已落库）
+		s.thumbMu.Unlock()
+		<-c.done
+	} else {
+		c := &thumbCall{done: make(chan struct{})}
+		s.thumbCalls[key] = c
+		s.thumbMu.Unlock()
+		func() {
+			defer close(c.done)
+			if _, _, _, _, _, err := s.generateImageThumb(noteID, imageID); err != nil {
+				log.Printf("缩略图生成失败 note=%s image=%s: %v", noteID, imageID, err)
+			}
+		}()
+		s.thumbMu.Lock()
+		delete(s.thumbCalls, key)
+		s.thumbMu.Unlock()
+	}
+	rel, tw, th, w, h, err := s.lookupImageThumb(noteID, imageID)
+	if err != nil {
+		return "", 0, 0, 0, 0, err
+	}
+	if rel == "" {
+		return "", 0, 0, 0, 0, fmt.Errorf("缩略图生成失败")
+	}
+	return rel, tw, th, w, h, nil
+}
+
+// generateImageThumb 生成并持久化缩略图：解密原图 → 解码 → 按 EXIF 方向矫正 →
+// 最长边 ≤480px 面积平均缩放 → JPEG q82（PNG 源用 PNG 保留透明）→ 加密落盘 → 回写 DB。
+// GIF（保持动图）与无法解码的格式（如 WebP）直接以原图作为缩略图引用，保证 thumb 接口始终可用
+func (s *PrivateStore) generateImageThumb(noteID, imageID string) (string, int, int, int, int, error) {
+	var origRel string
+	if err := s.db.QueryRow(`SELECT file_path FROM note_images WHERE id = ? AND note_id = ?`, imageID, noteID).Scan(&origRel); err != nil {
+		return "", 0, 0, 0, 0, err
+	}
+	// fallbackAsOriginal 无法生成缩略图时回退：缩略图直接引用原图（记录原始宽高，缩略宽高留 0）
+	fallbackAsOriginal := func(w, h int) (string, int, int, int, int, error) {
+		if _, err := s.db.Exec(`UPDATE note_images SET thumb_path = ?, width = ?, height = ? WHERE id = ?`,
+			origRel, w, h, imageID); err != nil {
+			return "", 0, 0, 0, 0, err
+		}
+		return origRel, 0, 0, w, h, nil
+	}
+
+	abs, err := s.safeFilePath(origRel)
+	if err != nil {
+		return "", 0, 0, 0, 0, err
+	}
+	raw, err := os.ReadFile(abs)
+	if err != nil {
+		return "", 0, 0, 0, 0, err
+	}
+	data, err := decryptMediaBytes(raw)
+	if err != nil {
+		return "", 0, 0, 0, 0, err
+	}
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 {
+		return fallbackAsOriginal(0, 0)
+	}
+	// 显示宽高按 EXIF 方向修正（浏览器渲染 <img> 时同样遵循 EXIF 方向）
+	orient := exifOrientation(data)
+	w, h := cfg.Width, cfg.Height
+	if orient >= 5 {
+		w, h = h, w
+	}
+	// GIF 多为动图：缩略图直接引用原图，避免抽帧丢失动画
+	if format == "gif" {
+		if _, err := s.db.Exec(`UPDATE note_images SET thumb_path = ?, width = ?, height = ?, thumb_width = ?, thumb_height = ? WHERE id = ?`,
+			origRel, w, h, w, h, imageID); err != nil {
+			return "", 0, 0, 0, 0, err
+		}
+		return origRel, w, h, w, h, nil
+	}
+
+	src, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return fallbackAsOriginal(w, h)
+	}
+	// 统一转 RGBA 后按 EXIF 方向矫正，再面积平均缩放（只缩不放）
+	b := src.Bounds()
+	rgba := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	draw.Draw(rgba, rgba.Bounds(), src, b.Min, draw.Src)
+	rgba = orientRGBA(rgba, orient)
+	sw, sh := rgba.Bounds().Dx(), rgba.Bounds().Dy()
+	dw, dh := sw, sh
+	if m := max(sw, sh); m > thumbMaxEdge {
+		dw = max(1, sw*thumbMaxEdge/m)
+		dh = max(1, sh*thumbMaxEdge/m)
+	}
+	thumb := resizeAreaRGBA(rgba, dw, dh)
+
+	var out bytes.Buffer
+	if format == "png" {
+		err = png.Encode(&out, thumb)
+	} else {
+		err = jpeg.Encode(&out, thumb, &jpeg.Options{Quality: 82})
+	}
+	if err != nil {
+		return fallbackAsOriginal(w, h)
+	}
+	ext := ".jpg"
+	if format == "png" {
+		ext = ".png"
+	}
+	thumbRel := strings.TrimSuffix(origRel, filepath.Ext(origRel)) + ".thumb" + ext
+	tabs, err := s.safeFilePath(thumbRel)
+	if err != nil {
+		return "", 0, 0, 0, 0, err
+	}
+	enc, err := encryptMediaBytes(out.Bytes())
+	if err != nil {
+		return "", 0, 0, 0, 0, err
+	}
+	if err := os.MkdirAll(filepath.Dir(tabs), 0755); err != nil {
+		return "", 0, 0, 0, 0, err
+	}
+	if err := os.WriteFile(tabs, enc, 0644); err != nil {
+		return "", 0, 0, 0, 0, err
+	}
+	if _, err := s.db.Exec(`UPDATE note_images SET thumb_path = ?, width = ?, height = ?, thumb_width = ?, thumb_height = ? WHERE id = ?`,
+		thumbRel, w, h, dw, dh, imageID); err != nil {
+		os.Remove(tabs)
+		return "", 0, 0, 0, 0, err
+	}
+	return thumbRel, dw, dh, w, h, nil
+}
+
+// exifOrientation 解析 JPEG EXIF 方向标签（TIFF IFD0 Orientation 0x0112）；
+// 非 JPEG 或缺失时返回 1（不旋转）
+func exifOrientation(data []byte) int {
+	if len(data) < 4 || data[0] != 0xFF || data[1] != 0xD8 {
+		return 1
+	}
+	pos := 2
+	for pos+4 <= len(data) {
+		if data[pos] != 0xFF {
+			return 1
+		}
+		marker := data[pos+1]
+		if marker == 0xD8 || (marker >= 0xD0 && marker <= 0xD7) || marker == 0x01 {
+			pos += 2
+			continue
+		}
+		if marker == 0xDA {
+			break // SOS：头部段结束
+		}
+		segLen := int(data[pos+2])<<8 | int(data[pos+3])
+		if segLen < 2 || pos+2+segLen > len(data) {
+			return 1
+		}
+		if marker == 0xE1 && pos+10 <= len(data) && bytes.HasPrefix(data[pos+4:pos+10], []byte("Exif\x00\x00")) {
+			return parseTIFFOrientation(data[pos+10 : pos+2+segLen])
+		}
+		pos += 2 + segLen
+	}
+	return 1
+}
+
+// parseTIFFOrientation 从 TIFF 头解析 IFD0 的 Orientation 值（非法/缺失返回 1）
+func parseTIFFOrientation(tiff []byte) int {
+	if len(tiff) < 8 {
+		return 1
+	}
+	var bo binary.ByteOrder = binary.LittleEndian
+	switch {
+	case tiff[0] == 'M' && tiff[1] == 'M':
+		bo = binary.BigEndian
+	case tiff[0] != 'I' || tiff[1] != 'I':
+		return 1
+	}
+	if bo.Uint16(tiff[2:]) != 42 {
+		return 1
+	}
+	ifd0 := int(bo.Uint32(tiff[4:]))
+	if ifd0+2 > len(tiff) {
+		return 1
+	}
+	n := int(bo.Uint16(tiff[ifd0:]))
+	for i := 0; i < n; i++ {
+		e := ifd0 + 2 + i*12
+		if e+12 > len(tiff) {
+			break
+		}
+		if bo.Uint16(tiff[e:]) == 0x0112 {
+			if o := int(bo.Uint16(tiff[e+8:])); o >= 1 && o <= 8 {
+				return o
+			}
+			return 1
+		}
+	}
+	return 1
+}
+
+// orientRGBA 按 EXIF Orientation（2-8）变换像素方向，保证缩略图方向与浏览器渲染原图一致；
+// 方向 5-8 输出宽高互换。方向 1 或非法值原样返回
+func orientRGBA(src *image.RGBA, o int) *image.RGBA {
+	if o <= 1 || o > 8 {
+		return src
+	}
+	sb := src.Bounds()
+	sw, sh := sb.Dx(), sb.Dy()
+	dw, dh := sw, sh
+	if o >= 5 {
+		dw, dh = sh, sw
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, dw, dh))
+	for y := 0; y < dh; y++ {
+		for x := 0; x < dw; x++ {
+			var sx, sy int
+			switch o {
+			case 2: // 水平翻转
+				sx, sy = sw-1-x, y
+			case 3: // 旋转 180°
+				sx, sy = sw-1-x, sh-1-y
+			case 4: // 垂直翻转
+				sx, sy = x, sh-1-y
+			case 5: // 转置（主对角线镜像）
+				sx, sy = y, x
+			case 6: // 顺时针旋转 90°
+				sx, sy = y, sh-1-x
+			case 7: // 反对角线镜像
+				sx, sy = sw-1-y, sh-1-x
+			case 8: // 逆时针旋转 90°
+				sx, sy = sw-1-y, x
+			}
+			dst.SetRGBA(x, y, src.RGBAAt(sb.Min.X+sx, sb.Min.Y+sy))
+		}
+	}
+	return dst
+}
+
+// resizeAreaRGBA 盒式面积平均缩放（纯标准库实现）：每个目标像素取源图对应矩形块
+// 的预乘平均色，缩比明显时质量优于最近邻，速度远快于逐点双线性大核采样
+func resizeAreaRGBA(src *image.RGBA, dw, dh int) *image.RGBA {
+	sb := src.Bounds()
+	sw, sh := sb.Dx(), sb.Dy()
+	if dw <= 0 || dh <= 0 || sw <= 0 || sh <= 0 {
+		return src
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, dw, dh))
+	for dy := 0; dy < dh; dy++ {
+		sy0 := dy * sh / dh
+		sy1 := (dy + 1) * sh / dh
+		if sy1 <= sy0 {
+			sy1 = min(sy0+1, sh)
+		}
+		for dx := 0; dx < dw; dx++ {
+			sx0 := dx * sw / dw
+			sx1 := (dx + 1) * sw / dw
+			if sx1 <= sx0 {
+				sx1 = min(sx0+1, sw)
+			}
+			var r, g, b, a float64
+			for y := sy0; y < sy1; y++ {
+				rowOff := (sb.Min.Y + y - src.Rect.Min.Y) * src.Stride
+				for x := sx0; x < sx1; x++ {
+					off := rowOff + (sb.Min.X+x-src.Rect.Min.X)*4
+					a += float64(src.Pix[off+3])
+					// 预乘后累加，避免半透明边缘出现颜色渗光
+					af := float64(src.Pix[off+3]) / 255
+					r += float64(src.Pix[off+0]) * af
+					g += float64(src.Pix[off+1]) * af
+					b += float64(src.Pix[off+2]) * af
+				}
+			}
+			n := float64((sx1 - sx0) * (sy1 - sy0))
+			pa := a / n
+			doff := dst.PixOffset(dx, dy)
+			if pa > 0 {
+				// 非预乘色 = 预乘均值 × 255 / 平均 alpha
+				dst.Pix[doff+0] = uint8(math.Min(255, (r/n)*255/pa))
+				dst.Pix[doff+1] = uint8(math.Min(255, (g/n)*255/pa))
+				dst.Pix[doff+2] = uint8(math.Min(255, (b/n)*255/pa))
+			}
+			dst.Pix[doff+3] = uint8(math.Min(255, pa))
+		}
+	}
+	return dst
 }
 
 func (s *PrivateStore) addAudio(userID, noteID string, file multipart.File, header *multipart.FileHeader, duration float64) (*PrivateAudio, error) {

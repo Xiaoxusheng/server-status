@@ -95,13 +95,23 @@ type PrivateNote struct {
 }
 
 // PrivateImage 手记图片
+// 缩略图架构：FilePath/thumbPath 均为加密存储的持久缩略图（最长边 480px），
+// ThumbURL 供时间线/搜索/日历预览等列表场景使用；URL（原图）仅在
+// 全屏查看器、下载、卡片生成等确需原图的场景加载。
+// Width/Height 为原图显示宽高（已按 EXIF 方向修正），ThumbWidth/ThumbHeight 为缩略图宽高。
 type PrivateImage struct {
-	ID        string `json:"id"`
-	NoteID    string `json:"note_id"`
-	FilePath  string `json:"-"`
-	URL       string `json:"url"`
-	SortOrder int    `json:"sort_order"`
-	CreatedAt string `json:"created_at"`
+	ID          string `json:"id"`
+	NoteID      string `json:"note_id"`
+	FilePath    string `json:"-"`
+	ThumbPath   string `json:"-"`
+	URL         string `json:"url"`
+	ThumbURL    string `json:"thumb_url"`
+	Width       int    `json:"width"`
+	Height      int    `json:"height"`
+	ThumbWidth  int    `json:"thumb_width"`
+	ThumbHeight int    `json:"thumb_height"`
+	SortOrder   int    `json:"sort_order"`
+	CreatedAt   string `json:"created_at"`
 }
 
 // PrivateAudio 手记语音
@@ -173,6 +183,15 @@ type PrivateStore struct {
 	storageDir string
 	config     PrivateNotesJSON
 	failures   map[string]*privateFailCounter
+	// 缩略图按需生成去重（轻量 singleflight，不引第三方依赖）：
+	// 同一 image 的并发首次访问只执行一次解密+缩放+落盘，其余等待后直接读库
+	thumbMu    sync.Mutex
+	thumbCalls map[string]*thumbCall
+}
+
+// thumbCall 一次进行中的缩略图生成任务（等待完成用）
+type thumbCall struct {
+	done chan struct{}
 }
 
 type privateFailCounter struct {
@@ -658,6 +677,19 @@ func (s *PrivateStore) migrate() error {
 	if _, err := s.db.Exec(`ALTER TABLE note_audio_shares ADD COLUMN card_id TEXT`); err != nil &&
 		!strings.Contains(err.Error(), "duplicate column name") {
 		return err
+	}
+	// 迁移：note_images 缩略图列（旧库无此列，不破坏已有数据库）。
+	// 历史图片 thumb_path 为空：不在启动时一次性生成，首次访问 thumb 接口时按需生成
+	for _, ddl := range []string{
+		`ALTER TABLE note_images ADD COLUMN thumb_path TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE note_images ADD COLUMN width INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE note_images ADD COLUMN height INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE note_images ADD COLUMN thumb_width INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE note_images ADD COLUMN thumb_height INTEGER NOT NULL DEFAULT 0`,
+	} {
+		if _, err := s.db.Exec(ddl); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+			return err
+		}
 	}
 	return nil
 }
