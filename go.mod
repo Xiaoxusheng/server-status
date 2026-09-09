@@ -8,8 +8,8 @@ require (
 	github.com/p4gefau1t/trojan-go v0.10.6
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
-	golang.org/x/crypto v0.52.0
-	google.golang.org/grpc v1.83.1
+	golang.org/x/crypto v0.55.0
+	google.golang.org/grpc v1.83.2
 	modernc.org/sqlite v1.56.0
 )
 
@@ -28,9 +28,9 @@ require (
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/xtaci/smux v1.5.15 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
-	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.39.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
