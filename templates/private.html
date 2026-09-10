@@ -2346,12 +2346,19 @@
         // 任一环节失败回退服务器解密 URL；结果按 imageID 缓存复用（预览/查看器共享）
         function fetchDecryptedImage(noteID, imageID, fallbackURL) {
             if (pvBlobCache.has(imageID)) return pvBlobCache.get(imageID);
+            // authEv 图片走裸 fetch（不经 api()），需自行检测会话失效并广播：
+            // 403 未解锁 → 弹重新验证浮层；401 请先登录 → 弹就地重登浮层。
+            // 否则过期后只显示笼统的"加载失败"，用户只能整页刷新
+            const authEv = st => {
+                if (st === 403) window.dispatchEvent(new CustomEvent('pv-locked'));
+                else if (st === 401) window.dispatchEvent(new CustomEvent('pv-relogin'));
+            };
             const p = (async () => {
                 try {
                     const key = await ensurePvMediaKey();
                     const r = await fetch(baseUrl + '/api/private/notes/' + noteID + '/images/' + imageID + '/cloud',
                         { credentials: 'include', redirect: 'follow' }); // 302 自动跟到 CDN
-                    if (!r.ok) throw new Error('cloud ' + r.status);
+                    if (!r.ok) { authEv(r.status); throw new Error('cloud ' + r.status); }
                     const buf = new Uint8Array(await r.arrayBuffer()); // CORS 不通过会在这里抛错
                     // 服务器回退路径返回的是已解密明文（无 PVMEDIA2 头），直接使用不重复解密
                     const plain = (buf.length >= 8 && buf[0] === 0x50 && buf[1] === 0x56 && buf[2] === 0x4D)
@@ -2360,7 +2367,7 @@
                     return URL.createObjectURL(new Blob([plain], { type: pvMime(plain) }));
                 } catch (e) {
                     const r2 = await fetch(baseUrl + fallbackURL, { credentials: 'include' }); // 服务器解密回退
-                    if (!r2.ok) throw new Error('fallback ' + r2.status);
+                    if (!r2.ok) { authEv(r2.status); throw new Error('fallback ' + r2.status); }
                     return URL.createObjectURL(await r2.blob());
                 }
             })();
@@ -2726,7 +2733,12 @@
                 } catch (e) { /* 解密链路失败：回退原 URL（服务器解密） */ target = url; }
             }
             const r = await fetch(target, { credentials: 'include' });
-            if (!r.ok) throw new Error('图片加载失败 HTTP ' + r.status);
+            if (!r.ok) {
+                // 会话失效广播：canvas 取图同样不经 api()，过期时弹解锁/重登浮层而非笼统报错
+                if (r.status === 403) window.dispatchEvent(new CustomEvent('pv-locked'));
+                else if (r.status === 401) window.dispatchEvent(new CustomEvent('pv-relogin'));
+                throw new Error('图片加载失败 HTTP ' + r.status);
+            }
             const blob = await r.blob();
             if (window.createImageBitmap) {
                 try {
@@ -3642,20 +3654,33 @@
             const [src, setSrc] = useState(null);
             const [loaded, setLoaded] = useState(false);
             const [loadErr, setLoadErr] = useState(false);
+            const [retryTick, setRetryTick] = useState(0); // 点击重试/解锁后续看：自增触发重新加载
             const touchX = useRef(null);
             const preloadsRef = useRef([]);
+            // 当前图重试：清掉失败的 blob 缓存后重新加载（img 可能随 imgs 更新，重试时以当下为准）
+            const retryCur = () => {
+                const im = (imgs[cur] || {});
+                if (im.id) pvBlobCache.delete(im.id);
+                setRetryTick(t => t + 1);
+            };
             // 切图：重置加载态，取当前原图（云直链解密 → 服务器回退，失败显示错误态）
             useEffect(() => {
                 setLoaded(false);
                 setLoadErr(false);
                 setSrc(null);
-                if (!img || !img.url || !img.id) { if (img && img.url) setSrc(img.url); return; }
+                const img0 = imgs[cur];
+                if (!img0 || !img0.url || !img0.id) { if (img0 && img0.url) setSrc(img0.url); return; }
                 let stale = false;
-                fetchDecryptedImage(img.note_id, img.id, img.url)
+                fetchDecryptedImage(img0.note_id, img0.id, img0.url)
                     .then(u => { if (!stale) setSrc(u); })
-                    .catch(() => { if (!stale) setLoadErr(true); });
+                    .catch(() => {
+                        if (stale) return;
+                        setLoadErr(true);
+                        // 注册解锁/重登成功后的自动续看：浮层确认后自动重载当前图，无需刷新页面
+                        window.__pvPendingRetry = () => setRetryTick(t => t + 1);
+                    });
                 return () => { stale = true; };
-            }, [cur, imgs]);
+            }, [cur, imgs, retryTick]);
             // 相邻预加载：只预取当前图前后各 1 张（合计 ≤2），不一次性加载全部原图。
             // 用 document.createElement('img')——页面顶层 Image 构造器可能被 antd 解构遮蔽，new Image() 会崩；
             // 预取同样走解密缓存（失败静默，切换到该图时由当前图加载逻辑兜底）
@@ -3712,7 +3737,7 @@
                         {/* 原图加载期间的缩略图占位（缓存秒出），原图就绪后隐藏 */}
                         {thumb && !loaded && !loadErr && <img className="pv-imgview-thumb" src={thumb} alt="" draggable={false} />}
                         {!loaded && !loadErr && <div className="pv-imgview-loading"><Spin size="large" /></div>}
-                        {loadErr && <div className="pv-imgview-err">图片加载失败，请稍后重试</div>}
+                        {loadErr && <div className="pv-imgview-err" style={{ cursor: 'pointer' }} onClick={retryCur} title="点击重试">图片加载失败，点击重试</div>}
                         {!loadErr && src && (
                             <img key={src} src={src} alt="" draggable={false}
                                 onLoad={() => setLoaded(true)}
@@ -4209,12 +4234,12 @@
                 const good = [], skipped = [];
                 Array.from(list).forEach(f => {
                     const sizeOk = f.size <= 200 * 1024 * 1024;
-                    if ((/^video\//.test(f.type) || /\.(mp4|m4v|webm|mov)$/i.test(f.name || '')) && sizeOk) good.push(f);
+                    if ((/^video\//.test(f.type) || /\.(mp4|m4v|webm|mov|ts)$/i.test(f.name || '')) && sizeOk) good.push(f);
                     else skipped.push(f);
                 });
                 if (skipped.length) {
                     message.warning(skipped.length === Array.from(list).length
-                        ? '所选视频格式不支持或超过 200MB（支持 mp4 / mov / webm）'
+                        ? '所选视频格式不支持或超过 200MB（支持 mp4 / mov / webm / ts，ts 自动转 mp4）'
                         : `${skipped.length} 个视频格式不支持或超限已跳过`);
                 }
                 if (!good.length) return;
@@ -4230,7 +4255,8 @@
                 // 排队提示：截帧+上传是逐个进行的，先告知用户共选了几个视频（避免"点了没反应"）
                 setVidPrep(good.length);
                 for (const f of good) {
-                    const poster = await makeVideoPoster(f);
+                    // TS 传输流浏览器 <video> 无法解码：跳过本地截帧（服务器 ffmpeg 兜底出封面和时长）
+                    const poster = /\.ts$/i.test(f.name || '') ? null : await makeVideoPoster(f);
                     await uploadOneVideo(f, noteId, poster);
                     setVidPrep(n => Math.max(0, n - 1));
                 }
@@ -4412,7 +4438,7 @@
                             <Button icon={<I name="PictureOutlined" />} onClick={() => fileRef.current && fileRef.current.click()}>拍照 / 相册</Button>
                             <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { onFiles(e.target.files); e.target.value = ''; }} />
                             <Button icon={<I name="VideoCameraOutlined" />} onClick={() => videoFileRef.current && videoFileRef.current.click()}>视频</Button>
-                            <input ref={videoFileRef} type="file" accept="video/mp4,video/webm,video/quicktime,video/*" multiple style={{ display: 'none' }} onChange={e => { onVideoFiles(e.target.files); e.target.value = ''; }} />
+                            <input ref={videoFileRef} type="file" accept="video/mp4,video/webm,video/quicktime,video/mp2t,video/*,.ts" multiple style={{ display: 'none' }} onChange={e => { onVideoFiles(e.target.files); e.target.value = ''; }} />
                             <div style={{ display: 'inline-block' }}
                                 onDragOver={e => { e.preventDefault(); setDragging(true); }}
                                 onDragLeave={() => setDragging(false)}
@@ -5415,6 +5441,7 @@
             const [dragging, setDragging] = useState(false);
             const [dispUrl, setDispUrl] = useState(''); // 当前实际显示的大图：新图加载完成后才替换，旧图保持可见
             const [loadErr, setLoadErr] = useState(false);
+            const [retryTick, setRetryTick] = useState(0); // 点击重试/解锁后续看：自增触发重新加载
             const [slideDir, setSlideDir] = useState(0); // 滑出方向：1=切下一张(向左滑出)、-1=切上一张、0=无动画
             const [enterDir, setEnterDir] = useState(0); // 新图滑入方向（与 slideDir 同源），决定入场动画类名
             const dragRef = useRef(null);
@@ -5458,10 +5485,21 @@
                 let cancelled = false;
                 const im = document.createElement('img'); // 勿用 new Image()：antd Image 已遮蔽原生构造器
                 im.onload = function () { if (!cancelled) setDispUrl(url); };
-                im.onerror = function () { if (!cancelled) { setLoadErr(true); setSlideDir(0); } };
+                im.onerror = function () {
+                    if (cancelled) return;
+                    setLoadErr(true); setSlideDir(0);
+                    // 裸 <img> 拿不到状态码：失败后用 fetch 探测一次，
+                    // 403 未解锁/401 请先登录时广播全局事件弹出对应浮层（与 api() 行为对齐）
+                    fetch(url, { credentials: 'include' }).then(r => {
+                        if (r.status === 403) window.dispatchEvent(new CustomEvent('pv-locked'));
+                        else if (r.status === 401) window.dispatchEvent(new CustomEvent('pv-relogin'));
+                    }).catch(() => { });
+                    // 注册解锁/重登后的自动续看
+                    window.__pvPendingRetry = () => setRetryTick(t => t + 1);
+                };
                 im.src = url;
                 return function () { cancelled = true; };
-            }, [index, cards]);
+            }, [index, cards, retryTick]);
             // 新图就绪并完成替换后，才结束滑出状态、开始滑入
             useEffect(() => { setSlideDir(0); }, [dispUrl]);
 
@@ -5598,7 +5636,7 @@
                                     : { transform: 'translate(' + off.x + 'px,' + off.y + 'px) scale(' + scale + ')' }} />
                         )}
                         {!dispUrl && !loadErr && <div className="pv-viewer-loading"><Spin size="large" /></div>}
-                        {loadErr && <div className="pv-viewer-fallback">图片加载失败，请稍后重试</div>}
+                        {loadErr && <div className="pv-viewer-fallback" style={{ cursor: 'pointer' }} onClick={() => setRetryTick(t => t + 1)} title="点击重试">图片加载失败，点击重试</div>}
                         <button className="pv-viewer-nav prev" disabled={index === 0} onClick={() => nav(-1)} aria-label="上一张"><I name="LeftOutlined" /></button>
                         <button className="pv-viewer-nav next" disabled={index === total - 1} onClick={() => nav(1)} aria-label="下一张"><I name="RightOutlined" /></button>
                     </div>

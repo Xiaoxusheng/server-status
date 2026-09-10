@@ -134,6 +134,49 @@ func TestVideoFFmpegMetaFallback(t *testing.T) {
 	}
 }
 
+// TestTSRemux TS 上传转封装：ffmpeg 生成 H.264+AAC 的 MPEG-TS → remuxTSToMP4 输出
+// 合法非空 MP4；垃圾输入报错。本机/服务器需有 ffmpeg，缺失则跳过
+func TestTSRemux(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg 不可用，跳过")
+	}
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		t.Skip("ffprobe 不可用，跳过")
+	}
+	// 生成 1 秒 H.264+AAC 的 MPEG-TS 测试流（testsrc 彩条 + 正弦音）
+	tsPath := filepath.Join(t.TempDir(), "in.ts")
+	if err := exec.Command("ffmpeg", "-v", "error",
+		"-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=15",
+		"-f", "lavfi", "-i", "sine=duration=1",
+		"-c:v", "libx264", "-preset", "ultrafast", "-c:a", "aac", "-shortest",
+		"-f", "mpegts", "-y", tsPath).Run(); err != nil {
+		t.Fatalf("生成测试 TS 失败: %v", err)
+	}
+	f, err := os.Open(tsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	mp4Path, err := remuxTSToMP4(f)
+	if err != nil {
+		t.Fatalf("remuxTSToMP4: %v", err)
+	}
+	defer os.Remove(mp4Path)
+	st, err := os.Stat(mp4Path)
+	if err != nil || st.Size() == 0 {
+		t.Fatalf("转封装输出异常: size=%v err=%v", st, err)
+	}
+	// 输出应被 ffprobe 识别为 MP4 容器（format_name 含 mp4）
+	if out, e := exec.Command("ffprobe", "-v", "error", "-show_entries", "format=format_name",
+		"-of", "csv=p=0", mp4Path).Output(); e != nil || !strings.Contains(string(out), "mp4") {
+		t.Fatalf("输出不是合法 MP4: out=%q err=%v", string(out), e)
+	}
+	// 垃圾数据应报错（ffmpeg 无法识别输入）
+	if _, err := remuxTSToMP4(bytes.NewReader([]byte("not-a-ts-file-garbage-0000"))); err == nil {
+		t.Fatal("垃圾输入应报错")
+	}
+}
+
 func TestPrivatePasswordAndUnlock(t *testing.T) {
 	st := newTestStore(t)
 	if err := st.SetupPrivatePassword("my-secret"); err != nil {

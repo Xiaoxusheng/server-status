@@ -967,7 +967,8 @@ func (s *PrivateStore) audioFilePath(userID, noteID, audioID string) (string, st
 
 // ==================== 视频文件 ====================
 
-// videoExtForMIME 校验视频扩展名与 MIME 匹配（手机拍摄常见 mp4/mov，浏览器录制 webm）
+// videoExtForMIME 校验视频扩展名与 MIME 匹配（手机拍摄常见 mp4/mov，浏览器录制 webm，
+// TS 传输流上传后自动转封装为 MP4）
 func videoExtForMIME(contentType, fileName string) (string, bool) {
 	ext := strings.ToLower(filepath.Ext(fileName))
 	mime := strings.ToLower(strings.TrimSpace(contentType))
@@ -975,10 +976,41 @@ func videoExtForMIME(contentType, fileName string) (string, bool) {
 		return "", false
 	}
 	switch ext {
-	case ".mp4", ".m4v", ".webm", ".mov":
+	case ".mp4", ".m4v", ".webm", ".mov", ".ts":
 		return ext, true
 	}
 	return "", false
+}
+
+// remuxTSToMP4 把上传的 MPEG-TS 传输流转封装为 MP4（ffmpeg -c copy 流复制：
+// 不重编码、无画质损失、通常秒级完成；+faststart 将 moov 前置以支持边下边播）。
+// 之所以转封装：浏览器原生 <video> 无法播放 TS 裸流，转 MP4 后播放器/封面/时长
+// 全部复用现有链路。返回 MP4 临时路径（调用方负责打开与删除）；
+// ffmpeg 缺失或编码不兼容 MP4 容器（如 MPEG-2 视频）时返回错误，由调用方拒绝上传
+func remuxTSToMP4(r io.Reader) (string, error) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		return "", fmt.Errorf("服务器缺少 ffmpeg，无法处理 TS 视频")
+	}
+	tmpTS, err := os.CreateTemp("", "pv-ts-*.ts")
+	if err != nil {
+		return "", err
+	}
+	tsPath := tmpTS.Name()
+	defer os.Remove(tsPath)
+	if _, err := io.Copy(tmpTS, r); err != nil {
+		tmpTS.Close()
+		return "", fmt.Errorf("读取上传的 TS 文件失败: %w", err)
+	}
+	if err := tmpTS.Close(); err != nil {
+		return "", err
+	}
+	mp4Path := tsPath[:len(tsPath)-3] + ".mp4"
+	if err := exec.Command("ffmpeg", "-y", "-v", "error", "-i", tsPath,
+		"-c", "copy", "-movflags", "+faststart", mp4Path).Run(); err != nil {
+		os.Remove(mp4Path)
+		return "", fmt.Errorf("TS 转封装失败（编码不兼容 MP4 容器）: %w", err)
+	}
+	return mp4Path, nil
 }
 
 // addVideo 流式分块加密写入视频并保存海报（海报为客户端截取的首帧 JPEG）
@@ -988,10 +1020,33 @@ func (s *PrivateStore) addVideo(userID, noteID string, file multipart.File, head
 	}
 	ext, valid := videoExtForMIME(header.Header.Get("Content-Type"), header.Filename)
 	if !valid {
-		return nil, fmt.Errorf("仅支持 mp4 / mov / webm 视频")
+		return nil, fmt.Errorf("仅支持 mp4 / mov / webm / ts 视频")
 	}
 	if header.Size > videoMaxSize {
 		return nil, fmt.Errorf("视频不能超过 200MB")
+	}
+	// TS 传输流转封装：浏览器 <video> 无法播放 TS 裸流，上传时用 ffmpeg -c copy
+	// 转为 MP4（流复制无转码），之后走完全相同的加密存储/播放/封面链路
+	if ext == ".ts" {
+		mp4Path, rerr := remuxTSToMP4(file)
+		if rerr != nil {
+			return nil, rerr
+		}
+		mp4File, oerr := os.Open(mp4Path)
+		if oerr != nil {
+			os.Remove(mp4Path)
+			return nil, oerr
+		}
+		st, serr := mp4File.Stat()
+		if serr != nil || st.Size() == 0 {
+			mp4File.Close()
+			os.Remove(mp4Path)
+			return nil, fmt.Errorf("TS 转封装输出为空，视频编码可能不兼容")
+		}
+		defer func() { mp4File.Close(); os.Remove(mp4Path) }()
+		file = mp4File
+		header.Size = st.Size()
+		ext = ".mp4"
 	}
 	// 视频文件：流式分块加密，不整读进内存
 	rel, abs, err := s.newNoteFilePath(ext)
