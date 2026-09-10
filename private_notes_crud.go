@@ -412,6 +412,16 @@ func (s *PrivateStore) noteOwnedBy(userID, noteID string) bool {
 	return err == nil && n > 0
 }
 
+// noteOwner 返回手记属主用户名（缩略图等无 userID 上下文的写入路径反查用）
+func (s *PrivateStore) noteOwner(noteID string) (string, error) {
+	var u string
+	err := s.db.QueryRow(`SELECT user_id FROM notes WHERE id = ?`, noteID).Scan(&u)
+	if err != nil {
+		return "", fmt.Errorf("手记不存在")
+	}
+	return u, nil
+}
+
 func (s *PrivateStore) addImage(userID, noteID string, file multipart.File, header *multipart.FileHeader) (*PrivateImage, error) {
 	if !s.noteOwnedBy(userID, noteID) {
 		return nil, fmt.Errorf("手记不存在")
@@ -443,7 +453,7 @@ func (s *PrivateStore) addImage(userID, noteID string, file multipart.File, head
 	if len(data) > 20*1024*1024 {
 		return nil, fmt.Errorf("图片不能超过 20MB")
 	}
-	enc, err := encryptMediaBytes(data)
+	enc, err := s.encryptMediaBytesFor(userID, data)
 	if err != nil {
 		return nil, err
 	}
@@ -470,6 +480,8 @@ func (s *PrivateStore) addImage(userID, noteID string, file multipart.File, head
 		os.Remove(abs)
 		return nil, err
 	}
+	// 原图入云同步队列（缩略图不入云；队列满/未启用时内部直接短路，不阻塞上传）
+	s.enqueueCloudUpload(filepath.ToSlash(rel))
 	img := &PrivateImage{
 		ID: id, NoteID: noteID, FilePath: filepath.ToSlash(rel), SortOrder: maxOrder + 1, CreatedAt: nowUTC(),
 		URL:      fmt.Sprintf("/api/private/notes/%s/images/%s/file", noteID, id),
@@ -500,6 +512,10 @@ func (s *PrivateStore) deleteImage(userID, noteID, imageID string) error {
 		}
 	}
 	_, err := s.db.Exec(`DELETE FROM note_images WHERE id = ? AND note_id = ?`, imageID, noteID)
+	if err == nil {
+		// 云端副本尽力而为删除：失败只记日志，不影响本地删除结果
+		s.enqueueCloudDelete(filepath.ToSlash(rel))
+	}
 	return err
 }
 
@@ -526,6 +542,18 @@ func (s *PrivateStore) imageFilePath(userID, noteID, imageID string) (string, st
 	}
 	abs, err := s.safeFilePath(rel)
 	return abs, filepath.Base(abs), err
+}
+
+// imageRelPath 归属校验后返回图片相对路径（云直链签发用）；任何错误一律按图片不存在处理
+func (s *PrivateStore) imageRelPath(userID, noteID, imageID string) (string, error) {
+	if !s.noteOwnedBy(userID, noteID) {
+		return "", fmt.Errorf("图片不存在")
+	}
+	var rel string
+	if err := s.db.QueryRow(`SELECT file_path FROM note_images WHERE id = ? AND note_id = ?`, imageID, noteID).Scan(&rel); err != nil {
+		return "", fmt.Errorf("图片不存在")
+	}
+	return rel, nil
 }
 
 // ==================== 缩略图 ====================
@@ -626,7 +654,7 @@ func (s *PrivateStore) generateImageThumb(noteID, imageID string) (string, int, 
 	if err != nil {
 		return "", 0, 0, 0, 0, err
 	}
-	data, err := decryptMediaBytes(raw)
+	data, err := s.decryptMediaBytes(raw)
 	if err != nil {
 		return "", 0, 0, 0, 0, err
 	}
@@ -684,7 +712,12 @@ func (s *PrivateStore) generateImageThumb(noteID, imageID string) (string, int, 
 	if err != nil {
 		return "", 0, 0, 0, 0, err
 	}
-	enc, err := encryptMediaBytes(out.Bytes())
+	// 缩略图与原图同用户密钥（PVMEDIA2）：属主由手记行反查（本函数无 userID 形参）
+	owner, oerr := s.noteOwner(noteID)
+	if oerr != nil {
+		return "", 0, 0, 0, 0, oerr
+	}
+	enc, err := s.encryptMediaBytesFor(owner, out.Bytes())
 	if err != nil {
 		return "", 0, 0, 0, 0, err
 	}
@@ -877,7 +910,7 @@ func (s *PrivateStore) addAudio(userID, noteID string, file multipart.File, head
 	if len(data) > 30*1024*1024 {
 		return nil, fmt.Errorf("语音不能超过 30MB")
 	}
-	enc, err := encryptMediaBytes(data)
+	enc, err := s.encryptMediaBytesFor(userID, data)
 	if err != nil {
 		return nil, err
 	}
@@ -1003,7 +1036,7 @@ func (s *PrivateStore) addVideo(userID, noteID string, file multipart.File, head
 			os.Remove(pabs)
 			return nil, fmt.Errorf("读取封面失败")
 		}
-		penc, err := encryptMediaBytes(pdata)
+		penc, err := s.encryptMediaBytesFor(userID, pdata)
 		if err != nil {
 			os.Remove(abs)
 			os.Remove(pabs)
@@ -1028,7 +1061,7 @@ func (s *PrivateStore) addVideo(userID, noteID string, file multipart.File, head
 				log.Printf("视频封面服务器兜底成功 note=%s ffprobe_duration=%.3f poster_bytes=%d", noteID, d, len(jpg))
 				prel, pabs, perr := s.newNoteFilePath(".jpg")
 				if perr == nil {
-					if penc, eenc := encryptMediaBytes(jpg); eenc == nil && os.WriteFile(pabs, penc, 0644) == nil {
+					if penc, eenc := s.encryptMediaBytesFor(userID, jpg); eenc == nil && os.WriteFile(pabs, penc, 0644) == nil {
 						posterRel = filepath.ToSlash(prel)
 					} else {
 						os.Remove(pabs)

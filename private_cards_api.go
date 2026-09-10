@@ -70,7 +70,7 @@ func (s *PrivateStore) createCard(userID string, req createCardRequest) (*Privat
 	}
 	id := randomID("card")
 	abs := filepath.Join(dir, id+".png")
-	enc, err := encryptMediaBytes(raw)
+	enc, err := s.encryptMediaBytesFor(userID, raw)
 	if err != nil {
 		return nil, err
 	}

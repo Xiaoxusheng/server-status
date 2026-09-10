@@ -56,11 +56,26 @@ type GeoConfig struct {
 	AmapKey string `json:"amap_key"`
 }
 
+// CloudSyncConfig 手记媒体云同步配置（OpenList/WebDAV → 网盘）。
+// 仅由用户手改 private_notes.json + 重启生效（全仓库无配置写回逻辑）；
+// Enabled=false 时全部云同步代码路径直接短路，行为与未引入本特性完全一致
+type CloudSyncConfig struct {
+	Enabled       bool   `json:"enabled"`
+	DAVURL        string `json:"dav_url"`        // 如 http://127.0.0.1:5244/dav
+	DAVUser       string `json:"dav_user"`       // WebDAV 账号
+	DAVPass       string `json:"dav_pass"`       // WebDAV 密码
+	RemoteDir     string `json:"remote_dir"`     // 云端目录，如 /home/备份/手记媒体
+	OpenlistAPI   string `json:"openlist_api"`   // OpenList 地址，如 http://127.0.0.1:5244（服务器本机调用，无需公网暴露）
+	OpenlistToken string `json:"openlist_token"` // OpenList API Token（直链签发用）
+	LinkMode      string `json:"link_mode"`      // 直链模式：本期仅实现 server_get
+}
+
 // PrivateNotesJSON 磁盘配置文件结构（禁止保存任何密码/密码 Hash）
 type PrivateNotesJSON struct {
 	PrivateNotes PrivateNotesConfig `json:"private_notes"`
 	Cards        CardsConfig        `json:"cards"`
 	Geo          GeoConfig          `json:"geo"`
+	CloudSync    CloudSyncConfig    `json:"cloud_sync"`
 }
 
 func defaultPrivateNotesJSON() PrivateNotesJSON {
@@ -76,6 +91,14 @@ func defaultPrivateNotesJSON() PrivateNotesJSON {
 			Enabled:       true,
 			DefaultWidth:  1080,
 			DefaultHeight: 1080,
+		},
+		// 云同步默认关闭：缺段（旧配置文件）解析后即零值，同样等效关闭
+		CloudSync: CloudSyncConfig{
+			Enabled:     false,
+			DAVURL:      "http://127.0.0.1:5244/dav",
+			RemoteDir:   "/home/备份/手记媒体",
+			OpenlistAPI: "http://127.0.0.1:5244",
+			LinkMode:    "server_get",
 		},
 	}
 }
@@ -193,6 +216,16 @@ type PrivateStore struct {
 	// 同一 image 的并发首次访问只执行一次解密+缩放+落盘，其余等待后直接读库
 	thumbMu    sync.Mutex
 	thumbCalls map[string]*thumbCall
+	// 每用户媒体密钥的 AEAD 缓存（keyUID hex → AES-GCM），详见 private_cloud.go / PVMEDIA2
+	mediaKeysMu sync.Mutex
+	mediaKeys   map[string]cipher.AEAD
+	// 云同步（private_cloud.go）：单 worker 上传队列、in-flight 去重与状态计数
+	cloudQueue      chan cloudTask
+	cloudInflightMu sync.Mutex
+	cloudInflight   map[string]bool
+	cloudStat       cloudStatus
+	reencMu         sync.Mutex
+	reenc           reencryptStatus
 }
 
 // thumbCall 一次进行中的缩略图生成任务（等待完成用）
@@ -223,9 +256,15 @@ func privateRoot() string {
 // 文件以 magic 头标识格式；读取时自动解密，历史明文文件原样兼容，
 // 并在存储初始化时由 migratePlainMedia 原位迁移为加密格式（幂等）。
 
-var mediaCryptMagic = []byte("PVMEDIA1")
+var (
+	mediaCryptMagic  = []byte("PVMEDIA1")
+	mediaCryptMagic2 = []byte("PVMEDIA2")
+)
 
-// encryptMediaBytes 加密媒体字节并附加 magic 头
+// PVMEDIA2 文件头长度：magic(8) ‖ keyUID(8) ‖ nonce(12) = 28 字节
+const pvMedia2HeaderLen = 8 + 8 + 12
+
+// encryptMediaBytes 加密媒体字节并附加 magic 头（PVMEDIA1，全局密钥；历史格式，仅存量迁移路径继续产生）
 func encryptMediaBytes(plain []byte) ([]byte, error) {
 	enc, err := encryptData(plain)
 	if err != nil {
@@ -236,27 +275,153 @@ func encryptMediaBytes(plain []byte) ([]byte, error) {
 	return append(out, enc...), nil
 }
 
-// isMediaEncrypted 判断磁盘原始内容是否已是加密格式
+// isMediaEncrypted 判断磁盘原始内容是否已是加密格式。
+// 必须同时识别 PVMEDIA1 与 PVMEDIA2：漏判 PVMEDIA2 会导致明文迁移任务
+// 把已加密文件再加密一层，数据永久损坏
 func isMediaEncrypted(raw []byte) bool {
-	return bytes.HasPrefix(raw, mediaCryptMagic)
+	return bytes.HasPrefix(raw, mediaCryptMagic) || bytes.HasPrefix(raw, mediaCryptMagic2)
 }
 
-// decryptMediaBytes 解密媒体字节；不带 magic 头的历史明文原样返回
-func decryptMediaBytes(raw []byte) ([]byte, error) {
-	if !isMediaEncrypted(raw) {
+// encryptMediaBytesFor 用用户专属密钥加密媒体（PVMEDIA2：
+// magic(8) ‖ keyUID(8) ‖ nonce(12) ‖ GCM 密文‖tag）。
+// keyUID = sha256(perUserKey) 前 8 字节，仅作密钥查找标识，让解密自包含
+// （分享页/无会话上下文的读取方无需知道属主即可解密），泄露无风险
+func (s *PrivateStore) encryptMediaBytesFor(userID string, plain []byte) ([]byte, error) {
+	key, err := s.userMediaKey(userID)
+	if err != nil {
+		return nil, err
+	}
+	aead, err := s.aeadForKey(key)
+	if err != nil {
+		return nil, err
+	}
+	uid := sha256.Sum256(key)
+	nonce := make([]byte, aead.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	out := make([]byte, 0, pvMedia2HeaderLen+len(plain)+16)
+	out = append(out, mediaCryptMagic2...)
+	out = append(out, uid[:8]...)
+	out = append(out, nonce...)
+	return aead.Seal(out, nonce, plain, nil), nil
+}
+
+// decryptMediaBytes 解密媒体字节；不带 magic 头的历史明文原样返回。
+// PVMEDIA2 按 keyUID 自解析，PVMEDIA1 走全局密钥——两种历史格式永久可读
+func (s *PrivateStore) decryptMediaBytes(raw []byte) ([]byte, error) {
+	switch {
+	case bytes.HasPrefix(raw, mediaCryptMagic2):
+		if len(raw) < pvMedia2HeaderLen {
+			return nil, fmt.Errorf("加密媒体文件头无效")
+		}
+		aead, err := s.userAEADByUID(raw[len(mediaCryptMagic2) : len(mediaCryptMagic2)+8])
+		if err != nil {
+			return nil, err
+		}
+		return aead.Open(nil, raw[len(mediaCryptMagic2)+8:pvMedia2HeaderLen], raw[pvMedia2HeaderLen:], nil)
+	case bytes.HasPrefix(raw, mediaCryptMagic):
+		return decryptData(raw[len(mediaCryptMagic):])
+	default:
 		return raw, nil
 	}
-	return decryptData(raw[len(mediaCryptMagic):])
 }
 
-// servePrivateMediaFile 读取并解密媒体文件后按内容提供（支持 Range 断点播放）
+// userMediaKey 获取（或首次生成）用户的 32B 媒体密钥。
+// 密钥以全局密钥 AES-GCM 加密后存 private_media_keys 表（key_enc hex），
+// 明文只在内存短暂存在，绝不落日志
+func (s *PrivateStore) userMediaKey(userID string) ([]byte, error) {
+	var keyEnc string
+	err := s.db.QueryRow(`SELECT key_enc FROM private_media_keys WHERE user_id = ?`, userID).Scan(&keyEnc)
+	if err == nil {
+		enc, derr := hex.DecodeString(keyEnc)
+		if derr != nil {
+			return nil, derr
+		}
+		return decryptData(enc)
+	}
+	if err != sql.ErrNoRows {
+		return nil, err
+	}
+	// 首次使用：生成 32B 随机密钥并落库（key_uid UNIQUE 冲突时重查既有行，不崩溃）
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, err
+	}
+	enc, err := encryptData(key)
+	if err != nil {
+		return nil, err
+	}
+	uid := sha256.Sum256(key)
+	if _, err := s.db.Exec(`
+		INSERT INTO private_media_keys (user_id, key_uid, key_enc, created_at) VALUES (?, ?, ?, ?)`,
+		userID, hex.EncodeToString(uid[:8]), hex.EncodeToString(enc), nowUTC()); err != nil {
+		var retry string
+		if qerr := s.db.QueryRow(`SELECT key_enc FROM private_media_keys WHERE user_id = ?`, userID).Scan(&retry); qerr == nil {
+			if enc2, derr := hex.DecodeString(retry); derr == nil {
+				if k2, derr := decryptData(enc2); derr == nil {
+					return k2, nil
+				}
+			}
+		}
+		return nil, err
+	}
+	return key, nil
+}
+
+// userAEADByUID 按 keyUID（8B）查密钥并返回缓存的 AES-GCM（解密路径：文件头自解析，无需属主信息）
+func (s *PrivateStore) userAEADByUID(uid []byte) (cipher.AEAD, error) {
+	id := hex.EncodeToString(uid)
+	s.mediaKeysMu.Lock()
+	if aead, ok := s.mediaKeys[id]; ok {
+		s.mediaKeysMu.Unlock()
+		return aead, nil
+	}
+	s.mediaKeysMu.Unlock()
+	var keyEnc string
+	if err := s.db.QueryRow(`SELECT key_enc FROM private_media_keys WHERE key_uid = ?`, id).Scan(&keyEnc); err != nil {
+		return nil, fmt.Errorf("媒体密钥不存在")
+	}
+	enc, err := hex.DecodeString(keyEnc)
+	if err != nil {
+		return nil, err
+	}
+	key, err := decryptData(enc)
+	if err != nil {
+		return nil, err
+	}
+	return s.aeadForKey(key)
+}
+
+// aeadForKey 构建密钥对应的 AES-GCM 并写入缓存（同 key 重复加密/解密免重建）
+func (s *PrivateStore) aeadForKey(key []byte) (cipher.AEAD, error) {
+	uid := sha256.Sum256(key)
+	id := hex.EncodeToString(uid[:8])
+	s.mediaKeysMu.Lock()
+	defer s.mediaKeysMu.Unlock()
+	if s.mediaKeys == nil {
+		s.mediaKeys = make(map[string]cipher.AEAD)
+	}
+	if aead, ok := s.mediaKeys[id]; ok {
+		return aead, nil
+	}
+	aead, err := mediaGCMWith(key)
+	if err != nil {
+		return nil, err
+	}
+	s.mediaKeys[id] = aead
+	return aead, nil
+}
+
+// servePrivateMediaFile 读取并解密媒体文件后按内容提供（支持 Range 断点播放）。
+// 仅在全局 store 就绪后被调用（调用点均已有 nil 检查），解密走 store 方法以支持 PVMEDIA2
 func servePrivateMediaFile(w http.ResponseWriter, r *http.Request, abs, name string) {
 	raw, err := os.ReadFile(abs)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	data, err := decryptMediaBytes(raw)
+	data, err := privateStore.decryptMediaBytes(raw)
 	if err != nil {
 		log.Printf("私人媒体文件解密失败 %s: %v（请确认 SERVER_STATUS_ENCRYPT_KEY 未变更）", abs, err)
 		http.Error(w, "文件解密失败", http.StatusInternalServerError)
@@ -286,15 +451,20 @@ var (
 	videoMaxSize    = int64(200) << 20                 // 上传上限 200MB
 )
 
-// mediaGCM 构建与用户数据一致的 AES-GCM（密钥 = sha256(encryptionKey)），
-// 供图片/语音整块加密与视频分块加密共用
-func mediaGCM() (cipher.AEAD, error) {
-	key := sha256.Sum256([]byte(encryptionKey))
-	block, err := aes.NewCipher(key[:])
+// mediaGCMWith 以指定 32B 密钥构建 AES-GCM（全局媒体密钥与每用户媒体密钥共用构建逻辑）
+func mediaGCMWith(key []byte) (cipher.AEAD, error) {
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
 	return cipher.NewGCM(block)
+}
+
+// mediaGCM 构建与用户数据一致的 AES-GCM（密钥 = sha256(encryptionKey)），
+// 供视频分块加解密与 PVMEDIA1 存量格式共用（行为与重构前完全一致）
+func mediaGCM() (cipher.AEAD, error) {
+	key := sha256.Sum256([]byte(encryptionKey))
+	return mediaGCMWith(key[:])
 }
 
 // isVideoEncrypted 判断磁盘文件是否为视频分块加密格式
@@ -591,6 +761,7 @@ func NewPrivateStore(baseDir string) (*PrivateStore, error) {
 	} else if n > 0 {
 		log.Printf("🔐 已将 %d 个历史明文媒体文件加密迁移", n)
 	}
+	st.startCloudSync()
 	return st, nil
 }
 
@@ -673,6 +844,11 @@ func (s *PrivateStore) migrate() error {
 			id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL DEFAULT '',
 			action TEXT NOT NULL, created_at TEXT NOT NULL, ip TEXT NOT NULL DEFAULT '')`,
 		`CREATE INDEX IF NOT EXISTS idx_private_audit_time ON private_note_audit_logs(created_at DESC)`,
+		// 每用户媒体密钥（PVMEDIA2）：key_uid=sha256(key) 前 8B hex（解密自解析用），
+		// key_enc=全局密钥加密后的 hex（密文落库，明文绝不持久化）
+		`CREATE TABLE IF NOT EXISTS private_media_keys (
+			user_id TEXT PRIMARY KEY, key_uid TEXT NOT NULL UNIQUE,
+			key_enc TEXT NOT NULL, created_at TEXT NOT NULL)`,
 	}
 	for _, q := range schema {
 		if _, err := s.db.Exec(q); err != nil {

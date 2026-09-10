@@ -345,7 +345,7 @@ func TestImageThumbGeneration(t *testing.T) {
 	if !isMediaEncrypted(raw) {
 		t.Fatal("缩略图应与原图一样加密存储")
 	}
-	data, err := decryptMediaBytes(raw)
+	data, err := st.decryptMediaBytes(raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -628,12 +628,12 @@ func TestMediaEncryptionRoundtrip(t *testing.T) {
 	if !isMediaEncrypted(enc) {
 		t.Fatal("加密内容应带 magic 头")
 	}
-	if got, err := decryptMediaBytes(enc); err != nil || !bytes.Equal(got, plain) {
+	if got, err := st.decryptMediaBytes(enc); err != nil || !bytes.Equal(got, plain) {
 		t.Fatalf("解密回环失败: %v", err)
 	}
 
 	// 历史明文兼容：不带 magic 头的内容原样返回
-	if got, err := decryptMediaBytes(plain); err != nil || !bytes.Equal(got, plain) {
+	if got, err := st.decryptMediaBytes(plain); err != nil || !bytes.Equal(got, plain) {
 		t.Fatalf("历史明文应原样返回: %v", err)
 	}
 
@@ -658,7 +658,7 @@ func TestMediaEncryptionRoundtrip(t *testing.T) {
 	if n, err := st.migratePlainMedia(); err != nil || n != 0 {
 		t.Fatalf("重复迁移应幂等: n=%d err=%v", n, err)
 	}
-	if got, err := decryptMediaBytes(raw); err != nil || !bytes.Equal(got, plain) {
+	if got, err := st.decryptMediaBytes(raw); err != nil || !bytes.Equal(got, plain) {
 		t.Fatalf("迁移后解密回环失败: %v", err)
 	}
 }

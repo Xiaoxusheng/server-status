@@ -177,3 +177,42 @@
 - 139 上传空文件修复（OpenListTeam Discussion #147）：<https://github.com/orgs/OpenListTeam/discussions/147>
 - WebDAV 上传中文文件名问题（AlistGo Discussion #6093）：<https://github.com/AlistGo/alist/discussions/6093>
 - OpenList WebDAV temp_dir 上传机制（OpenList Issue #742）：<https://github.com/OpenListTeam/OpenList/issues/742>
+
+---
+
+## 九、实施交付：cloud_sync 配置与上线步骤（2026-09-10 已实现，方案 A：云盘密文直链 + 客户端解密）
+
+后端 `private_cloud.go` + 4 条 `/api/private/*` 新路由 + 前端 `private.html` WebCrypto 解密已落地。
+铁律：本地副本永不删除；任何云端故障自动回退服务器解密（功能零劣化）；视频本体本期不动。
+
+### 9.1 配置样例（手改 /home/os/private_notes.json 后重启生效，程序不回写该文件）
+
+```json
+{
+  "cloud_sync": {
+    "enabled": true,
+    "dav_url": "http://127.0.0.1:5244/dav",
+    "dav_user": "openlist用户名",
+    "dav_pass": "openlist密码",
+    "remote_dir": "/home/备份/手记媒体",
+    "openlist_api": "http://127.0.0.1:5244",
+    "openlist_token": "openlist-管理后台生成的API Token",
+    "link_mode": "server_get"
+  }
+}
+```
+
+说明：`enabled:false` 或缺省整段时全部行为与现状 100% 一致。`link_mode` 本期仅实现 `server_get`。
+
+### 9.2 上线步骤
+
+1. 手改 `/home/os/private_notes.json` 加上 `cloud_sync` 段 → `systemctl restart server-status`；
+2. 触发存量重加密迁移（PVMEDIA1 → 每用户密钥 PVMEDIA2，幂等）：
+   `curl -k -X POST -H "Cookie: ..." https://127.0.0.1:9000/api/private/media/reencrypt`
+   进度查看：`GET /api/private/cloud/status`（返回 queue 与 reencrypt 计数）；
+3. 服务器上跑 `deploy/check-openlist-direct.sh` 确认 CORS 与直链可达性；
+4. 观察几天后在移动端 DevTools 验证：原图请求指向 `/cloud` 且 302 到外部域，图片字节不经服务器域名。
+
+### 9.3 本期明确不做（二期）
+
+卡片查看器/语音播放/视频的直链化、`delete_local_after_upload`（省磁盘）、配置写回 UI、OpenList 状态监控页。

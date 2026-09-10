@@ -53,7 +53,7 @@ func (s *PrivateStore) readPrivateMedia(rel string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return decryptMediaBytes(raw)
+	return s.decryptMediaBytes(raw)
 }
 
 // copyPrivateVideo 将分块加密视频解密后流式拷贝到 w（避免大视频整体读入内存）

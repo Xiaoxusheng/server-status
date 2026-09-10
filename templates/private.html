@@ -2293,6 +2293,99 @@
         // 高德 Web 服务 key（服务端配置经 /api/private/session 下发），反向地理编码用
         let amapKey = '';
 
+        // ==================== 媒体本地解密（PVMEDIA2 云直链） ====================
+        // 原图经 /cloud 接口 302 直连网盘 CDN 取回密文，WebCrypto 本地解密渲染，
+        // 字节流量不再消耗服务器出向带宽。密钥只存内存（绝不写 localStorage），
+        // 任何环节失败自动回退服务器解密路径，功能零劣化
+        let pvMediaKey = null;            // CryptoKey，内存缓存
+        let pvMediaKeyPromise = null;     // 并发去重：多图同时首载只请求一次密钥
+        const pvBlobCache = new Map();    // imageID -> Promise<blobURL>（FIFO 上限 30，防内存膨胀）
+        const pvBlobCacheMax = 30;
+
+        // pvHexToBytes 64 位 hex 密钥 → 32B Uint8Array
+        function pvHexToBytes(h) {
+            const out = new Uint8Array(h.length / 2);
+            for (let i = 0; i < out.length; i++) out[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16);
+            return out;
+        }
+
+        // ensurePvMediaKey 拉取并导入当前用户媒体密钥（AES-GCM，仅解密用途）
+        function ensurePvMediaKey() {
+            if (pvMediaKey) return Promise.resolve(pvMediaKey);
+            if (!pvMediaKeyPromise) {
+                pvMediaKeyPromise = api('/api/private/media/key')
+                    .then(d => {
+                        if (!ok(d) || !d.data || !d.data.key) throw new Error('密钥获取失败');
+                        return crypto.subtle.importKey('raw', pvHexToBytes(d.data.key), 'AES-GCM', false, ['decrypt']);
+                    })
+                    .then(k => { pvMediaKey = k; return k; })
+                    .catch(e => { pvMediaKeyPromise = null; throw e; });
+            }
+            return pvMediaKeyPromise;
+        }
+
+        // pvDecryptMedia 解密 PVMEDIA2 布局：magic(8) ‖ keyUID(8) ‖ nonce(12) ‖ GCM 密文‖tag
+        function pvDecryptMedia(key, buf) {
+            const M = [0x50, 0x56, 0x4D, 0x45, 0x44, 0x49, 0x41, 0x32]; // "PVMEDIA2"
+            for (let i = 0; i < 8; i++) if (buf[i] !== M[i]) throw new Error('not-pvmedia2');
+            if (buf.length < 28) throw new Error('bad-header');
+            const iv = buf.slice(16, 28);
+            return crypto.subtle.decrypt({ name: 'AES-GCM', iv, tagLength: 128 }, key, buf.slice(28));
+        }
+
+        // pvMime 解密后按魔数判定 MIME（浏览器 <img>/canvas 依赖正确的类型）
+        function pvMime(b) {
+            if (b.length >= 3 && b[0] === 0xFF && b[1] === 0xD8) return 'image/jpeg';
+            if (b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) return 'image/png';
+            if (b.length >= 6 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return 'image/gif';
+            if (b.length >= 12 && b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return 'image/webp';
+            return 'application/octet-stream';
+        }
+
+        // fetchDecryptedImage 取原图 blob URL：云直链密文优先 + WebCrypto 解密，
+        // 任一环节失败回退服务器解密 URL；结果按 imageID 缓存复用（预览/查看器共享）
+        function fetchDecryptedImage(noteID, imageID, fallbackURL) {
+            if (pvBlobCache.has(imageID)) return pvBlobCache.get(imageID);
+            const p = (async () => {
+                try {
+                    const key = await ensurePvMediaKey();
+                    const r = await fetch(baseUrl + '/api/private/notes/' + noteID + '/images/' + imageID + '/cloud',
+                        { credentials: 'include', redirect: 'follow' }); // 302 自动跟到 CDN
+                    if (!r.ok) throw new Error('cloud ' + r.status);
+                    const buf = new Uint8Array(await r.arrayBuffer()); // CORS 不通过会在这里抛错
+                    // 服务器回退路径返回的是已解密明文（无 PVMEDIA2 头），直接使用不重复解密
+                    const plain = (buf.length >= 8 && buf[0] === 0x50 && buf[1] === 0x56 && buf[2] === 0x4D)
+                        ? new Uint8Array(await pvDecryptMedia(key, buf))
+                        : buf;
+                    return URL.createObjectURL(new Blob([plain], { type: pvMime(plain) }));
+                } catch (e) {
+                    const r2 = await fetch(baseUrl + fallbackURL, { credentials: 'include' }); // 服务器解密回退
+                    if (!r2.ok) throw new Error('fallback ' + r2.status);
+                    return URL.createObjectURL(await r2.blob());
+                }
+            })();
+            // 缓存淘汰：超上限按写入顺序（FIFO）移除最早条目，其 blob 完成后释放，
+            // 防止移动端连续浏览大图内存膨胀；淘汰后再查看该图会重新走直链（有浏览器缓存兜底）
+            pvBlobCache.set(imageID, p);
+            if (pvBlobCache.size > pvBlobCacheMax) {
+                const oldest = pvBlobCache.keys().next().value;
+                if (oldest !== undefined && oldest !== imageID) {
+                    const oldP = pvBlobCache.get(oldest);
+                    pvBlobCache.delete(oldest);
+                    if (oldP) oldP.then(u => URL.revokeObjectURL(u)).catch(() => { });
+                }
+            }
+            p.catch(() => pvBlobCache.delete(imageID));
+            return p;
+        }
+
+        // pvCleanupMedia 锁定/退出时清理密钥与全部 blob URL（密钥绝不持久化）
+        function pvCleanupMedia() {
+            pvMediaKey = null; pvMediaKeyPromise = null;
+            pvBlobCache.forEach(p => p.then(u => URL.revokeObjectURL(u)).catch(() => { }));
+            pvBlobCache.clear();
+        }
+
         // 读取指定名称的 Cookie（Double-Submit CSRF 使用非 HttpOnly 的 csrf_token，会话 Cookie 仍为 HttpOnly）
         const getCookie = name => {
             for (const part of document.cookie.split(';')) {
@@ -2619,11 +2712,20 @@
             ctx.arcTo(x, y, x + w, y, r);
             ctx.closePath();
         }
-        async function loadImg(url) {
+        // loadImg 取图并解码：ref = {noteID, imageID} 时优先走云直链+本地解密
+        //（fetchDecryptedImage 失败内部已回退服务器，此处仅需再兜底原 URL）；
+        // 无 ref 走原有直连逻辑（卡片二维码/视频海报等不受影响）
+        async function loadImg(url, ref) {
             // 用 fetch(credentials:include) 拉取（保证携带登录/私人 Cookie，能过安全中间件）。
             // 注意：本页 Babel 编译后会把顶层 const { Image } = window.antd 挂到 window.Image 上，
             // 所以绝不能使用 new Image() / new window.Image()，一律用 createImageBitmap 或 createElement('img')。
-            const r = await fetch(url, { credentials: 'include' });
+            let target = url;
+            if (ref && ref.noteID && ref.imageID) {
+                try {
+                    target = await fetchDecryptedImage(ref.noteID, ref.imageID, url);
+                } catch (e) { /* 解密链路失败：回退原 URL（服务器解密） */ target = url; }
+            }
+            const r = await fetch(target, { credentials: 'include' });
             if (!r.ok) throw new Error('图片加载失败 HTTP ' + r.status);
             const blob = await r.blob();
             if (window.createImageBitmap) {
@@ -2670,12 +2772,16 @@
             const w = sw * s, h = sh * s;
             return [x + (dw - w) / 2, y + (dh - h) / 2, w, h];
         }
-        async function drawImageCover(ctx, url, x, y, w, h, r, badge) {
+        // drawImageCover 裁剪绘制到画布：src 为 {url, id} 对象（手记图片，走云直链解密）
+        // 或纯 URL 字符串（视频海报/二维码等，走服务器解密），noteID 用于构造解密引用
+        async function drawImageCover(ctx, src, x, y, w, h, r, badge, noteID) {
             // r 为 0 时表示直角（无缝拼图），仅在未传时回退 12；
             // 旧写法 `r || 12` 会把显式传 0 的直角错误地变成 12px 圆角
             const rr = (r == null) ? 12 : r;
+            const entry = (src && typeof src === 'object') ? src : { url: src };
+            const ref = (noteID && entry.id) ? { noteID, imageID: entry.id } : null;
             try {
-                const img = await loadImg(url);
+                const img = await loadImg(entry.url, ref);
                 ctx.save();
                 roundRect(ctx, x, y, w, h, rr);
                 ctx.clip();
@@ -2715,7 +2821,7 @@
         async function renderCard(opts) {
             const {
                 template, width, height, title, content, time, location, tags, images, brand, server,
-                locationName, latitude, longitude, audioQR,
+                locationName, latitude, longitude, audioQR, noteID,
                 show = {}, locationMode = 'name', background = 'white', autoLayout = true,
                 fold = false, foldLines = 8, fontScale = 1
             } = opts;
@@ -2950,7 +3056,7 @@
                 for (let i = 0; i < n; i++) {
                     const cx = x + (i % cols) * cw;
                     const cy = y + Math.floor(i / cols) * ch;
-                    await drawImageCover(ctx, urls[i], cx, cy, cw, ch, 0, null);
+                    await drawImageCover(ctx, urls[i], cx, cy, cw, ch, 0, null, noteID);
                 }
                 ctx.restore();
             };
@@ -2958,7 +3064,7 @@
             // 背景填充（含图片背景模式）
             const fillBackground = async () => {
                 if (background === 'image' && showImages && images && images.length) {
-                    await drawImageCover(ctx, images[0], 0, 0, width, height, 0);
+                    await drawImageCover(ctx, images[0], 0, 0, width, height, 0, null, noteID);
                     ctx.fillStyle = 'rgba(0,0,0,.42)';
                     ctx.fillRect(0, 0, width, height);
                     palette = { bg: 'transparent', text: 'rgba(255,255,255,.95)', secondary: 'rgba(255,255,255,.7)', muted: 'rgba(255,255,255,.5)' };
@@ -3052,7 +3158,7 @@
                     const thumbH = height * 0.28;
                     const ty = height - thumbH - height * 0.1;
                     for (let k = 0; k < imgs.length; k++) {
-                        await drawImageCover(ctx, imgs[k], padX + k * (thumbW + gap), ty, thumbW, thumbH, 12);
+                        await drawImageCover(ctx, imgs[k], padX + k * (thumbW + gap), ty, thumbW, thumbH, 12, null, noteID);
                     }
                 }
                 await drawAudioQR('topright');
@@ -3526,24 +3632,41 @@
         // 受控预览在滚动跳转后空白白屏等问题），改为自研 Portal 浮层，行为完全可控：
         // 点遮罩关闭、左右箭头 / 键盘 ←→ / 移动端左右滑动切换、Esc 关闭、加载中转圈、失败提示。
         // 加载策略：打开后只加载当前原图（缩略图作加载期占位），最多后台预加载相邻 2 张，
-        // 不一次性加载全部原图；关闭时释放预加载对象
+        // 不一次性加载全部原图。原图统一走 fetchDecryptedImage（云直链密文本地解密，
+        // 失败自动回退服务器解密），结果进 pvBlobCache 由全局统一管理生命周期
         function NoteImageViewer({ imgs, index, onClose, onNav }) {
             const total = imgs.length;
             const cur = Math.min(Math.max(index, 0), total - 1);
-            const src = imgs[cur] ? imgs[cur].url : '';
-            const thumb = imgs[cur] ? (imgs[cur].thumb_url || '') : '';
+            const img = imgs[cur] || null;
+            const thumb = img ? (img.thumb_url || '') : '';
+            const [src, setSrc] = useState(null);
             const [loaded, setLoaded] = useState(false);
             const [loadErr, setLoadErr] = useState(false);
             const touchX = useRef(null);
             const preloadsRef = useRef([]);
-            // 切图后重置加载态
-            useEffect(() => { setLoaded(false); setLoadErr(false); }, [src]);
+            // 切图：重置加载态，取当前原图（云直链解密 → 服务器回退，失败显示错误态）
+            useEffect(() => {
+                setLoaded(false);
+                setLoadErr(false);
+                setSrc(null);
+                if (!img || !img.url || !img.id) { if (img && img.url) setSrc(img.url); return; }
+                let stale = false;
+                fetchDecryptedImage(img.note_id, img.id, img.url)
+                    .then(u => { if (!stale) setSrc(u); })
+                    .catch(() => { if (!stale) setLoadErr(true); });
+                return () => { stale = true; };
+            }, [cur, imgs]);
             // 相邻预加载：只预取当前图前后各 1 张（合计 ≤2），不一次性加载全部原图。
-            // 用 document.createElement('img')——页面顶层 Image 构造器可能被 antd 解构遮蔽，new Image() 会崩
+            // 用 document.createElement('img')——页面顶层 Image 构造器可能被 antd 解构遮蔽，new Image() 会崩；
+            // 预取同样走解密缓存（失败静默，切换到该图时由当前图加载逻辑兜底）
             useEffect(() => {
                 preloadsRef.current = [imgs[cur + 1], imgs[cur - 1]].filter(Boolean).map(n => {
                     const el = document.createElement('img');
-                    el.src = n.url;
+                    if (n.id) {
+                        fetchDecryptedImage(n.note_id, n.id, n.url).then(u => { el.src = u; }).catch(() => { });
+                    } else {
+                        el.src = n.url;
+                    }
                     return el;
                 });
             }, [cur, imgs]);
@@ -3590,7 +3713,7 @@
                         {thumb && !loaded && !loadErr && <img className="pv-imgview-thumb" src={thumb} alt="" draggable={false} />}
                         {!loaded && !loadErr && <div className="pv-imgview-loading"><Spin size="large" /></div>}
                         {loadErr && <div className="pv-imgview-err">图片加载失败，请稍后重试</div>}
-                        {!loadErr && (
+                        {!loadErr && src && (
                             <img key={src} src={src} alt="" draggable={false}
                                 onLoad={() => setLoaded(true)}
                                 onError={() => setLoadErr(true)}
@@ -4565,8 +4688,10 @@
                 latitude: note ? note.latitude : null,
                 longitude: note ? note.longitude : null,
                 tags: note ? note.tags : [],
-                // 卡片图片 = 用户点选的子集（顺序即点选顺序），而非手记全量图片
-                images: selImgs.map(u => u),
+                // 卡片图片 = 用户点选的子集（顺序即点选顺序），而非手记全量图片；
+                // 手记图片项带 id（走云直链本地解密），视频海报无 id（走服务器解密）
+                images: selImgs,
+                noteID: note ? note.id : '',
                 // 语音二维码受开关控制：关闭时画布不绘制二维码
                 audioQR: audioQROn ? audioQR : null,
                 brand: show.brand ? brandText : false,
@@ -4615,8 +4740,8 @@
                 setRetryTick(0);
                 setAudioQROn(true);
                 setSelImgs(note && (note.images || note.videos)
-                    ? (note.images || []).slice(0, 9).map(i => i.url)
-                        .concat((note.videos || []).filter(v => v.poster_url).map(v => v.poster_url))
+                    ? (note.images || []).slice(0, 9).map(i => ({ url: i.url, id: i.id }))
+                        .concat((note.videos || []).filter(v => v.poster_url).map(v => ({ url: v.poster_url })))
                         .slice(0, 9)
                     : []);
             }, [open, note && note.id]);
@@ -4871,17 +4996,20 @@
                                             <span className="cg-sub">已选 {selImgs.length} / {(note.images || []).length + (note.videos || []).filter(v => v.poster_url).length} 张（最多 9 张），点击缩略图选取，角标即卡片排列顺序；视频取首帧</span>
                                         </div>
                                         <div className="cg-img-pick">
-                                            {(note.images || []).map(img => ({ key: img.id || img.url, url: img.url, thumb: img.thumb_url || img.url, video: false }))
+                                            {(note.images || []).map(img => ({ key: img.id || img.url, url: img.url, id: img.id, thumb: img.thumb_url || img.url, video: false }))
                                                 .concat((note.videos || []).filter(v => v.poster_url).map(v => ({ key: 'v-' + v.id, url: v.poster_url, thumb: v.poster_url, video: true })))
                                                 .map(m => {
-                                                    const idx = selImgs.indexOf(m.url);
+                                                    // selImgs 元素为 {url, id?}：按 url 匹配选中态
+                                                    const idx = selImgs.findIndex(s => s.url === m.url);
                                                     const dis = idx < 0 && selImgs.length >= 9;
                                                     return (
                                                         <div key={m.key}
                                                             className={'cg-ip' + (idx >= 0 ? ' on' : '') + (dis ? ' dis' : '')}
                                                             onClick={() => {
                                                                 if (dis) return;
-                                                                setSelImgs(idx >= 0 ? selImgs.filter(u => u !== m.url) : [...selImgs, m.url]);
+                                                                setSelImgs(idx >= 0
+                                                                    ? selImgs.filter(s => s.url !== m.url)
+                                                                    : [...selImgs, { url: m.url, id: m.id }]);
                                                             }}>
                                                             {/* 选取网格用缩略图展示；选中项的原图 URL 只在卡片渲染时加载 */}
                                                             <img src={m.thumb || m.url} alt="" loading="lazy" />
@@ -5927,8 +6055,9 @@
             const isMobile = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches, []);
 
             useEffect(() => {
-                // 锁定事件由 api() 统一广播（403 + “未解锁”）；整页密码门阶段无需浮层
-                const onLocked = () => { if (phaseRef.current === 'open') setReauth(true); };
+                // 锁定事件由 api() 统一广播（403 + “未解锁”）；整页密码门阶段无需浮层。
+                // 锁定即清理媒体密钥与解密 blob 缓存（敏感态只存内存）
+                const onLocked = () => { pvCleanupMedia(); if (phaseRef.current === 'open') setReauth(true); };
                 window.addEventListener('pv-locked', onLocked);
                 // 站点登录态失效事件由 api() 统一广播（401 + “请先登录”）：
                 // 任何 Tab / 弹窗操作中过期都会弹出就地重登浮层（此前仅整页密码门阶段可重登）
@@ -5947,6 +6076,8 @@
                 // 广播解锁成功：各 Tab（如卡片页）监听后自行重新加载数据，
                 // 修复“被锁时停留在卡片页 → 解锁后卡片一直空白/破图”的问题
                 window.dispatchEvent(new CustomEvent('pv-unlocked'));
+                // 预热媒体密钥：解锁后首张原图即可走云直链解密（失败静默，读取时再兜底）
+                ensurePvMediaKey().catch(() => { });
                 // 继续被锁定打断的操作（如生成卡片）
                 const retry = window.__pvPendingRetry;
                 window.__pvPendingRetry = null;
@@ -5961,7 +6092,10 @@
                     if (d && d.data && d.data.amap_key) amapKey = d.data.amap_key;
                     // 站点登录态失效：就地弹出重登浮层，不再跳转主页丢弃私人空间位置
                     if (d.code === 401) { setPhase('locked'); setRelogin(true); return; }
-                    setPhase(ok(d) && d.data && d.data.unlocked ? 'open' : 'locked');
+                    const unlocked = ok(d) && d.data && d.data.unlocked;
+                    setPhase(unlocked ? 'open' : 'locked');
+                    // 已解锁进入：预热媒体密钥（云直链解密），失败静默
+                    if (unlocked) ensurePvMediaKey().catch(() => { });
                 }).catch(() => setPhase('locked'));
             }, []);
 
@@ -6176,6 +6310,8 @@
                                 </Tooltip>
                                 <Button size="small" onClick={async () => {
                                     await api('/api/private/lock', { method: 'POST' });
+                                    // 主动锁定同样清理媒体密钥与解密缓存
+                                    pvCleanupMedia();
                                     setPhase('locked');
                                 }}>锁定</Button>
                                 <Button size="small" icon={isDark ? <I name="SunOutlined" /> : <I name="MoonOutlined" />} onClick={() => setIsDark(!isDark)} />

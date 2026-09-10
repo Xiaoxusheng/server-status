@@ -4,10 +4,12 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -103,6 +105,12 @@ func registerPrivateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/private/notes/{id}/images/{image_id}", authMiddleware(securityMiddleware(privateAuthMiddleware(privateDeleteImageHandler))))
 	mux.HandleFunc("GET /api/private/notes/{id}/images/{image_id}/file", authMiddleware(securityMiddleware(privateAuthMiddleware(privateImageFileHandler))))
 	mux.HandleFunc("GET /api/private/notes/{id}/images/{image_id}/thumb", authMiddleware(securityMiddleware(privateAuthMiddleware(privateImageThumbHandler))))
+
+	// 云同步：媒体密钥下发（浏览器解密）、原图云直链 302、状态快照、重加密迁移触发
+	mux.HandleFunc("GET /api/private/media/key", authMiddleware(securityMiddleware(privateAuthMiddleware(privateMediaKeyHandler))))
+	mux.HandleFunc("GET /api/private/notes/{id}/images/{image_id}/cloud", authMiddleware(securityMiddleware(privateAuthMiddleware(privateImageCloudHandler))))
+	mux.HandleFunc("GET /api/private/cloud/status", authMiddleware(securityMiddleware(privateAuthMiddleware(privateCloudStatusHandler))))
+	mux.HandleFunc("POST /api/private/media/reencrypt", authMiddleware(securityMiddleware(privateAuthMiddleware(privateMediaReencryptHandler))))
 
 	// 语音
 	mux.HandleFunc("POST /api/private/notes/{id}/audio", authMiddleware(securityMiddleware(privateAuthMiddleware(privateUploadAudioHandler))))
@@ -535,6 +543,95 @@ func privateImageThumbHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	w.Header().Set("ETag", etagForFile("pvthumb-"+imageID, abs, 1))
 	servePrivateMediaFile(w, r, abs, name)
+}
+
+// ==================== 云同步处理器 ====================
+
+// privateMediaKeyHandler GET /api/private/media/key
+// 下发当前用户的 32B 媒体密钥（hex 64 字符），供浏览器 WebCrypto 解密 PVMEDIA2 原图。
+// 仅三层中间件（登录 + 安全 + 私人会话解锁）通过后可达；密钥绝不写入日志正文
+func privateMediaKeyHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	if privateStore == nil {
+		writeJSONError(w, http.StatusForbidden, "私人空间不可用")
+		return
+	}
+	session, _ := getSessionFromRequest(r)
+	key, err := privateStore.userMediaKey(session.Username)
+	if err != nil {
+		log.Printf("私人媒体密钥获取失败 user=%s: %v", session.Username, err)
+		writeJSONError(w, http.StatusInternalServerError, "密钥获取失败")
+		return
+	}
+	privateStore.auditPrivate(r, session.Username, "private_cloud.media_key")
+	writeJSON(w, http.StatusOK, "ok", map[string]string{"key": hex.EncodeToString(key)})
+}
+
+// privateImageCloudHandler GET /api/private/notes/{id}/images/{image_id}/cloud
+// 原图带宽直链：云同步启用时 302 到 OpenList 换取的网盘 CDN 直链（密文，浏览器本地解密）；
+// 未启用/签发失败时同请求内回退服务器解密输出——任何云端故障不影响功能，只影响带宽优化。
+// 302 响应必须 no-store：raw_url 为短时效签名 URL，绝不能被浏览器缓存
+func privateImageCloudHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	if privateStore == nil {
+		writeJSONError(w, http.StatusForbidden, "私人空间不可用")
+		return
+	}
+	session, _ := getSessionFromRequest(r)
+	username := session.Username
+	noteID, imageID := r.PathValue("id"), r.PathValue("image_id")
+	rel, err := privateStore.imageRelPath(username, noteID, imageID)
+	if err != nil {
+		writeJSONError(w, http.StatusNotFound, "图片不存在")
+		return
+	}
+	cfg := privateStore.config.CloudSync
+	if cfg.Enabled && cfg.OpenlistToken != "" {
+		rawURL, lerr := openlistRawURL(cfg, rel)
+		if lerr == nil {
+			w.Header().Set("Cache-Control", "no-store")
+			privateStore.auditPrivate(r, username, "private_cloud.link")
+			http.Redirect(w, r, rawURL, http.StatusFound)
+			return
+		}
+		// 直链签发失败：记日志后走同请求回退（raw_url 全文绝不落日志）
+		log.Printf("☁️ 手记云直链签发失败 note=%s image=%s: %v，回退服务器解密", noteID, imageID, lerr)
+	}
+	// 回退：与 privateImageFileHandler 相同的响应头与解密输出
+	abs, name, ferr := privateStore.imageFilePath(username, noteID, imageID)
+	if ferr != nil {
+		writeJSONError(w, http.StatusNotFound, "图片不存在")
+		return
+	}
+	w.Header().Set("Content-Disposition", "inline; filename=\""+name+"\"")
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	w.Header().Set("ETag", etagForFile("pvimg-"+imageID, abs, 1))
+	servePrivateMediaFile(w, r, abs, name)
+}
+
+// privateCloudStatusHandler GET /api/private/cloud/status
+// 云同步队列与重加密迁移进度快照（管理排障用）
+func privateCloudStatusHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	if privateStore == nil {
+		writeJSONError(w, http.StatusForbidden, "私人空间不可用")
+		return
+	}
+	writeJSON(w, http.StatusOK, "ok", privateStore.cloudSyncSnapshot())
+}
+
+// privateMediaReencryptHandler POST /api/private/media/reencrypt
+// 触发 PVMEDIA1 → PVMEDIA2 存量迁移（幂等；已在运行返回 started=false）
+func privateMediaReencryptHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	if privateStore == nil {
+		writeJSONError(w, http.StatusForbidden, "私人空间不可用")
+		return
+	}
+	session, _ := getSessionFromRequest(r)
+	started := privateStore.startMediaReencrypt()
+	privateStore.auditPrivate(r, session.Username, "private_cloud.reencrypt")
+	writeJSON(w, http.StatusOK, "ok", map[string]bool{"started": started})
 }
 
 // ==================== 语音处理器 ====================
