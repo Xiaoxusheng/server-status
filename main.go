@@ -192,7 +192,6 @@ type RBACManager struct {
 // allPermissions 系统支持的权限定义
 var allPermissions = []PermissionDef{
 	{Key: "system:view", Name: "查看服务器状态", Group: "系统", Description: "查看实时监控、网络接口、访问统计"},
-	{Key: "system:exec", Name: "执行系统命令", Group: "系统", Description: "执行白名单内的系统管理命令"},
 	{Key: "system:log", Name: "查看系统日志", Group: "系统", Description: "在线查看与检索服务器运行日志及历史归档"},
 	{Key: "files:view", Name: "查看媒体文件", Group: "文件", Description: "查看视频、电子书、随机媒体等内容"},
 	{Key: "files:download", Name: "下载文件", Group: "文件", Description: "通过安全下载页或下载令牌下载服务器文件"},
@@ -236,8 +235,8 @@ func defaultRoles() map[string]*Role {
 		"operator": {
 			RoleID:      "operator",
 			Name:        "运维人员",
-			Description: "负责服务器日常运维，可查看状态并执行命令",
-			Permissions: []string{"system:view", "system:log", "system:exec", "files:view", "files:download", "token:issue", "token:view", "token:revoke", "user:view", "trojan:manage", "docker:view", "docker:manage"},
+			Description: "负责服务器日常运维，可查看状态与日志",
+			Permissions: []string{"system:view", "system:log", "files:view", "files:download", "token:issue", "token:view", "token:revoke", "user:view", "trojan:manage", "docker:view", "docker:manage"},
 			IsSystem:    true,
 			CreatedAt:   now,
 		},
@@ -279,8 +278,43 @@ func ensureDefaultRoles() {
 		}
 	}
 
+	// 一次性迁移：system:exec 权限已下线（/exec 接口删除，系统信息统一走首页监控），
+	// 从所有存量角色与用户直接权限里剔除该键，避免权限列表残留死键造成困惑
+	stripStalePerm := (func(perms []string) ([]string, bool) {
+		out := perms[:0]
+		removed := false
+		for _, p := range perms {
+			if p == "system:exec" {
+				removed = true
+				continue
+			}
+			out = append(out, p)
+		}
+		return out, removed
+	})
+	for _, role := range rbacManager.Roles {
+		if role == nil {
+			continue
+		}
+		if np, removed := stripStalePerm(role.Permissions); removed {
+			role.Permissions = np
+			changed = true
+		}
+	}
+	userManager.RLock()
+	for _, u := range userManager.UserInfos {
+		if u == nil {
+			continue
+		}
+		if np, removed := stripStalePerm(u.Permissions); removed {
+			u.Permissions = np
+			changed = true
+		}
+	}
+	userManager.RUnlock()
 	if changed {
 		go scheduleSaveRBAC()
+		go scheduleSaveUsers() // 用户直接权限同样剔除并落盘 users.json
 	}
 }
 
@@ -3894,6 +3928,12 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		// 将会话信息添加到请求上下文
 		ctx := context.WithValue(r.Context(), "session", session)
+		// 主站会话 Cookie 滑动续期：服务端会话按最后访问时间滑动续期，但 Cookie 若仍是
+		// 登录时签发的固定有效期（如 24h），会先于服务端过期，导致“明明还登录着却 401”。
+		// 每次认证通过的请求都重签 Cookie 与服务端续期保持同步（与 check-auth 一致）
+		if cookie, err := r.Cookie("session_id"); err == nil && cookie.Value != "" {
+			http.SetCookie(w, sessionCookieFor(cookie.Value, session))
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 }
@@ -3923,6 +3963,9 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	// 注册按次数限流：无论成败每次尝试都计数且不重置（注册没有“成功后解锁”的语义，
+	// 成功本身就是要限制的次数），窗口内超过阈值直接拒绝，防止脚本化批量注册
+	loginLimiter.fail("reg:" + getClientIP(r))
 
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -5825,68 +5868,6 @@ func formatBytes(kb uint64) string {
 	}
 }
 
-// ---------------- 安全命令执行接口 ----------------
-var allowedCommands = map[string][]string{
-	"uptime": {},
-	"df":     {"-h"},
-	"free":   {"-m"},
-	"who":    {},
-	"uname":  {"-a"},
-	"ls":     {"-lh", "/"},
-}
-
-// execHandler HTTP 端点：约束外部特权在允许且极短的防僵死闭包环境代操作命令行
-func execHandler(w http.ResponseWriter, r *http.Request) {
-	recordAccess(r)
-	updateOnlineUser(r, "exec")
-
-	if r.Method != http.MethodPost {
-		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	cmdName := r.URL.Query().Get("command")
-	if cmdName == "" {
-		http.Error(w, "Missing command parameter", http.StatusBadRequest)
-		return
-	}
-
-	args, ok := allowedCommands[cmdName]
-	if !ok {
-		auditAction(r, "exec.denied", "command="+cmdName+" reason=not-whitelisted")
-		http.Error(w, "Command not allowed", http.StatusForbidden)
-		return
-	}
-
-	// 系统命令执行属高危操作，无论成败均记录审计
-	defer auditAction(r, "exec.run", "command="+cmdName)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	cmd := exec.CommandContext(ctx, cmdName, args...)
-	output, err := cmd.CombinedOutput()
-
-	w.Header().Set("Content-Type", "application/json")
-	if err != nil {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":  "error",
-			"message": err.Error(),
-			"output":  string(output),
-		})
-		return
-	}
-
-	err = json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "success",
-		"output": string(output),
-	})
-	if err != nil {
-		log.Println("err:", err)
-		return
-	}
-}
-
 // ==================== 主函数 ====================
 
 // main 主宰整个程序的挂载，驱动所有路由装配及守望守护协程开启
@@ -6032,7 +6013,7 @@ func main() {
 	http.HandleFunc("GET /api/ssl/expiry", authMiddleware(requirePermission("system:view", securityMiddleware(sslExpiryHandler))))
 	http.HandleFunc("/random-media", enableCORSh(authMiddleware(requirePermission("files:view", securityMiddleware(randomMediaHandler)))))
 	http.HandleFunc("/access-stats", authMiddleware(requirePermission("system:view", securityMiddleware(accessStatsHandler))))
-	http.HandleFunc("/exec", authMiddleware(requirePermission("system:exec", securityMiddleware(execHandler))))
+	// /exec 白名单命令接口已下线：系统信息统一走首页监控（system:view），不再提供命令执行入口
 	http.HandleFunc("/epubs", enableCORSh(authMiddleware(requirePermission("files:view", securityMiddleware(listEpubs)))))
 	http.HandleFunc("GET /epub", authMiddleware(requirePermission("files:view", securityMiddleware(epubFileHandler))))
 
@@ -6137,9 +6118,8 @@ func main() {
 	http.HandleFunc("GET /ws/docker", authMiddleware(requireAnyPermission([]string{"docker:view", "docker:manage"}, securityMiddleware(dockerWSHandler))))
 
 	// ==================== Web Shell / Web Terminal ====================
-	// 复用 system:exec 权限；每次启动 Shell 均需独立二次认证 + 一次性 Token
 	// Web Shell 全链路使用独立的 shell:use 权限（等同主机用户权限，高危）；
-	// 不再与 system:exec（白名单快捷命令）混用，避免持有快捷命令权限的账号默认获得主机 Shell
+	// 每次启动 Shell 均需独立二次认证 + 一次性 Token
 	http.HandleFunc("GET /shell.html", authMiddleware(requirePermission("shell:use", securityMiddleware(shellPageHandler))))
 	http.HandleFunc("POST /api/shell/setup-password", authMiddleware(requirePermission("shell:use", securityMiddleware(shellSetupPasswordHandler))))
 	http.HandleFunc("POST /api/shell/auth", authMiddleware(requirePermission("shell:use", securityMiddleware(shellAuthHandler))))

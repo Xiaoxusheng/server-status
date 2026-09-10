@@ -338,6 +338,36 @@
             pointer-events: none;
         }
 
+        /* ================= 视频拖拽排序 ================= */
+        /* 非拖拽项通过 transform 过渡平滑让位；拖拽中的项关闭过渡保持 1:1 跟手 */
+        .pv-vid-item {
+            transition: transform .18s ease;
+        }
+
+        .pv-vid-item.pv-vid-dragging {
+            transition: none;
+            position: relative;
+            z-index: 5;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, .22);
+            opacity: .92;
+        }
+
+        /* 手柄：touch-action:none 让垂直拖动不被页面滚动抢占；禁用长按选中/系统拖拽 */
+        .pv-vid-handle {
+            flex: none;
+            cursor: grab;
+            touch-action: none;
+            color: rgba(128, 128, 128, .85);
+            font-size: 16px;
+            padding: 6px 2px;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .pv-vid-handle:active {
+            cursor: grabbing;
+        }
+
         /* ================= 手记卡片视频行 ================= */
         .note-vids {
             display: flex;
@@ -662,6 +692,33 @@
             bottom: 2px;
             display: flex;
             gap: 2px;
+        }
+
+        /* ================= 图片上传占位（乐观反馈） ================= */
+        .pv-img-item.pv-img-pending {
+            opacity: .8;
+        }
+
+        .pv-img-item .pv-img-mask {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, .35);
+            color: #fff;
+            font-size: 18px;
+        }
+
+        @keyframes pv-rot {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .pv-spin {
+            display: inline-flex;
+            animation: pv-rot 1s linear infinite;
         }
 
         .pv-upload-box {
@@ -2227,12 +2284,14 @@
         const { Modal, Input, Button, Form, Card, Tabs, Tag, Space, Typography, ConfigProvider, theme, message,
             Drawer, Select, Popconfirm, Dropdown, Empty, Spin, Alert, Switch, Segmented, Tooltip, Image, Divider,
             Popover, InputNumber, Checkbox, Progress } = window.antd;
-        const { useState, useEffect, useRef, useCallback, useMemo } = React;
+        const { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } = React;
         const { darkAlgorithm } = theme;
         const IconSet = window.icons || {};
         const I = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
 
         const baseUrl = window.location.origin;
+        // 高德 Web 服务 key（服务端配置经 /api/private/session 下发），反向地理编码用
+        let amapKey = '';
 
         // 读取指定名称的 Cookie（Double-Submit CSRF 使用非 HttpOnly 的 csrf_token，会话 Cookie 仍为 HttpOnly）
         const getCookie = name => {
@@ -2265,6 +2324,11 @@
                 // 避免各操作只报笼统的“失败”而不引导重新解锁
                 if (d && d.code === 403 && d.message === '未解锁') {
                     window.dispatchEvent(new CustomEvent('pv-locked'));
+                }
+                // 站点登录态失效（主站 session 过期）：全局广播弹出就地重登浮层，
+                // 页面停留在任何 Tab / 弹窗时都能就地恢复，而不是各操作静默失败
+                if (d && d.code === 401 && d.message === '请先登录') {
+                    window.dispatchEvent(new CustomEvent('pv-relogin'));
                 }
                 return d;
             });
@@ -3177,7 +3241,37 @@
             { name: '东京 · 涩谷', lat: 35.6580, lng: 139.7016 },
             { name: '大阪', lat: 34.6937, lng: 135.5023 }
         ];
-        // 反向地理编码：GPS 坐标 → 真实地名（nominatim → BigDataCloud → 坐标兜底）
+        // ==================== 反向地理编码 ====================
+        // WGS-84 → GCJ-02（火星坐标系）转换：照片 EXIF GPS 与浏览器定位返回的都是 WGS-84 原始坐标，
+        // 而高德 API 使用 GCJ-02，国内不转换直接查询会系统性偏移约 100~700 米（实测本地 608 米），
+        // 解析出的街道/镇会落在隔壁街区。境外坐标超出 GCJ-02 适用范围，原样返回不做偏移
+        function wgs2gcj(lng, lat) {
+            const a = 6378245.0, ee = 0.00669342162296594323;
+            if (lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271) return [lng, lat];
+            const tLng = (x, y) => {
+                let r = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+                r += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
+                r += (20.0 * Math.sin(x * Math.PI) + 40.0 * Math.sin(x / 3.0 * Math.PI)) * 2.0 / 3.0;
+                r += (150.0 * Math.sin(x / 12.0 * Math.PI) + 300.0 * Math.sin(x / 30.0 * Math.PI)) * 2.0 / 3.0;
+                return r;
+            };
+            const tLat = (x, y) => {
+                let r = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+                r += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
+                r += (20.0 * Math.sin(y * Math.PI) + 40.0 * Math.sin(y / 3.0 * Math.PI)) * 2.0 / 3.0;
+                r += (160.0 * Math.sin(y / 12.0 * Math.PI) + 320 * Math.sin(y * Math.PI / 30.0)) * 2.0 / 3.0;
+                return r;
+            };
+            let dLat = tLat(lng - 105.0, lat - 35.0), dLng = tLng(lng - 105.0, lat - 35.0);
+            const radLat = lat / 180.0 * Math.PI;
+            let magic = Math.sin(radLat);
+            magic = 1 - ee * magic * magic;
+            const sq = Math.sqrt(magic);
+            dLat = (dLat * 180.0) / ((a * (1 - ee)) / (magic * sq) * Math.PI);
+            dLng = (dLng * 180.0) / (a / sq * Math.cos(radLat) * Math.PI);
+            return [lng + dLng, lat + dLat];
+        }
+        // 反向地理编码：GPS 坐标 → 真实地名（高德 → nominatim → BigDataCloud → 坐标兜底）
         // 供浏览器定位与照片 EXIF 定位共用；任一服务 5s 无响应即切换下一级
         function reverseGeo(lat, lng, setName, fallbackCoord) {
             const fetchTimeout = (url, ms) => {
@@ -3188,27 +3282,39 @@
             const bdc = () => fetchTimeout('https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=' + lat + '&longitude=' + lng + '&localityLanguage=zh', 5000)
                 .then(r => r.json())
                 .then(d => {
-                    const info = (d.localityInfo && d.localityInfo.informative) || [];
-                    // 最具体的一条（如街道/地标）排在最后取用
-                    const detail = info.length ? info[info.length - 1].name : '';
-                    const name = [d.city || d.locality, d.principalSubdivision, detail].filter(Boolean).join(' · ');
+                    const name = [d.city || d.locality, d.principalSubdivision].filter(Boolean).join(' · ');
                     if (name) setName(name); else fallbackCoord();
                 })
                 .catch(fallbackCoord);
-            // zoom=18 为建筑物级，可拿到门牌号与 POI 名称
-            fetchTimeout('https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&accept-language=zh-CN&lat=' + lat + '&lon=' + lng, 5000)
+            const nominatim = () => fetchTimeout('https://nominatim.openstreetmap.org/reverse?format=json&zoom=14&accept-language=zh-CN&lat=' + lat + '&lon=' + lng, 5000)
                 .then(r => r.json())
                 .then(d => {
                     const a = (d && d.address) || {};
-                    const road = [a.road, a.house_number].filter(Boolean).join(' ') || a.neighbourhood || a.hamlet || '';
-                    const parts = [a.city || a.town || a.county, a.suburb || a.city_district || a.district, road].filter(Boolean);
-                    // POI 名（门店/小区等）最具体，未重复时放最前
-                    const poi = d.name && d.name !== a.road ? d.name : '';
-                    if (poi && !parts.includes(poi)) parts.unshift(poi);
-                    const name = parts.join(' · ');
+                    const name = [a.city || a.town || a.county || a.municipality, a.suburb || a.city_district || a.district || a.township || a.village].filter(Boolean).join(' · ');
                     if (name || (d && d.display_name)) setName(name || d.display_name); else bdc();
                 })
                 .catch(bdc);
+            // 高德优先：国内可达且镇级精度最好；未配置 key（或解析失败）时依次回退 nominatim → BDC → 坐标。
+            // 高德要求 GCJ-02 坐标：传入的 WGS-84 必须先转换，否则地址系统性偏移数百米
+            const amap = () => {
+                if (!amapKey) return nominatim();
+                const [mlng, mlat] = wgs2gcj(lng, lat);
+                return fetchTimeout('https://restapi.amap.com/v3/geocode/regeo?key=' + encodeURIComponent(amapKey) + '&location=' + mlng.toFixed(6) + ',' + mlat.toFixed(6), 5000)
+                    .then(r => r.json())
+                    .then(d => {
+                        if (!d || d.status !== '1' || !d.regeocode) return nominatim();
+                        const ac = d.regeocode.addressComponent || {};
+                        // 高德对直辖市 city 返回空数组，此时回退 province
+                        const lv1 = (typeof ac.city === 'string' && ac.city) ? ac.city : (ac.province || '');
+                        // 街道号级精度：镇/街道之后再拼道路+门牌号（无则自动维持镇/街道级）
+                        const sn = ac.streetNumber || {};
+                        const road = [sn.street, sn.number].filter(Boolean).join('');
+                        const name = [lv1, ac.district, ac.township, road].filter(Boolean).join(' · ');
+                        if (name) setName(name); else nominatim();
+                    })
+                    .catch(nominatim);
+            };
+            amap();
         }
         function LocationPicker({ value, onChange, exif, onUseTime }) {
             const [search, setSearch] = useState('');
@@ -3690,6 +3796,11 @@
             const [audioList, setAudioList] = useState([]);
             const [videos, setVideos] = useState([]);
             const [vidProg, setVidProg] = useState(null); // 视频上传进度百分比，null = 未在上传
+            const [vidPrep, setVidPrep] = useState(0);    // 等待本地截帧+上传的视频数（选多个视频时的排队提示）
+            const [imgProg, setImgProg] = useState(null); // 图片上传计数 {done,total}，null = 未在上传
+            const [vidDrag, setVidDrag] = useState(-1);   // 正在拖拽的视频下标，-1 = 未拖拽
+            const vidRefs = useRef({});                   // 视频 id -> DOM 元素（拖拽位移用）
+            const vidDragRef = useRef(null);              // 拖拽进行中的状态 {idx,startY,rowH,target}
             const [saving, setSaving] = useState(false);
             const [exif, setExif] = useState(null);
             const [dragging, setDragging] = useState(false);
@@ -3699,6 +3810,18 @@
             // 同步防重锁：保存进行中时忽略后续触发（状态更新是异步的，快速连点会穿透 loading）
             const savingRef = useRef(false);
             const contentRef = useRef(null);
+            // 待应用光标：工具栏插入（H2/B/表情…）后，等 React 把新 content 提交到 DOM 再精确设置选区。
+            // 旧实现用 requestAnimationFrame：既与 React 的 DOM 提交存在竞态，又因 iOS 只在用户手势
+            // 调用栈内允许 focus()——rAF 里调用会静默失败，导致点 H2 后光标常不落在文字后面
+            const pendingSelRef = useRef(null);
+            useEffect(() => {
+                const p = pendingSelRef.current;
+                if (!p) return;
+                pendingSelRef.current = null;
+                const node = contentRef.current && contentRef.current.resizableTextArea;
+                const ta = node && node.textArea;
+                if (ta) { try { ta.setSelectionRange(p.s, p.e); } catch (e) { /* 忽略 */ } }
+            }, [content]);
             // Markdown 快捷插入：before/after 包住所选文字，line 为行首前缀
             const mdWrap = (before, after, ph) => {
                 const node = contentRef.current && contentRef.current.resizableTextArea;
@@ -3707,8 +3830,9 @@
                 const start = ta.selectionStart, end = ta.selectionEnd;
                 const sel = content.slice(start, end);
                 const body = sel || ph;
+                ta.focus(); // 同步聚焦：保住 iOS 键盘与用户手势上下文
+                pendingSelRef.current = { s: start + before.length, e: start + before.length + body.length };
                 setContent(content.slice(0, start) + before + body + after + content.slice(end));
-                requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(start + before.length, start + before.length + body.length); });
             };
             const mdLinePrefix = (prefix) => {
                 const node = contentRef.current && contentRef.current.resizableTextArea;
@@ -3716,8 +3840,9 @@
                 if (!ta) return;
                 const pos = ta.selectionStart;
                 const lineStart = content.lastIndexOf(String.fromCharCode(10), pos - 1) + 1;
+                ta.focus(); // 同步聚焦：保住 iOS 键盘与用户手势上下文
+                pendingSelRef.current = { s: pos + prefix.length, e: pos + prefix.length };
                 setContent(content.slice(0, lineStart) + prefix + content.slice(lineStart));
-                requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(pos + prefix.length, pos + prefix.length); });
             };
             // 光标处插入任意文本（表情等），插入后光标停在文本之后
             const mdInsertText = (text) => {
@@ -3725,8 +3850,9 @@
                 const ta = node && node.textArea;
                 if (!ta) return;
                 const start = ta.selectionStart, end = ta.selectionEnd;
+                ta.focus(); // 同步聚焦：保住 iOS 键盘与用户手势上下文
+                pendingSelRef.current = { s: start + text.length, e: start + text.length };
                 setContent(content.slice(0, start) + text + content.slice(end));
-                requestAnimationFrame(() => { ta.focus(); ta.setSelectionRange(start + text.length, start + text.length); });
             };
             // 未入库草稿的 id：选图/录音会自动创建草稿，重试时复用，避免生成多条空手记
             const draftRef = useRef(null);
@@ -3752,17 +3878,41 @@
                 setAudioList(n && n.audio ? n.audio.slice() : []);
                 setVideos(n && n.videos ? n.videos.slice() : []);
                 setExif(null);
+                // 清理上传/拖拽的瞬时状态（上次编辑会话可能中途关闭）
+                setImgProg(null);
+                setVidPrep(0);
+                setVidDrag(-1);
+                vidDragRef.current = null;
                 draftRef.current = n && n.id ? n.id : null;
             };
             useEffect(() => {
-                if (open) reset(note);
+                if (open) {
+                    reset(note);
+                    // 桌面端打开编辑器自动聚焦正文，光标放到已有文字末尾（不用再手点一下）；
+                    // 移动端不自动聚焦，避免 Drawer 动画中强拉起虚拟键盘遮挡页面
+                    if (!('ontouchstart' in window)) {
+                        setTimeout(() => {
+                            const node = contentRef.current && contentRef.current.resizableTextArea;
+                            const ta = node && node.textArea;
+                            if (!ta) return;
+                            ta.focus();
+                            const len = (ta.value || '').length;
+                            try { ta.setSelectionRange(len, len); } catch (e) { /* 忽略 */ }
+                        }, 260);
+                    }
+                }
                 // eslint-disable-next-line react-hooks/exhaustive-deps
             }, [open, note && note.id]);
 
             const uploadFiles = async (files, noteId) => {
                 const id = noteId || (note ? note.id : null);
-                if (!id) { message.warning('请先保存手记基本信息'); return; }
+                if (!id) { setImgProg(null); message.warning('请先保存手记基本信息'); return; }
                 for (const f of Array.from(files)) {
+                    // 先生成本地小缩略图并立刻占位显示：移动端原图 4000×3000，若等「上传+解码」全链路
+                    // 完成才可见，会显得"点了没反应"；占位项带 pending 标记，上传完成后原位替换
+                    const thumb = await makeThumbUrl(f);
+                    const key = 'pend-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+                    setImages(prev => prev.concat({ key: key, pending: true, thumb: thumb || '' }));
                     const fd = new FormData();
                     fd.append('file', f);
                     try {
@@ -3773,14 +3923,13 @@
                         });
                         const d = await r.json();
                         if (ok(d) && d.data && d.data.id) {
-                            // 编辑器预览条用本地缩略图显示（原图照常入库），避免多张原图解码卡死 UI；
+                            // 原位替换占位项：编辑器预览条用本地缩略图显示（原图照常入库），避免多张原图解码卡死 UI；
                             // 服务端同步返回持久缩略图（thumb_url）与宽高，保存后列表直接用服务器缩略图
-                            const thumb = await makeThumbUrl(f);
-                            setImages(prev => prev.concat({
+                            setImages(prev => prev.map(x => x.key === key ? {
                                 id: d.data.id, url: d.data.url, thumb_url: d.data.thumb_url || '',
                                 width: d.data.width || 0, height: d.data.height || 0,
                                 sort_order: d.data.sort_order, thumb: thumb || d.data.thumb_url || d.data.url
-                            }));
+                            } : x));
                             const ex = await readExif(f);
                             if (ex && (ex.gpsLat != null || ex.time)) {
                                 setExif(ex);
@@ -3795,11 +3944,24 @@
                                 }
                             }
                         } else {
+                            // 失败：移除占位缩略图（本地 blob 一并释放）
+                            setImages(prev => prev.filter(x => x.key !== key));
+                            if (thumb && thumb.indexOf('blob:') === 0) URL.revokeObjectURL(thumb);
+                            // 会话被锁（403 未解锁）：广播弹出重新验证浮层，解锁后重新上传即可
+                            if (d && d.code === 403 && d.message === '未解锁') window.dispatchEvent(new CustomEvent('pv-locked'));
                             message.error('图片上传失败：' + (d.message || ''));
                         }
                     } catch (e) {
+                        setImages(prev => prev.filter(x => x.key !== key));
+                        if (thumb && thumb.indexOf('blob:') === 0) URL.revokeObjectURL(thumb);
                         message.error('图片上传失败，请重试');
                     }
+                    // 单张完成（成败均计）：全部完成后收起进度条（支持连续多批选择，计数累加）
+                    setImgProg(prev => {
+                        if (!prev) return null;
+                        const done = prev.done + 1;
+                        return done >= prev.total ? null : { done: done, total: prev.total };
+                    });
                 }
             };
             const onFiles = (list) => {
@@ -3818,11 +3980,14 @@
                         : `${skipped.length} 张图片格式不支持已跳过（仅支持 jpg / png / webp / gif）`);
                 }
                 if (!good.length) return;
+                // 选中即显示进度（含建草稿的网络等待），多张显示 n/m 计数
+                setImgProg(prev => ({ done: prev ? prev.done : 0, total: (prev ? prev.total : 0) + good.length }));
                 if (!note) {
                     // 尚无手记：先保存草稿（正文为空时给占位）；重试时复用已建草稿，避免生成多条空手记
                     if (draftRef.current) { uploadFiles(good, draftRef.current); return; }
                     doSave(true).then(saved => {
                         if (saved) { draftRef.current = saved.id; uploadFiles(good, saved.id); }
+                        else setImgProg(null);
                     });
                     return;
                 }
@@ -3906,6 +4071,8 @@
                     try {
                         const d = JSON.parse(xhr.responseText);
                         if (ok(d) && d.data) { setVideos(prev => prev.concat(d.data)); resolve(true); return; }
+                        // 会话被锁（403 未解锁）：广播弹出重新验证浮层，解锁后重新上传即可
+                        if (d && d.code === 403 && d.message === '未解锁') window.dispatchEvent(new CustomEvent('pv-locked'));
                         message.error('视频上传失败：' + (d.message || ''));
                     } catch (e) { message.error('视频上传失败'); }
                     resolve(false);
@@ -3937,9 +4104,12 @@
                     draftRef.current = saved.id;
                     noteId = saved.id;
                 }
+                // 排队提示：截帧+上传是逐个进行的，先告知用户共选了几个视频（避免"点了没反应"）
+                setVidPrep(good.length);
                 for (const f of good) {
                     const poster = await makeVideoPoster(f);
                     await uploadOneVideo(f, noteId, poster);
+                    setVidPrep(n => Math.max(0, n - 1));
                 }
             };
             const doSave = async (silent) => {
@@ -3965,6 +4135,12 @@
                         if (!silent) { message.success('已保存'); onSaved(d.data); }
                         return d.data;
                     }
+                    if (d.code === 403 && d.message === '未解锁') {
+                        // 私人空间被自动锁定：api() 已触发重新验证浮层，注册解锁后自动续做
+                        // 本次保存（静默前置保存同样自动补存），解锁后无需再手动点一次保存
+                        window.__pvPendingRetry = () => { doSave(silent); };
+                        return null;
+                    }
                     if (!silent) message.error(d.message || '保存失败');
                     return null;
                 } catch (e) {
@@ -3982,10 +4158,73 @@
                 [arr[idx], arr[j]] = [arr[j], arr[idx]];
                 setImages(arr);
                 if (note) {
-                    const ids = arr.map(x => x.id);
+                    // 上传中的占位项没有 id，过滤后再提交排序（不影响已入库图片的相对顺序）
+                    const ids = arr.map(x => x.id).filter(Boolean);
                     api('/api/private/notes/' + note.id + '/images/order', { method: 'PUT', body: JSON.stringify({ ids }) }).catch(() => { });
                 }
             };
+            // ==================== 视频拖拽排序（Pointer Events，触屏/鼠标通用） ====================
+            // 手柄上按下开始拖动（touch-action:none 防止页面滚动抢占）；move 中按行高换算目标下标，
+            // 被拖项 1:1 跟手、中间项 transform 让位（CSS 过渡平滑）；抬起提交新顺序并持久化
+            const onVidHandleDown = (e, idx) => {
+                if (e.button != null && e.button !== 0) return;
+                const ids = videos.map(v => v.id);
+                const el = vidRefs.current[ids[idx]];
+                if (!el) return;
+                // 行高 = 相邻两项 offsetTop 之差（含 margin），单行时退化为高度 + margin-bottom 6px
+                let rowH = el.offsetHeight + 6;
+                const next = el.nextElementSibling;
+                if (next && next.offsetTop > el.offsetTop) rowH = next.offsetTop - el.offsetTop;
+                try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* 老浏览器忽略 */ }
+                vidDragRef.current = { idx: idx, startY: e.clientY, rowH: rowH, target: idx };
+                setVidDrag(idx);
+                e.preventDefault();
+            };
+            const onVidHandleMove = (e) => {
+                const st = vidDragRef.current;
+                if (!st) return;
+                const dy = e.clientY - st.startY;
+                let target = st.idx + Math.round(dy / st.rowH);
+                target = Math.max(0, Math.min(videos.length - 1, target));
+                st.target = target;
+                const ids = videos.map(v => v.id);
+                const dragEl = vidRefs.current[ids[st.idx]];
+                if (dragEl) dragEl.style.transform = 'translateY(' + dy + 'px)';
+                ids.forEach((id, i) => {
+                    const el = vidRefs.current[id];
+                    if (!el || i === st.idx) return;
+                    let shift = 0;
+                    if (st.target > st.idx && i > st.idx && i <= st.target) shift = -st.rowH;
+                    else if (st.target < st.idx && i >= st.target && i < st.idx) shift = st.rowH;
+                    el.style.transform = shift ? 'translateY(' + shift + 'px)' : '';
+                });
+            };
+            const onVidHandleUp = () => {
+                const st = vidDragRef.current;
+                if (!st) return;
+                vidDragRef.current = null;
+                setVidDrag(-1);
+                if (st.target === st.idx) return;
+                const arr = videos.slice();
+                const moved = arr.splice(st.idx, 1)[0];
+                arr.splice(st.target, 0, moved);
+                setVideos(arr);
+                const nid = (note && note.id) || draftRef.current;
+                if (nid) {
+                    api('/api/private/notes/' + nid + '/videos/order', { method: 'PUT', body: JSON.stringify({ ids: arr.map(x => x.id) }) })
+                        .then(d => { if (!ok(d)) message.error('视频排序保存失败'); })
+                        .catch(() => { });
+                }
+            };
+            // 位移清理放在布局阶段（提交后、绘制前）：拖拽项与让位项的内联 transform 在新顺序
+            // 上屏的同时移除，避免“先清位移后重排”之间闪一帧旧顺序
+            useLayoutEffect(() => {
+                if (vidDrag !== -1) return;
+                Object.keys(vidRefs.current).forEach(id => {
+                    const el = vidRefs.current[id];
+                    if (el && el.style.transform) el.style.transform = '';
+                });
+            }, [vidDrag, videos]);
             const onSaveAudio = async (file, secs) => {
                 if (!note) {
                     if (draftRef.current) { note = { id: draftRef.current }; }
@@ -4007,7 +4246,11 @@
                     });
                     const d = await r.json();
                     if (ok(d) && d.data) setAudioList(prev => prev.concat(d.data));
-                    else message.error('语音保存失败');
+                    else {
+                        // 会话被锁（403 未解锁）：广播弹出重新验证浮层，解锁后重新录音即可
+                        if (d && d.code === 403 && d.message === '未解锁') window.dispatchEvent(new CustomEvent('pv-locked'));
+                        message.error('语音保存失败');
+                    }
                 } catch (e) { message.error('语音保存失败'); }
             };
             const onDeleteAudio = async (id) => {
@@ -4086,28 +4329,39 @@
                                 </Tooltip>
                             </Popover>
                         </div>
+                        {imgProg && (
+                            <div style={{ marginBottom: 8 }}>
+                                <Progress percent={Math.min(99, Math.round(imgProg.done / imgProg.total * 100))} size="small" status="active" />
+                                <Typography.Text type="secondary" style={{ fontSize: 12 }}>图片上传中 {imgProg.done}/{imgProg.total}…</Typography.Text>
+                            </div>
+                        )}
                         {(images.length > 0 || dragging) && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10, minHeight: dragging ? 92 : 0, border: dragging ? '2px dashed #1677ff' : 'none', borderRadius: 8, padding: dragging ? 4 : 0, alignItems: 'center' }}>
                                 {images.map((img, idx) => (
-                                    <div key={img.id} className="pv-img-item">
-                                        <img src={img.thumb || img.thumb_url || img.url} alt="" decoding="async" />
-                                        <div className="pv-img-move">
-                                            <Button size="small" type="text" style={{ color: '#fff', background: 'rgba(0,0,0,.45)' }} disabled={idx === 0} icon={<I name="ArrowLeftOutlined" />} onClick={() => moveImg(idx, -1)} />
-                                            <Button size="small" type="text" style={{ color: '#fff', background: 'rgba(0,0,0,.45)' }} disabled={idx === images.length - 1} icon={<I name="ArrowRightOutlined" />} onClick={() => moveImg(idx, 1)} />
-                                        </div>
-                                        <Button className="pv-img-del" size="small" type="text" danger icon={<I name="CloseOutlined" />} onClick={async () => {
-                                            if (note) {
-                                                const d = await api('/api/private/notes/' + note.id + '/images/' + img.id, { method: 'DELETE' });
-                                                if (ok(d)) {
-                                                    if (img.thumb && img.thumb.indexOf('blob:') === 0) URL.revokeObjectURL(img.thumb);
-                                                    setImages(prev => prev.filter(x => x.id !== img.id));
-                                                }
-                                                else message.error('删除失败');
-                                            } else {
-                                                if (img.thumb && img.thumb.indexOf('blob:') === 0) URL.revokeObjectURL(img.thumb);
-                                                setImages(prev => prev.filter(x => x.id !== img.id));
-                                            }
-                                        }} />
+                                    <div key={img.key || img.id} className={'pv-img-item' + (img.pending ? ' pv-img-pending' : '')}>
+                                        <img src={img.thumb || img.thumb_url || img.url} alt="" decoding="async" draggable={false} />
+                                        {!!img.pending && <div className="pv-img-mask"><span className="pv-spin"><I name="LoadingOutlined" /></span></div>}
+                                        {!img.pending && (
+                                            <React.Fragment>
+                                                <div className="pv-img-move">
+                                                    <Button size="small" type="text" style={{ color: '#fff', background: 'rgba(0,0,0,.45)' }} disabled={idx === 0} icon={<I name="ArrowLeftOutlined" />} onClick={() => moveImg(idx, -1)} />
+                                                    <Button size="small" type="text" style={{ color: '#fff', background: 'rgba(0,0,0,.45)' }} disabled={idx === images.length - 1} icon={<I name="ArrowRightOutlined" />} onClick={() => moveImg(idx, 1)} />
+                                                </div>
+                                                <Button className="pv-img-del" size="small" type="text" danger icon={<I name="CloseOutlined" />} onClick={async () => {
+                                                    if (note) {
+                                                        const d = await api('/api/private/notes/' + note.id + '/images/' + img.id, { method: 'DELETE' });
+                                                        if (ok(d)) {
+                                                            if (img.thumb && img.thumb.indexOf('blob:') === 0) URL.revokeObjectURL(img.thumb);
+                                                            setImages(prev => prev.filter(x => x.id !== img.id));
+                                                        }
+                                                        else message.error('删除失败');
+                                                    } else {
+                                                        if (img.thumb && img.thumb.indexOf('blob:') === 0) URL.revokeObjectURL(img.thumb);
+                                                        setImages(prev => prev.filter(x => x.id !== img.id));
+                                                    }
+                                                }} />
+                                            </React.Fragment>
+                                        )}
                                     </div>
                                 ))}
                                 <div className="pv-upload-box" onClick={() => fileRef.current && fileRef.current.click()}>
@@ -4116,12 +4370,26 @@
                                 </div>
                             </div>
                         )}
-                        {(videos.length > 0 || vidProg != null) && (
+                        {(videos.length > 0 || vidProg != null || vidPrep > 0) && (
                             <div style={{ marginBottom: 10 }}>
-                                {videos.map(v => (
-                                    <div key={v.id} className="pv-vid-item">
+                                {vidPrep > 0 && (
+                                    <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                                        正在处理视频封面，剩 {vidPrep} 个…
+                                    </Typography.Text>
+                                )}
+                                {videos.map((v, idx) => (
+                                    <div key={v.id}
+                                        ref={el => { vidRefs.current[v.id] = el; }}
+                                        className={'pv-vid-item' + (vidDrag === idx ? ' pv-vid-dragging' : '')}>
+                                        <div className="pv-vid-handle" title="拖动调整顺序"
+                                            onPointerDown={e => onVidHandleDown(e, idx)}
+                                            onPointerMove={onVidHandleMove}
+                                            onPointerUp={onVidHandleUp}
+                                            onPointerCancel={onVidHandleUp}>
+                                            <I name="HolderOutlined" />
+                                        </div>
                                         <div className="pv-vid-thumb">
-                                            {v.poster_url ? <img src={v.poster_url} alt="" /> : <div className="pv-vid-noimg"><I name="VideoCameraOutlined" /></div>}
+                                            {v.poster_url ? <img src={v.poster_url} alt="" draggable={false} /> : <div className="pv-vid-noimg"><I name="VideoCameraOutlined" /></div>}
                                             <span className="pv-vid-play"><I name="PlayCircleFilled" /></span>
                                         </div>
                                         <div style={{ flex: 1 }}>
@@ -5238,6 +5506,14 @@
                 }).catch(() => setLoading(false));
             }, []);
             useEffect(() => { if (isDark !== undefined) load(); }, [load]);
+            // 会话被锁期间本页加载会失败（空列表 + 缩略图 403 破图），解锁/重登成功后
+            // 自动重载自愈；gridKey 变化强制重建整个网格，让 src 未变的 <img> 也重新发起请求
+            const [gridKey, setGridKey] = useState(0);
+            useEffect(() => {
+                const reload = () => { setGridKey(k => k + 1); load(); };
+                window.addEventListener('pv-unlocked', reload);
+                return () => window.removeEventListener('pv-unlocked', reload);
+            }, [load]);
 
             // 列数随容器宽度自适应（ResizeObserver：窗口/侧栏变化即时重排）
             useEffect(() => {
@@ -5253,10 +5529,18 @@
                 return () => ro.disconnect();
             }, []);
 
+            // 直连 fetch 拉卡片图片（不经 api()）：被锁时 403 也广播 pv-locked 弹出重验浮层
+            const fetchCardBlob = async (url) => {
+                const r = await fetch(baseUrl + url, { credentials: 'include' });
+                if (!r.ok) {
+                    if (r.status === 403) window.dispatchEvent(new CustomEvent('pv-locked'));
+                    throw new Error('HTTP ' + r.status);
+                }
+                return r.blob();
+            };
             const saveCard = async (c) => {
                 try {
-                    const r = await fetch(baseUrl + c.url, { credentials: 'include' });
-                    const blob = await r.blob();
+                    const blob = await fetchCardBlob(c.url);
                     const a = document.createElement('a');
                     a.href = URL.createObjectURL(blob);
                     a.download = 'note-card-' + stamp(c.created_at) + '.png';
@@ -5267,8 +5551,7 @@
             };
             const copyCard = async (c) => {
                 try {
-                    const r = await fetch(baseUrl + c.url, { credentials: 'include' });
-                    const blob = await r.blob();
+                    const blob = await fetchCardBlob(c.url);
                     if (navigator.clipboard && window.ClipboardItem) {
                         await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
                         message.success('图片已复制');
@@ -5396,7 +5679,7 @@
                         <Empty description="当前筛选条件下暂无卡片" style={{ marginTop: 60 }} />
                     )}
                     {shown.length > 0 && (
-                        <div className="masonry">
+                        <div className="masonry" key={gridKey}>
                             {cols.map((col, ci) => (
                                 <div className="masonry-col" key={ci}>
                                     {col.map(c => {
@@ -5528,6 +5811,7 @@
                     width={360}
                     footer={null}
                     destroyOnClose
+                    zIndex={3000}
                 >
                     <div style={{ paddingTop: 4 }}>
                         <Typography.Text type="secondary" style={{ fontSize: 13 }}>
@@ -5586,6 +5870,7 @@
                     width={360}
                     footer={null}
                     destroyOnClose
+                    zIndex={3100}
                 >
                     <div style={{ paddingTop: 4 }}>
                         <Typography.Text type="secondary" style={{ fontSize: 13 }}>
@@ -5645,13 +5930,23 @@
                 // 锁定事件由 api() 统一广播（403 + “未解锁”）；整页密码门阶段无需浮层
                 const onLocked = () => { if (phaseRef.current === 'open') setReauth(true); };
                 window.addEventListener('pv-locked', onLocked);
-                return () => window.removeEventListener('pv-locked', onLocked);
+                // 站点登录态失效事件由 api() 统一广播（401 + “请先登录”）：
+                // 任何 Tab / 弹窗操作中过期都会弹出就地重登浮层（此前仅整页密码门阶段可重登）
+                const onReloginNeeded = () => { if (phaseRef.current === 'open') setRelogin(true); };
+                window.addEventListener('pv-relogin', onReloginNeeded);
+                return () => {
+                    window.removeEventListener('pv-locked', onLocked);
+                    window.removeEventListener('pv-relogin', onReloginNeeded);
+                };
             }, []);
 
             const onReauthUnlocked = () => {
                 setReauth(false);
                 message.success('已解锁');
                 loadAllNotes();
+                // 广播解锁成功：各 Tab（如卡片页）监听后自行重新加载数据，
+                // 修复“被锁时停留在卡片页 → 解锁后卡片一直空白/破图”的问题
+                window.dispatchEvent(new CustomEvent('pv-unlocked'));
                 // 继续被锁定打断的操作（如生成卡片）
                 const retry = window.__pvPendingRetry;
                 window.__pvPendingRetry = null;
@@ -5662,20 +5957,24 @@
                 // 确认登录并确保会话绑定的 CSRF Cookie 就绪（Double-Submit 的 Token 来源）
                 fetch(baseUrl + '/check-auth', { credentials: 'include' }).catch(() => { });
                 api('/api/private/session').then(d => {
+                    // 记录服务端下发的高德 key（反向地理编码用）
+                    if (d && d.data && d.data.amap_key) amapKey = d.data.amap_key;
                     // 站点登录态失效：就地弹出重登浮层，不再跳转主页丢弃私人空间位置
                     if (d.code === 401) { setPhase('locked'); setRelogin(true); return; }
                     setPhase(ok(d) && d.data && d.data.unlocked ? 'open' : 'locked');
                 }).catch(() => setPhase('locked'));
             }, []);
 
-            // 就地重登成功：关闭浮层并重新检查私人空间会话状态，恢复进入流程
+            // 就地重登成功：关闭浮层并重新检查私人空间会话状态，恢复进入流程；
+            // 解锁态下重登（中途主站会话过期）时广播 pv-unlocked 让各 Tab 重新拉数据，
+            // 清理因 401 失败留下的空白列表与破图
             const onRelogin = () => {
                 setRelogin(false);
                 message.success('登录成功');
                 api('/api/private/session').then(d => {
                     const opened = ok(d) && d.data && d.data.unlocked;
                     setPhase(opened ? 'open' : 'locked');
-                    if (opened) loadAllNotes();
+                    if (opened) { loadAllNotes(); window.dispatchEvent(new CustomEvent('pv-unlocked')); }
                 }).catch(() => setPhase('locked'));
             };
 
@@ -5934,6 +6233,8 @@
                         />
                         <CardModal open={!!cardNote} note={cardNote} onClose={() => setCardNote(null)} />
                         {reauth && <ReauthModal onClose={() => setReauth(false)} onUnlocked={onReauthUnlocked} />}
+                        {/* 解锁态下站点登录过期：压在最上层弹就地重登浮层，重登后数据自动恢复 */}
+                        {relogin && <ReloginModal onLogin={onRelogin} />}
                     </div>
                 </ConfigProvider>
             );

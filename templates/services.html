@@ -1069,7 +1069,7 @@
                         const msgs = { start: '服务已启动', stop: '服务已停止', restart: '服务已重启', enable: '已开启开机自启', disable: '已关闭开机自启' };
                         if (action === 'restart') message.success({ content: msgs[action], key: 'svc-' + svc.name });
                         else message.success(msgs[action]);
-                        setTimeout(load, 1200);
+                        setTimeout(() => load(true), 1200); // 手动刷新：WS 在线时普通 load 会被跳过，启停结果需立即反馈
                         if (current === svc.name) setTimeout(() => loadDetail(svc.name), 1200);
                     } else {
                         message.error(({ start: '服务启动失败', stop: '服务停止失败', restart: '服务重启失败', enable: '开启自启失败', disable: '关闭自启失败' })[action] + '：' + (d.message || ''));
@@ -1219,19 +1219,25 @@
                 setDrawerOpen(true);
             };
 
+            // svcButtons 生成卡片/表格中的操作按钮：启停/重启需 service:manage（canManage），
+            // 只读用户仅保留「详情」与 FAILED 状态下的「日志」入口（日志仅需 service:view）
             const svcButtons = (s) => {
                 const btns = [];
                 const busyKey = (a) => busy[a + ':' + s.name];
-                if (s.status === 'RUNNING') {
-                    btns.push(<Button key="stop" size="small" danger loading={busyKey('stop')} onClick={() => runAction(s, 'stop')}>停止</Button>);
-                    btns.push(<Button key="restart" size="small" loading={busyKey('restart')} onClick={() => runAction(s, 'restart')}>重启</Button>);
-                } else if (s.status === 'STARTING') {
-                    btns.push(<Button key="stop" size="small" danger loading={busyKey('stop')} onClick={() => runAction(s, 'stop')}>停止</Button>);
-                } else if (s.status === 'FAILED') {
-                    btns.push(<Button key="restart" size="small" loading={busyKey('restart')} onClick={() => runAction(s, 'restart')}>重启</Button>);
+                if (canManage) {
+                    if (s.status === 'RUNNING') {
+                        btns.push(<Button key="stop" size="small" danger loading={busyKey('stop')} onClick={() => runAction(s, 'stop')}>停止</Button>);
+                        btns.push(<Button key="restart" size="small" loading={busyKey('restart')} onClick={() => runAction(s, 'restart')}>重启</Button>);
+                    } else if (s.status === 'STARTING') {
+                        btns.push(<Button key="stop" size="small" danger loading={busyKey('stop')} onClick={() => runAction(s, 'stop')}>停止</Button>);
+                    } else if (s.status === 'FAILED') {
+                        btns.push(<Button key="restart" size="small" loading={busyKey('restart')} onClick={() => runAction(s, 'restart')}>重启</Button>);
+                    } else {
+                        btns.push(<Button key="start" size="small" loading={busyKey('start')} onClick={() => runAction(s, 'start')}>启动</Button>);
+                    }
+                }
+                if (s.status === 'FAILED') {
                     btns.push(<Button key="log" size="small" icon={<UIIcon name="FileTextOutlined" />} onClick={() => openDetail(s, 'logs')}>日志</Button>);
-                } else {
-                    btns.push(<Button key="start" size="small" loading={busyKey('start')} onClick={() => runAction(s, 'start')}>启动</Button>);
                 }
                 btns.push(<Button key="detail" size="small" type="text" onClick={() => openDetail(s)}>详情</Button>);
                 return btns;
@@ -1968,6 +1974,7 @@
                                             { label: '全部', value: 'all' },
                                             { label: '公网', value: 'public' },
                                             { label: '内网', value: 'private' },
+                                            { label: '本机', value: 'local' },
                                             { label: 'TCP', value: 'tcp' },
                                             { label: 'UDP', value: 'udp' }
                                         ]} />

@@ -442,7 +442,7 @@
             const [auditLoading, setAuditLoading] = useState(false);
             const [auditUser, setAuditUser] = useState('');
             const [auditLimit, setAuditLimit] = useState(100);
-            const hasPermAudit = hasPerm('role:manage') || hasPerm('user:manage');
+            const hasPermAudit = hasPerm('role:manage') || hasPerm('user:manage') || hasPerm('audit:view');
 
             // 拉取审计记录（切换到审计视图或手动刷新时触发）
             const loadAudit = () => {
@@ -476,6 +476,11 @@
             }, [isDark]);
 
             const hasPermLog = hasPerm('system:log');
+
+            // 仅有 audit:view 而无 system:log 的账号：进入页面默认落在审计视图
+            useEffect(() => {
+                if (auth.ok && !hasPermLog && hasPermAudit) setView(v => (v === 'tail' ? 'audit' : v));
+            }, [auth.ok, hasPermLog, hasPermAudit]);
 
             // 拉取日志文件列表，默认选中最新一个
             useEffect(() => {
@@ -545,14 +550,14 @@
                 </div>;
             }
 
-            if (!hasPermLog) {
+            if (!hasPermLog && !hasPermAudit) {
                 return (
                     <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
                         <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}>
                             <Card style={{ width: 380, textAlign: 'center' }}>
                                 <div style={{ fontSize: 48 }}>🚫</div>
                                 <Typography.Title level={4}>没有访问权限</Typography.Title>
-                                <Typography.Text type="secondary">当前账号没有「查看系统日志」权限，请联系管理员开通。</Typography.Text>
+                                <Typography.Text type="secondary">当前账号没有「查看系统日志」或「查看审计日志」权限，请联系管理员开通。</Typography.Text>
                                 <div style={{ marginTop: 16 }}>
                                     <Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>
                                 </div>
@@ -597,14 +602,15 @@
                         </div>
 
                         <div className="page-wrap">
-                            {/* 视图切换：实时日志 / 审计记录（审计需 role:manage 或 user:manage 权限） */}
+                            {/* 视图切换：实时日志（system:log）/ 审计记录（role:manage、user:manage 或 audit:view） */}
                             <div style={{ marginBottom: 10 }}>
                                 <Segmented
                                     value={view}
                                     onChange={setView}
-                                    options={hasPermAudit
-                                        ? [{ label: '实时日志', value: 'tail' }, { label: '审计记录', value: 'audit' }]
-                                        : [{ label: '实时日志', value: 'tail' }]}
+                                    options={[
+                                        ...(hasPermLog ? [{ label: '实时日志', value: 'tail' }] : []),
+                                        ...(hasPermAudit ? [{ label: '审计记录', value: 'audit' }] : []),
+                                    ]}
                                 />
                             </div>
 

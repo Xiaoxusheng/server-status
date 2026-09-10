@@ -956,7 +956,7 @@
             }, [connect]);
 
             const navBtns = [];
-            navBtns.push(<Button key="ebooks" icon={<UIIcon name="BookOutlined" />} onClick={() => window.location.href = 'ebooks.html'}>电子书</Button>);
+            if (hasPerm('files:view')) navBtns.push(<Button key="ebooks" icon={<UIIcon name="BookOutlined" />} onClick={() => window.location.href = 'ebooks.html'}>电子书</Button>);
             navBtns.push(<Button key="ip" icon={<UIIcon name="GlobalOutlined" />} onClick={() => window.location.href = 'ip-panel.html'}>IP 流量</Button>);
             if (hasPerm('service:view') || hasPerm('port:view')) navBtns.push(<Button key="services" icon={<UIIcon name="AppstoreOutlined" />} onClick={() => window.location.href = 'services.html'}>服务端口</Button>);
             if (hasPerm('docker:view') || hasPerm('docker:manage')) navBtns.push(<Button key="docker" icon={<UIIcon name="DockerOutlined" />} onClick={() => window.location.href = 'docker.html'}>Docker</Button>);
@@ -964,10 +964,10 @@
             if (hasPerm('shell:use')) navBtns.push(<Button key="shell" icon={<UIIcon name="CodeOutlined" />} onClick={() => window.location.href = 'shell.html'}>Web Shell</Button>);
             if (hasPerm('files:manage')) navBtns.push(<Button key="files" icon={<UIIcon name="FolderOutlined" />} onClick={() => window.location.href = 'files.html'}>文件管理</Button>);
             if (hasPerm('system:process')) navBtns.push(<Button key="proc" icon={<UIIcon name="SettingOutlined" />} onClick={() => window.location.href = 'process.html'}>进程</Button>);
-            if (hasPerm('system:log')) navBtns.push(<Button key="logs" icon={<UIIcon name="FileSearchOutlined" />} onClick={() => window.location.href = 'log.html'}>日志</Button>);
+            if (hasPerm('system:log') || hasPerm('audit:view')) navBtns.push(<Button key="logs" icon={<UIIcon name="FileSearchOutlined" />} onClick={() => window.location.href = 'log.html'}>日志</Button>);
             if (hasPerm('system:log')) navBtns.push(<Button key="backup" icon={<UIIcon name="CloudUploadOutlined" />} onClick={() => window.location.href = 'backup.html'}>云备份</Button>);
-            if (hasPerm('files:download')) navBtns.push(<Button key="dl" icon={<UIIcon name="DownloadOutlined" />} onClick={() => window.location.href = 'download.html'}>安全下载</Button>);
-            if (hasPerm('user:manage') || hasPerm('role:manage')) navBtns.push(<Button key="rbac" icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => window.location.href = 'rbac.html'}>权限管理</Button>);
+            if (hasPerm('files:download') || hasPerm('token:issue')) navBtns.push(<Button key="dl" icon={<UIIcon name="DownloadOutlined" />} onClick={() => window.location.href = 'download.html'}>安全下载</Button>);
+            if (hasPerm('user:manage') || hasPerm('role:manage') || hasPerm('user:view')) navBtns.push(<Button key="rbac" icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => window.location.href = 'rbac.html'}>权限管理</Button>);
             if (hasPerm('files:view')) navBtns.push(<Button key="mediawin" className="nav-media-btn" icon={<UIIcon name="VideoCameraOutlined" />} type={mediaClosed ? 'default' : 'primary'}
                 onClick={() => { const next = !mediaClosed; setMediaClosed(next); localStorage.setItem('media_closed', next ? '1' : '0'); }}
                 title={mediaClosed ? '打开媒体展示小窗' : '关闭媒体展示小窗'}>媒体窗</Button>);
@@ -1003,6 +1003,12 @@
                                 <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={onLogout}><span className="tb-text">退出</span></Button>
                             </Space>
                         </div>
+                        {/* 无 system:view 权限时实时监控数据无法加载（/ws、/status-ifaces 等均要求该权限），给出明确提示而非静默空白 */}
+                        {!hasPerm('system:view') && (
+                            <Alert style={{ margin: '12px 16px 0' }} type="warning" showIcon
+                                message="无实时监控查看权限"
+                                description="当前账号没有「查看服务器状态」权限，实时状态、在线用户等数据无法加载。如需使用其他功能，请点击上方导航按钮。" />
+                        )}
                         {/* SSL 证书详情弹窗 */}
                         <Modal open={sslOpen} onCancel={() => setSslOpen(false)} footer={null}
                             title={<span><UIIcon name="SafetyCertificateOutlined" /> SSL 证书信息</span>} width={520}>
@@ -1289,10 +1295,13 @@
             function getCsrfToken() { var m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
             function openPrivateSpace() {
                 try {
+                    // URL 带时间戳强制绕过任何浏览器/内置内核的 URL 级缓存（微信 X5 等对 no-cache 处理激进），
+                    // 确保每次进入私人空间都拿到最新页面；服务端对查询参数无校验，路由正常命中
+                    var url = 'private.html?v=' + Date.now();
                     fetch('/api/private/entry', { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() }, credentials: 'include' })
-                        .then(function (r) { if (r.ok) window.location.href = 'private.html'; })
+                        .then(function (r) { if (r.ok) window.location.href = url; })
                         .catch(function () { });
-                } catch (e) { window.location.href = 'private.html'; }
+                } catch (e) { window.location.href = 'private.html?v=' + Date.now(); }
             }
             var taps = [], lastTap = 0;
             document.addEventListener('keydown', function (e) {

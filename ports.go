@@ -404,7 +404,11 @@ func detectFirewallProviderUncached() FirewallProvider {
 		return &nftablesProvider{bin: bin}
 	}
 	if bin, err := exec.LookPath("iptables"); err == nil {
-		return &iptablesProvider{bin: bin}
+		p := &iptablesProvider{bin: bin}
+		if b6, err := exec.LookPath("ip6tables"); err == nil {
+			p.bin6 = b6
+		}
+		return p
 	}
 	return &noopProvider{}
 }
@@ -434,20 +438,33 @@ func (p *firewalldProvider) run(args ...string) error {
 
 func (p *firewalldProvider) reload() error { return p.run("--reload") }
 
-// BlockPort 添加 drop rich rule 阻断公网访问（public 区域默认 ACCEPT，仅移除端口不生效）
+// BlockPort 添加 drop rich rule 阻断公网访问（IPv4+IPv6 双栈；public 区域默认 ACCEPT，仅移除端口不生效）。
+// IPv4 规则失败视为整体失败；IPv6 规则失败仅记录日志（尽力而为，避免环境不支持时误报操作失败）
 func (p *firewalldProvider) BlockPort(port uint32, proto string) error {
-	rich := fmt.Sprintf("rule family=ipv4 port port=%d protocol=%s drop", port, proto)
-	if err := p.run("--permanent", "--zone=public", "--add-rich-rule", rich); err != nil {
-		return err
+	for _, family := range []string{"ipv4", "ipv6"} {
+		rich := fmt.Sprintf("rule family=%s port port=%d protocol=%s drop", family, port, proto)
+		if err := p.run("--permanent", "--zone=public", "--add-rich-rule", rich); err != nil {
+			if family == "ipv6" {
+				log.Printf("firewalld 阻断 IPv6 %d/%s 失败（该地址族可能仍可访问）: %v", port, proto, err)
+				continue
+			}
+			return err
+		}
 	}
 	return p.reload()
 }
 
-// UnblockPort 移除 drop rich rule，恢复公网访问
+// UnblockPort 移除 drop rich rule，恢复公网访问（IPv4+IPv6 双栈，与 BlockPort 对称）
 func (p *firewalldProvider) UnblockPort(port uint32, proto string) error {
-	rich := fmt.Sprintf("rule family=ipv4 port port=%d protocol=%s drop", port, proto)
-	if err := p.run("--permanent", "--zone=public", "--remove-rich-rule", rich); err != nil {
-		return err
+	for _, family := range []string{"ipv4", "ipv6"} {
+		rich := fmt.Sprintf("rule family=%s port port=%d protocol=%s drop", family, port, proto)
+		if err := p.run("--permanent", "--zone=public", "--remove-rich-rule", rich); err != nil {
+			if family == "ipv6" {
+				log.Printf("firewalld 移除 IPv6 %d/%s 规则失败: %v", port, proto, err)
+				continue
+			}
+			return err
+		}
 	}
 	return p.reload()
 }
@@ -524,10 +541,15 @@ func (p *nftablesProvider) UnblockPort(port uint32, proto string) error {
 	return p.removeRule(ruleExpr(port, proto, "", "drop"))
 }
 
+// ruleExpr 生成 nft 规则表达式；按 CIDR 地址族自动选择 ip/ip6 匹配前缀（inet 表两种语法不同）
 func ruleExpr(port uint32, proto, cidr, action string) string {
 	base := proto + " dport " + strconv.Itoa(int(port)) + " " + action
 	if cidr != "" {
-		base = "ip saddr " + cidr + " " + base
+		fam := "ip"
+		if strings.Contains(cidr, ":") {
+			fam = "ip6"
+		}
+		base = fam + " saddr " + cidr + " " + base
 	}
 	return base
 }
@@ -582,57 +604,96 @@ func (p *nftablesProvider) ApplyRule(rule PortRule, cidrs []string, remove bool)
 
 // ---------------- iptables ----------------
 
-type iptablesProvider struct{ bin string }
+type iptablesProvider struct {
+	bin  string // iptables（IPv4）
+	bin6 string // ip6tables（IPv6），未安装时为空
+}
 
 func (p *iptablesProvider) Name() string { return "iptables" }
 
-func (p *iptablesProvider) run(args ...string) error {
+// runBin 在指定二进制（iptables 或 ip6tables）上执行命令
+func (p *iptablesProvider) runBin(bin string, args ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, p.bin, args...)
+	cmd := exec.CommandContext(ctx, bin, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("iptables %s 失败: %s", strings.Join(args, " "), strings.TrimSpace(string(out)))
+		return fmt.Errorf("%s %s 失败: %s", filepath.Base(bin), strings.Join(args, " "), strings.TrimSpace(string(out)))
 	}
 	return nil
 }
+
+func (p *iptablesProvider) run(args ...string) error { return p.runBin(p.bin, args...) }
 
 func (p *iptablesProvider) dropRule(port uint32, proto string) []string {
 	return []string{"INPUT", "-p", proto, "--dport", strconv.Itoa(int(port)), "-j", "DROP"}
 }
 
-func (p *iptablesProvider) BlockPort(port uint32, proto string) error {
+// toggleDrop 在指定二进制上幂等地添加/移除端口 DROP 规则
+func (p *iptablesProvider) toggleDrop(bin string, port uint32, proto string, add bool) error {
 	rule := p.dropRule(port, proto)
-	if err := p.run(append([]string{"-C"}, rule...)...); err == nil {
+	if err := p.runBin(bin, append([]string{"-C"}, rule...)...); err == nil {
 		return nil // 已存在
 	}
-	return p.run(append([]string{"-A"}, rule...)...)
-}
-
-func (p *iptablesProvider) UnblockPort(port uint32, proto string) error {
-	rule := p.dropRule(port, proto)
-	if err := p.run(append([]string{"-C"}, rule...)...); err != nil {
-		return nil // 不存在
+	op := "-D"
+	if add {
+		op = "-A"
 	}
-	return p.run(append([]string{"-D"}, rule...)...)
+	return p.runBin(bin, append([]string{op}, rule...)...)
 }
 
+// BlockPort 在 iptables（IPv4）与 ip6tables（IPv6，如可用）同时添加 DROP 规则。
+// IPv4 失败视为整体失败；IPv6 失败仅记录日志（尽力而为）
+func (p *iptablesProvider) BlockPort(port uint32, proto string) error {
+	if err := p.toggleDrop(p.bin, port, proto, true); err != nil {
+		return err
+	}
+	if p.bin6 != "" {
+		if err := p.toggleDrop(p.bin6, port, proto, true); err != nil {
+			log.Printf("ip6tables 阻断 %d/%s 失败（IPv6 可能仍可访问）: %v", port, proto, err)
+		}
+	}
+	return nil
+}
+
+// UnblockPort 移除 iptables / ip6tables 的端口 DROP 规则（与 BlockPort 对称）
+func (p *iptablesProvider) UnblockPort(port uint32, proto string) error {
+	if err := p.toggleDrop(p.bin, port, proto, false); err != nil {
+		return err
+	}
+	if p.bin6 != "" {
+		if err := p.toggleDrop(p.bin6, port, proto, false); err != nil {
+			log.Printf("ip6tables 移除 %d/%s 规则失败: %v", port, proto, err)
+		}
+	}
+	return nil
+}
+
+// ApplyRule 按访问来源 CIDR 逐条应用规则：IPv4 网段走 iptables，IPv6 网段走 ip6tables（未安装时跳过）
 func (p *iptablesProvider) ApplyRule(rule PortRule, cidrs []string, remove bool) error {
 	action := "ACCEPT"
 	if rule.Action == "block" {
 		action = "DROP"
 	}
 	for _, cidr := range cidrs {
+		bin := p.bin
+		if strings.Contains(cidr, ":") {
+			if p.bin6 == "" {
+				log.Printf("未安装 ip6tables，跳过 IPv6 网段规则: %s", cidr)
+				continue
+			}
+			bin = p.bin6
+		}
 		args := []string{"INPUT", "-s", cidr, "-p", rule.Protocol, "--dport", strconv.Itoa(int(rule.Port)), "-j", action}
 		if remove {
-			if err := p.run(append([]string{"-D"}, args...)...); err != nil {
+			if err := p.runBin(bin, append([]string{"-D"}, args...)...); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := p.run(append([]string{"-C"}, args...)...); err == nil {
+		if err := p.runBin(bin, append([]string{"-C"}, args...)...); err == nil {
 			continue
 		}
-		if err := p.run(append([]string{"-A"}, args...)...); err != nil {
+		if err := p.runBin(bin, append([]string{"-A"}, args...)...); err != nil {
 			return err
 		}
 	}
@@ -725,15 +786,15 @@ func getFirewallInfo() map[string]interface{} {
 	}
 }
 
-// ruleSourceCIDRs 展开规则访问来源为 CIDR 列表
+// ruleSourceCIDRs 展开规则访问来源为 CIDR 列表（IPv4+IPv6 双栈，确保阻断/放行对两个地址族同时生效）
 func ruleSourceCIDRs(rule PortRule) ([]string, error) {
 	switch rule.Source {
 	case "public":
-		return []string{"0.0.0.0/0"}, nil
+		return []string{"0.0.0.0/0", "::/0"}, nil
 	case "private":
-		return []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}, nil
+		return []string{"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"}, nil
 	case "local":
-		return []string{"127.0.0.0/8"}, nil
+		return []string{"127.0.0.0/8", "::1/128"}, nil
 	case "ip":
 		ip := net.ParseIP(strings.TrimSpace(rule.SourceValue))
 		if ip == nil || ip.To4() == nil {

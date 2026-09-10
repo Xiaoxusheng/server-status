@@ -127,8 +127,8 @@ func TestRuleSourceCIDRs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("private: %v", err)
 	}
-	if len(cidrs) != 3 {
-		t.Errorf("private should expand to 3 CIDRs, got %d", len(cidrs))
+	if len(cidrs) != 4 {
+		t.Errorf("private should expand to 4 CIDRs (IPv4+IPv6), got %d", len(cidrs))
 	}
 	rule = PortRule{Source: "ip", SourceValue: "1.2.3.4"}
 	cidrs, err = ruleSourceCIDRs(rule)

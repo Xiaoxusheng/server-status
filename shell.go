@@ -5,7 +5,7 @@ package main
 //   - 新增 /ws/shell 基于 gorilla/websocket 的双向实时通信
 //   - 每次启动 Shell 都必须通过独立的二次认证（Shell 密码，bcrypt）
 //   - 认证成功后颁发一次性（60 秒）Shell Token，Token 只保存 Hash
-//   - RBAC 复用 system:exec 权限
+//   - RBAC 使用独立 shell:use 权限（等同主机用户权限，高危）
 //   - Shell 并发限制、空闲超时、最大生命周期、输出背压
 //   - 会话/Token/PTY/子进程/goroutine/FD 完整清理
 //   - 审计记录会话生命周期，绝不记录终端输入与输出
@@ -1077,7 +1077,7 @@ func shellWSHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusUnauthorized, "请先登录")
 		return
 	}
-	if !hasPermission(session.Username, "system:exec") {
+	if !hasPermission(session.Username, "shell:use") {
 		auditAction(r, "shell.permission.denied", fmt.Sprintf("ws user=%s ip=%s", session.Username, getClientIP(r)))
 		writeJSONError(w, http.StatusForbidden, "没有权限执行此操作")
 		return

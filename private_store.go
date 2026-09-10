@@ -51,10 +51,16 @@ type CardsConfig struct {
 	DefaultHeight int  `json:"default_height"`
 }
 
+// GeoConfig 地理编码配置（反向地理编码服务密钥；高德 Web 服务 key，前端经 session 接口获取）
+type GeoConfig struct {
+	AmapKey string `json:"amap_key"`
+}
+
 // PrivateNotesJSON 磁盘配置文件结构（禁止保存任何密码/密码 Hash）
 type PrivateNotesJSON struct {
 	PrivateNotes PrivateNotesConfig `json:"private_notes"`
 	Cards        CardsConfig        `json:"cards"`
+	Geo          GeoConfig          `json:"geo"`
 }
 
 func defaultPrivateNotesJSON() PrivateNotesJSON {
@@ -691,6 +697,15 @@ func (s *PrivateStore) migrate() error {
 			return err
 		}
 	}
+	// 迁移：note_videos 补充 sort_order 列（旧库无此列，默认 0；列表排序按 sort_order, created_at，
+	// 旧数据 sort_order 全为 0 时自然回落 created_at 顺序，行为不变）
+	if _, err := s.db.Exec(`ALTER TABLE note_videos ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_note_videos_note_sort ON note_videos(note_id, sort_order)`); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -789,21 +804,56 @@ func (s *PrivateStore) Unlock(username, password, clientIP string) (string, erro
 			fc = &privateFailCounter{}
 			s.failures[key] = fc
 		}
-		fc.count++
-		fc.last = time.Now()
-		if fc.count >= s.config.PrivateNotes.MaxLoginAttempts {
-			dur, _ := time.ParseDuration(s.config.PrivateNotes.LockoutDuration)
-			if dur <= 0 {
-				dur = time.Minute
-			}
-			fc.lockedUntil = time.Now().Add(dur)
-			fc.count = 0
-		}
+		s.recordFailureLockout(fc)
 		return "", privateErrAuth
 	}
 
 	delete(s.failures, key)
 	return s.createSession(username)
+}
+
+// recordFailureLockout 累计一次失败并在达到阈值时按配置时长锁定（须持有 s.mu）。
+// 供私人空间解锁与分享密码验证共用，阈值/时长取 PrivateNotes 配置。
+func (s *PrivateStore) recordFailureLockout(fc *privateFailCounter) {
+	fc.count++
+	fc.last = time.Now()
+	if fc.count >= s.config.PrivateNotes.MaxLoginAttempts {
+		dur, _ := time.ParseDuration(s.config.PrivateNotes.LockoutDuration)
+		if dur <= 0 {
+			dur = time.Minute
+		}
+		fc.lockedUntil = time.Now().Add(dur)
+		fc.count = 0
+	}
+}
+
+// shareVerifyAllowed 分享密码验证防爆破：该键处于锁定期则拒绝继续尝试
+func (s *PrivateStore) shareVerifyAllowed(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if fc := s.failures[key]; fc != nil && time.Now().Before(fc.lockedUntil) {
+		return false
+	}
+	return true
+}
+
+// shareVerifyFail 记录一次分享密码验证失败，达到阈值后锁定
+func (s *PrivateStore) shareVerifyFail(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	fc := s.failures[key]
+	if fc == nil {
+		fc = &privateFailCounter{}
+		s.failures[key] = fc
+	}
+	s.recordFailureLockout(fc)
+}
+
+// shareVerifyReset 分享密码验证成功后清除失败计数
+func (s *PrivateStore) shareVerifyReset(key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.failures, key)
 }
 
 func (s *PrivateStore) createSession(username string) (string, error) {
@@ -834,7 +884,10 @@ func (s *PrivateStore) sessionTimeout() time.Duration {
 	return timeout
 }
 
-// ValidateSession 校验 private session：存在、未过期、属于该用户；并刷新最后访问时间
+// ValidateSession 校验 private session：存在、未过期、属于该用户；并滑动续期
+// 续期语义（2026-09-09）：空闲超时（UnlockTimeout，默认 30 分钟）内任何一次成功访问都会把
+// 绝对过期时间续到 now+timeout——持续操作的用户不再被 30 分钟硬上限强制锁定；
+// 离开超过空闲超时仍会自动锁定（安全性不变），另有 7 天绝对寿命兜底防止无限滑动
 func (s *PrivateStore) ValidateSession(username, token string) (*PrivateSession, bool) {
 	if token == "" {
 		return nil, false
@@ -855,12 +908,22 @@ func (s *PrivateStore) ValidateSession(username, token string) (*PrivateSession,
 
 	timeout := s.sessionTimeout()
 	now := time.Now().UTC()
-	if now.After(ps.LastAccessAt.Add(timeout)) || now.After(ps.ExpiresAt) {
+	// 空闲超时：距上次访问超过 UnlockTimeout 即锁定（离开电脑自动锁的核心保障）
+	if now.After(ps.LastAccessAt.Add(timeout)) {
 		s.deleteSessionByHash(ps.SessionHash)
 		return nil, false
 	}
+	// 绝对寿命兜底：自创建起超过 7 天强制失效（防止会话被无限滑动续期）
+	if now.After(ps.ExpiresAt) || now.Sub(ps.CreatedAt) > 7*24*time.Hour {
+		s.deleteSessionByHash(ps.SessionHash)
+		return nil, false
+	}
+	// 滑动续期：与 last_access_at 同一节流窗口（30 秒）内合并写库，
+	// 绝对过期时间续到 now+timeout，活跃会话不再被硬上限打断
 	if now.Sub(ps.LastAccessAt) > 30*time.Second {
-		s.db.Exec(`UPDATE private_note_sessions SET last_access_at = ? WHERE id = ?`, now.Format(time.RFC3339), ps.ID)
+		ps.ExpiresAt = now.Add(timeout)
+		s.db.Exec(`UPDATE private_note_sessions SET last_access_at = ?, expires_at = ? WHERE id = ?`,
+			now.Format(time.RFC3339), ps.ExpiresAt.Format(time.RFC3339), ps.ID)
 	}
 	return &ps, true
 }
@@ -883,7 +946,8 @@ func (s *PrivateStore) cleanupExpiredSessions() {
 	s.db.Exec(`DELETE FROM private_note_sessions WHERE expires_at < ?`, time.Now().UTC().Format(time.RFC3339))
 	s.mu.Lock()
 	for k, fc := range s.failures {
-		if time.Since(fc.last) > 10*time.Minute {
+		// 锁定中的计数不能清，否则锁定时长超过 10 分钟时会被兜底清理提前解锁
+		if time.Since(fc.last) > 10*time.Minute && time.Now().After(fc.lockedUntil) {
 			delete(s.failures, k)
 		}
 	}

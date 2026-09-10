@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -18,6 +19,24 @@ import (
 
 	psnet "github.com/shirou/gopsutil/v3/net"
 )
+
+// 私人空间上传请求体硬上限：文件限额 + multipart 编码余量。
+// 在 ParseMultipartForm 之前用 MaxBytesReader 截断超大请求，
+// 避免超限内容先整体读进内存 / 落盘临时文件造成资源耗尽。
+const (
+	privateImageMaxBody = 21 << 20  // 图片限额 20MB
+	privateAudioMaxBody = 31 << 20  // 语音限额 30MB
+	privateVideoMaxBody = 210 << 20 // 视频限额 200MB + 封面 5MB
+)
+
+// uploadBodyErrMsg 将请求体超限错误转成可读文案
+func uploadBodyErrMsg(err error) string {
+	var mbe *http.MaxBytesError
+	if errors.As(err, &mbe) {
+		return "文件超过大小限制"
+	}
+	return "上传数据无效"
+}
 
 // privateEntryHandler POST /api/private/entry
 // 隐藏入口（快捷键 / 连点 Logo）先调用本接口获取 5 分钟短期入口 Cookie，再进入 /private.html，
@@ -80,6 +99,7 @@ func registerPrivateRoutes(mux *http.ServeMux) {
 	// 图片
 	mux.HandleFunc("POST /api/private/notes/{id}/images", authMiddleware(securityMiddleware(privateAuthMiddleware(privateUploadImageHandler))))
 	mux.HandleFunc("PUT /api/private/notes/{id}/images/order", authMiddleware(securityMiddleware(privateAuthMiddleware(privateReorderImagesHandler))))
+	mux.HandleFunc("PUT /api/private/notes/{id}/videos/order", authMiddleware(securityMiddleware(privateAuthMiddleware(privateReorderVideosHandler))))
 	mux.HandleFunc("DELETE /api/private/notes/{id}/images/{image_id}", authMiddleware(securityMiddleware(privateAuthMiddleware(privateDeleteImageHandler))))
 	mux.HandleFunc("GET /api/private/notes/{id}/images/{image_id}/file", authMiddleware(securityMiddleware(privateAuthMiddleware(privateImageFileHandler))))
 	mux.HandleFunc("GET /api/private/notes/{id}/images/{image_id}/thumb", authMiddleware(securityMiddleware(privateAuthMiddleware(privateImageThumbHandler))))
@@ -215,6 +235,7 @@ func privateSessionHandler(w http.ResponseWriter, r *http.Request) {
 		"unlocked":   true,
 		"user":       session.Username,
 		"expires_at": ps.ExpiresAt.Format(time.RFC3339),
+		"amap_key":   privateStore.config.Geo.AmapKey, // 前端反向地理编码用（高德 Web 服务 key）
 	})
 }
 
@@ -263,6 +284,14 @@ func privateAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			writeJSONError(w, http.StatusForbidden, "未解锁")
 			return
 		}
+		// 浏览器 Cookie 滑动续期：Cookie 的 MaxAge 是解锁时一次性签发的，若不随会话续期，
+		// 解锁满 timeout 后浏览器会先删 Cookie，服务端会话还活着却被判定"未解锁"。
+		// 每次通过校验的请求都重签 Cookie，与服务端滑动续期保持同步（安全属性不变）
+		http.SetCookie(w, &http.Cookie{
+			Name: "private_session", Value: cookie.Value, Path: "/api/private",
+			HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil,
+			MaxAge: int(privateStore.sessionTimeout().Seconds()),
+		})
 		ctx := context.WithValue(r.Context(), "privateSession", ps)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
@@ -393,8 +422,9 @@ func privateUploadImageHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	session, _ := getSessionFromRequest(r)
 	noteID := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, privateImageMaxBody)
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "上传数据无效")
+		writeJSONError(w, http.StatusBadRequest, uploadBodyErrMsg(err))
 		return
 	}
 	file, header, err := r.FormFile("file")
@@ -422,6 +452,25 @@ func privateReorderImagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := privateStore.reorderImages(session.Username, r.PathValue("id"), req.IDs); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "排序失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, "排序已保存", nil)
+}
+
+// privateReorderVideosHandler PUT /api/private/notes/{id}/videos/order
+// 保存视频拖拽排序：body { ids: [videoID...] }，按数组顺序写 sort_order（与图片排序一致）
+func privateReorderVideosHandler(w http.ResponseWriter, r *http.Request) {
+	recordAccess(r)
+	session, _ := getSessionFromRequest(r)
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "无效的请求数据")
+		return
+	}
+	if err := privateStore.reorderVideos(session.Username, r.PathValue("id"), req.IDs); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "排序失败")
 		return
 	}
@@ -495,8 +544,9 @@ func privateUploadAudioHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	session, _ := getSessionFromRequest(r)
 	noteID := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, privateAudioMaxBody)
 	if err := r.ParseMultipartForm(34 << 20); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "上传数据无效")
+		writeJSONError(w, http.StatusBadRequest, uploadBodyErrMsg(err))
 		return
 	}
 	file, header, err := r.FormFile("file")
@@ -547,8 +597,9 @@ func privateUploadVideoHandler(w http.ResponseWriter, r *http.Request) {
 	recordAccess(r)
 	session, _ := getSessionFromRequest(r)
 	noteID := r.PathValue("id")
+	r.Body = http.MaxBytesReader(w, r.Body, privateVideoMaxBody)
 	if err := r.ParseMultipartForm(34 << 20); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "上传数据无效")
+		writeJSONError(w, http.StatusBadRequest, uploadBodyErrMsg(err))
 		return
 	}
 	file, header, err := r.FormFile("file")

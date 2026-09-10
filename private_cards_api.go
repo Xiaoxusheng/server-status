@@ -403,6 +403,11 @@ func shareCookieName(token string) string {
 	return "share_ok_" + sha256Hex(token)[:16]
 }
 
+// shareVerifyFailKey 分享密码防爆破计数键：按 IP+令牌隔离（令牌哈希入键，避免长明文 token 占用内存键）
+func shareVerifyFailKey(token, ip string) string {
+	return "shareverify|" + sha256Hex(token+"|"+ip)
+}
+
 // ==================== 公开分享处理器 ====================
 
 // sharePageHandler GET /card/{token} 公开分享页（无需登录）
@@ -472,10 +477,23 @@ func shareVerifyHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "无效的请求数据")
 		return
 	}
-	if privateStore == nil || !privateStore.verifySharePassword(token, req.Password) {
+	if privateStore == nil {
+		writeJSONError(w, http.StatusNotFound, "分享不存在")
+		return
+	}
+	// 防爆破：同一 IP 对同一分享令牌连续猜错达到阈值后锁定一段时间
+	// （阈值/时长复用 PrivateNotes 配置，失败计数随既有清理任务过期回收）
+	key := shareVerifyFailKey(token, getClientIP(r))
+	if !privateStore.shareVerifyAllowed(key) {
+		writeJSONError(w, http.StatusTooManyRequests, "尝试次数过多，请稍后再试")
+		return
+	}
+	if !privateStore.verifySharePassword(token, req.Password) {
+		privateStore.shareVerifyFail(key)
 		writeJSONError(w, http.StatusForbidden, "密码错误")
 		return
 	}
+	privateStore.shareVerifyReset(key)
 	http.SetCookie(w, &http.Cookie{
 		Name: shareCookieName(token), Value: hmacSign(token), Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil,

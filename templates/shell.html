@@ -873,7 +873,6 @@
             const pwdInputRef = React.useRef(null); // 密码输入框 ref（错误后聚焦全选）
 
             const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
-            const execOk = auth.user && hasPerm('system:exec');
             const hostname = window.location.hostname || 'server';
             const termUser = auth.user ? auth.user.username : '';
 
@@ -1399,7 +1398,8 @@
                                 </div>
                                 <span className="ws-head-sep"></span>
                                 <Badge status={connState === 'ok' ? 'success' : connState === 'proc' ? 'processing' : connState === 'err' ? 'error' : 'default'} text={statusText} />
-                                <Tag className="ws-perm-tag" color={execOk ? 'blue' : 'orange'} style={{ marginInlineEnd: 0 }}>shell:use</Tag>
+                                {/* 能进入本页即已通过 shell:use 校验（服务端路由 + check-auth 双重门槛） */}
+                                <Tag className="ws-perm-tag" color="blue" style={{ marginInlineEnd: 0 }}>shell:use</Tag>
                             </div>
                             <div className="ws-h-right">
                                 <Tooltip title="清空终端显示（不影响连接）">
@@ -1417,125 +1417,120 @@
                             </div>
                         </header>
 
-                        {!execOk ? (
-                            <div style={{ padding: 24 }}>
-                                <Alert type="warning" showIcon message="您没有 shell:use 权限，无法使用 Web Shell。" action={<Button size="small" onClick={() => window.location.href = 'index.html'}>返回首页</Button>} />
-                            </div>
-                        ) : (
-                            <div className="ws-stage">
-                                {/* ===== 快捷操作栏（分组） ===== */}
-                                <div className="ws-toolstrip">
-                                    <div className="ws-toolgroups">
-                                        <span className="ws-tg-label">快捷命令</span>
-                                        {qGroups.map(g => (
-                                            <Dropdown key={g.title}
-                                                trigger={auth && auth.ok ? ['click'] : []}
-                                                menu={{
-                                                    items: g.cmds.map((c, i) => ({ key: g.title + '-' + i, label: c.l })),
-                                                    onClick: ({ key }) => {
-                                                        const idx = Number(key.split('-').pop());
-                                                        const c = g.cmds[idx];
-                                                        if (c) quickCmd(c.c);
-                                                    },
-                                                }}>
-                                                <Button size="small" icon={g.icon ? <g.icon /> : undefined}>{g.title}{ICaretDown ? <ICaretDown style={{ fontSize: 10 }} /> : ' ▾'}</Button>
-                                            </Dropdown>
-                                        ))}
-                                    </div>
-                                    <div className="ws-right-actions">
-                                        <span className="ws-hint">点击终端聚焦 · Ctrl+C 复制 / Ctrl+V 粘贴</span>
-                                        <Tooltip title="复制终端选中内容（也可 Ctrl+C）">
-                                            <Button size="small" icon={ICopy ? <ICopy /> : undefined} onClick={copySelection}>复制</Button>
-                                        </Tooltip>
-                                        <Tooltip title="将剪贴板内容粘贴到终端（也可 Ctrl+V）">
-                                            <Button size="small" icon={IPaste ? <IPaste /> : undefined} onClick={pasteFromClipboard}>粘贴</Button>
-                                        </Tooltip>
-                                        <Tooltip title={terminalDark ? '切换终端为浅色' : '切换终端为深色'}>
-                                            <Button size="small" onClick={() => setTerminalDark(!terminalDark)}>终端:{terminalDark ? '深' : '浅'}</Button>
-                                        </Tooltip>
-                                    </div>
-                                </div>
-
-                                {/* ===== 终端主机 ===== */}
-                                <div className="ws-term">
-                                    <div className="ws-termhead">
-                                        <span className="ws-dots"><i></i><i></i><i></i></span>
-                                        <span className="ws-th-host">{termUser ? termUser + '@' + hostname : hostname}</span>
-                                        {pidNow > 0 ? <span className="ws-th-meta">PID: <b>{pidNow}</b></span> : null}
-                                        <span className="ws-th-meta">{shellTypeText}</span>
-                                        <span className="ws-th-right">
-                                            <span className="ws-th-meta">编码: <b>UTF-8</b></span>
-                                        </span>
-                                    </div>
-                                    <div className="ws-viewport">
-                                        {/* xterm 挂载点 */}
-                                        <div className="terminal-host" ref={termRef}></div>
-
-                                        {/* 空状态 / 连接中 / 断开覆盖层（仅未进入命令态时显示；连接成功即隐藏，展示真实 Shell Prompt） */}
-                                        {conn === 'idle' && (
-                                            <div className="ws-termstatus">
-                                                <Empty description={null} className="ws-empty-antd"
-                                                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                                >
-                                                    <div className="ws-empty-antd-body">
-                                                        <div className="ws-empty-antd-title">Shell 未连接</div>
-                                                        <div className="ws-empty-antd-desc">完成二次认证后开始使用 Web Terminal</div>
-                                                        {/* 认证弹窗打开时隐藏此按钮，避免与弹窗内"验证并连接"重复 */}
-                                                        {!authOpen && <Button type="primary" icon={IConnect ? <IConnect /> : undefined} onClick={() => { setAuthErrKind(''); setAuthReason(''); setAuthOpen(true); }}>验证并连接</Button>}
-                                                    </div>
-                                                </Empty>
-                                            </div>
-                                        )}
-                                        {conn === 'connecting' && (
-                                            <div className="ws-termstatus">
-                                                <div className="ws-termloading">
-                                                    <Spin size="large" />
-                                                    <div className="t">正在连接 Shell…</div>
-                                                    <div className="m">正在建立加密通道并验证身份</div>
-                                                </div>
-                                            </div>
-                                        )}
-                                        {conn === 'disconnected' && (
-                                            <div className="ws-termstatus">
-                                                <Empty description={null} image={Empty.PRESENTED_IMAGE_SIMPLE} className="ws-empty-antd">
-                                                    <div className="ws-empty-antd-body">
-                                                        <div className="ws-empty-antd-title">{connBad ? '连接失败' : '连接已断开'}</div>
-                                                        <div className="ws-empty-antd-desc">{connBad ? '无法连接 Web Shell，请检查网络后重试' : '需要重新进行二次认证'}</div>
-                                                        {!authOpen && <Button type="primary" icon={IConnect ? <IConnect /> : undefined} onClick={() => { setAuthErrKind(''); setAuthReason(''); setAuthOpen(true); }}>验证并连接</Button>}
-                                                    </div>
-                                                </Empty>
-                                            </div>
-                                        )}
-
-                                        {/* 回到底部悬浮按钮 */}
-                                        {showScrollBottom && conn === 'connected' ? (
-                                            <Button size="small" className="ws-scroll-btn" onClick={scrollToBottom}>↓ 回到底部</Button>
-                                        ) : null}
-                                    </div>
-                                </div>
-
-                                {/* ===== 底部 Session 状态栏：仅已连接时显示（连接状态以 Header Badge 为唯一来源，避免三处重复） ===== */}
-                                {conn === 'connected' && (
-                                    <footer className="ws-footer">
-                                        <Tag color="success"><b>Session Active</b></Tag>
-                                        <span className="k">PID</span><span className="v">{pidNow || '—'}</span>
-                                        <span className="k">用户</span><span className="v">{termUser || '—'}</span>
-                                        <span className="k">主机</span><span className="v">{hostname}</span>
-                                        <span className="k">时长</span><span className="v">{fmtClock(elapsed)}</span>
-                                    </footer>
-                                )}
-
-                                {/* 移动端底部快捷键 */}
-                                <div className="pad">
-                                    {padKeys.map(b => (
-                                        <button key={b.k} className={'btn' + (b.accent ? ' accent' : '')} onClick={() => sendPad(b.v)}>{b.k}</button>
+                        {/* 终端区域：能打开本页即持有 shell:use，直接渲染 */}
+                        <div className="ws-stage">
+                            {/* ===== 快捷操作栏（分组） ===== */}
+                            <div className="ws-toolstrip">
+                                <div className="ws-toolgroups">
+                                    <span className="ws-tg-label">快捷命令</span>
+                                    {qGroups.map(g => (
+                                        <Dropdown key={g.title}
+                                            trigger={auth && auth.ok ? ['click'] : []}
+                                            menu={{
+                                                items: g.cmds.map((c, i) => ({ key: g.title + '-' + i, label: c.l })),
+                                                onClick: ({ key }) => {
+                                                    const idx = Number(key.split('-').pop());
+                                                    const c = g.cmds[idx];
+                                                    if (c) quickCmd(c.c);
+                                                },
+                                            }}>
+                                            <Button size="small" icon={g.icon ? <g.icon /> : undefined}>{g.title}{ICaretDown ? <ICaretDown style={{ fontSize: 10 }} /> : ' ▾'}</Button>
+                                        </Dropdown>
                                     ))}
-                                    {/* 移动端复制/粘贴入口（粘贴走 Clipboard API，需浏览器授权） */}
-                                    <button className="btn" onClick={copySelection}>复制</button>
-                                    <button className="btn" onClick={pasteFromClipboard}>粘贴</button>
+                                </div>
+                                <div className="ws-right-actions">
+                                    <span className="ws-hint">点击终端聚焦 · Ctrl+C 复制 / Ctrl+V 粘贴</span>
+                                    <Tooltip title="复制终端选中内容（也可 Ctrl+C）">
+                                        <Button size="small" icon={ICopy ? <ICopy /> : undefined} onClick={copySelection}>复制</Button>
+                                    </Tooltip>
+                                    <Tooltip title="将剪贴板内容粘贴到终端（也可 Ctrl+V）">
+                                        <Button size="small" icon={IPaste ? <IPaste /> : undefined} onClick={pasteFromClipboard}>粘贴</Button>
+                                    </Tooltip>
+                                    <Tooltip title={terminalDark ? '切换终端为浅色' : '切换终端为深色'}>
+                                        <Button size="small" onClick={() => setTerminalDark(!terminalDark)}>终端:{terminalDark ? '深' : '浅'}</Button>
+                                    </Tooltip>
                                 </div>
                             </div>
-                        )}
+
+                            {/* ===== 终端主机 ===== */}
+                            <div className="ws-term">
+                                <div className="ws-termhead">
+                                    <span className="ws-dots"><i></i><i></i><i></i></span>
+                                    <span className="ws-th-host">{termUser ? termUser + '@' + hostname : hostname}</span>
+                                    {pidNow > 0 ? <span className="ws-th-meta">PID: <b>{pidNow}</b></span> : null}
+                                    <span className="ws-th-meta">{shellTypeText}</span>
+                                    <span className="ws-th-right">
+                                        <span className="ws-th-meta">编码: <b>UTF-8</b></span>
+                                    </span>
+                                </div>
+                                <div className="ws-viewport">
+                                    {/* xterm 挂载点 */}
+                                    <div className="terminal-host" ref={termRef}></div>
+
+                                    {/* 空状态 / 连接中 / 断开覆盖层（仅未进入命令态时显示；连接成功即隐藏，展示真实 Shell Prompt） */}
+                                    {conn === 'idle' && (
+                                        <div className="ws-termstatus">
+                                            <Empty description={null} className="ws-empty-antd"
+                                                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                            >
+                                                <div className="ws-empty-antd-body">
+                                                    <div className="ws-empty-antd-title">Shell 未连接</div>
+                                                    <div className="ws-empty-antd-desc">完成二次认证后开始使用 Web Terminal</div>
+                                                    {/* 认证弹窗打开时隐藏此按钮，避免与弹窗内"验证并连接"重复 */}
+                                                    {!authOpen && <Button type="primary" icon={IConnect ? <IConnect /> : undefined} onClick={() => { setAuthErrKind(''); setAuthReason(''); setAuthOpen(true); }}>验证并连接</Button>}
+                                                </div>
+                                            </Empty>
+                                        </div>
+                                    )}
+                                    {conn === 'connecting' && (
+                                        <div className="ws-termstatus">
+                                            <div className="ws-termloading">
+                                                <Spin size="large" />
+                                                <div className="t">正在连接 Shell…</div>
+                                                <div className="m">正在建立加密通道并验证身份</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {conn === 'disconnected' && (
+                                        <div className="ws-termstatus">
+                                            <Empty description={null} image={Empty.PRESENTED_IMAGE_SIMPLE} className="ws-empty-antd">
+                                                <div className="ws-empty-antd-body">
+                                                    <div className="ws-empty-antd-title">{connBad ? '连接失败' : '连接已断开'}</div>
+                                                    <div className="ws-empty-antd-desc">{connBad ? '无法连接 Web Shell，请检查网络后重试' : '需要重新进行二次认证'}</div>
+                                                    {!authOpen && <Button type="primary" icon={IConnect ? <IConnect /> : undefined} onClick={() => { setAuthErrKind(''); setAuthReason(''); setAuthOpen(true); }}>验证并连接</Button>}
+                                                </div>
+                                            </Empty>
+                                        </div>
+                                    )}
+
+                                    {/* 回到底部悬浮按钮 */}
+                                    {showScrollBottom && conn === 'connected' ? (
+                                        <Button size="small" className="ws-scroll-btn" onClick={scrollToBottom}>↓ 回到底部</Button>
+                                    ) : null}
+                                </div>
+                            </div>
+
+                            {/* ===== 底部 Session 状态栏：仅已连接时显示（连接状态以 Header Badge 为唯一来源，避免三处重复） ===== */}
+                            {conn === 'connected' && (
+                                <footer className="ws-footer">
+                                    <Tag color="success"><b>Session Active</b></Tag>
+                                    <span className="k">PID</span><span className="v">{pidNow || '—'}</span>
+                                    <span className="k">用户</span><span className="v">{termUser || '—'}</span>
+                                    <span className="k">主机</span><span className="v">{hostname}</span>
+                                    <span className="k">时长</span><span className="v">{fmtClock(elapsed)}</span>
+                                </footer>
+                            )}
+
+                            {/* 移动端底部快捷键 */}
+                            <div className="pad">
+                                {padKeys.map(b => (
+                                    <button key={b.k} className={'btn' + (b.accent ? ' accent' : '')} onClick={() => sendPad(b.v)}>{b.k}</button>
+                                ))}
+                                {/* 移动端复制/粘贴入口（粘贴走 Clipboard API，需浏览器授权） */}
+                                <button className="btn" onClick={copySelection}>复制</button>
+                                <button className="btn" onClick={pasteFromClipboard}>粘贴</button>
+                            </div>
+                        </div>
 
                         {/* ===== 二次认证弹窗 ===== */}
                         <Modal

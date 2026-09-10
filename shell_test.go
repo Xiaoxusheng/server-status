@@ -1,7 +1,7 @@
 package main
 
 // Web Shell 二次认证 / 一次性 Token / RBAC / CSRF / 限速 / 密码管理 纯逻辑与 REST 回归测试。
-// 覆盖：未登录 401、无 system:exec 403、错误/正确密码、一次性 Token 防重放/过期/撤销、
+// 覆盖：未登录 401、无 shell:use 403、错误/正确密码、一次性 Token 防重放/过期/撤销、
 // 改密的旧认证失效、密码强度、输入消息大小、Shell 环境变量脱敏、限速防爆破。
 
 import (

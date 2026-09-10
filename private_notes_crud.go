@@ -215,10 +215,10 @@ func (s *PrivateStore) fillNotesDetailsBatch(notes []*PrivateNote) error {
 		}
 	}
 
-	// 视频（含播放与海报 URL）
+	// 视频（含播放与海报 URL）：按 sort_order 升序（编辑器拖拽排序的结果），旧数据回落 created_at
 	for _, chunk := range chunkIDs(ids, batchChunk) {
 		rows, err := s.db.Query(`SELECT id, note_id, file_path, poster_path, duration, size, created_at
-			FROM note_videos WHERE note_id IN (`+placeholders(len(chunk))+`) ORDER BY created_at ASC`, toArgs(chunk)...)
+			FROM note_videos WHERE note_id IN (`+placeholders(len(chunk))+`) ORDER BY sort_order ASC, created_at ASC`, toArgs(chunk)...)
 		if err != nil {
 			return err
 		}
@@ -1041,9 +1041,12 @@ func (s *PrivateStore) addVideo(userID, noteID string, file multipart.File, head
 	}
 
 	id := randomID("vid")
+	// 追加到末尾：sort_order 取当前最大值 +1（拖拽排序后新上传的视频仍排在最后）
+	var maxOrder int
+	s.db.QueryRow(`SELECT COALESCE(MAX(sort_order), -1) FROM note_videos WHERE note_id = ?`, noteID).Scan(&maxOrder)
 	if _, err := s.db.Exec(`
-		INSERT INTO note_videos (id, note_id, file_path, poster_path, duration, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		id, noteID, filepath.ToSlash(rel), posterRel, duration, written, nowUTC()); err != nil {
+		INSERT INTO note_videos (id, note_id, file_path, poster_path, duration, size, sort_order, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, noteID, filepath.ToSlash(rel), posterRel, duration, written, maxOrder+1, nowUTC()); err != nil {
 		os.Remove(abs)
 		if posterRel != "" {
 			if pabs, e := s.safeFilePath(posterRel); e == nil {
@@ -1077,6 +1080,19 @@ func (s *PrivateStore) deleteVideo(userID, noteID, videoID string) error {
 	}
 	_, err := s.db.Exec(`DELETE FROM note_videos WHERE id = ? AND note_id = ?`, videoID, noteID)
 	return err
+}
+
+// reorderVideos 保存视频拖拽排序：ids 按目标顺序排列，按下标写 sort_order（与图片排序语义一致）
+func (s *PrivateStore) reorderVideos(userID, noteID string, ids []string) error {
+	if !s.noteOwnedBy(userID, noteID) {
+		return fmt.Errorf("手记不存在")
+	}
+	for i, id := range ids {
+		if _, err := s.db.Exec(`UPDATE note_videos SET sort_order = ? WHERE id = ? AND note_id = ?`, i, id, noteID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // videoFilePath 返回视频/海报的绝对路径与展示文件名（kind: file | poster）
