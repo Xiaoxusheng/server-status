@@ -2835,7 +2835,7 @@
                 template, width, height, title, content, time, location, tags, images, brand, server,
                 locationName, latitude, longitude, audioQR, noteID,
                 show = {}, locationMode = 'name', background = 'white', autoLayout = true,
-                fold = false, foldLines = 8, fontScale = 1
+                frame = 'natural', fold = false, foldLines = 8, fontScale = 1
             } = opts;
             const showTitle = show.title !== false;
             const showContent = show.content !== false;
@@ -2956,6 +2956,7 @@
             // 图片模板先按「未缩放文字需求」压缩图片区，再让文字在剩余区域内缩放，二者互相让步。
             const tplImgs = (showImages && images ? images.slice(0, 9) : []);
             let cardImgH = 0; // 图片模板的图片区高度（其余模板为 0）
+            let devLayout = null; // device 模板的手机区布局（无图时为 null，回退纯文字）
             let scale = 1;
             let availH = height * 0.72;
             if (template === 'image' && tplImgs.length) {
@@ -2972,6 +2973,17 @@
                 }
                 // 图片下方文字带：扣除顶部留白与底部余量
                 availH = (height - cardImgH) - height * 0.05 - height * 0.03;
+            } else if (template === 'device' && tplImgs.length) {
+                // iPhone 模板：先保证文字占位（含语音二维码盒），剩余高度给手机区，
+                // 同时受机身宽高比（0.478）约束；最多取前 3 张并排
+                const qrbDev = audioQRBox('bottomright');
+                const textH = textNeed() + height * 0.1 + (qrbDev ? qrbDev.bh : 0);
+                const n = Math.min(3, tplImgs.length);
+                const gap = n > 1 ? width * 0.055 : 0;
+                const perW = (maxW - gap * (n - 1)) / n;
+                const ph = Math.round(Math.min(height * 0.78, Math.max(height * 0.26, height - textH), perW / 0.478));
+                devLayout = { n, ph, top: Math.round(height * 0.055), gap };
+                availH = (height - devLayout.top - ph) - height * 0.05 - height * 0.03;
             } else if (template === 'travel') {
                 // 旅行模板：文字区在 0.27h ~ 缩略图上沿(约 0.62h) 之间
                 availH = height * 0.62 - height * 0.27 - width * 0.03;
@@ -3073,6 +3085,107 @@
                 ctx.restore();
             };
 
+            // ==================== iPhone 机身建模（device 模板）====================
+            // 几何按 iPhone 15 Pro 实测比例：机身 70.6×147.6mm（宽高比 0.478）、
+            // 正面玻璃黑边约 1.55mm、灵动岛 125×36pt @ 距屏顶 11pt（=31.8% 屏宽）。
+            // 全部尺寸相对机身高度 H 换算，任意卡片尺寸下等比清晰
+            const FRAME_PALS = {
+                natural: { rim: '#f3f2ef', railA: '#d9d6d1', railB: '#a29c96', edge: '#666059', btn: '#b0aaa3' },
+                black: { rim: '#b0b0b8', railA: '#6e6e76', railB: '#333338', edge: '#141418', btn: '#4a4a52' },
+                white: { rim: '#ffffff', railA: '#eff0f2', railB: '#c9c9d0', edge: '#8b8b95', btn: '#dddde3' }
+            };
+            const drawPhone = async (src, x, y, H) => {
+                const pal = FRAME_PALS[frame] || FRAME_PALS.natural;
+                const W = H * 0.478;
+                const r = W * 0.158;
+                const bezel = W * 0.045;
+                const sx = x + bezel, sy = y + bezel;
+                const sw = W - bezel * 2, sh = H - bezel * 2;
+                // 侧面实体按键：先画（内侧被机身盖住只露凸出部分）——左：操作按钮/音量±，右：电源。
+                // 横向渐变（外侧受光少偏暗）+ 深色缝线，让按键读作中框上的实体键而非凸点
+                const btnT = W * 0.014;
+                [
+                    { side: 'l', top: 0.185, len: 0.046 },
+                    { side: 'l', top: 0.252, len: 0.055 },
+                    { side: 'l', top: 0.323, len: 0.055 },
+                    { side: 'r', top: 0.248, len: 0.095 }
+                ].forEach(b => {
+                    const by = y + H * b.top, bh = H * b.len;
+                    const g = ctx.createLinearGradient(b.side === 'l' ? x - btnT : x + W + btnT, 0, b.side === 'l' ? x : x + W, 0);
+                    g.addColorStop(0, pal.edge); g.addColorStop(0.55, pal.btn); g.addColorStop(1, pal.railB);
+                    ctx.fillStyle = g;
+                    if (b.side === 'l') roundRect(ctx, x - btnT, by, btnT + W * 0.03, bh, btnT * 0.5);
+                    else roundRect(ctx, x + W - W * 0.03, by, btnT + W * 0.03, bh, btnT * 0.5);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(0,0,0,.28)';
+                    ctx.lineWidth = Math.max(1, W * 0.002);
+                    ctx.stroke();
+                });
+                // 机身 + 落地投影
+                ctx.save();
+                ctx.shadowColor = 'rgba(10,15,30,.38)';
+                ctx.shadowBlur = W * 0.22;
+                ctx.shadowOffsetY = H * 0.016;
+                ctx.fillStyle = pal.railB;
+                roundRect(ctx, x, y, W, H, r);
+                ctx.fill();
+                ctx.restore();
+                // 钛金属中框：对角渐变高光（左上受光、右下转暗）
+                const railG = ctx.createLinearGradient(x, y, x + W, y + H);
+                railG.addColorStop(0, pal.rim);
+                railG.addColorStop(0.35, pal.railA);
+                railG.addColorStop(0.75, pal.railB);
+                railG.addColorStop(1, pal.edge);
+                ctx.strokeStyle = railG;
+                ctx.lineWidth = Math.max(1, W * 0.012);
+                roundRect(ctx, x, y, W, H, r);
+                ctx.stroke();
+                // 金属感关键：沿机身纵向的镜面反射描边——顶部受光亮线、底部转入暗部
+                const specG = ctx.createLinearGradient(0, y, 0, y + H);
+                specG.addColorStop(0, 'rgba(255,255,255,.7)');
+                specG.addColorStop(0.22, 'rgba(255,255,255,.12)');
+                specG.addColorStop(0.72, 'rgba(0,0,0,.04)');
+                specG.addColorStop(1, 'rgba(0,0,0,.25)');
+                ctx.strokeStyle = specG;
+                ctx.lineWidth = Math.max(1, W * 0.005);
+                roundRect(ctx, x + W * 0.004, y + W * 0.004, W - W * 0.008, H - W * 0.008, r * 0.9);
+                ctx.stroke();
+                // 正面玻璃黑边
+                ctx.fillStyle = '#0b0b0f';
+                roundRect(ctx, x + bezel * 0.45, y + bezel * 0.45, W - bezel * 0.9, H - bezel * 0.9, Math.max(1, r - bezel * 0.5));
+                ctx.fill();
+                // 屏幕：截图 cover 裁剪进圆角屏 + 玻璃边缘高光
+                await drawImageCover(ctx, src, sx, sy, sw, sh, r - bezel * 0.8, null, noteID);
+                ctx.strokeStyle = 'rgba(255,255,255,.07)';
+                ctx.lineWidth = Math.max(1, W * 0.0035);
+                roundRect(ctx, sx, sy, sw, sh, r - bezel * 0.8);
+                ctx.stroke();
+                // 灵动岛 + 前摄镜片：几何严格按真机比例（31.8% 屏宽 / 距屏顶 1.35% / 高 4.23%），
+                // 真机截图自带的岛会与重画的纯黑岛完全重合不露边；非截图图片也能呈现机位。
+                // 镜片画成"玻璃下的暗镜头"：深色镜体 + 微弱金属环 + 一点高光，避免读作破洞
+                const iw = sw * 0.318, ih = sh * 0.0423;
+                const ix = sx + (sw - iw) / 2, iy = sy + sh * 0.0135;
+                ctx.fillStyle = '#000';
+                roundRect(ctx, ix, iy, iw, ih, ih / 2);
+                ctx.fill();
+                const lx = ix + iw - ih * 0.52, ly = iy + ih / 2, lr = ih * 0.3;
+                ctx.fillStyle = '#0a0a11';
+                ctx.beginPath();
+                ctx.arc(lx, ly, lr, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(92,112,160,.38)';
+                ctx.lineWidth = Math.max(1, W * 0.002);
+                ctx.beginPath();
+                ctx.arc(lx, ly, lr * 0.6, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(150,180,255,.16)';
+                ctx.beginPath();
+                ctx.arc(lx - lr * 0.26, ly - lr * 0.26, lr * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+            };
+
+            // device 模板沿用旧模板同一套背景（纯色/图片 + 同一调色板），保持卡片风格统一
+
             // 背景填充（含图片背景模式）
             const fillBackground = async () => {
                 if (background === 'image' && showImages && images && images.length) {
@@ -3124,6 +3237,26 @@
                     ctx.fillStyle = palette.muted;
                     ctx.fillText(timeTxt, padX, height - height * 0.08);
                 }
+                await drawAudioQR('bottomright');
+                drawBrand();
+                return canvas;
+            }
+
+            // ==================== iPhone 模板（截图套机身，文字在下方）====================
+            if (template === 'device' && devLayout) {
+                await fillBackground();
+                const { ph, top, gap } = devLayout;
+                const imgs = tplImgs.slice(0, devLayout.n);
+                const rowW = imgs.length * ph * 0.478 + gap * (imgs.length - 1);
+                let px = (width - rowW) / 2;
+                for (const it of imgs) {
+                    await drawPhone(it, px, top, ph);
+                    px += ph * 0.478 + gap;
+                }
+                const rest = height - top - ph;
+                const scaledNeed = textNeed() * scale;
+                let y = top + ph + Math.max(height * 0.04, (rest - scaledNeed) / 2);
+                y = drawText(y);
                 await drawAudioQR('bottomright');
                 drawBrand();
                 return canvas;
@@ -4646,6 +4779,7 @@
             { key: 'xhs', label: '小红书' },
             { key: 'dark', label: '深色' },
             { key: 'image', label: '图片' },
+            { key: 'device', label: 'iPhone' },
             { key: 'travel', label: '旅行' },
             { key: 'server', label: '服务器' }
         ];
@@ -4660,6 +4794,8 @@
             const [fontScale, setFontScale] = useState(1);
             const [size, setSize] = useState(0);
             const [background, setBackground] = useState('white');
+            // iPhone 模板机身配色：原色钛 / 深空黑 / 白色
+            const [frameColor, setFrameColor] = useState('natural');
             const [show, setShow] = useState({ title: true, content: true, time: true, location: true, tags: true, images: true, brand: false });
             const [brandText, setBrandText] = useState('Server Status');
             const [locationMode, setLocationMode] = useState('name');
@@ -4725,6 +4861,7 @@
                 show,
                 locationMode,
                 background,
+                frame: frameColor,
                 autoLayout,
                 fold: foldLong,
                 foldLines: foldLineN,
@@ -4753,6 +4890,7 @@
                 setFoldLineN(8);
                 setFontScale(1);
                 setBackground('white');
+                setFrameColor('natural');
                 setShow({ title: true, content: true, time: true, location: true, tags: true, images: true, brand: false });
                 setLocationMode('name');
                 setAutoLayout(true);
@@ -4796,7 +4934,7 @@
                 // deps 必须包含 foldLong/foldLineN/fontScale：否则折叠行数与字号变化不触发预览重渲染（点击看似无效）
                 // audioQR：二维码 blob URL 到位后需重绘预览，否则卡片上看不到语音二维码
                 // eslint-disable-next-line react-hooks/exhaustive-deps
-            }, [open, template, size, background, locationMode, autoLayout, show, brandText, server, note && note.id, retryTick, selImgs, foldLong, foldLineN, fontScale, audioQR, audioQROn]);
+            }, [open, template, size, background, frameColor, locationMode, autoLayout, show, brandText, server, note && note.id, retryTick, selImgs, foldLong, foldLineN, fontScale, audioQR, audioQROn]);
 
             // 预览缩放：只改变显示尺寸，内部保持真实分辨率
             useEffect(() => {
@@ -4890,7 +5028,7 @@
                 { key: 'title', label: '标题' }, { key: 'content', label: '正文' }, { key: 'time', label: '时间' },
                 { key: 'location', label: '地点' }, { key: 'tags', label: '标签' }, { key: 'images', label: '图片' }, { key: 'brand', label: '品牌' }
             ];
-            const isTextTpl = template === 'simple' || template === 'travel';
+            const isTextTpl = template === 'simple' || template === 'travel' || template === 'device';
 
             return (
                 <>
@@ -4950,6 +5088,16 @@
                                             { value: 'gray', label: '浅灰' },
                                             { value: 'dark', label: '深色' },
                                             { value: 'image', label: '图片' }
+                                        ]} />
+                                    </div>
+                                )}
+                                {template === 'device' && (
+                                    <div className="cg-section">
+                                        <div className="cg-label"><span className="cg-label-t">机身配色</span> <span className="cg-sub">截图套入 iPhone 机身（最多取前 3 张），钛金属中框配色</span></div>
+                                        <Segmented size="small" value={frameColor} onChange={setFrameColor} options={[
+                                            { value: 'natural', label: '原色钛' },
+                                            { value: 'black', label: '深空黑' },
+                                            { value: 'white', label: '白色' }
                                         ]} />
                                     </div>
                                 )}
