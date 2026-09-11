@@ -11,6 +11,7 @@ users.json
 rbac.json
 download_tokens.json
 blocked_ips.json
+ip_security.json
 *.db
 *.db-wal
 *.db-shm
@@ -35,6 +36,8 @@ Thumbs.db
 .trae/
 .zcode/
 .dev-home/
+.playwright-cli/
+.workbuddy-ai/
 
 # 本地临时/验证产物
 _pv_check.jsx
@@ -43,6 +46,14 @@ server-test.exe
 
 # 私人空间页面草稿（未接线的设计迭代副本；转正时删除本行再提交）
 templates/pv-*.html
+
+# 卡片设计草稿与截图产物（原型已实现进 templates/private.html；转正时删除以下行再提交）
+/index.html
+/液态玻璃卡片.html
+/assets/
+/新版卡片.png
+/旧版卡片*.png
+/_shot.js
 
 # 本地开发 / 临时目录（防止误提交）
 dev/
