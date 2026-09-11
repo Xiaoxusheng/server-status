@@ -63,8 +63,14 @@
         @media (prefers-reduced-motion: reduce) {
 
             .share-page,
-            .share-pw {
+            .share-pw,
+            .share-card {
                 animation: none;
+                transition: none;
+            }
+
+            .share-card .specular span {
+                transition: none;
             }
         }
 
@@ -83,8 +89,17 @@
             opacity: .75;
         }
 
-        /* 卡片本体：相框包图片 + 下方信息区（拍立得式） */
+        /* 卡片外层：为液态玻璃动效提供透视 */
+        .card-wrap {
+            position: relative;
+            width: 100%;
+            max-width: 460px;
+            perspective: 1200px;
+        }
+
+        /* 卡片本体：相框包图片 + 下方信息区（拍立得式）+ 玻璃倾斜/高光 */
         .share-card {
+            position: relative;
             width: 100%;
             max-width: 460px;
             background: var(--card);
@@ -92,6 +107,79 @@
             border-radius: 16px;
             padding: 10px 10px 6px;
             box-shadow: var(--shadow-overlay);
+            transform-style: preserve-3d;
+            /* 默认给桌面鼠标一点缓冲；陀螺仪模式会切成更跟手的短过渡 */
+            transition: transform .28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow .35s ease;
+            will-change: transform;
+        }
+
+        .card-wrap.gyro-live .share-card {
+            transition: transform .08s linear, box-shadow .25s ease;
+        }
+
+        /* 液态玻璃：鼠标跟随高光膜 */
+        .share-card .specular {
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        .share-card .specular span {
+            position: absolute;
+            width: 220%;
+            height: 220%;
+            left: 50%;
+            top: 50%;
+            translate: -50% -50%;
+            background: radial-gradient(
+                circle at var(--mx, 32%) var(--my, 18%),
+                rgba(255, 255, 255, 0.28) 0%,
+                rgba(255, 255, 255, 0.08) 18%,
+                transparent 40%
+            );
+            opacity: 0;
+            transition: opacity .35s ease, background .4s ease;
+        }
+
+        .card-wrap:hover .share-card .specular span,
+        .card-wrap.is-active .share-card .specular span {
+            opacity: 0.9;
+        }
+
+        /* 触控端：无 hover，给一层常驻淡高光，手指按下时再加强 */
+        @media (hover: none) {
+            .share-card .specular span {
+                opacity: 0.42;
+            }
+
+            .card-wrap.is-active .share-card .specular span {
+                opacity: 0.95;
+            }
+
+            .card-wrap.is-active .share-card {
+                box-shadow:
+                    0 2px 8px rgba(15, 23, 42, .06),
+                    0 18px 40px rgba(15, 23, 42, .1),
+                    0 40px 80px rgba(15, 23, 42, .06);
+            }
+
+            /* 横滑改倾斜，竖滑仍可滚页 */
+            .card-wrap {
+                touch-action: pan-y;
+            }
+        }
+
+        /* 悬停时略加深浮起投影（浅色卡片上的“玻璃悬浮”感） */
+        @media (hover: hover) {
+            .card-wrap:hover .share-card {
+                box-shadow:
+                    0 2px 8px rgba(15, 23, 42, .06),
+                    0 18px 40px rgba(15, 23, 42, .1),
+                    0 40px 80px rgba(15, 23, 42, .06);
+            }
         }
 
         .card-img-btn {
@@ -202,6 +290,21 @@
 
         .act-btn:active {
             transform: scale(.97);
+        }
+
+        /* 陀螺仪开关：仅触控设备显示，点击后作为用户手势申请运动权限 */
+        .act-btn.gyro-btn {
+            display: none;
+        }
+
+        @media (hover: none) {
+            .act-btn.gyro-btn {
+                display: inline-flex;
+            }
+
+            .act-btn.gyro-btn.done {
+                display: none;
+            }
         }
 
         /* 品牌信息：极弱、不抢焦点 */
@@ -757,6 +860,212 @@
             }
             function shareUrl() { return window.location.origin + '/card/' + encodeURIComponent(token); }
 
+            // 液态玻璃动效
+            // - 桌面：鼠标悬停倾斜
+            // - 手机：点「启用动态」申请运动权限后跟随陀螺仪；失败则手指拖动
+            // - reduced-motion 完全关闭
+            function bindCardGlass(wrap, card, spec, gyroBtn) {
+                if (!wrap || !card || !spec) return;
+                var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                if (reduce) {
+                    if (gyroBtn) gyroBtn.classList.add('done');
+                    return;
+                }
+
+                var active = false;
+                var fingerDown = false;
+                var gyroOn = false;
+                var permissionPending = false;
+                var baseBeta = null, baseGamma = null;
+                var gotEvent = false;
+
+                function setActive(on) {
+                    if (on === active) return;
+                    active = on;
+                    wrap.classList.toggle('is-active', on);
+                }
+
+                function applyTilt(rx, ry, mx, my) {
+                    var z = Math.min(16, 6 + Math.abs(rx) * 0.45 + Math.abs(ry) * 0.35);
+                    card.style.transform = 'rotateX(' + rx.toFixed(2) + 'deg) rotateY(' + ry.toFixed(2) + 'deg) translateZ(' + z.toFixed(1) + 'px)';
+                    spec.style.setProperty('--mx', mx.toFixed(1) + '%');
+                    spec.style.setProperty('--my', my.toFixed(1) + '%');
+                    setActive(true);
+                }
+
+                function applyPointer(cx, cy) {
+                    var r = card.getBoundingClientRect();
+                    if (!r.width || !r.height) return;
+                    var x = (cx - r.left) / r.width;
+                    var y = (cy - r.top) / r.height;
+                    if (x < 0) x = 0; else if (x > 1) x = 1;
+                    if (y < 0) y = 0; else if (y > 1) y = 1;
+                    applyTilt((0.5 - y) * 5, (x - 0.5) * 6, 18 + x * 40, 10 + y * 28);
+                }
+
+                function reset() {
+                    setActive(false);
+                    card.style.transform = 'rotateX(0deg) rotateY(0deg) translateZ(0)';
+                    spec.style.setProperty('--mx', '32%');
+                    spec.style.setProperty('--my', '18%');
+                }
+
+                function clamp(v, min, max) {
+                    return v < min ? min : (v > max ? max : v);
+                }
+
+                function onOrient(e) {
+                    if (!gyroOn || fingerDown) return;
+                    if (e.beta == null || e.gamma == null) return;
+                    gotEvent = true;
+                    if (baseBeta === null) {
+                        baseBeta = e.beta;
+                        baseGamma = e.gamma;
+                    }
+                    var dBeta = e.beta - baseBeta;
+                    var dGamma = e.gamma - baseGamma;
+                    // 幅度调大：日常小幅晃机能明显看到玻璃卡片跟着转
+                    // 手机前后约 ±30° → 卡片 ±16°；左右约 ±25° → 卡片 ±18°
+                    var rx = clamp(-dBeta * 0.55, -18, 18);
+                    var ry = clamp(dGamma * 0.7, -20, 22);
+                    var mx = clamp(32 + dGamma * 1.6, 4, 88);
+                    var my = clamp(18 + dBeta * 1.2, 4, 72);
+                    applyTilt(rx, ry, mx, my);
+                }
+
+                function detachGyro() {
+                    if (!gyroOn) return;
+                    gyroOn = false;
+                    wrap.classList.remove('gyro-live');
+                    window.removeEventListener('deviceorientation', onOrient);
+                    window.removeEventListener('deviceorientationabsolute', onOrient);
+                }
+
+                function attachGyro() {
+                    if (gyroOn) return;
+                    gyroOn = true;
+                    baseBeta = null;
+                    baseGamma = null;
+                    gotEvent = false;
+                    wrap.classList.add('gyro-live');
+                    window.addEventListener('deviceorientation', onOrient);
+                    window.addEventListener('deviceorientationabsolute', onOrient);
+                    if (gyroBtn) gyroBtn.classList.add('done');
+                    toast('动态已开启，晃动手机试试');
+                    // 1.5s 内没有任何传感器事件 → 视为不可用，回退手指拖动
+                    setTimeout(function () {
+                        if (gyroOn && !gotEvent) {
+                            detachGyro();
+                            wrap.classList.remove('gyro-live');
+                            if (gyroBtn) {
+                                gyroBtn.classList.remove('done');
+                                gyroBtn.textContent = '启用动态';
+                            }
+                            toast('当前环境不支持陀螺仪，可手指拖动卡片');
+                        }
+                    }, 1500);
+                }
+
+                // 必须在用户手势同步栈里调用 requestPermission()，否则 iOS 不弹窗
+                function requestMotionPermission() {
+                    if (gyroOn || permissionPending) return;
+                    var DOE = window.DeviceOrientationEvent;
+                    var DME = window.DeviceMotionEvent;
+
+                    // iOS 13+：DeviceOrientation 或 DeviceMotion 任一可申请
+                    var req = null;
+                    if (DOE && typeof DOE.requestPermission === 'function') req = DOE.requestPermission.bind(DOE);
+                    else if (DME && typeof DME.requestPermission === 'function') req = DME.requestPermission.bind(DME);
+
+                    if (req) {
+                        permissionPending = true;
+                        var p;
+                        try {
+                            p = req();
+                        } catch (err) {
+                            permissionPending = false;
+                            toast('无法申请运动权限');
+                            return;
+                        }
+                        Promise.resolve(p).then(function (state) {
+                            permissionPending = false;
+                            if (state === 'granted') attachGyro();
+                            else toast('未获得运动权限，请在系统设置中允许');
+                        }).catch(function () {
+                            permissionPending = false;
+                            toast('运动权限申请失败，可手指拖动卡片');
+                        });
+                        return;
+                    }
+
+                    // Android / 无 requestPermission：直接监听
+                    if (typeof DOE === 'undefined' && typeof DME === 'undefined') {
+                        toast('当前浏览器不支持陀螺仪，可手指拖动卡片');
+                        return;
+                    }
+                    attachGyro();
+                }
+
+                // 「启用动态」按钮：click 是最稳的用户手势（iOS Safari / 部分微信内核）
+                if (gyroBtn) {
+                    gyroBtn.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        requestMotionPermission();
+                    });
+                }
+
+                // 首次点卡片任意处也尝试申请（双保险）
+                var cardGestureTried = false;
+                wrap.addEventListener('click', function () {
+                    if (cardGestureTried || gyroOn) return;
+                    cardGestureTried = true;
+                    requestMotionPermission();
+                });
+
+                // —— 桌面：鼠标悬停 ——
+                wrap.addEventListener('pointermove', function (e) {
+                    if (e.pointerType === 'touch') return;
+                    applyPointer(e.clientX, e.clientY);
+                });
+                wrap.addEventListener('pointerleave', function (e) {
+                    if (e.pointerType === 'touch') return;
+                    if (gyroOn) return;
+                    reset();
+                });
+
+                // —— 触控：手指拖动微调 ——
+                var dragging = false;
+                wrap.addEventListener('touchstart', function (e) {
+                    if (!e.touches || e.touches.length !== 1) return;
+                    fingerDown = true;
+                    dragging = true;
+                    applyPointer(e.touches[0].clientX, e.touches[0].clientY);
+                }, { passive: true });
+                wrap.addEventListener('touchmove', function (e) {
+                    if (!dragging || !e.touches || e.touches.length !== 1) return;
+                    applyPointer(e.touches[0].clientX, e.touches[0].clientY);
+                }, { passive: true });
+                function endTouch() {
+                    fingerDown = false;
+                    if (!dragging) return;
+                    dragging = false;
+                    if (gyroOn) {
+                        baseBeta = null;
+                        baseGamma = null;
+                        setActive(true);
+                        return;
+                    }
+                    setTimeout(reset, 180);
+                }
+                wrap.addEventListener('touchend', endTouch, { passive: true });
+                wrap.addEventListener('touchcancel', function () {
+                    fingerDown = false;
+                    dragging = false;
+                    if (!gyroOn) reset();
+                }, { passive: true });
+            }
+
             // ==================== 各状态渲染 ====================
             function renderLoading() {
                 document.getElementById('root').innerHTML =
@@ -916,10 +1225,42 @@
             }
 
             function downloadImage() {
-                var a = document.createElement('a');
-                a.href = '/api/share/' + encodeURIComponent(token) + '/image';
-                a.download = 'card-' + token + '.png';
-                a.click();
+                // 用 blob 触发保存：直链 + a.download 在 iOS Safari / 微信内核里常被忽略
+                //（服务端 Content-Disposition 是 inline，浏览器会当预览而不是下载）
+                var url = '/api/share/' + encodeURIComponent(token) + '/image';
+                var name = 'card-' + (token || 'share') + '.png';
+                toast('正在准备下载…');
+                fetch(url, { credentials: 'include' })
+                    .then(function (r) {
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.blob();
+                    })
+                    .then(function (blob) {
+                        if (!blob || !blob.size) throw new Error('empty');
+                        // 部分内核对 application/octet-stream 更听话
+                        var file = blob;
+                        try {
+                            file = new Blob([blob], { type: 'image/png' });
+                        } catch (e) { }
+                        var objUrl = URL.createObjectURL(file);
+                        var a = document.createElement('a');
+                        a.href = objUrl;
+                        a.download = name;
+                        a.rel = 'noopener';
+                        a.style.display = 'none';
+                        document.body.appendChild(a);
+                        a.click();
+                        setTimeout(function () {
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(objUrl);
+                        }, 1500);
+                        toast('已开始下载');
+                    })
+                    .catch(function () {
+                        // 降级：新窗口打开；带 ?dl=1 优先触发附件保存
+                        window.open(url + '?dl=1', '_blank', 'noopener');
+                        toast('若未自动保存，请长按图片另存');
+                    });
             }
 
             // ==================== 二维码浮层 ====================
@@ -949,13 +1290,16 @@
                     '<div class="share-wrap">' +
                     '  <div class="share-page">' +
                     '    <div class="share-top">' + icon('send', 12) + '与你分享</div>' +
-                    '    <div class="share-card">' +
-                    '      <button class="card-img-btn" id="img-btn" title="点击查看大图">' +
-                    '        <img class="card-img" src="/api/share/' + encodeURIComponent(token) + '/image" alt="' + title + '" />' +
-                    '      </button>' +
-                    '      <div class="share-info">' +
-                    '        <h1 class="info-title">' + title + '</h1>' +
-                    '        <div class="info-meta">' + metaItems + '</div>' +
+                    '    <div class="card-wrap" id="card-wrap">' +
+                    '      <div class="share-card" id="share-card">' +
+                    '        <div class="specular" aria-hidden="true"><span id="card-spec"></span></div>' +
+                    '        <button class="card-img-btn" id="img-btn" title="点击查看大图">' +
+                    '          <img class="card-img" src="/api/share/' + encodeURIComponent(token) + '/image" alt="' + title + '" />' +
+                    '        </button>' +
+                    '        <div class="share-info">' +
+                    '          <h1 class="info-title">' + title + '</h1>' +
+                    '          <div class="info-meta">' + metaItems + '</div>' +
+                    '        </div>' +
                     '      </div>' +
                     '    </div>' +
                     '    <div class="share-actions">' +
@@ -963,6 +1307,7 @@
                     '      <button class="act-btn" id="copy-btn">' + icon('link', 14) + '复制链接</button>' +
                     (allow ? '      <button class="act-btn" id="dl-btn">' + icon('download', 14) + '下载</button>' : '') +
                     '      <button class="act-btn" id="qr-btn">' + icon('qr', 14) + '二维码</button>' +
+                    '      <button class="act-btn gyro-btn" id="gyro-btn" type="button" title="开启后晃动手机卡片会跟着倾斜">启用动态</button>' +
                     '    </div>' +
                     '    <div class="share-brand">Powered by Server Status</div>' +
                     '  </div>' +
@@ -973,6 +1318,7 @@
                 viewerTitle = data.title || '未命名卡片';
                 viewerAllow = allow;
 
+                bindCardGlass(document.getElementById('card-wrap'), document.getElementById('share-card'), document.getElementById('card-spec'), document.getElementById('gyro-btn'));
                 document.getElementById('img-btn').addEventListener('click', openViewer);
                 document.getElementById('share-btn').addEventListener('click', function () {
                     // 优先系统级分享（移动端），不支持则降级复制链接

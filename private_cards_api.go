@@ -537,6 +537,10 @@ func shareImageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	// ?dl=1：强制浏览器当附件保存（前端 a.download / 微信内核降级打开时用）
+	if r.URL.Query().Get("dl") == "1" {
+		w.Header().Set("Content-Disposition", `attachment; filename="card.png"`)
+	}
 	servePrivateMediaFile(w, r, abs, "card.png")
 }
 
