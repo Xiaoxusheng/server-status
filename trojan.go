@@ -129,6 +129,9 @@ type TrojanClient struct {
 	trafficAcc map[string]*trojanTrafficAcc
 	// archiveCache 档案缓存（含限额/用量），每 30 秒随用量落盘一并刷新，
 	// 用于把「已超限被踢出」的档案用户合并进状态快照、并在恢复时跳过超限用户。
+	// ipIdleSince 按用户 hash 记录「连续无流量」的起始时刻，用于检测 Trojan-Go
+	// 泄漏的 ip_current（见 sweepIdleIPs）。
+	ipIdleSince    map[string]time.Time
 	archiveCache   map[string]TrojanCredential
 	archiveLoaded  time.Time
 	persistTick    *time.Ticker
@@ -503,6 +506,10 @@ func (c *TrojanClient) refresh() {
 	}
 	// 流量限额：推进累计用量、踢出超限用户、合并展示超限档案用户
 	users = c.applyTrafficQuota(users)
+	// 泄漏 ip_current 清理：跳过刚恢复连接的这轮，避免与用户补发交错
+	if wasConnected {
+		c.sweepIdleIPs(users)
+	}
 	var status TrojanStatus
 	status.Enabled = true
 	status.Connected = true
@@ -523,6 +530,73 @@ func (c *TrojanClient) refresh() {
 	c.mu.Unlock()
 	if !wasConnected {
 		log.Printf("Trojan-Go API connection restored")
+	}
+}
+
+// trojanIPIdleReset 连续无流量达到该时长后，判定 ip_current 为泄漏计数并清零。
+const trojanIPIdleReset = 2 * time.Minute
+
+// sweepIdleIPs 清理 Trojan-Go v0.10.6 泄漏的 ip_current：内存认证器的 IP 表只在
+// 连接显式 Close 时 DelIP，许多断开路径（握手失败、消费方未关闭等）会永久泄漏
+// 条目，导致 ip_current 只增不减、并非「同时在线 IP 数」。
+// 这里对连续 trojanIPIdleReset 无流量的用户做 Delete+Add 重下发，把泄漏的 IP 表
+// 清零。真实连接在新连接进来时会重新 AddIP，几乎不受影响；会话流量计数归零由
+// updateTrafficAcc 的基线折叠兜底，不会重复或丢失累计用量。
+func (c *TrojanClient) sweepIdleIPs(users []TrojanUser) {
+	if c.ipIdleSince == nil {
+		c.ipIdleSince = make(map[string]time.Time)
+	}
+	now := time.Now()
+	var reset []TrojanUser
+	for _, user := range users {
+		if user.IPCurrent <= 0 || user.UploadSpeed > 0 || user.DownloadSpeed > 0 {
+			delete(c.ipIdleSince, user.Hash)
+			continue
+		}
+		since, ok := c.ipIdleSince[user.Hash]
+		if !ok {
+			c.ipIdleSince[user.Hash] = now
+			continue
+		}
+		if now.Sub(since) >= trojanIPIdleReset {
+			reset = append(reset, user)
+			delete(c.ipIdleSince, user.Hash)
+		}
+	}
+	for hash := range c.ipIdleSince {
+		live := false
+		for _, user := range users {
+			if user.Hash == hash {
+				live = true
+				break
+			}
+		}
+		if !live {
+			delete(c.ipIdleSince, hash)
+		}
+	}
+	for _, user := range reset {
+		ctx, cancel := context.WithTimeout(context.Background(), c.cfg.APITimeout)
+		delErr := c.setUser(ctx, TrojanUserRequest{Hash: user.Hash}, service.SetUsersRequest_Delete)
+		cancel()
+		if delErr != nil {
+			log.Printf("Trojan ip_current 清理失败(删除阶段) hash=%s: %v", user.Hash, delErr)
+			continue
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), c.cfg.APITimeout)
+		addErr := c.setUser(ctx, TrojanUserRequest{
+			Hash:          user.Hash,
+			IPLimit:       user.IPLimit,
+			UploadLimit:   user.UploadLimit,
+			DownloadLimit: user.DownloadLimit,
+		}, service.SetUsersRequest_Add)
+		cancel()
+		if addErr != nil {
+			// 删除成功而补发失败属于严重状态，立即由离线→在线对账流程兜底恢复
+			log.Printf("Trojan ip_current 清理失败(补发阶段) hash=%s: %v", user.Hash, addErr)
+			continue
+		}
+		log.Printf("Trojan 用户 ip_current 泄漏计数已清零: hash=%s 旧值=%d", user.Hash, user.IPCurrent)
 	}
 }
 
