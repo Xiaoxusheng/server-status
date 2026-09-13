@@ -64,3 +64,7 @@ temp/
 deploy/**
 # 例外：云直链可行性验收脚本（不含任何密钥）
 !deploy/check-openlist-direct.sh
+
+# IDE / 本地 AI 工具配置（.idea 为 JetBrains 工程配置，.trae 为 Trae 本地技能，均与项目无关）
+.idea/
+.trae/
