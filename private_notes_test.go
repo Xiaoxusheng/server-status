@@ -562,9 +562,20 @@ func TestCardCreateAndShare(t *testing.T) {
 	if card.ID == "" {
 		t.Fatal("卡片 ID 为空")
 	}
-	// 非法尺寸
-	if _, err := st.createCard("alice", createCardRequest{Template: "simple", Width: 123, Height: 456, Image: base64.StdEncoding.EncodeToString(buf.Bytes())}); err == nil {
-		t.Fatal("非法尺寸应被拒绝")
+	// 自定义尺寸（预设白名单之外、范围之内）应被接受
+	custom, err := st.createCard("alice", createCardRequest{Template: "simple", Width: 760, Height: 1322, Image: base64.StdEncoding.EncodeToString(buf.Bytes())})
+	if err != nil {
+		t.Fatalf("自定义尺寸 createCard: %v", err)
+	}
+	if custom.Width != 760 || custom.Height != 1322 {
+		t.Fatalf("自定义尺寸应原样保存: %dx%d", custom.Width, custom.Height)
+	}
+	// 范围外尺寸（宽低于下限 / 高超上限）
+	if _, err := st.createCard("alice", createCardRequest{Template: "simple", Width: 50, Height: 456, Image: base64.StdEncoding.EncodeToString(buf.Bytes())}); err == nil {
+		t.Fatal("宽低于下限应被拒绝")
+	}
+	if _, err := st.createCard("alice", createCardRequest{Template: "simple", Width: 1080, Height: 9000, Image: base64.StdEncoding.EncodeToString(buf.Bytes())}); err == nil {
+		t.Fatal("高超上限应被拒绝")
 	}
 	// 非 PNG
 	if _, err := st.createCard("alice", createCardRequest{Template: "simple", Width: 1080, Height: 1080, Image: base64.StdEncoding.EncodeToString([]byte("not png"))}); err == nil {

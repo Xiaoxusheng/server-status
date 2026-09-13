@@ -31,22 +31,10 @@ type createCardRequest struct {
 	Image    string `json:"image"`
 }
 
+// 卡片尺寸只做范围校验（与前端自定义尺寸边界一致）：预设比例之外，
+// CardModal 的「自定义」模式允许任意宽高（宽 240~4096、高 240~8192，服务端下限放宽到 100 兼容旧数据）
 func validCardSize(w, h int) bool {
-	if w < 100 || w > 4096 || h < 100 || h > 4096 {
-		return false
-	}
-	switch {
-	case w == 1080 && h == 1080:
-	case w == 1080 && h == 1350:
-	case w == 1080 && h == 1440:
-	case w == 1170 && h == 2532:
-	case w == 1080 && h == 1920:
-	case w == 1280 && h == 720:
-	case w == 1200 && h == 630:
-	default:
-		return false
-	}
-	return true
+	return w >= 100 && w <= 4096 && h >= 100 && h <= 8192
 }
 
 func (s *PrivateStore) createCard(userID string, req createCardRequest) (*PrivateCardMeta, error) {

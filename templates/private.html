@@ -47,6 +47,14 @@
             font-size: 16px;
         }
 
+        /* 页眉版本号：弱化的次要文字，紧跟品牌文案 */
+        .pv-topbar .pv-version {
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--color-text-secondary);
+            opacity: .75;
+        }
+
         .pv-topbar .pv-search {
             flex: 1;
             max-width: 360px;
@@ -608,6 +616,12 @@
             padding-bottom: calc(20px + env(safe-area-inset-bottom));
         }
 
+        /* 拖放进行中的高亮：整个抽屉 body 都是接收区（配合 Editor 里的 pv-drop-hint 类） */
+        .pv-editor .ant-drawer-body.pv-drop-hint {
+            outline: 2px dashed #1677ff;
+            outline-offset: -6px;
+        }
+
         .pv-editor-toolbar {
             display: flex;
             flex-wrap: wrap;
@@ -672,6 +686,21 @@
             border-radius: var(--radius-sm);
             overflow: hidden;
             border: 1px solid var(--color-border);
+            /* 图片缩略图支持按住拖动排序：touch-action:none 防止触摸拖动被页面滚动抢占；
+               非拖拽项 transform 过渡平滑让位（与视频拖拽一致） */
+            touch-action: none;
+            cursor: grab;
+            transition: transform .18s ease;
+        }
+
+        .pv-img-item:active {
+            cursor: grabbing;
+        }
+
+        .pv-img-item.pv-img-dragging {
+            transition: none;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, .3);
+            opacity: .92;
         }
 
         .pv-img-item img {
@@ -896,6 +925,94 @@
             color: var(--color-text-tertiary);
             margin-top: 6px;
             text-align: center;
+        }
+
+        /* 自定义尺寸：canvas 外包裹层接管居中（canvas 由绝对定位改为流内），
+           让拖拽手柄与 ghost 能相对卡片定位 */
+        .cg-cv-wrap {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            max-width: none;
+        }
+
+        .cg-cv-wrap canvas {
+            position: static;
+            left: auto;
+            top: auto;
+            transform: none;
+            max-width: none;
+            box-shadow: var(--shadow-overlay);
+            border-radius: var(--radius-sm);
+            background: #ffffff;
+            display: block;
+        }
+
+        /* 右下角拖拽手柄：双斜线抓手，触屏也可靠（touch-action:none） */
+        .cg-grip {
+            position: absolute;
+            right: -12px;
+            bottom: -12px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #1677ff;
+            cursor: nwse-resize;
+            touch-action: none;
+            z-index: 4;
+            box-shadow: 0 1px 5px rgba(0, 0, 0, .35);
+            background-image:
+                linear-gradient(135deg, transparent 0 32%, rgba(255, 255, 255, .85) 32% 38%, transparent 38% 52%, rgba(255, 255, 255, .85) 52% 58%, transparent 58% 72%, rgba(255, 255, 255, .85) 72% 78%, transparent 78%);
+        }
+
+        .cg-grip:active {
+            background-color: #4096ff;
+        }
+
+        /* 拖拽中的比例投影：以卡片中心为锚的虚线框 + 实时像素尺寸 */
+        .cg-drag-ghost {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            border: 1.5px dashed #1677ff;
+            border-radius: 6px;
+            background: rgba(22, 119, 255, .08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        .cg-drag-ghost span {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1677ff;
+            background: rgba(255, 255, 255, .92);
+            border-radius: 4px;
+            padding: 2px 8px;
+            white-space: nowrap;
+        }
+
+        .cg-custom-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .cg-custom-x,
+        .cg-custom-ratio {
+            font-size: 12px;
+            color: var(--color-text-tertiary);
+        }
+
+        .cg-imgshare-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
         .cg-info-row {
@@ -2777,6 +2894,55 @@
                 return blob ? URL.createObjectURL(blob) : null;
             } catch (e) { return null; }
         }
+        // ==================== HEIC 直传支持 ====================
+        // iPhone 从「文件」App 上传原片时是 HEIC（相册选择器会被 iOS 自动转成 JPEG，不受影响），
+        // 服务器无法解码 HEIC，这里在浏览器内转成 JPEG 后按普通图片上传。
+        function isHeicFile(f) {
+            return /\.hei[cf]$/i.test(f.name || '') || f.type === 'image/heic' || f.type === 'image/heif';
+        }
+        // 解码库按需懒加载（约 1.4MB，仅在遇到 HEIC 且浏览器原生解码失败时才拉取）；多 CDN 依次回退
+        let heicLibPromise = null;
+        function loadHeicDecoder() {
+            if (window.heic2any) return Promise.resolve();
+            if (heicLibPromise) return heicLibPromise;
+            const urls = [
+                'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js',
+                'https://fastly.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js',
+                'https://unpkg.com/heic2any@0.0.4/dist/heic2any.min.js'
+            ];
+            heicLibPromise = new Promise((resolve, reject) => {
+                let i = 0;
+                const tryNext = () => {
+                    if (i >= urls.length) { heicLibPromise = null; reject(new Error('HEIC 解码库加载失败（请检查网络）')); return; }
+                    const s = document.createElement('script');
+                    s.src = urls[i++];
+                    s.onload = () => { if (window.heic2any) resolve(); else tryNext(); };
+                    s.onerror = () => { s.remove(); tryNext(); };
+                    document.head.appendChild(s);
+                };
+                tryNext();
+            });
+            return heicLibPromise;
+        }
+        // HEIC → JPEG File：优先浏览器原生解码（iOS 17+/Safari 支持 HEIC，免下载解码库），
+        // 失败（Chrome/Edge/Firefox）再走 heic2any（libheif WASM）。解码后旋转信息已应用，直接即所得
+        async function convertHeicFile(f) {
+            try {
+                const bmp = await createImageBitmap(f);
+                const cv = document.createElement('canvas');
+                cv.width = bmp.naturalWidth || bmp.width;
+                cv.height = bmp.naturalHeight || bmp.height;
+                cv.getContext('2d').drawImage(bmp, 0, 0);
+                if (bmp.close) bmp.close();
+                const blob = await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.92));
+                if (blob && blob.size > 0) return new File([blob], f.name.replace(/\.hei[cf]$/i, '.jpg'), { type: 'image/jpeg' });
+            } catch (e) { /* 原生解码不支持，走 WASM 兜底 */ }
+            await loadHeicDecoder();
+            const out = await window.heic2any({ blob: f, toType: 'image/jpeg', quality: 0.92 });
+            const blob = Array.isArray(out) ? out[0] : out;
+            if (!blob || !blob.size) throw new Error('转换结果为空');
+            return new File([blob], f.name.replace(/\.hei[cf]$/i, '.jpg'), { type: 'image/jpeg' });
+        }
         function coverRect(sw, sh, dw, dh, x, y) {
             const s = Math.max(dw / sw, dh / sh);
             const w = sw * s, h = sh * s;
@@ -2833,7 +2999,7 @@
                 template, width, height, title, content, time, location, tags, images, brand, server,
                 locationName, latitude, longitude, audioQR, noteID,
                 show = {}, locationMode = 'name', background = 'white', autoLayout = true,
-                frame = 'natural', fold = false, foldLines = 8, fontScale = 1
+                frame = 'natural', fold = false, foldLines = 8, fontScale = 1, imgShare = null
             } = opts;
             const showTitle = show.title !== false;
             const showContent = show.content !== false;
@@ -2959,15 +3125,21 @@
             let availH = height * 0.72;
             if (template === 'image' && tplImgs.length) {
                 const qrbImg = audioQRBox('bottomright');
-                const textH = textNeed() + height * 0.1 + (qrbImg ? qrbImg.bh : 0);
-                if (tplImgs.length === 1) {
-                    // 单图：文字多时图片区最低压到 0.30h，给长文腾出 2/3 版面
-                    cardImgH = Math.round(Math.min(height * 0.72, Math.max(height * 0.30, height - textH)));
-                } else {
-                    const cols = tplImgs.length === 2 || tplImgs.length === 4 ? 2 : 3;
-                    const rows = Math.ceil(tplImgs.length / cols);
-                    cardImgH = Math.round(Math.min(height * 0.78, Math.max(height * 0.30, rows * (width / cols))));
+                if (imgShare != null) {
+                    // 手动占比：图片区高度由滑块直接指定（0.15~0.85），扣除语音二维码盒避免遮挡
+                    cardImgH = Math.round(Math.min(height * 0.85, Math.max(height * 0.15, height * imgShare)));
                     if (qrbImg) cardImgH = Math.max(0, cardImgH - Math.round(qrbImg.bh));
+                } else {
+                    const textH = textNeed() + height * 0.1 + (qrbImg ? qrbImg.bh : 0);
+                    if (tplImgs.length === 1) {
+                        // 单图：文字多时图片区最低压到 0.30h，给长文腾出 2/3 版面
+                        cardImgH = Math.round(Math.min(height * 0.72, Math.max(height * 0.30, height - textH)));
+                    } else {
+                        const cols = tplImgs.length === 2 || tplImgs.length === 4 ? 2 : 3;
+                        const rows = Math.ceil(tplImgs.length / cols);
+                        cardImgH = Math.round(Math.min(height * 0.78, Math.max(height * 0.30, rows * (width / cols))));
+                        if (qrbImg) cardImgH = Math.max(0, cardImgH - Math.round(qrbImg.bh));
+                    }
                 }
                 // 图片下方文字带：扣除顶部留白与底部余量
                 availH = (height - cardImgH) - height * 0.05 - height * 0.03;
@@ -4081,6 +4253,9 @@
             const [vidDrag, setVidDrag] = useState(-1);   // 正在拖拽的视频下标，-1 = 未拖拽
             const vidRefs = useRef({});                   // 视频 id -> DOM 元素（拖拽位移用）
             const vidDragRef = useRef(null);              // 拖拽进行中的状态 {idx,startY,rowH,target}
+            const [imgDrag, setImgDrag] = useState(-1);   // 正在拖拽的图片下标，-1 = 未拖拽
+            const imgRefs = useRef({});                   // 图片 key -> DOM 元素（拖拽位移用）
+            const imgDragRef = useRef(null);              // 拖拽进行中的状态 {idx,startX,startY,rects,target,active}
             const [saving, setSaving] = useState(false);
             const [exif, setExif] = useState(null);
             const [dragging, setDragging] = useState(false);
@@ -4163,6 +4338,9 @@
                 setVidPrep(0);
                 setVidDrag(-1);
                 vidDragRef.current = null;
+                setImgDrag(-1);
+                imgDragRef.current = null;
+                imgRefs.current = {};
                 draftRef.current = n && n.id ? n.id : null;
             };
             useEffect(() => {
@@ -4187,7 +4365,24 @@
             const uploadFiles = async (files, noteId) => {
                 const id = noteId || (note ? note.id : null);
                 if (!id) { setImgProg(null); message.warning('请先保存手记基本信息'); return; }
-                for (const f of Array.from(files)) {
+                for (const f0 of Array.from(files)) {
+                    // HEIC 原片：浏览器内转成 JPEG 再走上传（服务器无法解码 HEIC）；失败跳过该张并提示
+                    let f = f0;
+                    if (isHeicFile(f)) {
+                        message.loading({ content: 'HEIC 照片转换中：' + f.name, key: 'pv-heic', duration: 0 });
+                        try {
+                            f = await convertHeicFile(f);
+                            message.success({ content: 'HEIC 已转换：' + f.name, key: 'pv-heic', duration: 2 });
+                        } catch (e) {
+                            message.error({ content: 'HEIC 转换失败已跳过：' + (f0.name || '') + '（' + ((e && e.message) || '解码失败') + '）', key: 'pv-heic', duration: 5 });
+                            setImgProg(prev => {
+                                if (!prev) return null;
+                                const done = prev.done + 1;
+                                return done >= prev.total ? null : { done: done, total: prev.total };
+                            });
+                            continue;
+                        }
+                    }
                     // 先生成本地小缩略图并立刻占位显示：移动端原图 4000×3000，若等「上传+解码」全链路
                     // 完成才可见，会显得"点了没反应"；占位项带 pending 标记，上传完成后原位替换
                     const thumb = await makeThumbUrl(f);
@@ -4244,35 +4439,77 @@
                     });
                 }
             };
-            const onFiles = (list) => {
+            const onFiles = async (list) => {
                 if (!list || !list.length) return;
                 const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
                 const extOk = f => /\.(jpe?g|png|webp|gif)$/i.test(f.name || '');
-                // 逐张过滤：只跳过不支持的（如 iPhone 的 HEIC），不再整批拒绝
-                const good = [], skipped = [];
+                const isVidFile = f => /^video\//.test(f.type) || /\.(mov|mp4|webm|ts|m4v)$/i.test(f.name || '');
+                // 分类：图片（含 HEIC，上传时自动转 JPEG）→ 图片链路；视频文件 → 视频上传链路；其余跳过
+                const good = [], skipped = [], vids = [];
                 Array.from(list).forEach(f => {
-                    if (allowed.includes(f.type) || extOk(f)) good.push(f);
+                    if (isVidFile(f)) vids.push(f);
+                    else if (allowed.includes(f.type) || extOk(f) || isHeicFile(f)) good.push(f);
                     else skipped.push(f);
                 });
                 if (skipped.length) {
                     message.warning(skipped.length === Array.from(list).length
-                        ? '所选图片格式不支持，仅支持 jpg / png / webp / gif（iPhone 的 HEIC 照片可在分享时选择 JPEG）'
-                        : `${skipped.length} 张图片格式不支持已跳过（仅支持 jpg / png / webp / gif）`);
+                        ? '所选文件格式不支持，图片仅支持 jpg / png / webp / gif / heic'
+                        : `${skipped.length} 个文件格式不支持已跳过`);
                 }
-                if (!good.length) return;
-                // 选中即显示进度（含建草稿的网络等待），多张显示 n/m 计数
-                setImgProg(prev => ({ done: prev ? prev.done : 0, total: (prev ? prev.total : 0) + good.length }));
-                if (!note) {
-                    // 尚无手记：先保存草稿（正文为空时给占位）；重试时复用已建草稿，避免生成多条空手记
-                    if (draftRef.current) { uploadFiles(good, draftRef.current); return; }
-                    doSave(true).then(saved => {
-                        if (saved) { draftRef.current = saved.id; uploadFiles(good, saved.id); }
-                        else setImgProg(null);
-                    });
-                    return;
+                if (!good.length && !vids.length) return;
+                // 先确保草稿存在再上传：拖图/拖视频进全新空手记也能直接传（force 建稿，
+                // 不受"内容为空"守卫拦截）；照片与视频共用同一条草稿，避免并发建稿
+                let nid = (note && note.id) || draftRef.current;
+                if (!nid) {
+                    const saved = await doSave(true, true);
+                    if (!saved) { setImgProg(null); return; }
+                    draftRef.current = saved.id;
+                    nid = saved.id;
                 }
-                uploadFiles(good);
+                if (good.length) {
+                    // 选中即显示进度，多张显示 n/m 计数
+                    setImgProg(prev => ({ done: prev ? prev.done : 0, total: (prev ? prev.total : 0) + good.length }));
+                    uploadFiles(good, nid);
+                }
+                if (vids.length) await onVideoFiles(vids);
             };
+            // ==================== 整个抽屉作为拖放接收区 ====================
+            // 此前只有"拖拽上传"按钮那一小块（约 100×32px）能接收文件，其余区域一律 🚫：
+            // 系统拖拽影印的热点在影印图左上角，从下载气泡/资源管理器拖来时极易落在按钮旁
+            // 6px 的工具栏缝隙或编辑区上——观感就是"拖拽上传坏了"。改为把整个抽屉 body
+            // 作为接收区：dragenter 计数进出子元素不抖动，dragover preventDefault +
+            // dropEffect=copy 让光标全程显示"可投放"，drop 统一走 onFiles（图片/视频内部分流）。
+            // 原生监听挂在 .ant-drawer-body（antd 传送门在 React 树外，React 合成事件不便覆盖），
+            // onFiles 经 ref 转发避免闭包过期；随 open 建拆，重复 drop 不会双份上传。
+            const dropFilesRef = useRef(null);
+            dropFilesRef.current = onFiles;
+            useEffect(() => {
+                if (!open) return;
+                const body = document.querySelector('.pv-editor .ant-drawer-body');
+                if (!body) return;
+                let depth = 0;
+                const onEnter = e => { e.preventDefault(); depth++; body.classList.add('pv-drop-hint'); setDragging(true); };
+                const onOver = e => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; };
+                const onLeave = () => { depth = Math.max(0, depth - 1); if (!depth) { body.classList.remove('pv-drop-hint'); setDragging(false); } };
+                const onDrop = e => {
+                    e.preventDefault();
+                    depth = 0;
+                    body.classList.remove('pv-drop-hint');
+                    setDragging(false);
+                    dropFilesRef.current(e.dataTransfer ? e.dataTransfer.files : null);
+                };
+                body.addEventListener('dragenter', onEnter);
+                body.addEventListener('dragover', onOver);
+                body.addEventListener('dragleave', onLeave);
+                body.addEventListener('drop', onDrop);
+                return () => {
+                    body.removeEventListener('dragenter', onEnter);
+                    body.removeEventListener('dragover', onOver);
+                    body.removeEventListener('dragleave', onLeave);
+                    body.removeEventListener('drop', onDrop);
+                    body.classList.remove('pv-drop-hint');
+                };
+            }, [open]);
             // 客户端截取视频封面并读取时长：loadedmetadata 记时长 → seek 到视频前段 → 捕获真实呈现帧绘制 JPEG
             // 时长独立于封面成败始终返回；解码失败（如 Chrome 不支持 HEVC）时仅封面为 null
             const makeVideoPoster = (file) => new Promise(resolve => {
@@ -4378,7 +4615,7 @@
                 // 与图片一致：尚无手记时先静默建草稿（复用 draftRef 防重复建稿）
                 let noteId = (note && note.id) || draftRef.current;
                 if (!noteId) {
-                    const saved = await doSave(true);
+                    const saved = await doSave(true, true);
                     if (!saved) return;
                     note = saved;
                     draftRef.current = saved.id;
@@ -4393,9 +4630,11 @@
                     setVidPrep(n => Math.max(0, n - 1));
                 }
             };
-            const doSave = async (silent) => {
+            const doSave = async (silent, force) => {
                 if (savingRef.current) return null;
-                if (!content.trim() && !title.trim() && images.length === 0 && videos.length === 0) { message.warning('请输入正文或标题'); return null; }
+                // force=true：拖图/拖视频/录音触发的静默建稿调用——此刻附件尚未上传、正文为空是正常状态，
+                // 不应被“空手记”守卫拦截（否则新开手记直接拖图会静默失败，用户看起来就是“拖拽上传坏了”）
+                if (!force && !content.trim() && !title.trim() && images.length === 0 && videos.length === 0) { message.warning('请输入正文或标题'); return null; }
                 savingRef.current = true;
                 setSaving(true);
                 const body = {
@@ -4444,6 +4683,86 @@
                     api('/api/private/notes/' + note.id + '/images/order', { method: 'PUT', body: JSON.stringify({ ids }) }).catch(() => { });
                 }
             };
+            // ==================== 图片拖拽排序（Pointer Events，网格版） ====================
+            // 缩略图上按住拖动即可调整顺序（触屏/鼠标通用）：按下后位移超阈值才算拖拽（不干扰
+            // 删除/移动按钮点击）；拖拽项 1:1 跟手，其余项按目标槽位 transform 让位（flex 换行
+            // 网格的位移必须按每项初始矩形计算，行间跳跃才正确）；抬起提交新顺序并持久化
+            const imgKey = im => im.key || im.id;
+            const onImgPointerDown = (e, idx) => {
+                if (e.button != null && e.button !== 0) return;
+                if (images[idx] && images[idx].pending) return; // 上传中的占位项不参与拖拽
+                // 删除/移动按钮上的按下照常走点击，不进入拖拽
+                if (e.target && e.target.closest && e.target.closest('button')) return;
+                imgDragRef.current = { idx: idx, startX: e.clientX, startY: e.clientY, rects: null, target: idx, active: false };
+                try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) { /* 老浏览器忽略 */ }
+            };
+            const onImgPointerMove = (e) => {
+                const st = imgDragRef.current;
+                if (!st) return;
+                const dx = e.clientX - st.startX, dy = e.clientY - st.startY;
+                if (!st.active) {
+                    if (Math.hypot(dx, dy) < 6) return; // 小于阈值视为点击/误触
+                    st.active = true;
+                    // 记录所有项初始矩形（视口坐标）：此后布局不再变动，让位/命中全用它
+                    st.rects = images.map(im => {
+                        const el = imgRefs.current[imgKey(im)];
+                        return el ? el.getBoundingClientRect() : null;
+                    });
+                    setImgDrag(st.idx);
+                }
+                const rects = st.rects;
+                if (!rects) return;
+                // 目标下标 = 初始矩形中心距指针最近的项（网格换行时按距离自然跨行）
+                let target = st.idx, best = Infinity;
+                rects.forEach((r, i) => {
+                    if (!r || i === st.idx) return;
+                    const d = (r.left + r.width / 2 - e.clientX) * (r.left + r.width / 2 - e.clientX)
+                        + (r.top + r.height / 2 - e.clientY) * (r.top + r.height / 2 - e.clientY);
+                    if (d < best) { best = d; target = i; }
+                });
+                st.target = target;
+                const dragEl = imgRefs.current[imgKey(images[st.idx])];
+                if (dragEl) dragEl.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+                // 让位：新顺序 = idx 项移到 target；其余每项平移到它在归位后所处槽位的初始矩形处
+                const order = images.map((_, i) => i);
+                order.splice(target, 0, order.splice(st.idx, 1)[0]);
+                images.forEach((im, j) => {
+                    if (j === st.idx) return;
+                    const el = imgRefs.current[imgKey(im)];
+                    const slot = order.indexOf(j);
+                    if (!el || !rects[j] || !rects[slot]) return;
+                    const tx = rects[slot].left - rects[j].left;
+                    const ty = rects[slot].top - rects[j].top;
+                    el.style.transform = (tx || ty) ? 'translate(' + tx + 'px,' + ty + 'px)' : '';
+                });
+            };
+            const onImgPointerUp = () => {
+                const st = imgDragRef.current;
+                if (!st) return;
+                imgDragRef.current = null;
+                setImgDrag(-1);
+                if (!st.active || st.target === st.idx) return;
+                const arr = images.slice();
+                const moved = arr.splice(st.idx, 1)[0];
+                arr.splice(st.target, 0, moved);
+                setImages(arr);
+                const nid = (note && note.id) || draftRef.current;
+                if (nid) {
+                    // 上传中的占位项没有 id，过滤后再提交排序（与 moveImg 一致）
+                    const ids = arr.map(x => x.id).filter(Boolean);
+                    api('/api/private/notes/' + nid + '/images/order', { method: 'PUT', body: JSON.stringify({ ids }) })
+                        .then(d => { if (!ok(d)) message.error('图片排序保存失败'); })
+                        .catch(() => { });
+                }
+            };
+            // 位移清理放在布局阶段（提交后、绘制前）：与视频拖拽同理，避免“先清位移后重排”闪一帧旧顺序
+            useLayoutEffect(() => {
+                if (imgDrag !== -1) return;
+                Object.keys(imgRefs.current).forEach(k => {
+                    const el = imgRefs.current[k];
+                    if (el && el.style.transform) el.style.transform = '';
+                });
+            }, [imgDrag, images]);
             // ==================== 视频拖拽排序（Pointer Events，触屏/鼠标通用） ====================
             // 手柄上按下开始拖动（touch-action:none 防止页面滚动抢占）；move 中按行高换算目标下标，
             // 被拖项 1:1 跟手、中间项 transform 让位（CSS 过渡平滑）；抬起提交新顺序并持久化
@@ -4510,7 +4829,7 @@
                 if (!note) {
                     if (draftRef.current) { note = { id: draftRef.current }; }
                     else {
-                        const saved = await doSave(true);
+                        const saved = await doSave(true, true);
                         if (!saved) return;
                         note = saved;
                         draftRef.current = saved.id;
@@ -4568,13 +4887,11 @@
                         />
                         <div className="pv-editor-toolbar" style={{ marginTop: 10 }}>
                             <Button icon={<I name="PictureOutlined" />} onClick={() => fileRef.current && fileRef.current.click()}>拍照 / 相册</Button>
-                            <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { onFiles(e.target.files); e.target.value = ''; }} />
+                            <input ref={fileRef} type="file" accept="image/*,.heic,.heif" multiple style={{ display: 'none' }} onChange={e => { onFiles(e.target.files); e.target.value = ''; }} />
                             <Button icon={<I name="VideoCameraOutlined" />} onClick={() => videoFileRef.current && videoFileRef.current.click()}>视频</Button>
                             <input ref={videoFileRef} type="file" accept="video/mp4,video/webm,video/quicktime,video/mp2t,video/*,.ts" multiple style={{ display: 'none' }} onChange={e => { onVideoFiles(e.target.files); e.target.value = ''; }} />
-                            <div style={{ display: 'inline-block' }}
-                                onDragOver={e => { e.preventDefault(); setDragging(true); }}
-                                onDragLeave={() => setDragging(false)}
-                                onDrop={e => { e.preventDefault(); setDragging(false); onFiles(e.dataTransfer.files); }}>
+                            <div style={{ display: 'inline-block' }}>
+                                {/* 拖放接收已提升到整个抽屉 body（见上方 useEffect），按钮仅作视觉入口 */}
                                 <Button icon={<I name="CloudUploadOutlined" />}>拖拽上传</Button>
                             </div>
                             <span style={{ width: 1, height: 20, background: 'var(--color-border)', margin: '0 2px' }} />
@@ -4619,7 +4936,13 @@
                         {(images.length > 0 || dragging) && (
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10, minHeight: dragging ? 92 : 0, border: dragging ? '2px dashed #1677ff' : 'none', borderRadius: 8, padding: dragging ? 4 : 0, alignItems: 'center' }}>
                                 {images.map((img, idx) => (
-                                    <div key={img.key || img.id} className={'pv-img-item' + (img.pending ? ' pv-img-pending' : '')}>
+                                    <div key={img.key || img.id}
+                                        ref={el => { if (img.key || img.id) imgRefs.current[img.key || img.id] = el; }}
+                                        className={'pv-img-item' + (img.pending ? ' pv-img-pending' : '') + (imgDrag === idx ? ' pv-img-dragging' : '')}
+                                        onPointerDown={e => onImgPointerDown(e, idx)}
+                                        onPointerMove={onImgPointerMove}
+                                        onPointerUp={onImgPointerUp}
+                                        onPointerCancel={onImgPointerUp}>
                                         <img src={img.thumb || img.thumb_url || img.url} alt="" decoding="async" draggable={false} />
                                         {!!img.pending && <div className="pv-img-mask"><span className="pv-spin"><I name="LoadingOutlined" /></span></div>}
                                         {!img.pending && (
@@ -4742,11 +5065,28 @@
             { label: '方形', ratio: '1:1', w: 1080, h: 1080 },
             { label: '竖版 4:5', ratio: '4:5', w: 1080, h: 1350 },
             { label: '竖版 3:4', ratio: '3:4', w: 1080, h: 1440 },
+            { label: '竖版 2:3', ratio: '2:3', w: 1080, h: 1620 },
             { label: '手机长图', ratio: '9:19.5', w: 1170, h: 2532 },
             { label: '手机壁纸', ratio: '9:16', w: 1080, h: 1920 },
+            { label: '长图 1:2', ratio: '1:2', w: 1080, h: 2160 },
             { label: '横屏 16:9', ratio: '16:9', w: 1280, h: 720 },
+            { label: '横版 4:3', ratio: '4:3', w: 1440, h: 1080 },
+            { label: '横版 3:2', ratio: '3:2', w: 1620, h: 1080 },
+            { label: '超宽 21:9', ratio: '21:9', w: 1680, h: 720 },
+            { label: '横幅 3:1', ratio: '3:1', w: 1620, h: 540 },
             { label: '横版封面', ratio: '1.91:1', w: 1200, h: 630 }
         ];
+        // 自定义尺寸的边界：太小文字排不开，太大超出 canvas 安全范围
+        const CARD_CUSTOM_MIN = 240, CARD_CUSTOM_MAX_W = 4096, CARD_CUSTOM_MAX_H = 8192;
+        // 简化宽高比为 a:b（约分后位数过长则退回小数，如 1:2.34）
+        function cardRatioLabel(w, h) {
+            if (!w || !h) return '';
+            const g = (a, b) => b ? g(b, a % b) : a;
+            const d = g(w, h) || 1, a = Math.round(w / d), b = Math.round(h / d);
+            if (a <= 32 && b <= 32) return `${a}:${b}`;
+            const r = w / h;
+            return r >= 1 ? `${r.toFixed(2)}:1` : `1:${(1 / r).toFixed(2)}`;
+        }
         // Markdown 快捷按钮：line=true 为行首前缀插入
         const MD_BUTTONS = [
             { title: 'H2', hint: '标题', line: '## ' },
@@ -4792,6 +5132,10 @@
             // 正文字号缩放（0.85 小 / 1 标准 / 1.2 大 / 1.4 特大），仅影响正文不影响标题/时间等
             const [fontScale, setFontScale] = useState(1);
             const [size, setSize] = useState(0);
+            // 自定义尺寸：非 null 时覆盖预设（{w,h}），由输入框或预览拖拽手柄设置
+            const [customSize, setCustomSize] = useState(null);
+            // 图片区高度占比（0.15~0.85）：null 跟随自动排版，仅 image 模板生效
+            const [imgShare, setImgShare] = useState(null);
             const [background, setBackground] = useState('white');
             // iPhone 模板机身配色：原色钛 / 深空黑 / 白色
             const [frameColor, setFrameColor] = useState('natural');
@@ -4837,10 +5181,12 @@
             const previewRef = useRef(null);
             const timer = useRef(null);
 
+            const curSize = customSize || CARD_SIZES[size];
+
             const opts = () => ({
                 template,
-                width: CARD_SIZES[size].w,
-                height: CARD_SIZES[size].h,
+                width: curSize.w,
+                height: curSize.h,
                 title: note ? note.title : '',
                 content: note ? note.content : '',
                 time: note ? note.created_at : new Date().toISOString(),
@@ -4864,7 +5210,8 @@
                 autoLayout,
                 fold: foldLong,
                 foldLines: foldLineN,
-                fontScale
+                fontScale,
+                imgShare
             });
 
             // 生成期间隐藏页面 AI 浮球等悬浮元素（Card Renderer 本身不依赖 DOM）
@@ -4885,6 +5232,8 @@
                 const hasCardImg = !!(note && ((note.images && note.images.length) || (note.videos && note.videos.some(v => v.poster_url))));
                 setTemplate(hasCardImg ? 'image' : 'simple');
                 setSize(0);
+                setCustomSize(null);
+                setImgShare(null);
                 setFoldLong(false);
                 setFoldLineN(8);
                 setFontScale(1);
@@ -4932,8 +5281,9 @@
                 }, 200);
                 // deps 必须包含 foldLong/foldLineN/fontScale：否则折叠行数与字号变化不触发预览重渲染（点击看似无效）
                 // audioQR：二维码 blob URL 到位后需重绘预览，否则卡片上看不到语音二维码
+                // customSize/imgShare：自定义尺寸与图片区占比变化也要重绘（拖拽手柄提交、滑块拖动）
                 // eslint-disable-next-line react-hooks/exhaustive-deps
-            }, [open, template, size, background, frameColor, locationMode, autoLayout, show, brandText, server, note && note.id, retryTick, selImgs, foldLong, foldLineN, fontScale, audioQR, audioQROn]);
+            }, [open, template, size, customSize, imgShare, background, frameColor, locationMode, autoLayout, show, brandText, server, note && note.id, retryTick, selImgs, foldLong, foldLineN, fontScale, audioQR, audioQROn]);
 
             // 预览缩放：只改变显示尺寸，内部保持真实分辨率
             useEffect(() => {
@@ -4953,6 +5303,38 @@
                 return () => window.removeEventListener('resize', apply);
             }, [preview, zoom, open]);
 
+            // 自定义尺寸拖拽：按住预览右下角手柄拖动，ghost 实时投影新比例，松手提交触发重绘
+            const dragRef = useRef(null);
+            const [dragSize, setDragSize] = useState(null); // 拖拽中的 {w,h,scale}，null = 未在拖
+            const onGripDown = e => {
+                const cv = previewRef.current;
+                if (!cv || !customSize || !cv.width) return;
+                e.preventDefault();
+                const scale = cv.getBoundingClientRect().width / cv.width;
+                dragRef.current = { x0: e.clientX, y0: e.clientY, w0: customSize.w, h0: customSize.h, scale };
+                try { if (e.target.setPointerCapture) e.target.setPointerCapture(e.pointerId); } catch (err) { }
+                setDragSize({ w: customSize.w, h: customSize.h, scale });
+            };
+            const onGripMove = e => {
+                const d = dragRef.current;
+                if (!d) return;
+                const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+                setDragSize({
+                    w: clamp(Math.round(d.w0 + (e.clientX - d.x0) / d.scale), CARD_CUSTOM_MIN, CARD_CUSTOM_MAX_W),
+                    h: clamp(Math.round(d.h0 + (e.clientY - d.y0) / d.scale), CARD_CUSTOM_MIN, CARD_CUSTOM_MAX_H),
+                    scale: d.scale
+                });
+            };
+            const onGripUp = () => {
+                const d = dragRef.current;
+                dragRef.current = null;
+                // 尺寸确实变了才提交：提交触发预览重绘（debounce 200ms）
+                if (d && dragSize && (dragSize.w !== d.w0 || dragSize.h !== d.h0)) {
+                    setCustomSize({ w: dragSize.w, h: dragSize.h });
+                }
+                setDragSize(null);
+            };
+
             const toBlob = c => new Promise(res => c.toBlob(res, 'image/png'));
             const generate = async () => {
                 if (generatingRef.current) return;
@@ -4971,7 +5353,7 @@
                         method: 'POST',
                         body: JSON.stringify({
                             note_id: note ? note.id : '',
-                            template, width: CARD_SIZES[size].w, height: CARD_SIZES[size].h,
+                            template, width: curSize.w, height: curSize.h,
                             title: mdStrip(note ? (note.title || note.content || '') : 'Server Status').slice(0, 80) || '未命名卡片',
                             image: b64
                         })
@@ -5069,15 +5451,30 @@
                                     </div>
                                 </div>
                                 <div className="cg-section">
-                                    <div className="cg-label">尺寸</div>
+                                    <div className="cg-label"><span className="cg-label-t">尺寸</span> <span className="cg-sub">预设比例，或自定义宽高（可拖右侧预览右下角手柄拉比例）</span></div>
                                     <div className="cg-tpl-row">
                                         {CARD_SIZES.map((s, i) => (
-                                            <Button key={i} className="cg-tpl-btn" type={size === i ? 'primary' : 'default'} onClick={() => setSize(i)}>
+                                            <Button key={i} className="cg-tpl-btn" type={!customSize && size === i ? 'primary' : 'default'} onClick={() => { setSize(i); setCustomSize(null); }}>
                                                 <span>{s.label}</span>
                                                 <span className="cg-tpl-ratio">{s.ratio}</span>
                                             </Button>
                                         ))}
+                                        <Button className="cg-tpl-btn" type={customSize ? 'primary' : 'default'}
+                                            onClick={() => setCustomSize(s => s || { w: CARD_SIZES[size].w, h: CARD_SIZES[size].h })}>
+                                            <span>自定义</span>
+                                            <span className="cg-tpl-ratio">自由</span>
+                                        </Button>
                                     </div>
+                                    {customSize && (
+                                        <div className="cg-custom-row">
+                                            <InputNumber size="small" min={CARD_CUSTOM_MIN} max={CARD_CUSTOM_MAX_W} step={10} value={customSize.w} style={{ width: 92 }}
+                                                onChange={v => setCustomSize(s => s && ({ ...s, w: Math.min(CARD_CUSTOM_MAX_W, Math.max(CARD_CUSTOM_MIN, Math.round(v || CARD_CUSTOM_MIN))) }))} />
+                                            <span className="cg-custom-x">×</span>
+                                            <InputNumber size="small" min={CARD_CUSTOM_MIN} max={CARD_CUSTOM_MAX_H} step={10} value={customSize.h} style={{ width: 92 }}
+                                                onChange={v => setCustomSize(s => s && ({ ...s, h: Math.min(CARD_CUSTOM_MAX_H, Math.max(CARD_CUSTOM_MIN, Math.round(v || CARD_CUSTOM_MIN))) }))} />
+                                            <span className="cg-custom-ratio">{cardRatioLabel(customSize.w, customSize.h)}</span>
+                                        </div>
+                                    )}
                                 </div>
                                 {isTextTpl && (
                                     <div className="cg-section">
@@ -5088,6 +5485,18 @@
                                             { value: 'dark', label: '深色' },
                                             { value: 'image', label: '图片' }
                                         ]} />
+                                    </div>
+                                )}
+                                {template === 'image' && selImgs.length > 0 && show.images && (
+                                    <div className="cg-section">
+                                        <div className="cg-label"><span className="cg-label-t">图片区高度</span> <span className="cg-sub">自动 = 图片与文字互相让步；切手动后拖滑块固定图片区占卡片高度的比例</span></div>
+                                        <div className="cg-imgshare-row">
+                                            <Switch size="small" checked={imgShare != null} onChange={v => setImgShare(v ? 0.5 : null)} checkedChildren="手动" unCheckedChildren="自动" />
+                                            {imgShare != null && (
+                                                <Slider min={15} max={85} step={1} value={Math.round(imgShare * 100)} style={{ flex: 1 }}
+                                                    tooltip={{ formatter: v => v + '%' }} onChange={v => setImgShare(v / 100)} />
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                                 {template === 'device' && (
@@ -5206,7 +5615,18 @@
                                         </div>
                                     ) : (
                                         <>
-                                            <canvas ref={previewRef} />
+                                            <div className="cg-cv-wrap">
+                                                <canvas ref={previewRef} />
+                                                {customSize && preview && (
+                                                    <span className="cg-grip" title="拖拽调整卡片宽高"
+                                                        onPointerDown={onGripDown} onPointerMove={onGripMove} onPointerUp={onGripUp} onPointerCancel={onGripUp} />
+                                                )}
+                                                {dragSize && (
+                                                    <div className="cg-drag-ghost" style={{ width: Math.round(dragSize.w * dragSize.scale), height: Math.round(dragSize.h * dragSize.scale) }}>
+                                                        <span>{dragSize.w} × {dragSize.h}</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                             {fitHint && <div className="cg-fit-hint">内容较长，已自动缩小字体</div>}
                                             {!preview && <Spin />}
                                         </>
@@ -5217,7 +5637,7 @@
                                     <Typography.Text style={{ width: 46, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{Math.round(zoom * 100)}%</Typography.Text>
                                     <Button size="small" icon={<I name="PlusOutlined" />} onClick={() => setZoom(Math.min(1.5, +(zoom + 0.25).toFixed(2)))} />
                                 </div>
-                                <div className="cg-ratio">实际输出 {CARD_SIZES[size].w} × {CARD_SIZES[size].h}px · {CARD_SIZES[size].ratio}</div>
+                                <div className="cg-ratio">实际输出 {curSize.w} × {curSize.h}px · {customSize ? cardRatioLabel(curSize.w, curSize.h) + '（自定义）' : CARD_SIZES[size].ratio}</div>
                             </div>
                         </div>
                     </Modal>
@@ -6235,9 +6655,15 @@
             const [relogin, setRelogin] = useState(false);
             // 全量备份导出进行中标记（hook 必须声明在下方 phase 提前 return 之前，否则锁定态会因 hooks 数量减少而崩溃）
             const [exporting, setExporting] = useState(false);
+            // 程序版本（公开接口，页眉展示）
+            const [appVersion, setAppVersion] = useState('');
             const phaseRef = useRef(phase);
             phaseRef.current = phase;
             const isMobile = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches, []);
+
+            useEffect(() => {
+                api('/api/version').then(d => { if (ok(d) && d.data && d.data.version) setAppVersion(d.data.version); }).catch(() => { });
+            }, []);
 
             useEffect(() => {
                 // 锁定事件由 api() 统一广播（403 + “未解锁”）；整页密码门阶段无需浮层。
@@ -6477,7 +6903,7 @@
                 <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
                     <div className="pv-root" style={{ background: isDark ? '#141414' : '#f5f5f5' }}>
                         <div className="pv-topbar">
-                            <div className="pv-brand"><I name="LockOutlined" className="pv-lock-icon" /><span>Server Status / 私人空间</span></div>
+                            <div className="pv-brand"><I name="LockOutlined" className="pv-lock-icon" /><span>Server Status / 私人空间</span>{appVersion && <span className="pv-version">v{appVersion}</span>}</div>
                             <Input.Search
                                 className="pv-search"
                                 placeholder="搜索标题 / 正文 / 标签 / 地点"
