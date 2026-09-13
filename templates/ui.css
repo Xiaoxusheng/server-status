@@ -33,6 +33,13 @@ html {
     --color-warning: #faad14;
     --color-error: #ff4d4f;
 
+    /* 严重度色板（安全中心/运维模块专用，AntD volcano/gold/blue） */
+    --sev-critical: #cf1322;
+    --sev-high: #d46b08;
+    --sev-medium: #d4b106;
+    --sev-low: #1677ff;
+    --sev-info: #8c8c8c;
+
     /* 圆角等级 */
     --radius-sm: 6px;
     --radius: 8px;
@@ -73,6 +80,9 @@ html.dark {
     --color-border-strong: #434343;
 
     --color-primary-bg: #111a2c;
+
+    --sev-critical: #a8071a;
+    --sev-low: #1668dc;
 
     --hover: rgba(255, 255, 255, .06);
     --mark-bg: #613400;

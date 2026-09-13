@@ -3,11 +3,11 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="robots" content="noindex,nofollow">
     <title>安全中心 - Server Status</title>
     <link rel="icon"
-        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M866.9%20169.9L527.1%2054.1c-3-3-9.2-3-12.1%200L175.1%20169.9c-8.3%202.8-12.3%2012.1-8.6%2020.2l4.7%2010.4c-3-3-9.2-3-12.1%200L25.1%20314.5c-8.3%202.8-12.3%2012.1-8.6%2020.2l8.6%2019.1c-3-3-9.2-3-12.1%200L499.3%20960c1.5%201.5%203.5%202.3%205.7%202.3s4.2-0.8%205.7-2.3l486.2-605.7c3.7-8.1-0.3-17.4-8.6-20.2z%22%2F%3E%3C%2Fsvg%3E">
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
     <link rel="stylesheet" href="/ui.css">
     <style>
         #root { min-height: 100vh; }
@@ -21,6 +21,9 @@
         }
         .tb-page { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--color-text); white-space: nowrap; }
         .tb-page .anticon { color: var(--color-primary); }
+        .tb-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+        .tb-nav::-webkit-scrollbar { display: none; }
+        .tb-actions { display: flex; align-items: center; gap: 8px; margin-left: 8px; flex: 0 0 auto; }
 
         /* ===== 页面容器：宽屏信息密度 ===== */
         .sec-page { max-width: 1360px; margin: 0 auto; padding: 20px 28px 72px; }
@@ -163,9 +166,13 @@
             .sec-grid-dist { grid-template-columns: 1fr; }
         }
         @media (max-width: 768px) {
-            .sec-page { padding: 14px 12px 56px; }
+            .sec-page { padding: 14px 12px calc(14px + env(safe-area-inset-bottom)); }
             .sec-topbar { padding: 0 12px; }
             .sec-topbar .ant-btn { padding: 0 8px; }
+            .sec-topbar .tb-text { display: none; }
+            .tb-page { flex: 0 0 auto; }
+            .tb-nav { gap: 6px; }
+            .tb-nav .ant-btn { padding: 0 8px; flex: 0 0 auto; }
             .sec-head .sh-title { font-size: 19px; }
             .sec-hero { gap: 14px; }
             .sec-score-num { font-size: 34px; }
@@ -176,8 +183,6 @@
             .risk-row { flex-wrap: wrap; padding: 12px 12px 12px 14px; }
             .risk-main { flex: 1 1 100%; }
             .risk-actions { flex: 1 1 100%; padding-top: 8px; justify-content: flex-end; gap: 8px; }
-            /* 移动端主操作保证可点击面积 */
-            .risk-actions .ant-btn { min-height: 44px; min-width: 72px; }
             .dist-row { grid-template-columns: 64px 40px 1fr; padding: 9px 6px; }
         }
     </style>
@@ -193,6 +198,21 @@
 
 <body>
     <div id="root"></div>
+    <script>
+        // 前端崩溃捕获：React 渲染异常会整页白屏，把真实错误浮出来便于定位
+        window.__showFatal = function (msg) {
+            var el = document.getElementById('fatal-overlay');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'fatal-overlay';
+                el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;background:#fff2f0;border:1px solid #ffccc7;border-radius:8px;padding:12px 14px;color:#a8071a;font:12px/1.6 Consolas,monospace;white-space:pre-wrap;word-break:break-all;max-height:45vh;overflow:auto;box-shadow:0 6px 16px rgba(0,0,0,.15)';
+                document.body.appendChild(el);
+            }
+            el.textContent = '页面渲染出错：' + msg;
+        };
+        window.addEventListener('error', function (e) { window.__showFatal((e.error && e.error.stack) || e.message); });
+        window.addEventListener('unhandledrejection', function (e) { window.__showFatal('Promise: ' + ((e.reason && e.reason.stack) || e.reason)); });
+    </script>
     <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
     <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
     <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
@@ -218,10 +238,16 @@
             if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) { const tok = getCsrfToken(); if (tok) headers['X-CSRF-Token'] = tok; }
             return fetch(url, { method, headers, credentials: 'include', body: options.body });
         }
+        // 403（权限不足/IP 拦截）后置位，暂停 WS 触发的自动刷新，避免无限报错
+        let opsPermDenied = false;
         async function getJSON(url) {
             const r = await secureFetch(url);
             const d = await r.json();
-            if (d.code !== 200) throw new Error(d.message || ('HTTP ' + r.status));
+            if (d.code !== 200) {
+                const err = new Error(d.message || ('HTTP ' + r.status));
+                if (r.status === 403 || d.code === 403) { err.status = 403; opsPermDenied = true; }
+                throw err;
+            }
             return d.data;
         }
         async function postJSON(url, body) {
@@ -256,18 +282,18 @@
 
         // ==================== 领域展示规则 ====================
         const SEV = {
-            critical: { label: '严重', color: '#cf1322', dark: '#a8071a', rank: 4 },
-            high: { label: '高风险', color: '#d46b08', dark: '#d46b08', rank: 3 },
-            medium: { label: '中风险', color: '#d4b106', dark: '#d4b106', rank: 2 },
-            low: { label: '低风险', color: '#1677ff', dark: '#1668dc', rank: 1 },
-            info: { label: '提示', color: '#8c8c8c', dark: '#8c8c8c', rank: 0 },
+            critical: { label: '严重', color: 'var(--sev-critical)', rank: 4 },
+            high: { label: '高风险', color: 'var(--sev-high)', rank: 3 },
+            medium: { label: '中风险', color: 'var(--sev-medium)', rank: 2 },
+            low: { label: '低风险', color: 'var(--sev-low)', rank: 1 },
+            info: { label: '提示', color: 'var(--sev-info)', rank: 0 },
         };
-        const sevColor = (sev) => (SEV[sev] || SEV.info)[document.documentElement.classList.contains('dark') ? 'dark' : 'color'];
+        const sevColor = (sev) => (SEV[sev] || SEV.info).color;
         // 评分状态 → 状态点 / 文案
         const STATUS_META = {
             good: { dot: 'var(--color-success)', text: '安全状态良好' },
             warning: { dot: 'var(--color-warning)', text: '存在需要关注的风险' },
-            risk: { dot: '#d46b08', text: '存在风险，建议尽快处理' },
+            risk: { dot: 'var(--sev-high)', text: '存在风险，建议尽快处理' },
             critical: { dot: 'var(--color-error)', text: '存在严重风险，请立即处理' },
         };
         const FINDING_STATUS = {
@@ -334,17 +360,17 @@
         // ==================== 顶栏 ====================
         function OpsTopbar({ active, isDark, setIsDark, hasPerm }) {
             const navBtns = [];
-            navBtns.push(<Button key="home" icon={<UIIcon name="DashboardOutlined" />} onClick={() => window.location.href = 'index.html'}>首页</Button>);
-            if (hasPerm('security:view') || hasPerm('remediation:view')) navBtns.push(<Button key="security" icon={<UIIcon name="SafetyOutlined" />} type={active === 'security' ? 'primary' : 'default'} onClick={() => window.location.href = 'security.html'}>安全中心</Button>);
-            if (hasPerm('security:view')) navBtns.push(<Button key="events" icon={<UIIcon name="NotificationOutlined" />} type={active === 'events' ? 'primary' : 'default'} onClick={() => window.location.href = 'security-events.html'}>安全事件</Button>);
-            if (hasPerm('remediation:view')) navBtns.push(<Button key="rem" icon={<UIIcon name="ToolOutlined" />} type={active === 'remediation' ? 'primary' : 'default'} onClick={() => window.location.href = 'remediation.html'}>自动修复</Button>);
-            if (hasPerm('task:view')) navBtns.push(<Button key="tasks" icon={<UIIcon name="ClockCircleOutlined" />} type={active === 'tasks' ? 'primary' : 'default'} onClick={() => window.location.href = 'tasks.html'}>运维任务</Button>);
-            if (hasPerm('task:view')) navBtns.push(<Button key="history" icon={<UIIcon name="HistoryOutlined" />} type={active === 'history' ? 'primary' : 'default'} onClick={() => window.location.href = 'task-history.html'}>执行历史</Button>);
+            navBtns.push(<Button key="home" icon={<UIIcon name="DashboardOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>);
+            if (hasPerm('security:view') || hasPerm('remediation:view')) navBtns.push(<Button key="security" icon={<UIIcon name="SafetyOutlined" />} type={active === 'security' ? 'primary' : 'default'} onClick={() => window.location.href = 'security.html'}><span className="tb-text">安全中心</span></Button>);
+            if (hasPerm('security:view')) navBtns.push(<Button key="events" icon={<UIIcon name="NotificationOutlined" />} type={active === 'events' ? 'primary' : 'default'} onClick={() => window.location.href = 'security-events.html'}><span className="tb-text">安全事件</span></Button>);
+            if (hasPerm('remediation:view')) navBtns.push(<Button key="rem" icon={<UIIcon name="ToolOutlined" />} type={active === 'remediation' ? 'primary' : 'default'} onClick={() => window.location.href = 'remediation.html'}><span className="tb-text">自动修复</span></Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="tasks" icon={<UIIcon name="ClockCircleOutlined" />} type={active === 'tasks' ? 'primary' : 'default'} onClick={() => window.location.href = 'tasks.html'}><span className="tb-text">运维任务</span></Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="history" icon={<UIIcon name="HistoryOutlined" />} type={active === 'history' ? 'primary' : 'default'} onClick={() => window.location.href = 'task-history.html'}><span className="tb-text">执行历史</span></Button>);
             return (
                 <div className="sec-topbar">
                     <span className="tb-page"><UIIcon name="CloudServerOutlined" />安全中心</span>
-                    <Space wrap style={{ marginLeft: 'auto' }}>
-                        {navBtns}
+                    <div className="tb-nav">{navBtns}</div>
+                    <div className="tb-actions">
                         <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
                             <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
                         </Tooltip>
@@ -352,7 +378,7 @@
                             try { await secureFetch(baseUrl + '/logout', { method: 'POST', body: '{}' }); } catch (e) { }
                             window.location.href = 'index.html';
                         }}><span className="tb-text">退出</span></Button>
-                    </Space>
+                    </div>
                 </div>
             );
         }
@@ -483,7 +509,8 @@
                     setSummaryErr('');
                     if (d.scan && d.scan.status === 'running') setScanning(true);
                 } catch (e) {
-                    if (!silent) setSummaryErr(e.message || '加载失败');
+                    if (e.status === 403) setSummaryErr('访问被拦截（403），请确认账号权限或重新登录');
+                    else if (!silent) setSummaryErr(e.message || '加载失败');
                 }
             }, []);
             useEffect(() => { if (auth.ok) loadSummary(); }, [auth.ok]);
@@ -503,7 +530,7 @@
                     const payload = { list: d.findings || [], total: d.total || 0 };
                     cacheRef.current[key] = payload;
                     setFindingsMap(m => ({ ...m, [key]: payload }));
-                } catch (e) { message.error('加载风险列表失败：' + e.message); }
+                } catch (e) { if (e.status !== 403) message.error('加载风险列表失败：' + e.message); }
                 finally { setListLoading(false); }
             }, [statusTab, srcFilter, sevFilter]);
             useEffect(() => { if (auth.ok) loadFindings(); }, [auth.ok, loadFindings]);
@@ -565,9 +592,10 @@
                                 return { status: 'running', steps, total: d.total };
                             });
                         } else if (t === 'finding.open' || t === 'finding.resolved' || t.indexOf('remediation.') === 0) {
-                            // 局部刷新：1s 去抖，避免事件风暴下整页重绘
+                            // 局部刷新：1s 去抖，避免事件风暴下整页重绘；403 后暂停
                             if (refreshTimer.current) clearTimeout(refreshTimer.current);
                             refreshTimer.current = setTimeout(() => {
+                                if (opsPermDenied) return;
                                 loadSummary(true);
                                 cacheRef.current = {};
                                 loadFindings(true);
@@ -608,7 +636,18 @@
                 setRemState({ phase: 'preview', loading: true, finding });
                 try {
                     const d = await postJSON(baseUrl + '/api/remediation/preview', { finding_id: finding.id, rule_id: ruleId || '' });
-                    setRemState({ phase: 'preview', loading: false, preview: d.preview, rule: d, finding });
+                    if (!d || !d.preview) throw new Error('修复预览生成失败，请稍后重试');
+                    const pv = d.preview;
+                    setRemState({
+                        phase: 'preview', loading: false, finding,
+                        preview: {
+                            action: String(pv.action || ''), action_name: String(pv.action_name || ''),
+                            steps: Array.isArray(pv.steps) ? pv.steps.map(String) : [],
+                            impact: String(pv.impact || ''), risk: String(pv.risk || ''),
+                            command_hint: String(pv.command_hint || ''),
+                        },
+                        rule: d,
+                    });
                 } catch (e) { setRemState(null); message.error(e.message); }
             };
             const confirmRemediate = async () => {
@@ -1068,6 +1107,7 @@
                         <Drawer open={scoreOpen} onClose={() => setScoreOpen(false)} width={isMobile ? '100%' : 440} title="安全评分详情">
                             {s.score_breakdown ? (() => {
                                 const bd = s.score_breakdown;
+                                const deds = bd.deductions || [];
                                 return (
                                     <>
                                         <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
@@ -1085,9 +1125,9 @@
                                         </div>
                                         <div className="drawer-section">
                                             <div className="ds-label">风险扣分</div>
-                                            {bd.deductions.length === 0 ? (
+                                            {deds.length === 0 ? (
                                                 <div className="ds-body" style={{ color: 'var(--color-success)' }}>当前没有未解决风险，无扣分</div>
-                                            ) : bd.deductions.map((d, i) => (
+                                            ) : deds.map((d, i) => (
                                                 <div key={i} className="ded-row">
                                                     <span className="dd-reason">{d.reason}</span>
                                                     <span className="dd-count">× {d.count}</span>
@@ -1096,7 +1136,7 @@
                                             ))}
                                             <div className="ded-row ded-sum">
                                                 <span className="dd-reason">当前得分</span>
-                                                <span className="dd-count">{bd.deductions.reduce((a, d) => a + d.count, 0)} 项待处理</span>
+                                                <span className="dd-count">{deds.reduce((a, d) => a + d.count, 0)} 项待处理</span>
                                                 <span className="dd-points">{bd.final_score}</span>
                                             </div>
                                         </div>

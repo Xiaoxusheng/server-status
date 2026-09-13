@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="robots" content="noindex,nofollow">
     <title>执行历史 - Server Status</title>
     <link rel="icon"
@@ -13,11 +13,14 @@
         #root { min-height: 100vh; }
         .sec-topbar {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 0 24px; height: 56px;
+            padding: 0 24px; height: 52px;
             background: var(--color-surface); border-bottom: 1px solid var(--color-border);
         }
         .tb-page { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--color-text); white-space: nowrap; }
         .tb-page .anticon { color: var(--color-primary); }
+        .tb-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+        .tb-nav::-webkit-scrollbar { display: none; }
+        .tb-actions { display: flex; align-items: center; gap: 8px; margin-left: 8px; flex: 0 0 auto; }
         .sec-wrap { padding: 16px 24px 64px; max-width: 1280px; margin: 0 auto; width: 100%; }
 
         .hist-card-m {
@@ -26,12 +29,16 @@
             padding: 12px 14px; margin-bottom: 10px;
         }
         .st-success { border-left-color: var(--color-success); }
-        .st-failed, .st-timeout { border-left-color: #d46b08; }
+        .st-failed, .st-timeout { border-left-color: var(--sev-high); }
         .st-running, .st-queued { border-left-color: var(--color-primary); }
         .rem-mono { font-family: "JetBrains Mono", Consolas, "Courier New", monospace; font-size: 12px; }
         @media (max-width: 768px) {
-            .sec-wrap { padding: 12px 12px 48px; }
+            .sec-wrap { padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
             .sec-topbar { padding: 0 12px; }
+            .sec-topbar .tb-text { display: none; }
+            .tb-page { flex: 0 0 auto; }
+            .tb-nav { gap: 6px; }
+            .tb-nav .ant-btn { padding: 0 8px; flex: 0 0 auto; }
         }
     </style>
     <script>
@@ -109,17 +116,17 @@
 
         function OpsTopbar({ active, isDark, setIsDark, hasPerm }) {
             const navBtns = [];
-            navBtns.push(<Button key="home" icon={<UIIcon name="DashboardOutlined" />} onClick={() => window.location.href = 'index.html'}>首页</Button>);
-            if (hasPerm('security:view') || hasPerm('remediation:view')) navBtns.push(<Button key="security" icon={<UIIcon name="SafetyOutlined" />} type={active === 'security' ? 'primary' : 'default'} onClick={() => window.location.href = 'security.html'}>安全中心</Button>);
-            if (hasPerm('security:view')) navBtns.push(<Button key="events" icon={<UIIcon name="NotificationOutlined" />} type={active === 'events' ? 'primary' : 'default'} onClick={() => window.location.href = 'security-events.html'}>安全事件</Button>);
-            if (hasPerm('remediation:view')) navBtns.push(<Button key="rem" icon={<UIIcon name="ToolOutlined" />} type={active === 'remediation' ? 'primary' : 'default'} onClick={() => window.location.href = 'remediation.html'}>自动修复</Button>);
-            if (hasPerm('task:view')) navBtns.push(<Button key="tasks" icon={<UIIcon name="ClockCircleOutlined" />} type={active === 'tasks' ? 'primary' : 'default'} onClick={() => window.location.href = 'tasks.html'}>运维任务</Button>);
-            if (hasPerm('task:view')) navBtns.push(<Button key="history" icon={<UIIcon name="HistoryOutlined" />} type={active === 'history' ? 'primary' : 'default'} onClick={() => window.location.href = 'task-history.html'}>执行历史</Button>);
+            navBtns.push(<Button key="home" icon={<UIIcon name="DashboardOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>);
+            if (hasPerm('security:view') || hasPerm('remediation:view')) navBtns.push(<Button key="security" icon={<UIIcon name="SafetyOutlined" />} type={active === 'security' ? 'primary' : 'default'} onClick={() => window.location.href = 'security.html'}><span className="tb-text">安全中心</span></Button>);
+            if (hasPerm('security:view')) navBtns.push(<Button key="events" icon={<UIIcon name="NotificationOutlined" />} type={active === 'events' ? 'primary' : 'default'} onClick={() => window.location.href = 'security-events.html'}><span className="tb-text">安全事件</span></Button>);
+            if (hasPerm('remediation:view')) navBtns.push(<Button key="rem" icon={<UIIcon name="ToolOutlined" />} type={active === 'remediation' ? 'primary' : 'default'} onClick={() => window.location.href = 'remediation.html'}><span className="tb-text">自动修复</span></Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="tasks" icon={<UIIcon name="ClockCircleOutlined" />} type={active === 'tasks' ? 'primary' : 'default'} onClick={() => window.location.href = 'tasks.html'}><span className="tb-text">运维任务</span></Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="history" icon={<UIIcon name="HistoryOutlined" />} type={active === 'history' ? 'primary' : 'default'} onClick={() => window.location.href = 'task-history.html'}><span className="tb-text">执行历史</span></Button>);
             return (
                 <div className="sec-topbar">
                     <span className="tb-page"><UIIcon name="CloudServerOutlined" />执行历史</span>
-                    <Space wrap style={{ marginLeft: 'auto' }}>
-                        {navBtns}
+                    <div className="tb-nav">{navBtns}</div>
+                    <div className="tb-actions">
                         <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
                             <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
                         </Tooltip>
@@ -127,7 +134,7 @@
                             try { await secureFetch(baseUrl + '/logout', { method: 'POST', body: '{}' }); } catch (e) { }
                             window.location.href = 'index.html';
                         }}><span className="tb-text">退出</span></Button>
-                    </Space>
+                    </div>
                 </div>
             );
         }

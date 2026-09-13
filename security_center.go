@@ -367,7 +367,7 @@ const scoreRuleVersion = "v1"
 // computeScoreBreakdown 按未解决风险计算评分并给出扣分明细。
 // 权重与历史版本保持一致：critical 25 / high 15 / medium 8 / low 3 / info 0。
 func computeScoreBreakdown(counts map[string]int, updatedAt time.Time) (*SecurityScoreBreakdown, *int) {
-	b := &SecurityScoreBreakdown{BaseScore: 100, RuleVersion: scoreRuleVersion}
+	b := &SecurityScoreBreakdown{BaseScore: 100, RuleVersion: scoreRuleVersion, Deductions: []ScoreDeduction{}}
 	add := func(sev, label string, weight int) {
 		if n := counts[sev]; n > 0 {
 			b.Deductions = append(b.Deductions, ScoreDeduction{Reason: label, Count: n, Points: n * weight})

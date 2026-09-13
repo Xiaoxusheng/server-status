@@ -113,10 +113,9 @@
             align-items: center;
             justify-content: space-between;
             padding: 0 24px;
-            height: 54px;
+            height: 52px;
             background: #fff;
             border-bottom: 1px solid var(--color-border);
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
         }
 
         .topbar .brand {
@@ -131,7 +130,6 @@
         .topbar.dark {
             background: #1f1f1f;
             border-bottom-color: var(--color-border);
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
         }
 
         .topbar.dark .brand {
@@ -258,6 +256,11 @@
             overflow: hidden;
             transition: box-shadow 0.2s, border-color 0.2s;
             cursor: default;
+        }
+
+        .mini-stat.ms-tall {
+            height: auto;
+            min-height: 100px;
         }
 
         html.dark .mini-stat {
@@ -1073,7 +1076,7 @@
                             {(secOverview || taskStats) && (
                                 <div className="mini-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                                     {secOverview && (
-                                        <div className="mini-stat" style={{ cursor: 'pointer' }} onClick={() => window.location.href = 'security.html'}>
+                                        <div className="mini-stat ms-tall" style={{ cursor: 'pointer' }} onClick={() => window.location.href = 'security.html'}>
                                             <div className="ms-label"><UIIcon name="SafetyOutlined" />安全状态</div>
                                             <div className="ms-value" style={{ fontSize: 20 }}>
                                                 {secOverview.score != null ? secOverview.score : '未扫描'}
@@ -1087,7 +1090,7 @@
                                         </div>
                                     )}
                                     {taskStats && (
-                                        <div className="mini-stat" style={{ cursor: 'pointer' }} onClick={() => window.location.href = 'tasks.html'}>
+                                        <div className="mini-stat ms-tall" style={{ cursor: 'pointer' }} onClick={() => window.location.href = 'tasks.html'}>
                                             <div className="ms-label"><UIIcon name="ClockCircleOutlined" />运维状态</div>
                                             <div className="ms-value" style={{ fontSize: 20 }}>
                                                 {taskStats.scheduled}<span className="ms-suffix">个计划任务</span>

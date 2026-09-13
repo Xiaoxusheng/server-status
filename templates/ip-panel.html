@@ -96,16 +96,14 @@
             align-items: center;
             justify-content: space-between;
             padding: 0 24px;
-            height: 54px;
+            height: 52px;
             background: #fff;
             border-bottom: 1px solid var(--color-border);
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
         }
 
         .topbar.dark {
             background: #1f1f1f;
             border-bottom-color: var(--color-border);
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
         }
 
         .topbar .brand {
@@ -943,7 +941,7 @@
             ];
 
             const columns = [
-                { title: 'IP 地址', dataIndex: 'ip', width: 230, render: v => <a onClick={() => openDetail(v)} style={{ fontFamily: 'monospace' }}>{v}</a> },
+                { title: 'IP 地址', dataIndex: 'ip', width: 230, fixed: 'left', render: v => <a onClick={() => openDetail(v)} style={{ fontFamily: 'monospace' }}>{v}</a> },
                 { title: '总请求', dataIndex: 'total_access', width: 90, render: v => <Typography.Text strong>{v || 0}</Typography.Text> },
                 {
                     title: '封禁状态', key: 'blk', width: 180,
@@ -972,7 +970,7 @@
                                     <div key={code} style={{ width: (n / total * 100) + '%', background: statusColor(parseInt(code)) }} />
                                 ))}
                             </div>
-                            <Space size={4} style={{ marginTop: 4 }}>
+                            <Space size={4} wrap style={{ marginTop: 4, maxWidth: '100%' }}>
                                 {Object.entries(counts || {}).map(([code, n]) => (
                                     <Badge key={code} status={badgeClass(parseInt(code))} text={<span style={{ fontSize: 12 }}>{code}×{n}</span>} />
                                 ))}
@@ -1146,7 +1144,7 @@
                                             </div>
                                         ) : (
                                             <Table rowKey="ip" columns={columns} dataSource={filteredIps} loading={loading} size="middle"
-                                                scroll={{ x: 1000 }} pagination={{ pageSize: 20, showSizeChanger: true, showTotal: t => `共 ${t} 条` }} />
+                                                scroll={{ x: 1210 }} pagination={{ pageSize: 20, showSizeChanger: true, showTotal: t => `共 ${t} 条` }} />
                                         )}
                                     </Card>
                                 </Col>

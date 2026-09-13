@@ -784,28 +784,28 @@ func (c *dockerSecurityChecker) Check(ctx context.Context) SecurityCheckResult {
 				fmt.Sprintf("容器 %s 使用 host 网络", name),
 				"host 网络模式下容器直接共享主机网络栈，端口隔离与流量管控失效。",
 				fmt.Sprintf("%s: NetworkMode=host", name),
-				"如无性能必要，改为 bridge 网络并显式映射端口。", nil))
+				"如无性能必要，改为 bridge 网络并显式映射端口。", map[string]any{"container": name}))
 		}
 		if hc.PidMode == "host" {
 			hostPID++
 			if result.Status == "pass" {
 				result.Status = "warn"
 			}
-			result.Findings = append(result.Findings, mkFinding(c.ID(), "hostpid:"+name, "medium",
-				fmt.Sprintf("容器 %s 使用 host PID 空间", name),
-				"容器内进程可以看到主机全部进程，增大信息泄露与信号注入风险。",
-				fmt.Sprintf("%s: PidMode=host", name),
-				"如无必要请移除 --pid=host 配置。", nil))
+				result.Findings = append(result.Findings, mkFinding(c.ID(), "hostpid:"+name, "medium",
+					fmt.Sprintf("容器 %s 使用 host PID 空间", name),
+					"容器内进程可以看到主机全部进程，增大信息泄露与信号注入风险。",
+					fmt.Sprintf("%s: PidMode=host", name),
+					"如无必要请移除 --pid=host 配置。", map[string]any{"container": name}))
 		}
 		for _, b := range hc.Binds {
 			if strings.HasPrefix(b, "/var/run/docker.sock") || strings.HasPrefix(b, "/run/docker.sock") {
 				sockMount++
 				result.Status = "fail"
-				result.Findings = append(result.Findings, mkFinding(c.ID(), "sock:"+name, "critical",
-					fmt.Sprintf("容器 %s 挂载了 Docker Socket", name),
-					"挂载 docker.sock 等同于把主机 root 权限交给容器，属于最高危配置。",
-					fmt.Sprintf("%s: bind=%s", name, b),
-					"改用 docker API 代理（受限权限）或其他免 socket 方案。", nil))
+					result.Findings = append(result.Findings, mkFinding(c.ID(), "sock:"+name, "critical",
+						fmt.Sprintf("容器 %s 挂载了 Docker Socket", name),
+						"挂载 docker.sock 等同于把主机 root 权限交给容器，属于最高危配置。",
+						fmt.Sprintf("%s: bind=%s", name, b),
+						"改用 docker API 代理（受限权限）或其他免 socket 方案。", map[string]any{"container": name}))
 				break
 			}
 		}
