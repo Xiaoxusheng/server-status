@@ -2471,8 +2471,8 @@
             const p = (async () => {
                 try {
                     const key = await ensurePvMediaKey();
-                    const r = await fetch(baseUrl + '/api/private/notes/' + noteID + '/images/' + imageID + '/cloud',
-                        { credentials: 'include', redirect: 'follow' }); // 302 自动跟到 CDN
+                    const r = await pvFetchTimeout(baseUrl + '/api/private/notes/' + noteID + '/images/' + imageID + '/cloud', 15000,
+                        { redirect: 'follow' }); // 302 自动跟到 CDN；超时防止直链挂起把缓存 promise 永久卡死
                     if (!r.ok) { authEv(r.status); throw new Error('cloud ' + r.status); }
                     const buf = new Uint8Array(await r.arrayBuffer()); // CORS 不通过会在这里抛错
                     // 服务器回退路径返回的是已解密明文（无 PVMEDIA2 头），直接使用不重复解密
@@ -2481,7 +2481,7 @@
                         : buf;
                     return URL.createObjectURL(new Blob([plain], { type: pvMime(plain) }));
                 } catch (e) {
-                    const r2 = await fetch(baseUrl + fallbackURL, { credentials: 'include' }); // 服务器解密回退
+                    const r2 = await pvFetchTimeout(baseUrl + fallbackURL, 15000); // 服务器解密回退
                     if (!r2.ok) { authEv(r2.status); throw new Error('fallback ' + r2.status); }
                     return URL.createObjectURL(await r2.blob());
                 }
@@ -2834,6 +2834,15 @@
             ctx.arcTo(x, y, x + w, y, r);
             ctx.closePath();
         }
+        // pvFetchTimeout 带超时的 fetch：CDN 直链/服务器解密偶发挂起时，无超时的 await
+        // 会永远等不到结果（fetchDecryptedImage 还会把这种挂起 promise 按图缓存，
+        // 之后所有渲染一起卡死）。取图统一走这里，超时中断后由调用方回退或报错
+        function pvFetchTimeout(url, ms, opts) {
+            const ctl = new AbortController();
+            const t = setTimeout(() => ctl.abort(), ms);
+            return fetch(url, { credentials: 'include', ...(opts || {}), signal: ctl.signal }).finally(() => clearTimeout(t));
+        }
+
         // loadImg 取图并解码：ref = {noteID, imageID} 时优先走云直链+本地解密
         //（fetchDecryptedImage 失败内部已回退服务器，此处仅需再兜底原 URL）；
         // 无 ref 走原有直连逻辑（卡片二维码/视频海报等不受影响）
@@ -2847,7 +2856,7 @@
                     target = await fetchDecryptedImage(ref.noteID, ref.imageID, url);
                 } catch (e) { /* 解密链路失败：回退原 URL（服务器解密） */ target = url; }
             }
-            const r = await fetch(target, { credentials: 'include' });
+            const r = await pvFetchTimeout(target, 15000);
             if (!r.ok) {
                 // 会话失效广播：canvas 取图同样不经 api()，过期时弹解锁/重登浮层而非笼统报错
                 if (r.status === 403) window.dispatchEvent(new CustomEvent('pv-locked'));
@@ -2857,7 +2866,12 @@
             const blob = await r.blob();
             if (window.createImageBitmap) {
                 try {
-                    return await createImageBitmap(blob);
+                    // 解码也加超时：个别损坏图/超大图 createImageBitmap 可能长时间不落，
+                    // 卡住整条渲染链；超时后回退 <img> 解码路径
+                    return await Promise.race([
+                        createImageBitmap(blob),
+                        new Promise((_, rej) => setTimeout(() => rej(new Error('图片解码超时')), 8000))
+                    ]);
                 } catch (e) { /* 回退到 <img> 解码 */ }
             }
             const objUrl = URL.createObjectURL(blob);
@@ -3247,11 +3261,14 @@
                     roundRect(ctx, x, y, w, h, radius);
                     ctx.clip();
                 }
-                for (let i = 0; i < n; i++) {
+                // 并行加载：串行 await 会让 9 张原图的「下载+解密+解码」耗时线性叠加，
+                // 换选一张图也要干等整串完成，多图手记上表现为预览长时间无响应。
+                // 各格子绘制区域互不重叠，drawImageCover 取图后的绘制是同步块，完成顺序不影响结果
+                await Promise.all(urls.map((u, i) => {
                     const cx = x + (i % cols) * cw;
                     const cy = y + Math.floor(i / cols) * ch;
-                    await drawImageCover(ctx, urls[i], cx, cy, cw, ch, 0, null, noteID);
-                }
+                    return drawImageCover(ctx, u, cx, cy, cw, ch, 0, null, noteID);
+                }));
                 ctx.restore();
             };
 
@@ -3472,9 +3489,9 @@
                     const thumbW = (maxW - gap * (imgs.length - 1)) / imgs.length;
                     const thumbH = height * 0.28;
                     const ty = height - thumbH - height * 0.1;
-                    for (let k = 0; k < imgs.length; k++) {
-                        await drawImageCover(ctx, imgs[k], padX + k * (thumbW + gap), ty, thumbW, thumbH, 12, null, noteID);
-                    }
+                    // 与拼图一致并行加载，避免多图串行拖慢预览
+                    await Promise.all(imgs.map((im, k) =>
+                        drawImageCover(ctx, im, padX + k * (thumbW + gap), ty, thumbW, thumbH, 12, null, noteID)));
                 }
                 await drawAudioQR('topright');
                 drawBrand();
@@ -5180,6 +5197,10 @@
             const stageRef = useRef(null);
             const previewRef = useRef(null);
             const timer = useRef(null);
+            // 预览渲染代次：只有最新一次调度的渲染允许把结果落到画布。
+            // renderCard 无法中途取消，快速换图/取消重开时会并发多个在途渲染，
+            // 若不校验代次，先启动的旧渲染会后完成并把过期画面盖回预览（看起来就是"点了没反应"）
+            const renderSeqRef = useRef(0);
 
             const curSize = customSize || CARD_SIZES[size];
 
@@ -5259,14 +5280,23 @@
             }, [open, note && note.id]);
 
             useEffect(() => {
-                if (!open) return;
+                // 关闭弹窗：作废在途渲染并清掉未触发的 debounce。
+                // 否则取消后仍会在后台拉满 9 张原图，与下次打开的首渲染抢带宽，
+                // 预览长时间转圈，表现为"取消再选图就一直卡住"
+                if (!open) {
+                    clearTimeout(timer.current);
+                    renderSeqRef.current++;
+                    return;
+                }
                 if (template === 'server' && !server) {
                     api('/api/private/server-status').then(d => { if (ok(d) && d.data) setServer(d.data); });
                 }
                 clearTimeout(timer.current);
                 timer.current = setTimeout(async () => {
+                    const seq = ++renderSeqRef.current; // 只有最新代次允许落画布
                     try {
                         const c = await renderCard(opts());
+                        if (seq !== renderSeqRef.current) return; // 过期渲染：结果直接丢弃
                         setPreview(c);
                         setRenderErr(false);
                         setFitHint(!!c.fitHint);
@@ -5277,7 +5307,10 @@
                             ctx.clearRect(0, 0, c.width, c.height);
                             ctx.drawImage(c, 0, 0);
                         }
-                    } catch (e) { console.error('卡片预览渲染失败:', e); setRenderErr(true); }
+                    } catch (e) {
+                        console.error('卡片预览渲染失败:', e);
+                        if (seq === renderSeqRef.current) setRenderErr(true); // 过期渲染的失败不打扰当前预览
+                    }
                 }, 200);
                 // deps 必须包含 foldLong/foldLineN/fontScale：否则折叠行数与字号变化不触发预览重渲染（点击看似无效）
                 // audioQR：二维码 blob URL 到位后需重绘预览，否则卡片上看不到语音二维码
