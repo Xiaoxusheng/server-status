@@ -57,7 +57,6 @@ import (
 //	SERVER_STATUS_TLS_CERT / _KEY  TLS 证书与私钥（默认 <数据根目录>/tls/cert.pem、key.pem）
 //	SERVER_STATUS_DOMAIN           对外域名（跨域白名单、证书探测显示；localhost 表示本机调试）
 //	SERVER_STATUS_LISTEN_ADDR      HTTPS 监听地址（默认 :9000）
-//	SERVER_STATUS_STATIC_BASE_URL  随机媒体外链基地址（留空回退为同源会话鉴权的 /api/media）
 //	SERVER_STATUS_EXTRA_ORIGINS    额外跨域白名单 Origin，逗号分隔
 var (
 	mediaDir          = getEnvOr("SERVER_STATUS_MEDIA_DIR", filepath.Join(dataRoot(), "media"))
@@ -73,9 +72,7 @@ var (
 	tlsCertFile = getEnvOr("SERVER_STATUS_TLS_CERT", filepath.Join(dataRoot(), "tls", "cert.pem")) // TLS 证书文件路径
 	tlsKeyFile  = getEnvOr("SERVER_STATUS_TLS_KEY", filepath.Join(dataRoot(), "tls", "key.pem"))   // TLS 私钥文件路径
 	tlsDomain   = getEnvOr("SERVER_STATUS_DOMAIN", "localhost")                                    // 证书绑定的主域名（SNI / 跨域白名单用）
-	listenAddr  = getEnvOr("SERVER_STATUS_LISTEN_ADDR", ":9000")                                   // HTTPS 监听地址
-	// 随机媒体外链基地址：留空时回退为同源 /api/media（会话鉴权，无需额外静态服务器）
-	staticBaseURL = getEnvOr("SERVER_STATUS_STATIC_BASE_URL", "")
+	listenAddr  = getEnvOr("SERVER_STATUS_LISTEN_ADDR", ":9000") // HTTPS 监听地址
 	// 下载令牌配置
 	downloadTokenExpiry = 30 * time.Minute                                  // 下载令牌有效期
 	downloadLimitBytes  = 3 * 1024 * 1024 * 1024                            // 下载限制
@@ -140,12 +137,25 @@ func fallbackSigningDigest(n int64) string {
 // logDir 日志目录（默认 <数据根目录>/log，可用 SERVER_STATUS_HOME 覆盖便于本地测试/开发）
 var logDir = defaultLogDir()
 
-// 版本信息（由 CI 通过 -ldflags "-X" 注入，本地构建时为 dev）
+// 版本信息：构建时由 build.sh / deploy.sh 通过 -ldflags "-X" 注入 git 信息；
+// 未注入（本地裸 go build）时回落 1.0.0。前端通过 GET /api/version 读取展示
 var (
-	version   = "dev"
+	version   = "1.0.0"
 	commit    = "none"
 	buildDate = "unknown"
 )
+
+// versionHandler GET /api/version
+// 公开只读版本信息：程序版本、git 提交、构建时间、Go 运行时版本，供前端展示
+func versionHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, "ok", map[string]string{
+		"version":    version,
+		"commit":     commit,
+		"build_date": buildDate,
+		"go_version": runtime.Version(),
+	})
+}
 
 func defaultLogDir() string {
 	return filepath.Join(dataRoot(), "log")
@@ -1868,38 +1878,6 @@ func parseKbToMb(kb string) float64 {
 	return v / 1024
 }
 
-// ipinfoProxyHandler 代理到 8081 端口的 ipinfo 服务，避免跨端口/跨域名在移动端不可达的问题
-func ipinfoProxyHandler(w http.ResponseWriter, r *http.Request) {
-	target := "https://127.0.0.1:8081/ipinfo"
-	// 仅透传经过校验的 ip 参数，避免向内部服务注入其他参数
-	if q := strings.TrimSpace(r.URL.Query().Get("ip")); q != "" && net.ParseIP(q) != nil {
-		target += "?ip=" + url.QueryEscape(q)
-	}
-
-	// 127.0.0.1 上证书 CN 与主机名不匹配（自签 / 域名证书场景），需跳过证书校验
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	resp, err := client.Get(target)
-	if err != nil {
-		writeJSONError(w, http.StatusBadGateway, "IP 数据服务暂不可用: "+err.Error())
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		writeJSONError(w, http.StatusBadGateway, "读取 IP 数据失败")
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(body)
-}
-
 // ==================== IP 封禁管理功能 ====================
 
 // blockedIPsFile 手动封禁 IP 列表文件（默认 <数据根目录>/blocked_ips.json）
@@ -2190,6 +2168,9 @@ type ServerStatus struct {
 	Platform      string           `json:"platform"`
 	KernelVersion string           `json:"kernel_version"`
 	Architecture  string           `json:"architecture"`
+	Version       string           `json:"version"`
+	Commit        string           `json:"commit"`
+	BuildDate     string           `json:"build_date"`
 	ServerIP      string           `json:"server_ip"`
 	Trojan        TrojanStatus     `json:"trojan"`
 	Disks         []DiskPartition  `json:"disks"`
@@ -4911,8 +4892,8 @@ func epubFileHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // mediaStreamHandler GET /api/media?path=xxx
-// 登录 + files:manage 权限保护下，从媒体目录同源流式返回文件（http.ServeFile 自带 Range/206 断点支持）。
-// 供文件管理页 Drawer 内 <video>/<img> 预览及 mpegts.js 拉流播放 .ts 使用，避免依赖跨源且带 Basic Auth 的 8081 静态地址。
+// 登录 + files:view 权限保护下，从媒体目录同源流式返回文件（http.ServeFile 自带 Range/206 断点支持）。
+// 供首页媒体窗、文件管理页 Drawer 内 <video>/<img> 预览及 mpegts.js 拉流播放 .ts 使用。
 func mediaStreamHandler(w http.ResponseWriter, r *http.Request) {
 	// 以 "/" 为基准 Clean，消除 .. 等路径穿越片段，再交由 isSafeFilePath 双重校验
 	rel := filepath.Clean("/" + strings.Trim(r.URL.Query().Get("path"), "/"))
@@ -5124,13 +5105,9 @@ func recordAccess(r *http.Request) {
 // ---------------- 媒体文件 ----------------
 
 // randomMediaHandler HTTP 端点：分发流媒体挂载链接（含严密高并发处理防竞争）
-// mediaSrcURL 生成随机媒体的访问地址：
-// 配置了 SERVER_STATUS_STATIC_BASE_URL 时使用外链基地址；
-// 否则回退为同源 /api/media（会话 + files:view 鉴权），部署无需额外的静态文件服务器。
+// mediaSrcURL 生成随机媒体的访问地址：同源 /api/media（会话 + files:view 鉴权），
+// 不再依赖独立静态服务器 / 8081 外链，部署零额外组件。
 func mediaSrcURL(name string) string {
-	if staticBaseURL != "" {
-		return staticBaseURL + name
-	}
 	return "/api/media?path=" + url.QueryEscape(name)
 }
 
@@ -5834,6 +5811,9 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 		Platform:      platform,
 		KernelVersion: kernelVersion,
 		Architecture:  runtime.GOARCH,
+		Version:       version,
+		Commit:        commit,
+		BuildDate:     buildDate,
 		ServerIP:      serverIP,
 		Trojan: func() TrojanStatus {
 			if trojanClient == nil {
@@ -5900,6 +5880,9 @@ func main() {
 	// 加载手动封禁的 IP 列表
 	loadBlockedIPs()
 
+	// 加载按 IP 访问统计（/api/ipinfo 本地数据源，取代原 8081 独立服务）
+	loadIPAccess()
+
 	// 定期清理过期的自动/手动封禁
 	go ipSecurityPruneLoop()
 
@@ -5932,7 +5915,7 @@ func main() {
 		t := time.NewTicker(time.Second * 30)
 		for range t.C {
 			saveData()
-
+			saveIPAccess()
 		}
 	}()
 
@@ -5951,6 +5934,7 @@ func main() {
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 		<-c
 		saveData()
+		saveIPAccess()
 		if trojanClient != nil {
 			if err := trojanClient.close(); err != nil {
 				log.Printf("关闭 Trojan-Go 客户端失败: %v", err)
@@ -5976,6 +5960,8 @@ func main() {
 	http.HandleFunc("/logout", securityMiddleware(logoutHandler))
 	http.HandleFunc("/register", securityMiddleware(registerHandler))
 	http.HandleFunc("/check-auth", securityMiddleware(checkAuthHandler))
+	// 版本信息：公开只读接口（不含敏感数据），供前端页脚/关于面板展示
+	http.HandleFunc("GET /api/version", securityMiddleware(versionHandler))
 
 	// 注册下载相关路由
 	http.HandleFunc("/generate-download-token", authMiddleware(requirePermission("token:issue", securityMiddleware(generateDownloadTokenHandler))))
@@ -6064,14 +6050,14 @@ func main() {
 	http.HandleFunc("GET /api/files/favorites", authMiddleware(requirePermission("files:manage", securityMiddleware(favoritesHandler))))
 	http.HandleFunc("POST /api/files/favorites", authMiddleware(requirePermission("files:manage", securityMiddleware(favoritesHandler))))
 	http.HandleFunc("DELETE /api/files/favorites", authMiddleware(requirePermission("files:manage", securityMiddleware(favoritesHandler))))
-	http.HandleFunc("GET /api/media", authMiddleware(requirePermission("files:manage", securityMiddleware(mediaStreamHandler))))
+	http.HandleFunc("GET /api/media", authMiddleware(requirePermission("files:view", securityMiddleware(mediaStreamHandler))))
 	http.HandleFunc("GET /api/processes", authMiddleware(requirePermission("system:process", securityMiddleware(listProcessesHandler))))
 	http.HandleFunc("GET /api/processes/{pid}", authMiddleware(requirePermission("system:process", securityMiddleware(getProcessDetailHandler))))
 	http.HandleFunc("POST /api/processes/kill", authMiddleware(requirePermission("system:kill", securityMiddleware(killProcessHandler))))
 	http.HandleFunc("GET /api/ip/blocked", authMiddleware(requirePermission("ip:manage", securityMiddleware(listBlockedIPsHandler))))
 	http.HandleFunc("POST /api/ip/block", authMiddleware(requirePermission("ip:manage", securityMiddleware(blockIPHandler))))
 	http.HandleFunc("POST /api/ip/unblock", authMiddleware(requirePermission("ip:manage", securityMiddleware(unblockIPHandler))))
-	http.HandleFunc("GET /api/ipinfo", authMiddleware(requirePermission("system:view", securityMiddleware(ipinfoProxyHandler))))
+	http.HandleFunc("GET /api/ipinfo", authMiddleware(requirePermission("system:view", securityMiddleware(ipinfoHandler))))
 	http.HandleFunc("GET /api/ip/blocked/history", authMiddleware(requirePermission("ip:manage", securityMiddleware(listBlockHistoryHandler))))
 	http.HandleFunc("GET /api/ip/whitelist", authMiddleware(requirePermission("ip:manage", securityMiddleware(listWhitelistHandler))))
 	http.HandleFunc("POST /api/ip/whitelist", authMiddleware(requirePermission("ip:manage", securityMiddleware(addWhitelistHandler))))
@@ -6151,6 +6137,8 @@ func main() {
 	//（服务端无日志、前端表现为"正在连接"无限转圈）。禁 h2 换取全部 WS 端点可用。
 	srv := &http.Server{
 		Addr: listenAddr,
+		// 全链路按 IP 记账（/api/ipinfo 数据源），再进入默认路由
+		Handler: ipAccessMiddleware(http.DefaultServeMux),
 		TLSConfig: &tls.Config{
 			MinVersion: tls.VersionTLS12,
 			NextProtos: []string{"http/1.1"},

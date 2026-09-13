@@ -15,6 +15,12 @@ VERSION="1.0.0"
 BUILD_DIR="dist"
 MAIN_FILE="main.go"  # 如果是Go项目
 
+# 版本注入：程序版本 + git 提交 + 构建时间（git 不可用时回落 dev/none/unknown）
+BUILD_VERSION="$(git describe --tags --always 2>/dev/null || echo dev)"
+BUILD_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
+BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+VERSION_LDFLAGS="-X main.version=${BUILD_VERSION} -X main.commit=${BUILD_COMMIT} -X main.buildDate=${BUILD_DATE}"
+
 # 支持的平台列表
 SUPPORTED_PLATFORMS=(
     "linux/amd64"
@@ -79,7 +85,7 @@ build_platform() {
     if [ -f "$MAIN_FILE" ]; then
         # Go项目构建
         if command -v go &> /dev/null; then
-            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="-s -w" -o "$output_path" "$MAIN_FILE"
+            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags="$VERSION_LDFLAGS -s -w" -o "$output_path" "$MAIN_FILE"
             if [ $? -eq 0 ]; then
                 echo -e "${GREEN}✓ $platform 构建成功${NC}"
 

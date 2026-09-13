@@ -1056,7 +1056,12 @@
                                     { key: 'up', label: '上传总流量', children: status?.total_upload || '-' },
                                     { key: 'down', label: '下载总流量', children: status?.total_download || '-' },
                                     { key: 'load', label: '系统负载', children: status ? (status.load1 + ' / ' + status.load5 + ' / ' + status.load15) : '-' },
-                                    { key: 'net', label: '网络', children: status ? '↑' + (parseFloat(status.upload_speed) || 0).toFixed(1) + ' / ↓' + (parseFloat(status.download_speed) || 0).toFixed(1) + ' KB/s' : '-' }
+                                    { key: 'net', label: '网络', children: status ? '↑' + (parseFloat(status.upload_speed) || 0).toFixed(1) + ' / ↓' + (parseFloat(status.download_speed) || 0).toFixed(1) + ' KB/s' : '-' },
+                                    {
+                                        key: 'ver', label: '程序版本', children: status && status.version
+                                            ? status.version + (status.commit && status.commit !== 'none' ? ' (' + status.commit + ')' : '')
+                                            : '-'
+                                    }
                                 ]} />
                             </Card>
 
@@ -1128,18 +1133,11 @@
                 return null;
             });
             const isVideo = src && /\.(mp4|webm|mov)(\?|$)/i.test(src);
-            const fixSrc = (u) => {
-                try {
-                    const p = new URL(u);
-                    p.hostname = window.location.hostname;
-                    return p.toString();
-                } catch (e) { return u; }
-            };
 
             const load = useCallback(() => {
                 secureFetch(baseUrl + '/random-media')
                     .then(r => r.json())
-                    .then(d => { if (d && d.src) { setSrc(fixSrc(d.src)); setPlaying(true); setMuted(localStorage.getItem('media_sound') !== 'on'); } })
+                    .then(d => { if (d && d.src) { setSrc(d.src); setPlaying(true); setMuted(localStorage.getItem('media_sound') !== 'on'); } })
                     .catch(() => { });
             }, []);
             useEffect(() => {

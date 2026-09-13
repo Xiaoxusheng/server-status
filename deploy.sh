@@ -21,7 +21,6 @@ DATA_DIR="/opt/server-status"  # 数据根目录（--data-dir 覆盖）
 MODE="systemd"              # systemd | docker
 USE_LETSENCRYPT="no"
 PRIVATE_PASSWORD=""         # 私人空间初始化密码（可选，仅首次启动生效）
-STATIC_BASE_URL=""          # 独立静态服务器地址（可选）
 EXTRA_ORIGINS=""            # 额外跨域白名单（可选）
 CUSTOM_BINARY=""            # 指定预编译二进制路径（可选）
 ENV_FILE="/etc/server-status/server-status.env"
@@ -33,6 +32,12 @@ warn()  { echo -e "${YELLOW}警告:${NC} $*"; }
 die()   { echo -e "${RED}错误:${NC} $*" >&2; exit 1; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 版本注入：程序版本 + git 提交 + 构建时间（git 不可用时回落 dev/none/unknown）
+BUILD_VERSION="$(git describe --tags --always 2>/dev/null || echo dev)"
+BUILD_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
+BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+VERSION_LDFLAGS="-X main.version=${BUILD_VERSION} -X main.commit=${BUILD_COMMIT} -X main.buildDate=${BUILD_DATE}"
 
 # ---------------- 参数解析 ----------------
 usage() {
@@ -47,7 +52,6 @@ while [[ $# -gt 0 ]]; do
     --media-dir)        MEDIA_DIR="$2"; shift 2 ;;
     --letsencrypt)      USE_LETSENCRYPT="yes"; shift ;;
     --docker)           MODE="docker"; shift ;;
-    --static-base)      STATIC_BASE_URL="$2"; shift 2 ;;
     --extra-origins)    EXTRA_ORIGINS="$2"; shift 2 ;;
     --binary)           CUSTOM_BINARY="$2"; shift 2 ;;
     --private-password) PRIVATE_PASSWORD="$2"; shift 2 ;;
@@ -166,7 +170,7 @@ deploy_systemd() {
     bin_src="$SCRIPT_DIR/server-status-linux"
   elif command -v go >/dev/null; then
     info "未找到预编译产物 server-status-linux，现场编译（约 1-2 分钟）..."
-    ( cd "$SCRIPT_DIR" && CGO_ENABLED=0 go build -ldflags="-s -w" -o server-status-linux . ) \
+    ( cd "$SCRIPT_DIR" && CGO_ENABLED=0 go build -ldflags="$VERSION_LDFLAGS -s -w" -o server-status-linux . ) \
       || die "编译失败，请检查 Go 环境（或先在本地交叉编译：CGO_ENABLED=0 GOOS=linux go build -o server-status-linux .）"
     bin_src="$SCRIPT_DIR/server-status-linux"
   else
@@ -200,7 +204,6 @@ deploy_systemd() {
       echo "SERVER_STATUS_LISTEN_ADDR=:${PORT}"
       echo "SERVER_STATUS_HOME=${DATA_DIR}"
       echo "SERVER_STATUS_MEDIA_DIR=${MEDIA_DIR}"
-      if [[ -n "$STATIC_BASE_URL" ]]; then echo "SERVER_STATUS_STATIC_BASE_URL=${STATIC_BASE_URL}"; fi
       if [[ -n "$EXTRA_ORIGINS" ]];   then echo "SERVER_STATUS_EXTRA_ORIGINS=${EXTRA_ORIGINS}"; fi
       if [[ -n "$PRIVATE_PASSWORD" ]]; then
         echo "PRIVATE_NOTES_PASSWORD=${PRIVATE_PASSWORD}"

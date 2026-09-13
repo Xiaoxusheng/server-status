@@ -16,7 +16,10 @@ cd $SRC_DIR
 # 2. 【第一步】先编译 (Compile First)
 # 这样做的好处是：如果代码写错了导致编译失败，旧服务还在运行，不会导致网站挂掉。
 echo -e "${GREEN}===> 1. 开始编译新版本...${NC}"
-if go build -o "$APP_NAME" -ldflags "-w -s"; then
+BUILD_VERSION="$(git describe --tags --always 2>/dev/null || echo dev)"
+BUILD_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo none)"
+BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+if go build -o "$APP_NAME" -ldflags "-w -s -X main.version=${BUILD_VERSION} -X main.commit=${BUILD_COMMIT} -X main.buildDate=${BUILD_DATE}"; then
     echo -e "${GREEN}编译成功！${NC}"
 else
     echo -e "${RED}编译失败！脚本终止，服务未受影响。${NC}"

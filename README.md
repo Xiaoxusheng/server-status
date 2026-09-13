@@ -107,8 +107,7 @@ openssl rand -hex 32
 | `SERVER_STATUS_TEMPLATES_DIR` | `<数据根目录>/templates` | 前端模板目录（Docker 中固定为镜像内 `/app/templates`） |
 | `SERVER_STATUS_TLS_CERT` / `_KEY` | `<数据根目录>/tls/cert.pem`、`key.pem` | TLS 证书与私钥路径 |
 | `SERVER_STATUS_MEDIA_DIR` | `<数据根目录>/media` | 媒体文件目录（图片 / 视频 / EPUB） |
-| `SERVER_STATUS_STATIC_BASE_URL` | 空 | 随机媒体外链基地址。**留空时自动回退为同源 `/api/media` 接口（会话鉴权），无需额外静态服务器**；如你有独立公开静态服务，填 `https://域名:端口/static/` |
-| `SERVER_STATUS_EXTRA_ORIGINS` | 空 | 额外跨域白名单 Origin，逗号分隔（反向代理地址、静态服务地址等） |
+| `SERVER_STATUS_EXTRA_ORIGINS` | 空 | 额外跨域白名单 Origin，逗号分隔（反向代理地址等） |
 
 ### 可选：功能开关
 
@@ -160,7 +159,6 @@ SERVER_STATUS_MEDIA_DIR=<旧媒体目录>
 SERVER_STATUS_TLS_CERT=<旧证书文件路径>
 SERVER_STATUS_TLS_KEY=<旧私钥文件路径>
 SERVER_STATUS_DOMAIN=<你的域名>
-SERVER_STATUS_STATIC_BASE_URL=<旧媒体外链基地址，如有独立静态服务器>
 SERVER_STATUS_EXTRA_ORIGINS=<旧额外跨域来源，逗号分隔>
 ```
 
