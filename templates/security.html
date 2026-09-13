@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow">
+    <title>安全中心 - Server Status</title>
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M866.9%20169.9L527.1%2054.1c-3-3-9.2-3-12.1%200L175.1%20169.9c-8.3%202.8-12.3%2012.1-8.6%2020.2l4.7%2010.4c-3-3-9.2-3-12.1%200L25.1%20314.5c-8.3%202.8-12.3%2012.1-8.6%2020.2l8.6%2019.1c-3-3-9.2-3-12.1%200L499.3%20960c1.5%201.5%203.5%202.3%205.7%202.3s4.2-0.8%205.7-2.3l486.2-605.7c3.7-8.1-0.3-17.4-8.6-20.2z%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="stylesheet" href="/ui.css">
+    <style>
+        #root { min-height: 100vh; }
+
+        /* ===== 顶栏：与全站一致的窄条导航 ===== */
+        .sec-topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 52px;
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
+        }
+        .tb-page { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--color-text); white-space: nowrap; }
+        .tb-page .anticon { color: var(--color-primary); }
+
+        /* ===== 页面容器：宽屏信息密度 ===== */
+        .sec-page { max-width: 1360px; margin: 0 auto; padding: 20px 28px 72px; }
+
+        /* ===== 页头：标题 + 副标题 + 次要操作 ===== */
+        .sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+        .sec-head .sh-title { font-size: 22px; font-weight: 600; color: var(--color-text); line-height: 1.25; }
+        .sec-head .sh-title .sh-en { font-size: 12px; font-weight: 500; color: var(--color-text-tertiary); margin-left: 8px; letter-spacing: .04em; }
+        .sec-head .sh-sub { font-size: 13px; color: var(--color-text-tertiary); margin-top: 4px; }
+
+        /* ===== 卡片基线：1px 边框 + 表面色，无阴影无渐变 ===== */
+        .sec-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            padding: 16px 20px;
+        }
+        .sec-card .sc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+        .sec-card .sc-title { font-size: 14px; font-weight: 600; color: var(--color-text); display: inline-flex; align-items: center; gap: 6px; }
+        .sec-card .sc-sub { font-size: 12px; color: var(--color-text-tertiary); font-weight: 400; margin-left: 6px; }
+
+        /* ===== 评分区 ===== */
+        .sec-hero { display: flex; gap: 28px; align-items: stretch; flex-wrap: wrap; }
+        .sec-score-block { display: flex; flex-direction: column; justify-content: center; min-width: 190px; }
+        .sec-score-label { font-size: 12px; color: var(--color-text-tertiary); }
+        .sec-score-row { display: flex; align-items: baseline; gap: 4px; cursor: pointer; }
+        .sec-score-num { font-size: 42px; font-weight: 600; line-height: 1.15; color: var(--color-text); font-variant-numeric: tabular-nums; }
+        .sec-score-total { font-size: 14px; color: var(--color-text-tertiary); }
+        .sec-score-bar { margin-top: 8px; width: 200px; height: 6px; border-radius: 3px; background: var(--color-border); overflow: hidden; }
+        .sec-score-bar i { display: block; height: 100%; border-radius: 3px; transition: width .6s ease; }
+        .sec-score-hint { margin-top: 6px; font-size: 12px; color: var(--color-text-tertiary); display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+        .sec-score-hint:hover { color: var(--color-primary); }
+
+        .sec-hero-main { flex: 1; min-width: 260px; display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+        .sec-status-line { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: var(--color-text); }
+        .sec-status-line .sdot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; }
+        .sec-count-line { font-size: 13px; color: var(--color-text-secondary); }
+        .sec-count-line b { font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums; }
+        .sec-scan-meta { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--color-text-tertiary); }
+        .sec-scan-meta .tnum { font-variant-numeric: tabular-nums; }
+        .sec-hero-actions { display: flex; flex-direction: column; justify-content: center; gap: 8px; min-width: 132px; }
+
+        /* ===== 扫描进度（嵌入 hero 下方）===== */
+        .sec-scan-running { border-top: 1px dashed var(--color-border); margin-top: 14px; padding-top: 12px; }
+        .sec-scan-steps { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 18px; }
+        .sec-step { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-text-secondary); min-height: 24px; }
+        .sec-step .ss-mark { width: 16px; text-align: center; font-weight: 600; flex: 0 0 16px; }
+        .sec-step.ok .ss-mark { color: var(--color-success); }
+        .sec-step.warn .ss-mark { color: var(--color-warning); }
+        .sec-step.bad .ss-mark { color: var(--color-error); }
+        .sec-step.run .ss-mark { color: var(--color-primary); }
+
+        /* ===== 分布 + 趋势行 ===== */
+        .sec-grid-dist { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin: 14px 0; }
+
+        .dist-row { display: grid; grid-template-columns: 72px 44px 1fr; align-items: center; gap: 12px; padding: 7px 8px; border-radius: var(--radius-sm); cursor: pointer; }
+        .dist-row:hover { background: var(--hover); }
+        .dist-row.active { background: var(--color-primary-bg); }
+        .dist-row .dr-label { font-size: 13px; color: var(--color-text-secondary); display: inline-flex; align-items: center; gap: 6px; }
+        .dist-row .dr-label i { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; }
+        .dist-row.active .dr-label { color: var(--color-text); font-weight: 600; }
+        .dist-row .dr-count { font-size: 16px; font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums; text-align: right; }
+        .dist-row .dr-bar { height: 6px; border-radius: 3px; background: var(--color-border); overflow: hidden; }
+        .dist-row .dr-bar i { display: block; height: 100%; border-radius: 3px; }
+
+        /* ===== 趋势 sparkline ===== */
+        .trend-wrap { display: flex; flex-direction: column; }
+        .trend-svg { width: 100%; height: 74px; display: block; }
+        .trend-foot { display: flex; align-items: baseline; justify-content: space-between; margin-top: 6px; font-size: 12px; color: var(--color-text-tertiary); }
+        .trend-delta-up { color: var(--color-error); font-weight: 600; }
+        .trend-delta-down { color: var(--color-success); font-weight: 600; }
+
+        /* ===== 主区：风险列表 + 右栏 ===== */
+        .sec-grid-main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+        .sec-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+        /* 来源筛选 chips */
+        .src-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+        .src-chip { font-size: 12px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--color-border); color: var(--color-text-secondary); cursor: pointer; user-select: none; }
+        .src-chip:hover { border-color: var(--color-primary); color: var(--color-primary); }
+        .src-chip.active { background: var(--color-primary-bg); border-color: var(--color-primary); color: var(--color-primary); }
+
+        /* ===== 风险行：高密度列表（非表格，无边框卡片，严重度以小圆点表达）===== */
+        .risk-row {
+            display: flex; gap: 12px; align-items: flex-start;
+            padding: 11px 10px; margin: 0 -6px;
+            border-radius: var(--radius-sm); cursor: pointer; transition: background .15s;
+        }
+        .risk-row:hover { background: var(--hover); }
+        .risk-main { flex: 1; min-width: 0; }
+        .risk-title-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .risk-title { font-size: 14px; font-weight: 600; color: var(--color-text); word-break: break-word; }
+        .risk-sub { font-size: 12px; color: var(--color-text-tertiary); margin-top: 3px; }
+        .risk-meta { font-size: 12px; color: var(--color-text-tertiary); margin-top: 3px; }
+        .risk-meta .rm-err { color: var(--color-error); }
+        .risk-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; padding-top: 2px; }
+
+        .sev-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; flex: 0 0 auto; }
+        .sev-pill i { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; }
+
+        /* ===== 优先处理 ===== */
+        .prio-item { display: flex; gap: 10px; align-items: flex-start; padding: 9px 6px; border-radius: var(--radius-sm); cursor: pointer; }
+        .prio-item:hover { background: var(--hover); }
+        .prio-rank { font-size: 13px; font-weight: 700; color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; flex: 0 0 18px; padding-top: 1px; }
+        .prio-main { flex: 1; min-width: 0; }
+        .prio-title { font-size: 13px; font-weight: 600; color: var(--color-text); }
+        .prio-sub { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
+
+        /* ===== 事件 Timeline 微调 ===== */
+        .evt-item-title { font-size: 13px; color: var(--color-text); }
+        .evt-item-meta { font-size: 12px; color: var(--color-text-tertiary); }
+
+        /* ===== 详情 Drawer 分组 ===== */
+        .drawer-section { padding: 12px 0; border-top: 1px solid var(--color-border); }
+        .drawer-section:first-of-type { border-top: none; padding-top: 4px; }
+        .drawer-section .ds-label { font-size: 12px; font-weight: 600; color: var(--color-text-tertiary); letter-spacing: .02em; margin-bottom: 6px; }
+        .drawer-section .ds-body { font-size: 13px; color: var(--color-text); line-height: 1.65; word-break: break-word; }
+        .evidence-pre {
+            margin: 0; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+            background: var(--color-bg); color: var(--color-text-secondary);
+            font-family: "JetBrains Mono", Consolas, "Courier New", monospace; font-size: 12px;
+            white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto;
+        }
+        .score-big { font-size: 34px; font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums; }
+        .ded-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13px; }
+        .ded-row .dd-reason { flex: 1; color: var(--color-text-secondary); }
+        .ded-row .dd-count { color: var(--color-text-tertiary); font-variant-numeric: tabular-nums; }
+        .ded-row .dd-points { color: var(--color-error); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; }
+        .ded-sum { border-top: 1px dashed var(--color-border); margin-top: 4px; padding-top: 8px; }
+        .ded-sum .dd-points { color: var(--color-text); font-weight: 600; }
+
+        /* ===== 空态 / 加载 ===== */
+        .sec-loading { padding: 32px 0; text-align: center; color: var(--color-text-tertiary); font-size: 13px; }
+
+        .sec-error-alert { margin-bottom: 14px; }
+
+        /* ===== 响应式 ===== */
+        @media (max-width: 1100px) {
+            .sec-grid-main { grid-template-columns: 1fr; }
+            .sec-grid-dist { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 768px) {
+            .sec-page { padding: 14px 12px 56px; }
+            .sec-topbar { padding: 0 12px; }
+            .sec-topbar .ant-btn { padding: 0 8px; }
+            .sec-head .sh-title { font-size: 19px; }
+            .sec-hero { gap: 14px; }
+            .sec-score-num { font-size: 34px; }
+            .sec-score-bar { width: 100%; }
+            .sec-score-block { min-width: 0; width: 100%; }
+            .sec-hero-actions { flex-direction: row; min-width: 0; width: 100%; }
+            .sec-hero-actions .ant-btn { flex: 1; }
+            .risk-row { flex-wrap: wrap; padding: 12px 12px 12px 14px; }
+            .risk-main { flex: 1 1 100%; }
+            .risk-actions { flex: 1 1 100%; padding-top: 8px; justify-content: flex-end; gap: 8px; }
+            /* 移动端主操作保证可点击面积 */
+            .risk-actions .ant-btn { min-height: 44px; min-width: 72px; }
+            .dist-row { grid-template-columns: 64px 40px 1fr; padding: 9px 6px; }
+        }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) { }
+        })();
+    </script>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <script type="text/babel">
+        const { Button, Tag, Tooltip, Space, ConfigProvider, theme, message, Descriptions, Empty,
+            Modal, Segmented, Select, Input, Typography, Switch, Drawer, Timeline, Badge, Alert,
+            Popconfirm, InputNumber, Checkbox, Skeleton, Result } = window.antd;
+        const { useState, useEffect, useRef, useCallback, useMemo } = React;
+        const { darkAlgorithm } = theme;
+        const IconSet = window.icons || {};
+        const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
+
+        const baseUrl = window.location.origin;
+
+        // ==================== 基础工具 ====================
+        function getCsrfToken() { const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+        function secureFetch(url, options = {}) {
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) { const tok = getCsrfToken(); if (tok) headers['X-CSRF-Token'] = tok; }
+            return fetch(url, { method, headers, credentials: 'include', body: options.body });
+        }
+        async function getJSON(url) {
+            const r = await secureFetch(url);
+            const d = await r.json();
+            if (d.code !== 200) throw new Error(d.message || ('HTTP ' + r.status));
+            return d.data;
+        }
+        async function postJSON(url, body) {
+            const r = await secureFetch(url, { method: 'POST', body: JSON.stringify(body || {}) });
+            const d = await r.json();
+            if (d.code !== 200) throw new Error(d.message || ('HTTP ' + r.status));
+            return d.data;
+        }
+        function relTime(s) {
+            if (!s) return '—';
+            const diff = dayjs().diff(dayjs(s), 'second');
+            if (diff < 60) return '刚刚';
+            if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
+            if (diff < 86400) return Math.floor(diff / 3600) + ' 小时前';
+            return dayjs(s).format('MM-DD HH:mm');
+        }
+        function fmtTime(s) { return s ? dayjs(s).format('MM-DD HH:mm') : '—'; }
+        function fmtDuration(ms) {
+            if (!ms && ms !== 0) return '—';
+            if (ms < 1000) return ms + ' ms';
+            return (Math.round(ms / 100) / 10) + ' s';
+        }
+        function useIsMobile() {
+            const [m, setM] = useState(window.innerWidth <= 768);
+            useEffect(() => {
+                const on = () => setM(window.innerWidth <= 768);
+                window.addEventListener('resize', on);
+                return () => window.removeEventListener('resize', on);
+            }, []);
+            return m;
+        }
+
+        // ==================== 领域展示规则 ====================
+        const SEV = {
+            critical: { label: '严重', color: '#cf1322', dark: '#a8071a', rank: 4 },
+            high: { label: '高风险', color: '#d46b08', dark: '#d46b08', rank: 3 },
+            medium: { label: '中风险', color: '#d4b106', dark: '#d4b106', rank: 2 },
+            low: { label: '低风险', color: '#1677ff', dark: '#1668dc', rank: 1 },
+            info: { label: '提示', color: '#8c8c8c', dark: '#8c8c8c', rank: 0 },
+        };
+        const sevColor = (sev) => (SEV[sev] || SEV.info)[document.documentElement.classList.contains('dark') ? 'dark' : 'color'];
+        // 评分状态 → 状态点 / 文案
+        const STATUS_META = {
+            good: { dot: 'var(--color-success)', text: '安全状态良好' },
+            warning: { dot: 'var(--color-warning)', text: '存在需要关注的风险' },
+            risk: { dot: '#d46b08', text: '存在风险，建议尽快处理' },
+            critical: { dot: 'var(--color-error)', text: '存在严重风险，请立即处理' },
+        };
+        const FINDING_STATUS = {
+            open: { label: '待处理', color: 'warning' },
+            ignored: { label: '已忽略', color: 'default' },
+            fixing: { label: '修复中', color: 'processing' },
+            resolved: { label: '已解决', color: 'success' },
+            failed: { label: '修复失败', color: 'error' },
+        };
+        const StatusTag = ({ s }) => {
+            const m = FINDING_STATUS[s] || { label: s, color: 'default' };
+            return <Tag color={m.color} style={{ marginRight: 0 }}>{m.label}</Tag>;
+        };
+        // 检查器 → 来源筛选标签
+        const SRC_LABEL = { login_security: '账号', open_ports: '网络', firewall: '防火墙', tls_cert: 'TLS', file_permissions: '文件', service_health: '服务', docker_security: 'Docker' };
+
+        // 把后端标题拆成 主标题 / 副标题（格式与检查器输出一一对应，未命中时回退原文）
+        function formatFinding(f) {
+            const t = (f.title || '').trim();
+            const cat = f.category || '';
+            let m;
+            if (f.check_id === 'open_ports') {
+                if ((m = t.match(/^数据库\/敏感服务 (.+?) 端口 (\d+) 直接暴露公网$/)))
+                    return { title: `${m[1]} ${m[2]} 暴露公网`, sub: `数据库 · 网络暴露` };
+                if ((m = t.match(/^远程服务 (.+?) 暴露公网（端口 (\d+)）$/)))
+                    return { title: `${m[1]} ${m[2]} 暴露公网`, sub: `远程服务 · 网络暴露` };
+                if ((m = t.match(/^公网监听端口 (\d+)（(.+?)）请确认业务归属$/)))
+                    return { title: `端口 ${m[1]} 公网监听`, sub: `${m[2]} · 网络暴露` };
+            }
+            if (f.check_id === 'service_health' && (m = t.match(/^服务 (.+?) 未在运行/)))
+                return { title: `${m[1]} 未运行`, sub: `服务可用性` };
+            if (f.check_id === 'tls_cert' && (m = t.match(/^TLS 证书(将于 \d+ 天后过期|已过期 \d+ 天)$/)))
+                return { title: `TLS 证书${m[1]}`, sub: `证书安全` };
+            if (f.check_id === 'docker_security') {
+                if ((m = t.match(/^容器 (.+?) 以特权模式运行$/))) return { title: `${m[1]} 以特权模式运行`, sub: `容器安全` };
+                if ((m = t.match(/^容器 (.+?) 使用 host 网络$/))) return { title: `${m[1]} 使用 host 网络`, sub: `容器安全` };
+                if ((m = t.match(/^容器 (.+?) 使用 host PID 空间$/))) return { title: `${m[1]} 共享主机 PID`, sub: `容器安全` };
+                if ((m = t.match(/^容器 (.+?) 挂载了 Docker Socket$/))) return { title: `${m[1]} 挂载 docker.sock`, sub: `容器安全` };
+                if ((m = t.match(/^容器 (.+?) 异常退出$/))) return { title: `${m[1]} 异常退出`, sub: `容器安全` };
+            }
+            if (f.check_id === 'file_permissions') {
+                if ((m = t.match(/^敏感文件(.+?): (.+)$/))) return { title: `${m[2]} 权限过宽`, sub: `文件权限` };
+                if (t.indexOf('数据目录权限过宽') === 0) return { title: `数据目录权限过宽`, sub: `文件权限` };
+            }
+            if (f.check_id === 'login_security') {
+                if ((m = t.match(/^IP (.+?) 疑似暴力破解/))) return { title: `IP ${m[1]} 疑似暴力破解`, sub: `账号安全` };
+                if ((m = t.match(/^管理员账户数量偏多（(\d+) 个）/))) return { title: `管理员账户偏多（${m[1]} 个）`, sub: `账号安全` };
+                if ((m = t.match(/^存在 (\d+) 个长期未使用的账户/))) return { title: `${m[1]} 个长期未使用账户`, sub: `账号安全` };
+                if ((m = t.match(/^存在 (\d+) 个无密码\/异常密码状态账户/))) return { title: `${m[1]} 个无密码账户`, sub: `账号安全` };
+                if (t.indexOf('暴力破解') >= 0) return { title: t, sub: `账号安全` };
+            }
+            if (f.check_id === 'firewall' && (m = t.match(/^防火墙（(.+?)）没有任何规则$/)))
+                return { title: `${m[1]} 无任何规则`, sub: `网络防护` };
+            return { title: t, sub: cat };
+        }
+        const findingMeta = (f) => {
+            const parts = [`发现 ${relTime(f.detected_at)}`];
+            if (f.occurrences > 1) parts.push(`出现 ${f.occurrences} 次`);
+            if (f.status === 'failed') parts.push(<span className="rm-err">修复失败：{f.last_exec_error || '验证未通过'}</span>);
+            else if (f.status === 'fixing') parts.push('修复执行中');
+            return parts;
+        };
+
+        // ==================== 顶栏 ====================
+        function OpsTopbar({ active, isDark, setIsDark, hasPerm }) {
+            const navBtns = [];
+            navBtns.push(<Button key="home" icon={<UIIcon name="DashboardOutlined" />} onClick={() => window.location.href = 'index.html'}>首页</Button>);
+            if (hasPerm('security:view') || hasPerm('remediation:view')) navBtns.push(<Button key="security" icon={<UIIcon name="SafetyOutlined" />} type={active === 'security' ? 'primary' : 'default'} onClick={() => window.location.href = 'security.html'}>安全中心</Button>);
+            if (hasPerm('security:view')) navBtns.push(<Button key="events" icon={<UIIcon name="NotificationOutlined" />} type={active === 'events' ? 'primary' : 'default'} onClick={() => window.location.href = 'security-events.html'}>安全事件</Button>);
+            if (hasPerm('remediation:view')) navBtns.push(<Button key="rem" icon={<UIIcon name="ToolOutlined" />} type={active === 'remediation' ? 'primary' : 'default'} onClick={() => window.location.href = 'remediation.html'}>自动修复</Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="tasks" icon={<UIIcon name="ClockCircleOutlined" />} type={active === 'tasks' ? 'primary' : 'default'} onClick={() => window.location.href = 'tasks.html'}>运维任务</Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="history" icon={<UIIcon name="HistoryOutlined" />} type={active === 'history' ? 'primary' : 'default'} onClick={() => window.location.href = 'task-history.html'}>执行历史</Button>);
+            return (
+                <div className="sec-topbar">
+                    <span className="tb-page"><UIIcon name="SafetyOutlined" />安全中心</span>
+                    <Space wrap style={{ marginLeft: 'auto' }}>
+                        {navBtns}
+                        <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                            <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                        </Tooltip>
+                        <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={async () => {
+                            try { await secureFetch(baseUrl + '/logout', { method: 'POST', body: '{}' }); } catch (e) { }
+                            window.location.href = 'index.html';
+                        }}><span className="tb-text">退出</span></Button>
+                    </Space>
+                </div>
+            );
+        }
+
+        // ==================== 组件：严重度标记 ====================
+        function SevPill({ sev }) {
+            const m = SEV[sev] || SEV.info;
+            return <span className="sev-pill" style={{ color: sevColor(sev) }}><i style={{ background: sevColor(sev) }} />{m.label}</span>;
+        }
+
+        // ==================== 组件：趋势 Sparkline（轻量 SVG，不引图表库）====================
+        function TrendSparkline({ trend }) {
+            if (!trend || trend.length < 2) return null;
+            const W = 300, H = 74, P = 6;
+            const vals = trend.map(p => p.open || 0);
+            const max = Math.max(...vals, 1);
+            const stepX = (W - P * 2) / (trend.length - 1);
+            const pts = vals.map((v, i) => [P + i * stepX, H - P - (v / max) * (H - P * 2 - 8)]);
+            const line = pts.map(p => p.join(',')).join(' ');
+            const area = `M${pts[0][0]},${H - P} L` + pts.map(p => p.join(',')).join(' L') + ` L${pts[pts.length - 1][0]},${H - P} Z`;
+            const last = vals[vals.length - 1], first = vals[0];
+            let deltaNode;
+            if (first === 0 && last === 0) deltaNode = <span>持平</span>;
+            else if (first === 0) deltaNode = <span className="trend-delta-up">+{last}</span>;
+            else {
+                const pct = Math.round(((last - first) / first) * 100);
+                deltaNode = pct > 0 ? <span className="trend-delta-up">↑ {pct}%</span>
+                    : pct < 0 ? <span className="trend-delta-down">↓ {-pct}%</span>
+                        : <span>持平</span>;
+            }
+            return (
+                <div className="trend-wrap">
+                    <svg className="trend-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+                        <path d={area} fill="var(--color-primary-bg)" opacity="0.75" />
+                        <polyline points={line} fill="none" stroke="var(--color-primary)" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+                        <circle cx={pts[pts.length - 1][0]} cy={pts[pts.length - 1][1]} r="3" fill="var(--color-primary)" />
+                    </svg>
+                    <div className="trend-foot">
+                        <span>当前待处理 <b style={{ color: 'var(--color-text)' }}>{last}</b></span>
+                        <span>较 7 天前 {deltaNode}</span>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==================== 组件：风险行 ====================
+        function RiskItem({ f, hasPermRemediate, onDetail, onRemediate, onIgnore, dense }) {
+            const view = formatFinding(f);
+            const meta = findingMeta(f);
+            return (
+                <div className="risk-row" onClick={() => onDetail(f)}>
+                    <div className="risk-main">
+                        <div className="risk-title-line">
+                            <SevPill sev={f.severity} />
+                            <span className="risk-title">{view.title}</span>
+                            {f.remediable && <Tooltip title="此风险可自动修复"><Tag color="blue" style={{ marginRight: 0, fontSize: 11, lineHeight: '18px' }}>可修复</Tag></Tooltip>}
+                        </div>
+                        <div className="risk-sub">{view.sub}</div>
+                        <div className="risk-meta">{meta.map((x, i) => <span key={i}>{i > 0 && <span> · </span>}{x}</span>)}</div>
+                    </div>
+                    <div className="risk-actions" onClick={e => e.stopPropagation()}>
+                        <Button size="small" onClick={() => onDetail(f)}>详情</Button>
+                        {hasPermRemediate && f.remediable && (f.status === 'open' || f.status === 'failed') &&
+                            <Button size="small" type="primary" onClick={() => onRemediate(f)}>修复</Button>}
+                        {dense && <span />}
+                    </div>
+                </div>
+            );
+        }
+
+        // ==================== 主应用 ====================
+        function App() {
+            const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const isMobile = useIsMobile();
+            const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+            const canScan = hasPerm('security:scan');
+            const canManage = hasPerm('security:manage');
+            const canRemediate = hasPerm('remediation:execute');
+
+            const [summary, setSummary] = useState(null);      // overview 一次拉全
+            const [summaryErr, setSummaryErr] = useState('');
+            const [scanStatus, setScanStatus] = useState(null);
+            const [scanning, setScanning] = useState(false);
+            const [scanDoneTip, setScanDoneTip] = useState(null); // {new, resolved}
+
+            // 风险列表：状态 Tab + 来源 + 严重度（分布卡点击） 三维筛选，结果按 key 缓存
+            const [statusTab, setStatusTab] = useState('open');
+            const [srcFilter, setSrcFilter] = useState('');
+            const [sevFilter, setSevFilter] = useState('');
+            const [findingsMap, setFindingsMap] = useState({}); // key -> {list,total}
+            const [listLoading, setListLoading] = useState(false);
+            const cacheRef = useRef({});
+
+            const [detail, setDetail] = useState(null);          // finding 详情 {finding, rules}
+            const [scoreOpen, setScoreOpen] = useState(false);
+            const [settingsOpen, setSettingsOpen] = useState(false);
+            const [settingsForm, setSettingsForm] = useState(null);
+            const [settingsSaving, setSettingsSaving] = useState(false);
+            const [watchInput, setWatchInput] = useState('');
+            const [remState, setRemState] = useState(null);      // {phase: preview/running/done/failed, preview, rule, result, finding}
+            const wsRef = useRef(null);
+            const scanPollRef = useRef(null);
+            const refreshTimer = useRef(null);
+
+            // ---- 认证 ----
+            useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
+                        else window.location.href = 'index.html';
+                    })
+                    .catch(() => { window.location.href = 'index.html'; });
+            }, []);
+            useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+            }, [isDark]);
+
+            // ---- 概览（一次请求）----
+            const loadSummary = useCallback(async (silent) => {
+                try {
+                    const d = await getJSON(baseUrl + '/api/security/overview');
+                    setSummary(d);
+                    setSummaryErr('');
+                    if (d.scan && d.scan.status === 'running') setScanning(true);
+                } catch (e) {
+                    if (!silent) setSummaryErr(e.message || '加载失败');
+                }
+            }, []);
+            useEffect(() => { if (auth.ok) loadSummary(); }, [auth.ok]);
+
+            // ---- 风险列表（带缓存）----
+            const loadFindings = useCallback(async (force) => {
+                const statusMap = { open: 'open,failed,fixing', ignored: 'ignored', resolved: 'resolved', all: '' };
+                const key = statusTab + '|' + srcFilter + '|' + sevFilter;
+                if (!force && cacheRef.current[key]) {
+                    setFindingsMap(m => ({ ...m, [key]: cacheRef.current[key] }));
+                    return;
+                }
+                setListLoading(true);
+                try {
+                    const q = `status=${statusMap[statusTab] || ''}&check_id=${srcFilter}&severity=${sevFilter}&limit=200`;
+                    const d = await getJSON(baseUrl + '/api/security/findings?' + q);
+                    const payload = { list: d.findings || [], total: d.total || 0 };
+                    cacheRef.current[key] = payload;
+                    setFindingsMap(m => ({ ...m, [key]: payload }));
+                } catch (e) { message.error('加载风险列表失败：' + e.message); }
+                finally { setListLoading(false); }
+            }, [statusTab, srcFilter, sevFilter]);
+            useEffect(() => { if (auth.ok) loadFindings(); }, [auth.ok, loadFindings]);
+            const invalidateFindings = () => { cacheRef.current = {}; loadFindings(true); };
+
+            // ---- 扫描轮询（仅运行期间 2s，不整页刷新）----
+            const lastScanRefreshRef = useRef(0);
+            const refreshAfterScan = useCallback(async () => {
+                // WS 与轮询可能同时观察到扫描结束，3 秒内只收尾一次
+                if (Date.now() - lastScanRefreshRef.current < 3000) return;
+                lastScanRefreshRef.current = Date.now();
+                try {
+                    const sd = await getJSON(baseUrl + '/api/security/overview');
+                    setSummary(sd); setSummaryErr('');
+                    const ls = sd.last_scan_summary || {};
+                    setScanDoneTip({ new: ls.new || 0, resolved: ls.resolved || 0 });
+                    message.success(`扫描完成：新增 ${ls.new || 0} 个风险，解决 ${ls.resolved || 0} 个`);
+                    cacheRef.current = {};
+                    setListLoading(true); setListLoading(false);
+                } catch (e) { }
+            }, []);
+            useEffect(() => {
+                if (!scanning) {
+                    if (scanPollRef.current) { clearInterval(scanPollRef.current); scanPollRef.current = null; }
+                    return;
+                }
+                const poll = async () => {
+                    try {
+                        const d = await getJSON(baseUrl + '/api/security/scan/status');
+                        setScanStatus(d);
+                        if (!d.status || d.status !== 'running') {
+                            setScanning(false);
+                            refreshAfterScan();
+                        }
+                    } catch (e) { }
+                };
+                poll();
+                scanPollRef.current = setInterval(poll, 2000);
+                return () => { if (scanPollRef.current) clearInterval(scanPollRef.current); };
+            }, [scanning, refreshAfterScan]);
+
+            // ---- WebSocket 实时事件（失败静默降级为手动刷新）----
+            useEffect(() => {
+                if (!auth.ok) return;
+                let alive = true;
+                try {
+                    const ws = new WebSocket((window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws/ops-events');
+                    ws.onmessage = (ev) => {
+                        if (!alive) return;
+                        let d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+                        const t = d.type || '';
+                        if (t === 'security.scan.completed') {
+                            setScanning(false);
+                            refreshAfterScan();
+                        } else if (t === 'security.scan.progress') {
+                            setScanStatus(s => {
+                                const steps = ((s && s.steps) || []).slice();
+                                steps[d.index] = d.step;
+                                return { status: 'running', steps, total: d.total };
+                            });
+                        } else if (t === 'finding.open' || t === 'finding.resolved' || t.indexOf('remediation.') === 0) {
+                            // 局部刷新：1s 去抖，避免事件风暴下整页重绘
+                            if (refreshTimer.current) clearTimeout(refreshTimer.current);
+                            refreshTimer.current = setTimeout(() => {
+                                loadSummary(true);
+                                cacheRef.current = {};
+                                loadFindings(true);
+                            }, 1000);
+                        }
+                    };
+                    wsRef.current = ws;
+                    return () => { alive = false; try { ws.close(); } catch (e) { } };
+                } catch (e) { }
+            }, [auth.ok, refreshAfterScan, loadSummary, loadFindings]);
+
+            // ---- 动作 ----
+            const startScan = async () => {
+                try {
+                    await postJSON(baseUrl + '/api/security/scan');
+                    message.info('安全扫描已启动，正在后台执行');
+                    setScanning(true);
+                    setScanStatus({ status: 'running', steps: [], total: (summary && summary.checkers || []).length });
+                } catch (e) { message.error(e.message); }
+            };
+            const openDetail = async (f) => {
+                setDetail({ loading: true });
+                try {
+                    const d = await getJSON(baseUrl + '/api/security/findings/' + f.id);
+                    setDetail(d);
+                } catch (e) { setDetail(null); message.error(e.message); }
+            };
+            const ignoreFinding = async (f) => {
+                try {
+                    await postJSON(baseUrl + '/api/security/findings/' + f.id + '/ignore');
+                    message.success('已忽略「' + (formatFinding(f).title) + '」，后续扫描不再提醒');
+                    setDetail(null);
+                    loadSummary(true); invalidateFindings();
+                } catch (e) { message.error(e.message); }
+            };
+            // 修复流：Preview → 确认 → 执行 → 结果
+            const openRemediate = async (finding, ruleId) => {
+                setRemState({ phase: 'preview', loading: true, finding });
+                try {
+                    const d = await postJSON(baseUrl + '/api/remediation/preview', { finding_id: finding.id, rule_id: ruleId || '' });
+                    setRemState({ phase: 'preview', loading: false, preview: d.preview, rule: d, finding });
+                } catch (e) { setRemState(null); message.error(e.message); }
+            };
+            const confirmRemediate = async () => {
+                if (!remState) return;
+                setRemState(s => ({ ...s, phase: 'running' }));
+                try {
+                    const d = await postJSON(baseUrl + '/api/security/findings/' + remState.finding.id + '/remediate', { rule_id: (remState.rule && remState.rule.rule_id) || '' });
+                    if (d && d.status === 'success') {
+                        setRemState(s => ({ ...s, phase: 'done', result: d }));
+                        message.success('修复成功并已通过验证');
+                    } else {
+                        setRemState(s => ({ ...s, phase: 'failed', result: d }));
+                    }
+                } catch (e) {
+                    setRemState(s => ({ ...s, phase: 'failed', result: { message: e.message } }));
+                } finally {
+                    setDetail(null);
+                    loadSummary(true); invalidateFindings();
+                }
+            };
+            const openSettings = async () => {
+                try {
+                    const d = await getJSON(baseUrl + '/api/security/settings');
+                    setSettingsForm({
+                        schedule: d.schedule || {}, watched_services: d.watched_services || [],
+                        disabled: new Set(d.disabled_checkers || []),
+                    });
+                    setSettingsOpen(true);
+                } catch (e) { message.error(e.message); }
+            };
+            const saveSettings = async () => {
+                setSettingsSaving(true);
+                try {
+                    await postJSON(baseUrl + '/api/security/settings', {
+                        schedule: settingsForm.schedule,
+                        watched_services: settingsForm.watched_services,
+                        disabled_checkers: Array.from(settingsForm.disabled),
+                    });
+                    message.success('扫描设置已保存，将按新计划执行');
+                    setSettingsOpen(false);
+                    loadSummary(true);
+                } catch (e) { message.error(e.message); } finally { setSettingsSaving(false); }
+            };
+
+            // ==================== 渲染 ====================
+            if (auth.loading) {
+                return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}><Skeleton active paragraph={{ rows: 6 }} style={{ width: 720 }} /></div>;
+            }
+            if (!hasPerm('security:view') && !hasPerm('remediation:view')) {
+                return (
+                    <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                        <OpsTopbar active="security" isDark={isDark} setIsDark={setIsDark} hasPerm={hasPerm} />
+                        <div className="sec-page">
+                            <Result status="403" title="没有访问权限"
+                                subTitle="当前账号没有「查看安全中心」权限（security:view），请联系管理员开通。"
+                                extra={<Button type="primary" onClick={() => window.location.href = 'index.html'}>返回首页</Button>} />
+                        </div>
+                    </ConfigProvider>
+                );
+            }
+
+            const s = summary || {};
+            const counts = s.counts || {};
+            const lastScan = s.last_scan_summary || null;
+            const score = s.score != null ? s.score : (lastScan && lastScan.score != null ? lastScan.score : null);
+            const statusKey = s.status || (score != null ? (score >= 90 ? 'good' : score >= 70 ? 'warning' : score >= 40 ? 'risk' : 'critical') : null);
+            const stMeta = statusKey ? (STATUS_META[statusKey] || STATUS_META.warning) : null;
+            const pendingOpen = (counts.critical || 0) + (counts.high || 0) + (counts.medium || 0) + (counts.low || 0);
+            const sevMax = Math.max(counts.critical || 0, counts.high || 0, counts.medium || 0, counts.low || 0, 1);
+            const listKey = statusTab + '|' + srcFilter + '|' + sevFilter;
+            const curList = findingsMap[listKey] || null;
+            const statusTabs = [
+                { key: 'open', label: `待处理${pendingOpen > 0 ? ' ' + pendingOpen : ''}` },
+                { key: 'ignored', label: '已忽略' },
+                { key: 'resolved', label: '已解决' },
+                { key: 'all', label: '全部' },
+            ];
+            const srcOptions = ((s.checkers || []).filter(c => c.enabled !== false && SRC_LABEL[c.id]).map(c => ({ id: c.id, label: SRC_LABEL[c.id] })));
+            const scanRunSteps = scanning && scanStatus ? (scanStatus.steps || []).filter(x => x && x.checker_id) : [];
+            const doneCount = scanRunSteps.filter(x => x.status && x.status !== 'running' && x.status !== 'pending').length;
+            const totalChecks = (scanStatus && scanStatus.total) || (s.checkers || []).length || 0;
+
+            // ---- 子渲染 ----
+            const renderScanSteps = () => (
+                <div className="sec-scan-running">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                        <UIIcon name="SyncOutlined" spin style={{ color: 'var(--color-primary)' }} />
+                        <Typography.Text strong style={{ fontSize: 13 }}>安全扫描进行中</Typography.Text>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>检查 {doneCount}/{totalChecks || '…'} · 不影响正常服务</Typography.Text>
+                    </div>
+                    <div className="sec-scan-steps">
+                        {(scanRunSteps.length ? scanRunSteps : [{ checker_name: '准备中', status: 'running' }]).map((st, i) => {
+                            const cls = st.status === 'pass' ? 'ok' : st.status === 'warn' ? 'warn' : st.status === 'running' ? 'run' : (st.status === 'skipped' || st.status === 'pending') ? '' : 'bad';
+                            const mark = st.status === 'pass' ? '✓' : st.status === 'running' ? '…' : st.status === 'skipped' ? '—' : st.status === 'pending' ? '·' : st.status === 'warn' ? '!' : '✗';
+                            const txt = st.checker_name || st.CheckerName || '检查项';
+                            return (
+                                <div key={i} className={'sec-step ' + cls}>
+                                    <span className="ss-mark">{mark}</span>
+                                    <span>{txt}</span>
+                                    {st.findings > 0 && <Tag color="orange" style={{ marginRight: 0, fontSize: 11, lineHeight: '16px' }}>{st.findings}</Tag>}
+                                    {st.status === 'skipped' && <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>已停用</span>}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+
+            const hero = (
+                <div className="sec-card" style={{ marginBottom: 14 }}>
+                    <div className="sec-hero">
+                        <div className="sec-score-block">
+                            <span className="sec-score-label">安全评分</span>
+                            <div className="sec-score-row" onClick={() => score != null && setScoreOpen(true)}>
+                                <span className="sec-score-num" style={score != null && statusKey === 'critical' ? { color: 'var(--color-error)' } : null}>
+                                    {score != null ? score : <span style={{ fontSize: 20, fontWeight: 400, color: 'var(--color-text-tertiary)' }}>未扫描</span>}
+                                </span>
+                                {score != null && <span className="sec-score-total">/ 100</span>}
+                            </div>
+                            <div className="sec-score-bar">
+                                <i style={{ width: (score || 0) + '%', background: stMeta ? stMeta.dot : 'var(--color-primary)' }} />
+                            </div>
+                            <span className="sec-score-hint" onClick={() => score != null && setScoreOpen(true)}>
+                                <UIIcon name="InfoCircleOutlined" />评分如何计算
+                            </span>
+                        </div>
+                        <div className="sec-hero-main">
+                            <div className="sec-status-line">
+                                {stMeta && <span className="sdot" style={{ background: stMeta.dot }} />}
+                                <span>{stMeta ? stMeta.text : '尚未执行安全扫描'}</span>
+                            </div>
+                            {score != null && (
+                                <div className="sec-count-line">
+                                    <b>{counts.critical || 0}</b> 个严重 · <b>{counts.high || 0}</b> 个高风险 · <b>{counts.medium || 0}</b> 个中风险 · <b>{counts.low || 0}</b> 个低风险
+                                </div>
+                            )}
+                            <div className="sec-scan-meta">
+                                <span>上次扫描：<span className="tnum">{lastScan ? fmtTime(lastScan.time) : '尚未执行'}</span>
+                                    {lastScan && lastScan.duration_ms != null && <span> · 耗时 {fmtDuration(lastScan.duration_ms)}</span>}
+                                    {lastScan && lastScan.checks_total != null && <span> · 检查 {lastScan.checks_total} 项</span>}
+                                    {lastScan && lastScan.new > 0 && <span> · 新增 {lastScan.new}</span>}
+                                    {lastScan && lastScan.resolved > 0 && <span> · 解决 {lastScan.resolved}</span>}
+                                </span>
+                                {s.schedule && s.schedule.enabled && (
+                                    <span>下次扫描：<span className="tnum">{s.next_scan_at ? fmtTime(s.next_scan_at) : '—'}</span>（{{ hourly: '每小时', daily: '每天', weekly: '每周', cron: '自定义 Cron' }[s.schedule.type] || s.schedule.type}）</span>
+                                )}
+                            </div>
+                        </div>
+                        <div className="sec-hero-actions">
+                            <Button type="primary" icon={<UIIcon name="ScanOutlined" />} loading={scanning} disabled={!canScan} onClick={startScan}>
+                                {scanning ? '正在扫描…' : '立即扫描'}
+                            </Button>
+                            <Button icon={<UIIcon name="SettingOutlined" />} disabled={!canManage} onClick={openSettings}>扫描设置</Button>
+                        </div>
+                    </div>
+                    {scanning && renderScanSteps()}
+                    {scanDoneTip && !scanning && (
+                        <div className="sec-scan-running" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <UIIcon name="CheckCircleOutlined" style={{ color: 'var(--color-success)' }} />
+                            <Typography.Text style={{ fontSize: 13 }}>本次扫描：新增 <b>{scanDoneTip.new}</b> 个风险，解决 <b>{scanDoneTip.resolved}</b> 个</Typography.Text>
+                            <Button size="small" type="text" onClick={() => setScanDoneTip(null)}>收起</Button>
+                        </div>
+                    )}
+                </div>
+            );
+
+            const distCard = (
+                <div className="sec-card">
+                    <div className="sc-head">
+                        <span className="sc-title"><UIIcon name="PieChartOutlined" />风险分布<span className="sc-sub">点击按严重度筛选</span></span>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>待处理 {pendingOpen}</Typography.Text>
+                    </div>
+                    {['critical', 'high', 'medium', 'low'].map(k => (
+                        <div key={k} className={'dist-row' + (sevFilter === k ? ' active' : '')}
+                            onClick={() => { const v = sevFilter === k ? '' : k; setSevFilter(v); cacheRef.current = {}; }}>
+                            <span className="dr-label"><i style={{ background: sevColor(k) }} />{SEV[k].label}</span>
+                            <span className="dr-count">{counts[k] || 0}</span>
+                            <span className="dr-bar"><i style={{ width: Math.round(((counts[k] || 0) / sevMax) * 100) + '%', background: sevColor(k), opacity: .8 }} /></span>
+                        </div>
+                    ))}
+                    {(counts.info || 0) > 0 && (
+                        <div className={'dist-row' + (sevFilter === 'info' ? ' active' : '')}
+                            onClick={() => { const v = sevFilter === 'info' ? '' : 'info'; setSevFilter(v); cacheRef.current = {}; }}>
+                            <span className="dr-label"><i style={{ background: sevColor('info') }} />提示</span>
+                            <span className="dr-count">{counts.info}</span>
+                            <span className="dr-bar"><i style={{ width: Math.round((counts.info / sevMax) * 100) + '%', background: sevColor('info'), opacity: .8 }} /></span>
+                        </div>
+                    )}
+                </div>
+            );
+
+            const trendCard = (
+                <div className="sec-card">
+                    <div className="sc-head">
+                        <span className="sc-title"><UIIcon name="LineChartOutlined" />过去 7 天风险趋势</span>
+                    </div>
+                    {(s.trend && s.trend.length >= 2) ? <TrendSparkline trend={s.trend} />
+                        : <div className="sec-loading">完成首次扫描后生成趋势</div>}
+                </div>
+            );
+
+            const riskRows = () => {
+                if (!curList && listLoading) return <div className="sec-loading">加载中…</div>;
+                if (!curList) return <div className="sec-loading">加载中…</div>;
+                if (curList.list.length === 0) {
+                    const emptyText = statusTab === 'open'
+                        ? (score == null ? '尚未扫描，点击右上角「立即扫描」开始检查' : '当前筛选条件下没有待处理风险')
+                        : '暂无记录';
+                    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} style={{ padding: '24px 0' }} />;
+                }
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {curList.list.map(f => (
+                            <RiskItem key={f.id} f={f} hasPermRemediate={canRemediate}
+                                onDetail={openDetail} onRemediate={(x) => openRemediate(x, '')}
+                                onIgnore={ignoreFinding} dense={isMobile} />
+                        ))}
+                    </div>
+                );
+            };
+
+            const listCard = (
+                <div className="sec-card">
+                    <div className="sc-head" style={{ marginBottom: 4 }}>
+                        <span className="sc-title"><UIIcon name="AlertOutlined" />风险发现<span className="sc-sub">{statusTab === 'open' ? pendingOpen + ' 个待处理' : ''}</span></span>
+                        <Segmented size="small" value={statusTab} onChange={v => { setStatusTab(v); }} options={statusTabs.map(t => ({ value: t.key, label: t.label }))} />
+                    </div>
+                    <div className="src-chips">
+                        <span className={'src-chip' + (srcFilter === '' ? ' active' : '')} onClick={() => { setSrcFilter(''); cacheRef.current = {}; }}>全部来源</span>
+                        {srcOptions.map(o => (
+                            <span key={o.id} className={'src-chip' + (srcFilter === o.id ? ' active' : '')}
+                                onClick={() => { const v = srcFilter === o.id ? '' : o.id; setSrcFilter(v); cacheRef.current = {}; }}>{o.label}</span>
+                        ))}
+                        {sevFilter && (
+                            <span className="src-chip active" onClick={() => { setSevFilter(''); cacheRef.current = {}; }}>
+                                {SEV[sevFilter] ? SEV[sevFilter].label : sevFilter} ✕
+                            </span>
+                        )}
+                    </div>
+                    <div style={{ minHeight: 120 }}>{riskRows()}</div>
+                </div>
+            );
+
+            const priorityCard = (
+                <div className="sec-card">
+                    <div className="sc-head">
+                        <span className="sc-title"><UIIcon name="FireOutlined" />建议优先处理<span className="sc-sub">按严重度 / 暴露面 / 可修复性综合排序</span></span>
+                    </div>
+                    {!(s.priority_findings || []).length ? (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={score == null ? '扫描后生成处理建议' : '暂无待处理风险'} style={{ padding: '12px 0' }} />
+                    ) : (
+                        (s.priority_findings || []).map((f, i) => {
+                            const view = formatFinding(f);
+                            return (
+                                <div key={f.id} className="prio-item" onClick={() => openDetail(f)}>
+                                    <span className="prio-rank">{i + 1}</span>
+                                    <div className="prio-main">
+                                        <div className="prio-title" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                            <SevPill sev={f.severity} />{view.title}
+                                        </div>
+                                        <div className="prio-sub">{view.sub} · {relTime(f.detected_at)}{f.occurrences > 1 ? ' · 出现 ' + f.occurrences + ' 次' : ''}</div>
+                                    </div>
+                                    {canRemediate && f.remediable && (f.status === 'open' || f.status === 'failed') &&
+                                        <Button size="small" type="primary" onClick={(e) => { e.stopPropagation(); openRemediate(f, ''); }}>处理</Button>}
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+            );
+
+            const eventCard = (
+                <div className="sec-card">
+                    <div className="sc-head">
+                        <span className="sc-title"><UIIcon name="NotificationOutlined" />最近安全事件</span>
+                        <Button size="small" type="text" onClick={() => window.location.href = 'security-events.html'}>查看全部</Button>
+                    </div>
+                    {!(s.recent_events || []).length ? (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无安全事件" style={{ padding: '12px 0' }} />
+                    ) : (
+                        <Timeline items={(s.recent_events || []).slice(0, 6).map(e => ({
+                            color: { critical: 'red', error: 'red', warning: 'orange', info: 'blue' }[e.level] || 'gray',
+                            children: (
+                                <div>
+                                    <div className="evt-item-title">{e.title}</div>
+                                    <div className="evt-item-meta">{fmtTime(e.time)} · {e.source}</div>
+                                </div>
+                            ),
+                        }))} />
+                    )}
+                </div>
+            );
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <OpsTopbar active="security" isDark={isDark} setIsDark={setIsDark} hasPerm={hasPerm} />
+                        <div className="sec-page">
+                            <div className="sec-head">
+                                <div>
+                                    <div className="sh-title">安全中心<span className="sh-en">Security Center</span></div>
+                                    <div className="sh-sub">服务器安全状态与风险管理</div>
+                                </div>
+                            </div>
+
+                            {summaryErr && (
+                                <Alert className="sec-error-alert" type="error" showIcon message="安全概览加载失败" description={summaryErr}
+                                    action={<Button size="small" danger onClick={() => loadSummary()}>重试</Button>} />
+                            )}
+                            {!summary && !summaryErr ? <Skeleton active paragraph={{ rows: 8 }} /> : (
+                                <>
+                                    {hero}
+                                    <div className="sec-grid-dist">
+                                        {distCard}
+                                        {trendCard}
+                                    </div>
+                                    <div className="sec-grid-main">
+                                        <div className="sec-col">{listCard}</div>
+                                        <div className="sec-col">{priorityCard}{eventCard}</div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* ==================== 风险详情 Drawer ==================== */}
+                        <Drawer open={!!detail} onClose={() => setDetail(null)} width={isMobile ? '100%' : 480}
+                            title={detail && detail.finding ? (
+                                <Space direction="vertical" size={2}>
+                                    <span style={{ fontSize: 15 }}>{formatFinding(detail.finding).title}</span>
+                                    <Space size={6}><SevPill sev={detail.finding.severity} /><StatusTag s={detail.finding.status} /></Space>
+                                </Space>
+                            ) : '风险详情'}>
+                            {detail && detail.loading && <div className="sec-loading">加载中…</div>}
+                            {detail && detail.finding && (() => {
+                                const f = detail.finding;
+                                const rules = detail.rules || [];
+                                return (
+                                    <>
+                                        <div className="drawer-section">
+                                            <div className="ds-label">问题</div>
+                                            <div className="ds-body">{f.description}</div>
+                                        </div>
+                                        <div className="drawer-section">
+                                            <div className="ds-label">基本信息</div>
+                                            <Descriptions size="small" column={1} colon={false} items={[
+                                                { key: 'src', label: <span style={{ color: 'var(--color-text-tertiary)' }}>检查来源</span>, children: `${f.category}（${f.check_id}）` },
+                                                { key: 'time', label: <span style={{ color: 'var(--color-text-tertiary)' }}>发现时间</span>, children: `${fmtTime(f.detected_at)}${f.occurrences > 1 ? ` · 累计 ${f.occurrences} 次` : ''}` },
+                                                { key: 'st', label: <span style={{ color: 'var(--color-text-tertiary)' }}>当前状态</span>, children: <StatusTag s={f.status} /> },
+                                                f.last_exec_error ? { key: 'err', label: <span style={{ color: 'var(--color-text-tertiary)' }}>最近修复失败</span>, children: <span style={{ color: 'var(--color-error)' }}>{f.last_exec_error}</span> } : null,
+                                            ].filter(Boolean)} />
+                                        </div>
+                                        {f.evidence && (
+                                            <div className="drawer-section">
+                                                <div className="ds-label">检测证据</div>
+                                                <pre className="evidence-pre">{f.evidence}</pre>
+                                            </div>
+                                        )}
+                                        <div className="drawer-section">
+                                            <div className="ds-label">修复建议</div>
+                                            <div className="ds-body">{f.recommendation}</div>
+                                        </div>
+                                        <div className="drawer-section">
+                                            <div className="ds-label">修复方式</div>
+                                            {f.remediable && rules.length > 0 ? (
+                                                <>
+                                                    {rules.map(r => (
+                                                        <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 13 }}>
+                                                            <span className="sdot" style={{ width: 6, height: 6, borderRadius: 5, background: 'var(--color-success)', display: 'inline-block' }} />
+                                                            <span>{r.name}</span>
+                                                            <Tag style={{ marginRight: 0, fontSize: 11 }}>{r.mode === 'auto' ? '支持自动' : '人工确认'}</Tag>
+                                                        </div>
+                                                    ))}
+                                                    <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '6px 0 0' }}>
+                                                        修复动作仅限白名单（服务/容器/IP/文件等受控操作），执行前会展示影响并要求确认。
+                                                        <a onClick={() => window.location.href = 'remediation.html'}> 管理修复策略</a>
+                                                    </Typography.Paragraph>
+                                                </>
+                                            ) : (
+                                                <Typography.Paragraph type="secondary" style={{ fontSize: 13, margin: 0 }}>
+                                                    此风险暂无可自动执行的修复策略，请按上方建议手动处理，
+                                                    或<a onClick={() => window.location.href = 'remediation.html'}>创建修复策略</a>。
+                                                </Typography.Paragraph>
+                                            )}
+                                        </div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 18, flexWrap: 'wrap' }}>
+                                            {canManage && (f.status === 'open' || f.status === 'failed') && (
+                                                <Popconfirm title="忽略该风险？" description="忽略后后续扫描不再提醒；风险回归时会重新打开。"
+                                                    onConfirm={() => ignoreFinding(f)}>
+                                    <Button danger type="text">忽略风险</Button>
+                                                </Popconfirm>
+                                            )}
+                                            <span style={{ flex: 1 }} />
+                                            {canRemediate && f.remediable && (f.status === 'open' || f.status === 'failed') ? (
+                                                rules.length > 1 ? rules.map(r => (
+                                                    <Button key={r.id} type="primary" onClick={() => openRemediate(f, r.id)}>修复（{r.name}）</Button>
+                                                )) : <Button type="primary" icon={<UIIcon name="ThunderboltOutlined" />} onClick={() => openRemediate(f, '')}>修复</Button>
+                                            ) : null}
+                                            {f.status === 'fixing' && <Alert type="info" showIcon message="修复正在执行，稍后刷新查看结果" style={{ width: '100%' }} />}
+                                            {f.status === 'resolved' && <Alert type="success" showIcon message="该风险已解决" style={{ width: '100%' }} />}
+                                        </div>
+                                    </>
+                                );
+                            })()}
+                        </Drawer>
+
+                        {/* ==================== 修复确认 / 执行 / 结果 Modal ==================== */}
+                        <Modal open={!!remState} onCancel={() => remState && remState.phase !== 'running' && setRemState(null)} width={480}
+                            title={<span><UIIcon name="ThunderboltOutlined" /> {remState && remState.phase === 'done' ? '修复完成' : remState && remState.phase === 'failed' ? '修复失败' : '修复风险'}</span>}
+                            maskClosable={false}
+                            footer={(() => {
+                                if (!remState) return null;
+                                if (remState.phase === 'preview') return [
+                                    <Button key="c" onClick={() => setRemState(null)}>取消</Button>,
+                                    <Button key="ok" type="primary" loading={remState.loading} onClick={confirmRemediate}>执行修复</Button>,
+                                ];
+                                if (remState.phase === 'running') return [<Button key="d" disabled>执行中…</Button>];
+                                return [
+                                    <Button key="detail" type="text" onClick={() => { setRemState(null); window.location.href = 'remediation.html'; }}>查看执行详情</Button>,
+                                    <Button key="close" type="primary" onClick={() => setRemState(null)}>关闭</Button>,
+                                ];
+                            })()}>
+                            {remState && remState.phase === 'preview' && remState.preview && (
+                                <Descriptions size="small" column={1} bordered items={[
+                                    { key: 'risk', label: '风险', children: formatFinding(remState.finding).title },
+                                    { key: 'action', label: '执行动作', children: `${remState.preview.action_name}（${remState.preview.action}）` },
+                                    { key: 'steps', label: '执行步骤', children: <ul style={{ margin: 0, paddingLeft: 18 }}>{(remState.preview.steps || []).map((x, i) => <li key={i}>{x}</li>)}</ul> },
+                                    { key: 'impact', label: '预计影响', children: remState.preview.impact },
+                                    { key: 'risklv', label: '风险等级', children: remState.preview.risk },
+                                    { key: 'cmd', label: '执行方式', children: <span style={{ fontFamily: 'Consolas, monospace', fontSize: 12 }}>{remState.preview.command_hint}（内部受控 Action）</span> },
+                                ]} />
+                            )}
+                            {remState && remState.phase === 'running' && (
+                                <div style={{ textAlign: 'center', padding: '28px 0' }}>
+                                    <UIIcon name="SyncOutlined" spin style={{ fontSize: 30, color: 'var(--color-primary)' }} />
+                                    <div style={{ marginTop: 12, color: 'var(--color-text-secondary)' }}>正在执行修复并验证最终状态…</div>
+                                    <div style={{ marginTop: 4, fontSize: 12, color: 'var(--color-text-tertiary)' }}>执行完成后会自动验证（不只是命令成功）</div>
+                                </div>
+                            )}
+                            {remState && remState.phase === 'done' && (
+                                <Result status="success" title="修复成功"
+                                    subTitle="修复动作已执行并通过最终状态验证，对应风险已标记为已解决，本次操作已写入审计日志。"
+                                    extra={<Button type="primary" onClick={() => { setRemState(null); loadSummary(true); invalidateFindings(); }}>刷新风险列表</Button>} />
+                            )}
+                            {remState && remState.phase === 'failed' && (
+                                <Result status="error" title="修复失败"
+                                    subTitle={(remState.result && remState.result.message) || '执行或验证未通过，风险仍处于待处理状态。'}
+                                    extra={
+                                        <Space>
+                                            <Button onClick={() => { const f = remState.finding; setRemState(null); openDetail(f); }}>查看风险详情</Button>
+                                            <Button type="primary" onClick={() => { const f = remState.finding, rid = remState.rule && remState.rule.rule_id; setRemState(null); openRemediate(f, rid || ''); }}>重试</Button>
+                                        </Space>
+                                    } />
+                            )}
+                        </Modal>
+
+                        {/* ==================== 评分解释 Drawer ==================== */}
+                        <Drawer open={scoreOpen} onClose={() => setScoreOpen(false)} width={isMobile ? '100%' : 440} title="安全评分详情">
+                            {s.score_breakdown ? (() => {
+                                const bd = s.score_breakdown;
+                                return (
+                                    <>
+                                        <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+                                            <span className="score-big" style={statusKey === 'critical' ? { color: 'var(--color-error)' } : null}>{bd.final_score}</span>
+                                            <span className="sec-score-total"> / {bd.base_score}</span>
+                                            <div style={{ marginTop: 6 }}>
+                                                <Tag color={statusKey === 'good' ? 'success' : statusKey === 'warning' ? 'warning' : statusKey === 'risk' ? 'orange' : 'error'} style={{ marginRight: 0 }}>
+                                                    {s.score_level}
+                                                </Tag>
+                                            </div>
+                                        </div>
+                                        <div className="drawer-section">
+                                            <div className="ds-label">基础分</div>
+                                            <div className="ds-body">{bd.base_score}（满分）</div>
+                                        </div>
+                                        <div className="drawer-section">
+                                            <div className="ds-label">风险扣分</div>
+                                            {bd.deductions.length === 0 ? (
+                                                <div className="ds-body" style={{ color: 'var(--color-success)' }}>当前没有未解决风险，无扣分</div>
+                                            ) : bd.deductions.map((d, i) => (
+                                                <div key={i} className="ded-row">
+                                                    <span className="dd-reason">{d.reason}</span>
+                                                    <span className="dd-count">× {d.count}</span>
+                                                    <span className="dd-points">−{d.points}</span>
+                                                </div>
+                                            ))}
+                                            <div className="ded-row ded-sum">
+                                                <span className="dd-reason">当前得分</span>
+                                                <span className="dd-count">{bd.deductions.reduce((a, d) => a + d.count, 0)} 项待处理</span>
+                                                <span className="dd-points">{bd.final_score}</span>
+                                            </div>
+                                        </div>
+                                        <div className="drawer-section">
+                                            <div className="ds-body" style={{ color: 'var(--color-text-tertiary)', fontSize: 12 }}>
+                                                评分规则：100 分起，每项未解决风险按严重度扣分（严重 −25 / 高 −15 / 中 −8 / 低 −3），最低 0 分。<br />
+                                                评分更新时间：{bd.updated_at || '—'} · 规则版本：{bd.rule_version}
+                                            </div>
+                                        </div>
+                                    </>
+                                );
+                            })() : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="完成首次扫描后可查看评分构成" />}
+                        </Drawer>
+
+                        {/* ==================== 扫描设置 Drawer ==================== */}
+                        <Drawer open={settingsOpen} onClose={() => setSettingsOpen(false)} width={isMobile ? '100%' : 480}
+                            title="扫描设置"
+                            footer={
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                                    <Button onClick={() => setSettingsOpen(false)}>取消</Button>
+                                    <Button type="primary" loading={settingsSaving} disabled={!canManage} onClick={saveSettings}>保存</Button>
+                                </div>
+                            }>
+                            {settingsForm && (
+                                <>
+                                    <div className="drawer-section" style={{ border: 'none', paddingTop: 0 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                                            <Typography.Text strong>自动扫描</Typography.Text>
+                                            <Switch checked={settingsForm.schedule.enabled} onChange={v => setSettingsForm(f => ({ ...f, schedule: { ...f.schedule, enabled: v } }))} />
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                            <Select size="small" style={{ width: 110 }} value={settingsForm.schedule.type || 'daily'}
+                                                onChange={v => setSettingsForm(f => ({ ...f, schedule: { ...f.schedule, type: v } }))}
+                                                options={[{ value: 'hourly', label: '每小时' }, { value: 'daily', label: '每天' }, { value: 'weekly', label: '每周' }, { value: 'cron', label: '自定义 Cron' }]} />
+                                            {(settingsForm.schedule.type === 'daily' || settingsForm.schedule.type === 'weekly' || settingsForm.schedule.type === 'hourly') &&
+                                                <InputNumber size="small" min={settingsForm.schedule.type === 'hourly' ? 0 : 0} max={settingsForm.schedule.type === 'hourly' ? 59 : 23}
+                                                    value={settingsForm.schedule.type === 'hourly' ? settingsForm.schedule.minute : settingsForm.schedule.hour}
+                                                    onChange={v => setSettingsForm(f => ({ ...f, schedule: settingsForm.schedule.type === 'hourly' ? { ...f.schedule, minute: v } : { ...f.schedule, hour: v } }))}
+                                                    addonAfter={settingsForm.schedule.type === 'hourly' ? '分' : '时'} style={{ width: 96 }} />}
+                                            {(settingsForm.schedule.type === 'daily' || settingsForm.schedule.type === 'weekly') &&
+                                                <InputNumber size="small" min={0} max={59} value={settingsForm.schedule.minute}
+                                                    onChange={v => setSettingsForm(f => ({ ...f, schedule: { ...f.schedule, minute: v } }))}
+                                                    addonAfter="分" style={{ width: 96 }} />}
+                                            {settingsForm.schedule.type === 'weekly' &&
+                                                <Select size="small" style={{ width: 90 }} value={settingsForm.schedule.weekday || 1}
+                                                    onChange={v => setSettingsForm(f => ({ ...f, schedule: { ...f.schedule, weekday: v } }))}
+                                                    options={[{ value: 1, label: '周一' }, { value: 2, label: '周二' }, { value: 3, label: '周三' }, { value: 4, label: '周四' }, { value: 5, label: '周五' }, { value: 6, label: '周六' }, { value: 0, label: '周日' }]} />}
+                                            {settingsForm.schedule.type === 'cron' &&
+                                                <Input size="small" style={{ width: 170 }} placeholder="0 5 * * *" value={settingsForm.schedule.cron}
+                                                    onChange={e => setSettingsForm(f => ({ ...f, schedule: { ...f.schedule, cron: e.target.value } }))} />}
+                                        </div>
+                                    </div>
+                                    <div className="drawer-section">
+                                        <div className="ds-label">检查项</div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            {(summary && summary.checkers || []).map(ck => (
+                                                <Checkbox key={ck.id} checked={!settingsForm.disabled.has(ck.id)}
+                                                    onChange={e => {
+                                                        const next = new Set(settingsForm.disabled);
+                                                        if (e.target.checked) next.delete(ck.id); else next.add(ck.id);
+                                                        setSettingsForm(f => ({ ...f, disabled: next }));
+                                                    }}>
+                                                    <Tooltip title={ck.description}><span>{ck.name}</span></Tooltip>
+                                                    <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 6 }}>{ck.category}</Typography.Text>
+                                                </Checkbox>
+                                            ))}
+                                        </div>
+                                        <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
+                                            停用后不再执行该项扫描；已产生的风险仍会计入评分，重新启用并扫描后自动恢复。
+                                        </Typography.Paragraph>
+                                    </div>
+                                    <div className="drawer-section">
+                                        <div className="ds-label">服务监控清单</div>
+                                        <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '0 0 8px' }}>
+                                            「服务健康」检查将核查这些 systemd 服务是否运行，留空使用默认清单。
+                                        </Typography.Paragraph>
+                                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                                            {settingsForm.watched_services.map(sv => (
+                                                <Tag key={sv} closable onClose={() => setSettingsForm(f => ({ ...f, watched_services: f.watched_services.filter(x => x !== sv) }))}>{sv}</Tag>
+                                            ))}
+                                        </div>
+                                        <Space.Compact style={{ width: '100%' }}>
+                                            <Input size="small" placeholder="服务名，如 nginx / sshd" value={watchInput} onChange={e => setWatchInput(e.target.value)}
+                                                onPressEnter={() => {
+                                                    const v = watchInput.trim().replace(/\.service$/, '');
+                                                    if (v && !settingsForm.watched_services.includes(v)) setSettingsForm(f => ({ ...f, watched_services: [...f.watched_services, v] }));
+                                                    setWatchInput('');
+                                                }} />
+                                            <Button size="small" onClick={() => {
+                                                const v = watchInput.trim().replace(/\.service$/, '');
+                                                if (v && !settingsForm.watched_services.includes(v)) setSettingsForm(f => ({ ...f, watched_services: [...f.watched_services, v] }));
+                                                setWatchInput('');
+                                            }}>添加</Button>
+                                        </Space.Compact>
+                                    </div>
+                                </>
+                            )}
+                        </Drawer>
+                    </div>
+                </ConfigProvider>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>

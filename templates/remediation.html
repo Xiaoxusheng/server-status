@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow">
+    <title>自动修复 - Server Status</title>
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M866.9%20169.9L527.1%2054.1c-3-3-9.2-3-12.1%200L175.1%20169.9c-8.3%202.8-12.3%2012.1-8.6%2020.2l4.7%2010.4c-3-3-9.2-3-12.1%200L25.1%20314.5c-8.3%202.8-12.3%2012.1-8.6%2020.2l8.6%2019.1c-3-3-9.2-3-12.1%200L499.3%20960c1.5%201.5%203.5%202.3%205.7%202.3s4.2-0.8%205.7-2.3l486.2-605.7c3.7-8.1-0.3-17.4-8.6-20.2z%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="stylesheet" href="/ui.css">
+    <style>
+        #root { min-height: 100vh; }
+        .sec-topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 56px;
+            background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+        }
+        .tb-page { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--color-text); white-space: nowrap; }
+        .tb-page .anticon { color: var(--color-primary); }
+        .sec-wrap { padding: 16px 24px 64px; max-width: 1280px; margin: 0 auto; width: 100%; }
+
+        .rem-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 16px; }
+        .rem-stat {
+            background: var(--color-surface); border: 1px solid var(--color-border);
+            border-radius: var(--radius); padding: 12px 16px;
+        }
+        .rem-stat .rs-label { font-size: 12px; color: var(--color-text-tertiary); display: flex; align-items: center; gap: 6px; }
+        .rem-stat .rs-value { margin-top: 4px; font-size: 20px; font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums; }
+
+        .rem-exec-card {
+            background: var(--color-surface); border: 1px solid var(--color-border);
+            border-left-width: 3px; border-radius: var(--radius);
+            padding: 12px 14px; margin-bottom: 10px;
+        }
+        .rem-mono { font-family: "JetBrains Mono", Consolas, "Courier New", monospace; font-size: 12px; }
+        @media (max-width: 768px) {
+            .sec-wrap { padding: 12px 12px 48px; }
+            .sec-topbar { padding: 0 12px; }
+            .rem-stat-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) { }
+        })();
+    </script>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <script type="text/babel">
+        const { Card, Button, Table, Tag, Tooltip, Space, ConfigProvider, theme, message, Descriptions, Empty,
+            Modal, Segmented, Select, Input, InputNumber, Typography, Switch, Popconfirm, Alert } = window.antd;
+        const { useState, useEffect, useCallback, useRef } = React;
+        const { darkAlgorithm } = theme;
+        const IconSet = window.icons || {};
+        const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
+
+        const baseUrl = window.location.origin;
+        function getCsrfToken() { const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+        function secureFetch(url, options = {}) {
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) { const tok = getCsrfToken(); if (tok) headers['X-CSRF-Token'] = tok; }
+            return fetch(url, { method, headers, credentials: 'include', body: options.body });
+        }
+        async function getJSON(url) {
+            const r = await secureFetch(url);
+            const d = await r.json();
+            if (d.code !== 200) throw new Error(d.message || ('HTTP ' + r.status));
+            return d.data;
+        }
+        async function putJSON(url, body) {
+            const r = await secureFetch(url, { method: 'PUT', body: JSON.stringify(body || {}) });
+            const d = await r.json();
+            if (d.code !== 200) throw new Error(d.message || ('HTTP ' + r.status));
+            return d.data;
+        }
+        async function postJSON(url, body) {
+            const r = await secureFetch(url, { method: 'POST', body: JSON.stringify(body || {}) });
+            const d = await r.json();
+            if (d.code !== 200) throw new Error(d.message || ('HTTP ' + r.status));
+            return d.data;
+        }
+        async function deleteJSON(url) {
+            const r = await secureFetch(url, { method: 'DELETE' });
+            const d = await r.json();
+            if (d.code !== 200) throw new Error(d.message || ('HTTP ' + r.status));
+            return d.data;
+        }
+        function fmtTime(s) { return s ? dayjs(s).format('MM-DD HH:mm:ss') : '—'; }
+        function useIsMobile() {
+            const [m, setM] = useState(window.innerWidth <= 768);
+            useEffect(() => {
+                const on = () => setM(window.innerWidth <= 768);
+                window.addEventListener('resize', on);
+                return () => window.removeEventListener('resize', on);
+            }, []);
+            return m;
+        }
+
+        const MODE_MAP = { manual: { label: '人工确认', color: 'blue' }, suggest: { label: '仅建议', color: 'default' }, auto: { label: '自动执行', color: 'green' } };
+        const EXEC_STATUS = { running: { label: '执行中', color: 'processing' }, success: { label: '成功', color: 'success' }, failed: { label: '失败', color: 'error' }, timeout: { label: '超时', color: 'error' } };
+        const RISK_LABEL = { low: '低', medium: '中', high: '高' };
+        const SEV_OPTS = [{ value: 'critical', label: '严重及以上' }, { value: 'high', label: '高风险及以上' }, { value: 'medium', label: '中风险及以上' }, { value: 'low', label: '低风险及以上' }];
+
+        function OpsTopbar({ active, isDark, setIsDark, hasPerm }) {
+            const navBtns = [];
+            navBtns.push(<Button key="home" icon={<UIIcon name="DashboardOutlined" />} onClick={() => window.location.href = 'index.html'}>首页</Button>);
+            if (hasPerm('security:view') || hasPerm('remediation:view')) navBtns.push(<Button key="security" icon={<UIIcon name="SafetyOutlined" />} type={active === 'security' ? 'primary' : 'default'} onClick={() => window.location.href = 'security.html'}>安全中心</Button>);
+            if (hasPerm('security:view')) navBtns.push(<Button key="events" icon={<UIIcon name="NotificationOutlined" />} type={active === 'events' ? 'primary' : 'default'} onClick={() => window.location.href = 'security-events.html'}>安全事件</Button>);
+            if (hasPerm('remediation:view')) navBtns.push(<Button key="rem" icon={<UIIcon name="ToolOutlined" />} type={active === 'remediation' ? 'primary' : 'default'} onClick={() => window.location.href = 'remediation.html'}>自动修复</Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="tasks" icon={<UIIcon name="ClockCircleOutlined" />} type={active === 'tasks' ? 'primary' : 'default'} onClick={() => window.location.href = 'tasks.html'}>运维任务</Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="history" icon={<UIIcon name="HistoryOutlined" />} type={active === 'history' ? 'primary' : 'default'} onClick={() => window.location.href = 'task-history.html'}>执行历史</Button>);
+            return (
+                <div className="sec-topbar">
+                    <span className="tb-page"><UIIcon name="ToolOutlined" />自动修复</span>
+                    <Space wrap style={{ marginLeft: 'auto' }}>
+                        {navBtns}
+                        <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                            <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                        </Tooltip>
+                        <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={async () => {
+                            try { await secureFetch(baseUrl + '/logout', { method: 'POST', body: '{}' }); } catch (e) { }
+                            window.location.href = 'index.html';
+                        }}><span className="tb-text">退出</span></Button>
+                    </Space>
+                </div>
+            );
+        }
+
+        // 动作参数动态表单（参数规格来自后端 Action Registry，不暴露自由命令）
+        function ParamFields({ spec, params, setParams }) {
+            if (!spec || spec.length === 0) return <Alert type="info" message="该动作无需参数。" style={{ marginBottom: 12 }} />;
+            return spec.map(p => (
+                <div key={p.name} style={{ marginBottom: 10 }}>
+                    <Typography.Text style={{ fontSize: 13 }}>{p.label}{p.required && <span style={{ color: 'var(--color-error)' }}> *</span>}</Typography.Text>
+                    {p.help && <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 4 }}>{p.help}</Typography.Paragraph>}
+                    <div>
+                        {p.type === 'enum' ? (
+                            <Select style={{ width: '100%' }} value={params[p.name] != null ? String(params[p.name]) : (p.default != null ? String(p.default) : undefined)}
+                                onChange={v => setParams(m => ({ ...m, [p.name]: v }))}
+                                options={(p.options || []).map(o => ({ value: o, label: o }))} placeholder="请选择" />
+                        ) : p.type === 'int' ? (
+                            <InputNumber style={{ width: '100%' }} value={params[p.name] != null ? Number(params[p.name]) : (p.default != null ? Number(p.default) : undefined)}
+                                onChange={v => setParams(m => ({ ...m, [p.name]: v }))} />
+                        ) : (
+                            <Input value={params[p.name] != null ? String(params[p.name]) : (p.default != null ? String(p.default) : '')}
+                                onChange={e => setParams(m => ({ ...m, [p.name]: e.target.value }))}
+                                placeholder={p.name === 'service' ? '如 nginx（支持 $finding 表示从风险上下文取值）' : p.name === 'ip' ? '如 1.2.3.4（支持 $finding）' : ''} />
+                        )}
+                    </div>
+                </div>
+            ));
+        }
+
+        function App() {
+            const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const isMobile = useIsMobile();
+            const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+
+            const [rules, setRules] = useState(null);
+            const [lastExec, setLastExec] = useState({});
+            const [autoEnabled, setAutoEnabled] = useState(true);
+            const [today, setToday] = useState({ total: 0, success: 0, failed: 0 });
+            const [execs, setExecs] = useState([]);
+            const [actions, setActions] = useState([]);
+            const [checkers, setCheckers] = useState([]);
+            const [editOpen, setEditOpen] = useState(false);
+            const [editForm, setEditForm] = useState(null);
+            const [saving, setSaving] = useState(false);
+
+            useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
+                        else window.location.href = 'index.html';
+                    })
+                    .catch(() => { window.location.href = 'index.html'; });
+            }, []);
+            useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+            }, [isDark]);
+
+            const load = useCallback(async () => {
+                try {
+                    const [r, a, c, ex, st] = await Promise.all([
+                        getJSON(baseUrl + '/api/remediation/rules'),
+                        getJSON(baseUrl + '/api/remediation/actions'),
+                        getJSON(baseUrl + '/api/security/checkers'),
+                        getJSON(baseUrl + '/api/remediation/executions?limit=20'),
+                        getJSON(baseUrl + '/api/remediation/settings'),
+                    ]);
+                    setRules(r.rules || []);
+                    setLastExec(r.last_exec || {});
+                    setAutoEnabled(!!r.auto_enabled);
+                    setActions(a || []);
+                    setCheckers(c || []);
+                    setExecs(ex.executions || []);
+                    if (ex.today) setToday(ex.today);
+                } catch (e) { message.error('加载自动修复数据失败：' + e.message); }
+            }, []);
+            useEffect(() => { if (auth.ok) load(); }, [auth.ok]);
+
+            const toggleAuto = async (v) => {
+                try {
+                    await postJSON(baseUrl + '/api/remediation/settings', { auto_enabled: v });
+                    setAutoEnabled(v);
+                    message.success(v ? '已开启自动修复：符合条件且允许自动执行的风险将自动处理' : '已关闭自动修复：所有修复均需人工确认');
+                } catch (e) { message.error(e.message); }
+            };
+
+            const openCreate = () => {
+                setEditForm({
+                    id: '', name: '', description: '', check_id: checkers[0] && checkers[0].id || '',
+                    dedupe_key: '', min_severity: 'medium', mode: 'manual', enabled: true,
+                    require_confirm: true, action_id: (actions[0] || {}).id || '',
+                    parameters: {}, max_attempts: 3, cooldown_seconds: 900,
+                });
+                setEditOpen(true);
+            };
+            const openEdit = (r) => {
+                setEditForm({ ...r, parameters: { ...(r.parameters || {}) } });
+                setEditOpen(true);
+            };
+            const saveRule = async () => {
+                setSaving(true);
+                try {
+                    const body = { ...editForm };
+                    if (body.id) {
+                        await putJSON(baseUrl + '/api/remediation/rules/' + body.id, body);
+                        message.success('修复策略已更新');
+                    } else {
+                        delete body.id;
+                        await postJSON(baseUrl + '/api/remediation/rules', body);
+                        message.success('修复策略已创建');
+                    }
+                    setEditOpen(false);
+                    load();
+                } catch (e) { message.error(e.message); } finally { setSaving(false); }
+            };
+            const toggleRule = async (r) => {
+                try {
+                    await putJSON(baseUrl + '/api/remediation/rules/' + r.id, { ...r, enabled: !r.enabled });
+                    message.success(!r.enabled ? '策略已启用' : '策略已停用');
+                    load();
+                } catch (e) { message.error(e.message); }
+            };
+            const deleteRule = async (r) => {
+                try {
+                    await deleteJSON(baseUrl + '/api/remediation/rules/' + r.id);
+                    message.success('策略已删除');
+                    load();
+                } catch (e) { message.error(e.message); }
+            };
+
+            if (auth.loading) {
+                return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}><Card loading style={{ width: 320 }} /></div>;
+            }
+            if (!hasPerm('remediation:view')) {
+                return (
+                    <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                        <OpsTopbar active="remediation" isDark={isDark} setIsDark={setIsDark} hasPerm={hasPerm} />
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+                            <Card style={{ width: 400, textAlign: 'center' }}>
+                                <div style={{ fontSize: 40, marginBottom: 8 }}><UIIcon name="StopOutlined" /></div>
+                                <Typography.Title level={4}>没有访问权限</Typography.Title>
+                                <Typography.Text type="secondary">当前账号没有「查看自动修复」权限（remediation:view）。</Typography.Text>
+                            </Card>
+                        </div>
+                    </ConfigProvider>
+                );
+            }
+
+            const selectedAction = editForm ? actions.find(a => a.id === editForm.action_id) : null;
+            const ruleCols = [
+                { title: '策略名称', dataIndex: 'name', width: 180, render: (v, r) => <div><div style={{ fontWeight: 600 }}>{v}</div>{!isMobile && <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{r.description}</div>}</div> },
+                { title: '触发条件', key: 'match', width: 170, render: (_, r) => { const c = checkers.find(x => x.id === r.check_id); return <span style={{ fontSize: 12 }}>{(c && c.name) || r.check_id}{r.dedupe_key ? <div className="rem-mono">{r.dedupe_key}</div> : null}</span>; } },
+                { title: '动作', dataIndex: 'action_id', width: 130, render: (v) => { const a = actions.find(x => x.id === v); return <Tooltip title={a && a.description}><Tag style={{ marginRight: 0 }}>{(a && a.name) || v}</Tag></Tooltip>; } },
+                { title: '模式', dataIndex: 'mode', width: 100, render: (v) => <Tag color={(MODE_MAP[v] || {}).color} style={{ marginRight: 0 }}>{(MODE_MAP[v] || {}).label || v}</Tag> },
+                { title: '风险下限', dataIndex: 'min_severity', width: 90, render: (v) => ({ critical: '严重', high: '高', medium: '中', low: '低' }[v] || v) },
+                { title: '状态', dataIndex: 'enabled', width: 80, render: (v) => v ? <Tag color="success" style={{ marginRight: 0 }}>启用</Tag> : <Tag style={{ marginRight: 0 }}>停用</Tag> },
+                { title: '最近执行', key: 'last', width: 110, render: (_, r) => <span style={{ fontSize: 12 }}>{lastExec[r.id] ? fmtTime(lastExec[r.id]) : '未执行'}</span> },
+                {
+                    title: '操作', key: 'ops', width: 190,
+                    render: (_, r) => (
+                        <Space size={0} wrap>
+                            {hasPerm('remediation:manage') && <Button size="small" type="link" onClick={() => openEdit(r)}>编辑</Button>}
+                            {hasPerm('remediation:manage') && <Button size="small" type="link" onClick={() => toggleRule(r)}>{r.enabled ? '停用' : '启用'}</Button>}
+                            {hasPerm('remediation:manage') && <Popconfirm title="删除该修复策略？" onConfirm={() => deleteRule(r)}><Button size="small" type="link" danger>删除</Button></Popconfirm>}
+                        </Space>
+                    ),
+                },
+            ].filter(c => !(isMobile && ['match', 'min_severity'].includes(c.key || c.dataIndex)));
+
+            const execCols = [
+                { title: '时间', dataIndex: 'started_at', width: 130, render: (v) => fmtTime(v) },
+                { title: '动作', dataIndex: 'action_id', width: 130, render: (v) => { const a = actions.find(x => x.id === v); return (a && a.name) || v; } },
+                { title: '触发', dataIndex: 'trigger', width: 80, render: (v) => v === 'auto' ? <Tag color="green" style={{ marginRight: 0 }}>自动</Tag> : <Tag style={{ marginRight: 0 }}>人工</Tag> },
+                { title: '操作人', dataIndex: 'operator', width: 100 },
+                { title: '结果', dataIndex: 'status', width: 80, render: (v) => <Tag color={(EXEC_STATUS[v] || {}).color} style={{ marginRight: 0 }}>{(EXEC_STATUS[v] || {}).label || v}</Tag> },
+                { title: '说明', dataIndex: 'message', ellipsis: true, render: (v) => <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{v || '—'}</span> },
+            ].filter(c => !(isMobile && ['action_id', 'operator'].includes(c.dataIndex)));
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <OpsTopbar active="remediation" isDark={isDark} setIsDark={setIsDark} hasPerm={hasPerm} />
+                        <div className="sec-wrap">
+                            {/* ===== 顶部统计 ===== */}
+                            <div className="rem-stat-grid">
+                                <div className="rem-stat">
+                                    <div className="rs-label">自动修复</div>
+                                    <div style={{ marginTop: 6 }}>
+                                        <Switch checked={autoEnabled} disabled={!hasPerm('remediation:manage')} onChange={toggleAuto}
+                                            checkedChildren="ON" unCheckedChildren="OFF" />
+                                        <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>全局总开关</Typography.Text>
+                                    </div>
+                                </div>
+                                <div className="rem-stat"><div className="rs-label">今日执行</div><div className="rs-value">{today.total}</div></div>
+                                <div className="rem-stat"><div className="rs-label">成功</div><div className="rs-value" style={{ color: 'var(--color-success)' }}>{today.success}</div></div>
+                                <div className="rem-stat"><div className="rs-label">失败</div><div className="rs-value" style={{ color: today.failed > 0 ? 'var(--color-error)' : undefined }}>{today.failed}</div></div>
+                            </div>
+                            {!autoEnabled && (
+                                <Alert type="info" showIcon style={{ marginBottom: 16 }}
+                                    message="自动修复当前已关闭" description="所有发现仍会记录，修复动作都需要在安全中心人工确认执行。" />
+                            )}
+
+                            {/* ===== 修复策略 ===== */}
+                            <Card size="small" title={<span><UIIcon name="NodeIndexOutlined" /> 修复策略</span>}
+                                extra={hasPerm('remediation:manage') && <Button size="small" type="primary" icon={<UIIcon name="PlusOutlined" />} onClick={openCreate}>新建策略</Button>}>
+                                {!rules ? (
+                                    <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>加载中...</div>
+                                ) : rules.length === 0 ? (
+                                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有修复策略，点击「新建策略」创建" />
+                                ) : (
+                    <Table rowKey="id" size="small" columns={ruleCols} dataSource={rules} pagination={false} scroll={{ x: 1050 }} />
+                                )}
+                            </Card>
+
+                            {/* ===== 最近修复执行 ===== */}
+                            <Card size="small" title={<span><UIIcon name="HistoryOutlined" /> 最近修复执行</span>} style={{ marginTop: 16 }}>
+                                {execs.length === 0 ? (
+                                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无修复执行记录" />
+                                ) : isMobile ? (
+                                    execs.map(e => (
+                                        <div key={e.id} className="rem-exec-card">
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <Typography.Text strong>{e.action_id}</Typography.Text>
+                                                <Tag color={(EXEC_STATUS[e.status] || {}).color} style={{ marginRight: 0 }}>{(EXEC_STATUS[e.status] || {}).label || e.status}</Tag>
+                                            </div>
+                                            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 6 }}>
+                                                {fmtTime(e.started_at)} · {e.trigger === 'auto' ? '自动' : '人工'} · {e.operator}
+                                            </div>
+                                            {e.message && <div style={{ fontSize: 12, marginTop: 4, color: 'var(--color-text-secondary)' }}>{e.message}</div>}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <Table rowKey="id" size="small" columns={execCols} dataSource={execs} pagination={false} scroll={{ x: 760 }} />
+                                )}
+                            </Card>
+
+                            {/* ===== 动作白名单说明 ===== */}
+                            <Card size="small" title={<span><UIIcon name="LockOutlined" /> 动作白名单（修复 ≠ Shell，仅允许以下受控动作）</span>} style={{ marginTop: 16 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(320px, 1fr))', gap: 10 }}>
+                                    {actions.map(a => (
+                                        <div key={a.id} style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '8px 12px' }}>
+                                            <Space size={6}>
+                                                <Typography.Text strong style={{ fontSize: 13 }}>{a.name}</Typography.Text>
+                                                <Tag style={{ marginRight: 0 }} className="rem-mono">{a.id}</Tag>
+                                                <Tag color={{ low: 'blue', medium: 'gold', high: 'orange' }[a.risk_level]} style={{ marginRight: 0 }}>风险 {RISK_LABEL[a.risk_level] || a.risk_level}</Tag>
+                                                {!a.allow_auto && <Tooltip title="该动作风险较高，仅允许人工确认执行"><Tag color="default" style={{ marginRight: 0 }}>禁自动</Tag></Tooltip>}
+                                            </Space>
+                                            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 4 }}>{a.description}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </Card>
+                        </div>
+
+                        {/* ===== 策略编辑 Modal ===== */}
+                        <Modal open={editOpen} onCancel={() => setEditOpen(false)} onOk={saveRule} confirmLoading={saving}
+                            title={editForm && editForm.id ? '编辑修复策略' : '新建修复策略'} okText="保存" width={isMobile ? '96vw' : 620}
+                            destroyOnClose>
+                            {editForm && (
+                                <>
+                                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '0 16px' }}>
+                                        <div style={{ marginBottom: 10 }}>
+                                            <Typography.Text style={{ fontSize: 13 }}>策略名称 *</Typography.Text>
+                                            <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} placeholder="如：nginx 异常自动恢复" />
+                                        </div>
+                                        <div style={{ marginBottom: 10 }}>
+                                            <Typography.Text style={{ fontSize: 13 }}>触发检查器 *</Typography.Text>
+                                            <Select style={{ width: '100%' }} value={editForm.check_id}
+                                                onChange={v => setEditForm(f => ({ ...f, check_id: v }))}
+                                                options={checkers.map(c => ({ value: c.id, label: `${c.name}（${c.category}）` }))} />
+                                        </div>
+                                        <div style={{ marginBottom: 10 }}>
+                                            <Typography.Text style={{ fontSize: 13 }}>修复动作 *</Typography.Text>
+                                            <Select style={{ width: '100%' }} value={editForm.action_id}
+                                                onChange={v => setEditForm(f => ({ ...f, action_id: v, parameters: {} }))}
+                                                options={actions.map(a => ({ value: a.id, label: `${a.name}${a.allow_auto ? '' : '（禁自动）'}` }))} />
+                                        </div>
+                                        <div style={{ marginBottom: 10 }}>
+                                            <Typography.Text style={{ fontSize: 13 }}>执行模式 *</Typography.Text>
+                                            <Select style={{ width: '100%' }} value={editForm.mode}
+                                                onChange={v => setEditForm(f => ({ ...f, mode: v }))}
+                                                options={[
+                                                    { value: 'manual', label: '人工确认（推荐）' },
+                                                    { value: 'suggest', label: '仅建议，不执行' },
+                                                    { value: 'auto', label: selectedAction && !selectedAction.allow_auto ? '自动执行（该动作不允许）' : '自动执行', disabled: selectedAction && !selectedAction.allow_auto },
+                                                ]} />
+                                        </div>
+                                        <div style={{ marginBottom: 10 }}>
+                                            <Typography.Text style={{ fontSize: 13 }}>适用风险下限</Typography.Text>
+                                            <Select style={{ width: '100%' }} value={editForm.min_severity}
+                                                onChange={v => setEditForm(f => ({ ...f, min_severity: v }))} options={SEV_OPTS} />
+                                        </div>
+                                        <div style={{ marginBottom: 10 }}>
+                                            <Typography.Text style={{ fontSize: 13 }}>目标细分（可选）</Typography.Text>
+                                            <Input value={editForm.dedupe_key} onChange={e => setEditForm(f => ({ ...f, dedupe_key: e.target.value }))}
+                                                placeholder="留空匹配该检查全部风险" />
+                                        </div>
+                                        <div style={{ marginBottom: 10 }}>
+                                            <Typography.Text style={{ fontSize: 13 }}>最大尝试次数 / 周期</Typography.Text>
+                                            <Space>
+                                                <InputNumber min={1} max={10} value={editForm.max_attempts} onChange={v => setEditForm(f => ({ ...f, max_attempts: v }))} addonAfter="次" style={{ width: 90 }} />
+                                                <InputNumber min={60} step={60} value={editForm.cooldown_seconds} onChange={v => setEditForm(f => ({ ...f, cooldown_seconds: v }))} addonAfter="秒冷却" style={{ width: 130 }} />
+                                            </Space>
+                                        </div>
+                                        <div style={{ marginBottom: 10 }}>
+                                            <Typography.Text style={{ fontSize: 13 }}>人工确认</Typography.Text>
+                                            <div>
+                                                <Switch checked={editForm.require_confirm} onChange={v => setEditForm(f => ({ ...f, require_confirm: v }))} />
+                                                <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>执行前必须确认预览</Typography.Text>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <Typography.Text strong style={{ fontSize: 13 }}>动作参数</Typography.Text>
+                                    {selectedAction && selectedAction.allow_auto === undefined ? null : null}
+                                    <div style={{ margin: '8px 0', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                                        <ParamFields spec={(selectedAction || {}).params || []} params={editForm.parameters}
+                                            setParams={m => setEditForm(f => ({ ...f, parameters: { ...m } }))} />
+                                        <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>
+                                            参数值为 <span className="rem-mono">$finding</span> 表示执行时从风险上下文自动取值（如服务名 / IP）。
+                                        </Typography.Paragraph>
+                                    </div>
+                                </>
+                            )}
+                        </Modal>
+                    </div>
+                </ConfigProvider>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow">
+    <title>执行历史 - Server Status</title>
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="stylesheet" href="/ui.css">
+    <style>
+        #root { min-height: 100vh; }
+        .sec-topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 56px;
+            background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+        }
+        .tb-page { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--color-text); white-space: nowrap; }
+        .tb-page .anticon { color: var(--color-primary); }
+        .sec-wrap { padding: 16px 24px 64px; max-width: 1280px; margin: 0 auto; width: 100%; }
+
+        .hist-card-m {
+            background: var(--color-surface); border: 1px solid var(--color-border);
+            border-left-width: 3px; border-radius: var(--radius);
+            padding: 12px 14px; margin-bottom: 10px;
+        }
+        .st-success { border-left-color: var(--color-success); }
+        .st-failed, .st-timeout { border-left-color: #d46b08; }
+        .st-running, .st-queued { border-left-color: var(--color-primary); }
+        .rem-mono { font-family: "JetBrains Mono", Consolas, "Courier New", monospace; font-size: 12px; }
+        @media (max-width: 768px) {
+            .sec-wrap { padding: 12px 12px 48px; }
+            .sec-topbar { padding: 0 12px; }
+        }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) { }
+        })();
+    </script>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <script type="text/babel">
+        const { Card, Button, Table, Tag, Tooltip, Space, ConfigProvider, theme, message, Descriptions, Empty,
+            Select, Typography, Drawer, Steps } = window.antd;
+        const { useState, useEffect, useCallback } = React;
+        const { darkAlgorithm } = theme;
+        const IconSet = window.icons || {};
+        const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
+
+        const baseUrl = window.location.origin;
+        function getCsrfToken() { const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+        function secureFetch(url, options = {}) {
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) { const tok = getCsrfToken(); if (tok) headers['X-CSRF-Token'] = tok; }
+            return fetch(url, { method, headers, credentials: 'include', body: options.body });
+        }
+        async function getJSON(url) {
+            const r = await secureFetch(url);
+            const d = await r.json();
+            if (d.code !== 200) throw new Error(d.message || ('HTTP ' + r.status));
+            return d.data;
+        }
+        function fmtTime(s) { return s ? dayjs(s).format('MM-DD HH:mm:ss') : '—'; }
+        function fmtDuration(ms) {
+            if (!ms && ms !== 0) return '—';
+            if (ms < 1000) return ms + 'ms';
+            const s = Math.round(ms / 100) / 10;
+            if (s < 60) return s + 's';
+            return Math.floor(s / 60) + 'm' + Math.round(s % 60) + 's';
+        }
+        function useIsMobile() {
+            const [m, setM] = useState(window.innerWidth <= 768);
+            useEffect(() => {
+                const on = () => setM(window.innerWidth <= 768);
+                window.addEventListener('resize', on);
+                return () => window.removeEventListener('resize', on);
+            }, []);
+            return m;
+        }
+
+        const TASK_STATUS = {
+            running: { label: '运行中', color: 'processing', cls: 'st-running' },
+            queued: { label: '排队中', color: 'processing', cls: 'st-queued' },
+            success: { label: '成功', color: 'success', cls: 'st-success' },
+            failed: { label: '失败', color: 'error', cls: 'st-failed' },
+            timeout: { label: '超时', color: 'error', cls: 'st-timeout' },
+            cancelled: { label: '已取消', color: 'default', cls: '' },
+            skipped: { label: '已跳过', color: 'default', cls: '' },
+        };
+        const StatusTag = ({ s }) => {
+            const m = TASK_STATUS[s] || { label: s || '—', color: 'default', cls: '' };
+            return <Tag color={m.color} style={{ marginRight: 0 }}>{m.label}</Tag>;
+        };
+        const TRIGGER_LABEL = { schedule: '计划触发', manual: '手动执行', event: '事件触发', retry: '失败重试' };
+
+        function OpsTopbar({ active, isDark, setIsDark, hasPerm }) {
+            const navBtns = [];
+            navBtns.push(<Button key="home" icon={<UIIcon name="DashboardOutlined" />} onClick={() => window.location.href = 'index.html'}>首页</Button>);
+            if (hasPerm('security:view') || hasPerm('remediation:view')) navBtns.push(<Button key="security" icon={<UIIcon name="SafetyOutlined" />} type={active === 'security' ? 'primary' : 'default'} onClick={() => window.location.href = 'security.html'}>安全中心</Button>);
+            if (hasPerm('security:view')) navBtns.push(<Button key="events" icon={<UIIcon name="NotificationOutlined" />} type={active === 'events' ? 'primary' : 'default'} onClick={() => window.location.href = 'security-events.html'}>安全事件</Button>);
+            if (hasPerm('remediation:view')) navBtns.push(<Button key="rem" icon={<UIIcon name="ToolOutlined" />} type={active === 'remediation' ? 'primary' : 'default'} onClick={() => window.location.href = 'remediation.html'}>自动修复</Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="tasks" icon={<UIIcon name="ClockCircleOutlined" />} type={active === 'tasks' ? 'primary' : 'default'} onClick={() => window.location.href = 'tasks.html'}>运维任务</Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="history" icon={<UIIcon name="HistoryOutlined" />} type={active === 'history' ? 'primary' : 'default'} onClick={() => window.location.href = 'task-history.html'}>执行历史</Button>);
+            return (
+                <div className="sec-topbar">
+                    <span className="tb-page"><UIIcon name="HistoryOutlined" />执行历史</span>
+                    <Space wrap style={{ marginLeft: 'auto' }}>
+                        {navBtns}
+                        <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                            <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                        </Tooltip>
+                        <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={async () => {
+                            try { await secureFetch(baseUrl + '/logout', { method: 'POST', body: '{}' }); } catch (e) { }
+                            window.location.href = 'index.html';
+                        }}><span className="tb-text">退出</span></Button>
+                    </Space>
+                </div>
+            );
+        }
+
+        // 把 steps map 组装成时间线：开始 → 执行 → 验证 → 结束
+        function stepsItems(e) {
+            const items = [];
+            const st = e.steps || {};
+            items.push({ title: '开始', description: fmtTime(e.started_at), status: 'finish' });
+            if (st.execute) items.push({ title: '执行 Action', description: st.execute, status: 'finish' });
+            Object.keys(st).filter(k => k.startsWith('attempt_') || k.startsWith('retry_')).sort().forEach(k => {
+                items.push({ title: k.includes('retry') ? '重试' : '尝试后失败', description: st[k], status: 'error' });
+            });
+            if (st.verify) items.push({ title: '验证', description: st.verify, status: e.status === 'success' ? 'finish' : 'error' });
+            if (st.timeout) items.push({ title: '超时', description: st.timeout, status: 'error' });
+            if (st.lock) items.push({ title: '执行锁', description: st.lock, status: 'error' });
+            items.push({
+                title: '完成', description: (fmtTime(e.finished_at) !== '—' ? fmtTime(e.finished_at) + ' · ' : '') + fmtDuration(e.duration_ms),
+                status: e.status === 'success' ? 'finish' : 'error',
+            });
+            return items;
+        }
+
+        function App() {
+            const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const isMobile = useIsMobile();
+            const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+
+            const [execs, setExecs] = useState(null);
+            const [total, setTotal] = useState(0);
+            const [page, setPage] = useState(1);
+            const [taskOpts, setTaskOpts] = useState([]);
+            const [taskID, setTaskID] = useState('');
+            const [status, setStatus] = useState('');
+            const [range, setRange] = useState('');
+            const [detail, setDetail] = useState(null);
+
+            useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
+                        else window.location.href = 'index.html';
+                    })
+                    .catch(() => { window.location.href = 'index.html'; });
+            }, []);
+            useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+            }, [isDark]);
+
+            const load = useCallback(async () => {
+                try {
+                    const d = await getJSON(baseUrl + `/api/task/executions?limit=50&offset=${(page - 1) * 50}&task_id=${taskID}&status=${status}&range=${range}`);
+                    setExecs(d.executions || []);
+                    setTotal(d.total || 0);
+                    if (d.tasks) setTaskOpts(d.tasks);
+                } catch (e) { message.error('加载执行历史失败：' + e.message); }
+            }, [page, taskID, status, range]);
+            useEffect(() => { if (auth.ok) load(); }, [auth.ok, load]);
+
+            const openDetail = async (id) => {
+                try {
+                    const d = await getJSON(baseUrl + '/api/task/executions/' + id);
+                    setDetail(d);
+                } catch (e) { message.error(e.message); }
+            };
+
+            if (auth.loading) {
+                return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}><Card loading style={{ width: 320 }} /></div>;
+            }
+            if (!hasPerm('task:view')) {
+                return (
+                    <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                        <OpsTopbar active="history" isDark={isDark} setIsDark={setIsDark} hasPerm={hasPerm} />
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+                            <Card style={{ width: 400, textAlign: 'center' }}>
+                                <div style={{ fontSize: 40, marginBottom: 8 }}><UIIcon name="StopOutlined" /></div>
+                                <Typography.Title level={4}>没有访问权限</Typography.Title>
+                                <Typography.Text type="secondary">当前账号没有「查看运维任务」权限（task:view）。</Typography.Text>
+                            </Card>
+                        </div>
+                    </ConfigProvider>
+                );
+            }
+
+            const detailSteps = (e) => {
+                const map = {
+                    queued: 'process', running: 'process', success: 'finish',
+                    failed: 'error', timeout: 'error', cancelled: 'error', skipped: 'error',
+                };
+                const items = stepsItems(e);
+                // 最后一步根据整体状态着色
+                return <Steps size="small" direction="vertical" items={items.map((it, i) => ({
+                    ...it,
+                    status: i === items.length - 1 ? (map[e.status] || 'wait') : it.status,
+                }))} />;
+            };
+
+            const histCols = [
+                { title: '任务', dataIndex: 'task_name', width: 170, render: (v) => <span style={{ fontWeight: 600 }}>{v}</span> },
+                { title: '执行时间', dataIndex: 'created_at', width: 120, render: (v) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtTime(v)}</span> },
+                { title: '触发方式', dataIndex: 'trigger_type', width: 90, render: (v) => TRIGGER_LABEL[v] || v },
+                { title: '尝试', dataIndex: 'attempt', width: 60, align: 'center', render: (v, e) => e.max_attempts > 1 ? `${v}/${e.max_attempts}` : v },
+                { title: '耗时', dataIndex: 'duration_ms', width: 80, align: 'right', render: (v) => fmtDuration(v) },
+                { title: '状态', dataIndex: 'status', width: 80, render: (v) => <StatusTag s={v} /> },
+                { title: '执行者', dataIndex: 'operator', width: 90 },
+                {
+                    title: '说明', key: 'msg', ellipsis: true,
+                    render: (_, e) => e.error_message ? <Tooltip title={e.error_message} placement="topLeft"><span style={{ fontSize: 12, color: 'var(--color-error)' }}>{e.error_message}</span></Tooltip> : '—'
+                },
+                { title: '操作', key: 'ops', width: 70, render: (_, e) => <Button size="small" type="link" onClick={() => openDetail(e.id)}>详情</Button> },
+            ].filter(c => !(isMobile && ['trigger_type', 'attempt', 'operator', 'duration_ms'].includes(c.dataIndex || c.key)));
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <OpsTopbar active="history" isDark={isDark} setIsDark={setIsDark} hasPerm={hasPerm} />
+                        <div className="sec-wrap">
+                            <Card size="small" title={<span><UIIcon name="HistoryOutlined" /> 任务执行历史</span>}
+                                extra={
+                                    <Space size={8} wrap>
+                                        <Select size="small" style={{ width: 150 }} allowClear showSearch optionFilterProp="label"
+                                            placeholder="全部任务" value={taskID || null}
+                                            onChange={v => { setTaskID(v || ''); setPage(1); }}
+                                            options={taskOpts.map(t => ({ value: t.id, label: t.name }))} />
+                                        <Select size="small" style={{ width: 110 }} value={status || null} placeholder="全部状态"
+                                            onChange={v => { setStatus(v || ''); setPage(1); }}
+                                            options={Object.keys(TASK_STATUS).map(k => ({ value: k, label: TASK_STATUS[k].label }))} />
+                                        <Select size="small" style={{ width: 100 }} value={range || null} placeholder="全部时间"
+                                            onChange={v => { setRange(v || ''); setPage(1); }}
+                                            options={[{ value: 'today', label: '近 24 小时' }, { value: '7d', label: '近 7 天' }]} />
+                                        <Button size="small" icon={<UIIcon name="ReloadOutlined" />} onClick={load}>刷新</Button>
+                                    </Space>
+                                }>
+                                {!execs ? (
+                                    <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>加载中...</div>
+                                ) : execs.length === 0 ? (
+                                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无执行记录" />
+                                ) : isMobile ? (
+                                    execs.map(e => (
+                                        <div key={e.id} className={'hist-card-m ' + ((TASK_STATUS[e.status] || {}).cls || '')}
+                                            onClick={() => openDetail(e.id)}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <Typography.Text strong>{e.task_name}</Typography.Text>
+                                                <StatusTag s={e.status} />
+                                            </div>
+                                            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 6 }}>
+                                                {fmtTime(e.created_at)} · {TRIGGER_LABEL[e.trigger_type] || e.trigger_type} · {fmtDuration(e.duration_ms)}
+                                            </div>
+                                            {e.error_message && <div style={{ fontSize: 12, color: 'var(--color-error)', marginTop: 4 }}>{e.error_message}</div>}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <Table rowKey="id" size="small" columns={histCols} dataSource={execs}
+                                        pagination={{ current: page, pageSize: 50, total, showSizeChanger: false, onChange: setPage }}
+                                        scroll={{ x: 940 }}
+                                        onRow={(e) => ({ onClick: () => openDetail(e.id), style: { cursor: 'pointer' } })} />
+                                )}
+                            </Card>
+                        </div>
+
+                        {/* ===== 执行详情 Drawer ===== */}
+                        <Drawer open={!!detail} onClose={() => setDetail(null)} width={isMobile ? '100%' : 520}
+                            title={detail ? `执行详情：${detail.task_name}` : ''}>
+                            {detail && (
+                                <>
+                                    <Descriptions size="small" column={1} bordered items={[
+                                        { key: 'st', label: '状态', children: <StatusTag s={detail.status} /> },
+                                        { key: 'tg', label: '触发方式', children: TRIGGER_LABEL[detail.trigger_type] || detail.trigger_type },
+                                        { key: 'op', label: '执行者', children: detail.operator || 'system' },
+                                        { key: 'at', label: '尝试次数', children: `${detail.attempt} / ${detail.max_attempts}` },
+                                        { key: 'bg', label: '开始时间', children: fmtTime(detail.started_at) },
+                                        { key: 'ed', label: '结束时间', children: fmtTime(detail.finished_at) },
+                                        { key: 'du', label: '耗时', children: fmtDuration(detail.duration_ms) },
+                                        detail.error_message ? { key: 'er', label: '失败原因', children: <span style={{ color: 'var(--color-error)' }}>{detail.error_message}</span> } : null,
+                                    ].filter(Boolean)} />
+                                    <Typography.Text strong style={{ display: 'block', margin: '16px 0 12px' }}>执行过程</Typography.Text>
+                                    {detailSteps(detail)}
+                                    <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 16 }}>
+                                        说明：执行历史只记录动作名称与结果摘要，不记录任何敏感输入输出。
+                                    </Typography.Paragraph>
+                                </>
+                            )}
+                        </Drawer>
+                    </div>
+                </ConfigProvider>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>

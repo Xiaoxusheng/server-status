@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow">
+    <title>安全事件 - Server Status</title>
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M866.9%20169.9L527.1%2054.1c-3-3-9.2-3-12.1%200L175.1%20169.9c-8.3%202.8-12.3%2012.1-8.6%2020.2l4.7%2010.4c-3-3-9.2-3-12.1%200L25.1%20314.5c-8.3%202.8-12.3%2012.1-8.6%2020.2l8.6%2019.1c-3-3-9.2-3-12.1%200L499.3%20960c1.5%201.5%203.5%202.3%205.7%202.3s4.2-0.8%205.7-2.3l486.2-605.7c3.7-8.1-0.3-17.4-8.6-20.2z%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="stylesheet" href="/ui.css">
+    <style>
+        #root { min-height: 100vh; }
+        .sec-topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 56px;
+            background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+        }
+        .tb-page { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--color-text); white-space: nowrap; }
+        .tb-page .anticon { color: var(--color-primary); }
+        .sec-wrap { padding: 16px 24px 64px; max-width: 1280px; margin: 0 auto; width: 100%; }
+        .evt-card {
+            background: var(--color-surface); border: 1px solid var(--color-border);
+            border-left-width: 3px; border-radius: var(--radius);
+            padding: 12px 14px; margin-bottom: 10px;
+        }
+        .evt-title { font-size: 14px; font-weight: 600; color: var(--color-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .evt-meta { font-size: 12px; color: var(--color-text-tertiary); margin-top: 6px; }
+        .lv-critical { border-left-color: #cf1322; }
+        .lv-error { border-left-color: #d46b08; }
+        .lv-warning { border-left-color: #d4b106; }
+        .lv-info { border-left-color: #1677ff; }
+        @media (max-width: 768px) {
+            .sec-wrap { padding: 12px 12px 48px; }
+            .sec-topbar { padding: 0 12px; }
+        }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) { }
+        })();
+    </script>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <script type="text/babel">
+        const { Card, Button, Table, Tag, Tooltip, Space, ConfigProvider, theme, message, Empty,
+            Segmented, Select, Typography, Badge } = window.antd;
+        const { useState, useEffect, useCallback, useRef } = React;
+        const { darkAlgorithm } = theme;
+        const IconSet = window.icons || {};
+        const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
+
+        const baseUrl = window.location.origin;
+        function getCsrfToken() { const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+        function secureFetch(url, options = {}) {
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) { const tok = getCsrfToken(); if (tok) headers['X-CSRF-Token'] = tok; }
+            return fetch(url, { method, headers, credentials: 'include', body: options.body });
+        }
+        async function getJSON(url) {
+            const r = await secureFetch(url);
+            const d = await r.json();
+            if (d.code !== 200) throw new Error(d.message || ('HTTP ' + r.status));
+            return d.data;
+        }
+        function fmtTime(s) { return s ? dayjs(s).format('MM-DD HH:mm:ss') : '—'; }
+        function useIsMobile() {
+            const [m, setM] = useState(window.innerWidth <= 768);
+            useEffect(() => {
+                const on = () => setM(window.innerWidth <= 768);
+                window.addEventListener('resize', on);
+                return () => window.removeEventListener('resize', on);
+            }, []);
+            return m;
+        }
+
+        const LEVEL_MAP = {
+            critical: { label: '严重', color: 'volcano', cls: 'lv-critical' },
+            error: { label: '错误', color: 'orange', cls: 'lv-error' },
+            warning: { label: '警告', color: 'gold', cls: 'lv-warning' },
+            info: { label: '信息', color: 'blue', cls: 'lv-info' },
+        };
+        const LevelTag = ({ lv }) => {
+            const m = LEVEL_MAP[lv] || { label: lv, color: 'default', cls: '' };
+            return <Tag color={m.color} style={{ marginRight: 0 }}>{m.label}</Tag>;
+        };
+        const TYPE_LABEL = {
+            'finding.open': '风险发现', 'finding.resolved': '风险恢复', 'finding.ignored': '风险忽略',
+            'scan.started': '扫描开始', 'scan.completed': '扫描完成',
+            'remediation.success': '修复成功', 'remediation.failed': '修复失败', 'remediation.needs_manual': '需人工处理',
+            'task.event_fired': '事件触发', 'task.failed': '任务失败',
+        };
+
+        function OpsTopbar({ active, isDark, setIsDark, hasPerm }) {
+            const navBtns = [];
+            navBtns.push(<Button key="home" icon={<UIIcon name="DashboardOutlined" />} onClick={() => window.location.href = 'index.html'}>首页</Button>);
+            if (hasPerm('security:view') || hasPerm('remediation:view')) navBtns.push(<Button key="security" icon={<UIIcon name="SafetyOutlined" />} type={active === 'security' ? 'primary' : 'default'} onClick={() => window.location.href = 'security.html'}>安全中心</Button>);
+            if (hasPerm('security:view')) navBtns.push(<Button key="events" icon={<UIIcon name="NotificationOutlined" />} type={active === 'events' ? 'primary' : 'default'} onClick={() => window.location.href = 'security-events.html'}>安全事件</Button>);
+            if (hasPerm('remediation:view')) navBtns.push(<Button key="rem" icon={<UIIcon name="ToolOutlined" />} type={active === 'remediation' ? 'primary' : 'default'} onClick={() => window.location.href = 'remediation.html'}>自动修复</Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="tasks" icon={<UIIcon name="ClockCircleOutlined" />} type={active === 'tasks' ? 'primary' : 'default'} onClick={() => window.location.href = 'tasks.html'}>运维任务</Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="history" icon={<UIIcon name="HistoryOutlined" />} type={active === 'history' ? 'primary' : 'default'} onClick={() => window.location.href = 'task-history.html'}>执行历史</Button>);
+            return (
+                <div className="sec-topbar">
+                    <span className="tb-page"><UIIcon name="NotificationOutlined" />安全事件</span>
+                    <Space wrap style={{ marginLeft: 'auto' }}>
+                        {navBtns}
+                        <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                            <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                        </Tooltip>
+                        <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={async () => {
+                            try { await secureFetch(baseUrl + '/logout', { method: 'POST', body: '{}' }); } catch (e) { }
+                            window.location.href = 'index.html';
+                        }}><span className="tb-text">退出</span></Button>
+                    </Space>
+                </div>
+            );
+        }
+
+        function App() {
+            const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const isMobile = useIsMobile();
+            const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+
+            const [events, setEvents] = useState(null);
+            const [total, setTotal] = useState(0);
+            const [page, setPage] = useState(1);
+            const [level, setLevel] = useState('');
+            const [type, setType] = useState('');
+            const [live, setLive] = useState(false);
+            const wsRef = useRef(null);
+            const liveTimer = useRef(null);
+
+            useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
+                        else window.location.href = 'index.html';
+                    })
+                    .catch(() => { window.location.href = 'index.html'; });
+            }, []);
+            useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+            }, [isDark]);
+
+            const load = useCallback(async () => {
+                try {
+                    const d = await getJSON(baseUrl + `/api/security/events?limit=50&offset=${(page - 1) * 50}&level=${level}&type=${type}`);
+                    setEvents(d.events || []);
+                    setTotal(d.total || 0);
+                } catch (e) { message.error('加载安全事件失败：' + e.message); }
+            }, [page, level, type]);
+
+            useEffect(() => { if (auth.ok) load(); }, [auth.ok, load]);
+
+            // 实时开关：开启后 5s 轻量轮询最新一页（事件量小，轮询足够）
+            useEffect(() => {
+                if (!live) {
+                    if (liveTimer.current) { clearInterval(liveTimer.current); liveTimer.current = null; }
+                    return;
+                }
+                liveTimer.current = setInterval(load, 5000);
+                return () => { if (liveTimer.current) clearInterval(liveTimer.current); };
+            }, [live, load]);
+
+            if (auth.loading) {
+                return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}><Card loading style={{ width: 320 }} /></div>;
+            }
+            if (!hasPerm('security:view')) {
+                return (
+                    <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                        <OpsTopbar active="events" isDark={isDark} setIsDark={setIsDark} hasPerm={hasPerm} />
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+                            <Card style={{ width: 400, textAlign: 'center' }}>
+                                <div style={{ fontSize: 40, marginBottom: 8 }}><UIIcon name="StopOutlined" /></div>
+                                <Typography.Title level={4}>没有访问权限</Typography.Title>
+                                <Typography.Text type="secondary">当前账号没有「查看安全中心」权限（security:view）。</Typography.Text>
+                            </Card>
+                        </div>
+                    </ConfigProvider>
+                );
+            }
+
+            const renderBody = () => {
+                if (!events) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--color-text-tertiary)' }}>加载中...</div>;
+                if (events.length === 0) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无安全事件" />;
+                if (isMobile) {
+                    return events.map(e => (
+                        <div key={e.id} className={'evt-card ' + ((LEVEL_MAP[e.level] || {}).cls || '')}>
+                            <div className="evt-title"><LevelTag lv={e.level} />{e.title}</div>
+                            {e.detail && <div className="evt-meta" style={{ color: 'var(--color-text-secondary)' }}>{e.detail}</div>}
+                            <div className="evt-meta">{TYPE_LABEL[e.type] || e.type} · {e.source} · {fmtTime(e.time)}</div>
+                        </div>
+                    ));
+                }
+                const cols = [
+                    { title: '时间', dataIndex: 'time', width: 130, render: (v) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtTime(v)}</span> },
+                    { title: '级别', dataIndex: 'level', width: 80, render: (v) => <LevelTag lv={v} /> },
+                    { title: '类型', dataIndex: 'type', width: 110, render: (v) => TYPE_LABEL[v] || v },
+                    { title: '标题', dataIndex: 'title', ellipsis: true },
+                    { title: '来源', dataIndex: 'source', width: 110, ellipsis: true },
+                    {
+                        title: '详情', dataIndex: 'detail', width: 320, ellipsis: true,
+                        render: (v) => v ? <Tooltip title={v} placement="topLeft"><span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{v}</span></Tooltip> : '—'
+                    },
+                ];
+                return <Table rowKey="id" size="small" columns={cols} dataSource={events}
+                    pagination={{ current: page, pageSize: 50, total, showSizeChanger: false, onChange: setPage }}
+                    scroll={{ x: 920 }} />;
+            };
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <div style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
+                        <OpsTopbar active="events" isDark={isDark} setIsDark={setIsDark} hasPerm={hasPerm} />
+                        <div className="sec-wrap">
+                            <Card size="small" title={<span><UIIcon name="NotificationOutlined" /> 安全事件流水</span>}
+                                extra={
+                                    <Space size={8} wrap>
+                                        <Select size="small" style={{ width: 100 }} value={level} onChange={v => { setLevel(v); setPage(1); }}
+                                            options={[{ value: '', label: '全部级别' }, { value: 'critical', label: '严重' }, { value: 'error', label: '错误' }, { value: 'warning', label: '警告' }, { value: 'info', label: '信息' }]} />
+                                        <Select size="small" style={{ width: 130 }} value={type} onChange={v => { setType(v); setPage(1); }}
+                                            options={[{ value: '', label: '全部类型' }].concat(Object.keys(TYPE_LABEL).map(k => ({ value: k, label: TYPE_LABEL[k] })))} />
+                                        <Button size="small" icon={<UIIcon name="ReloadOutlined" />} onClick={load}>刷新</Button>
+                                        <Button size="small" type={live ? 'primary' : 'default'} icon={<UIIcon name="ThunderboltOutlined" />} onClick={() => setLive(!live)}>
+                                            {live ? '实时中' : '实时'}
+                                        </Button>
+                                    </Space>
+                                }>
+                                {renderBody()}
+                            </Card>
+                        </div>
+                    </div>
+                </ConfigProvider>
+            );
+        }
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+
+</html>

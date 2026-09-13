@@ -811,6 +811,9 @@
             // SSL 证书到期信息与详情弹窗开关
             const [sslInfo, setSslInfo] = useState(null);
             const [sslOpen, setSslOpen] = useState(false);
+            // 安全中心 / 运维任务状态摘要（挂载时一次，克制展示）
+            const [secOverview, setSecOverview] = useState(null);
+            const [taskStats, setTaskStats] = useState(null);
 
             const hasPerm = p => (user.permissions || []).some(x => x === '*' || x === p);
 
@@ -820,6 +823,20 @@
                 document.body.classList.toggle('dark', isDark);
                 document.body.style.background = isDark ? '#141414' : '#f5f5f5';
             }, [isDark]);
+
+            // 安全中心 / 运维任务摘要：仅挂载时加载一次（需要对应查看权限，403 时静默忽略）
+            useEffect(() => {
+                if (hasPerm('security:view') || hasPerm('remediation:view')) {
+                    secureFetch('/api/security/overview').then(r => r.json())
+                        .then(d => { if (d.code === 200) setSecOverview(d.data); })
+                        .catch(() => { });
+                }
+                if (hasPerm('task:view')) {
+                    secureFetch('/api/task/stats').then(r => r.json())
+                        .then(d => { if (d.code === 200) setTaskStats(d.data); })
+                        .catch(() => { });
+                }
+            }, []);
 
             // 拉取 SSL 证书到期信息：挂载时一次 + 每 10 分钟刷新
             useEffect(() => {
@@ -957,6 +974,11 @@
 
             const navBtns = [];
             if (hasPerm('files:view')) navBtns.push(<Button key="ebooks" icon={<UIIcon name="BookOutlined" />} onClick={() => window.location.href = 'ebooks.html'}>电子书</Button>);
+            if (hasPerm('security:view') || hasPerm('remediation:view')) navBtns.push(<Button key="security" icon={<UIIcon name="SafetyOutlined" />} onClick={() => window.location.href = 'security.html'}>安全中心</Button>);
+            if (hasPerm('security:view')) navBtns.push(<Button key="events" icon={<UIIcon name="NotificationOutlined" />} onClick={() => window.location.href = 'security-events.html'}>安全事件</Button>);
+            if (hasPerm('remediation:view')) navBtns.push(<Button key="remediation" icon={<UIIcon name="ToolOutlined" />} onClick={() => window.location.href = 'remediation.html'}>自动修复</Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="tasks" icon={<UIIcon name="ClockCircleOutlined" />} onClick={() => window.location.href = 'tasks.html'}>运维任务</Button>);
+            if (hasPerm('task:view')) navBtns.push(<Button key="taskhistory" icon={<UIIcon name="HistoryOutlined" />} onClick={() => window.location.href = 'task-history.html'}>执行历史</Button>);
             navBtns.push(<Button key="ip" icon={<UIIcon name="GlobalOutlined" />} onClick={() => window.location.href = 'ip-panel.html'}>IP 流量</Button>);
             if (hasPerm('service:view') || hasPerm('port:view')) navBtns.push(<Button key="services" icon={<UIIcon name="AppstoreOutlined" />} onClick={() => window.location.href = 'services.html'}>服务端口</Button>);
             if (hasPerm('docker:view') || hasPerm('docker:manage')) navBtns.push(<Button key="docker" icon={<UIIcon name="DockerOutlined" />} onClick={() => window.location.href = 'docker.html'}>Docker</Button>);
@@ -1046,6 +1068,38 @@
                                 <div className="mini-stat"><div className="ms-label"><UIIcon name="TeamOutlined" />在线用户</div><div className="ms-value" style={{ color: '#722ed1' }}>{onlineCount}<span className="ms-suffix">人</span></div></div>
                                 <div className="mini-stat"><div className="ms-label"><UIIcon name="ClockCircleOutlined" />运行时间</div><div className="ms-value" style={{ fontSize: 20 }}>{status ? status.uptime : '-'}</div></div>
                             </div>
+
+                            {/* 安全状态 / 运维状态：克制的一行摘要卡，仅对有权限的用户展示，点击跳转详情 */}
+                            {(secOverview || taskStats) && (
+                                <div className="mini-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                                    {secOverview && (
+                                        <div className="mini-stat" style={{ cursor: 'pointer' }} onClick={() => window.location.href = 'security.html'}>
+                                            <div className="ms-label"><UIIcon name="SafetyOutlined" />安全状态</div>
+                                            <div className="ms-value" style={{ fontSize: 20 }}>
+                                                {secOverview.score != null ? secOverview.score : '未扫描'}
+                                                {secOverview.score != null && <span className="ms-suffix">/100</span>}
+                                            </div>
+                                            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+                                                {secOverview.score != null
+                                                    ? `${secOverview.score_level} · ${secOverview.open_total || 0} 个待处理风险`
+                                                    : '尚未执行安全扫描'}
+                                            </div>
+                                        </div>
+                                    )}
+                                    {taskStats && (
+                                        <div className="mini-stat" style={{ cursor: 'pointer' }} onClick={() => window.location.href = 'tasks.html'}>
+                                            <div className="ms-label"><UIIcon name="ClockCircleOutlined" />运维状态</div>
+                                            <div className="ms-value" style={{ fontSize: 20 }}>
+                                                {taskStats.scheduled}<span className="ms-suffix">个计划任务</span>
+                                            </div>
+                                            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 2 }}>
+                                                运行中 {taskStats.running || 0} · 今日完成 {taskStats.done_today || 0}
+                                                {taskStats.failed_24h > 0 ? <span style={{ color: 'var(--color-error)' }}> · 24h 失败 {taskStats.failed_24h}</span> : null}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <Card size="small" style={{ marginBottom: 12 }}>
                                 <Descriptions size="small" column={{ xs: 1, sm: 2, md: 4 }} items={[

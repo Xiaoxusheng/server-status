@@ -228,6 +228,16 @@ var allPermissions = []PermissionDef{
 	{Key: "trojan:view", Name: "查看 Trojan-Go", Group: "服务与端口", Description: "查看 Trojan-Go 状态、用户列表与连接信息（只读）"},
 	{Key: "user:resetpw", Name: "重置用户密码", Group: "用户", Description: "替其他用户重置登录密码（高危）"},
 	{Key: "audit:view", Name: "查看审计日志", Group: "用户", Description: "查看系统操作审计日志"},
+	{Key: "security:view", Name: "查看安全中心", Group: "安全", Description: "查看安全评分、风险发现、安全事件与检查器状态"},
+	{Key: "security:scan", Name: "执行安全扫描", Group: "安全", Description: "手动触发全量安全扫描"},
+	{Key: "security:manage", Name: "管理安全中心", Group: "安全", Description: "忽略风险、配置扫描计划与服务监控清单"},
+	{Key: "remediation:view", Name: "查看自动修复", Group: "安全", Description: "查看修复策略与修复执行记录"},
+	{Key: "remediation:manage", Name: "管理修复策略", Group: "安全", Description: "创建、修改、删除自动修复策略与全局开关"},
+	{Key: "remediation:execute", Name: "执行修复", Group: "安全", Description: "对风险执行修复动作（高危，动作仅限白名单）"},
+	{Key: "task:view", Name: "查看运维任务", Group: "运维", Description: "查看运维任务、执行历史与任务模板"},
+	{Key: "task:manage", Name: "管理运维任务", Group: "运维", Description: "创建、修改、启用/停用运维任务"},
+	{Key: "task:execute", Name: "执行运维任务", Group: "运维", Description: "立即执行 / 取消运维任务（动作仅限白名单）"},
+	{Key: "task:delete", Name: "删除运维任务", Group: "运维", Description: "删除运维任务定义（高危）"},
 }
 
 // defaultRoles 返回系统内置的默认角色
@@ -281,6 +291,13 @@ func ensureDefaultRoles() {
 			permSet[p] = true
 		}
 		for _, need := range []string{"system:log", "token:issue"} {
+			if !permSet[need] {
+				role.Permissions = append(role.Permissions, need)
+				changed = true
+			}
+		}
+		// 一次性迁移：安全中心 / 自动修复 / 运维任务的只读权限对运维人员开放（管理/执行仍仅超管）
+		for _, need := range []string{"security:view", "security:scan", "remediation:view", "task:view"} {
 			if !permSet[need] {
 				role.Permissions = append(role.Permissions, need)
 				changed = true
@@ -5891,6 +5908,10 @@ func main() {
 	loadFirewallState()
 	go trackPortChangesLoop()
 
+	// 初始化安全中心 / 自动修复 / 运维任务（SQLite 存储 + 检查器 + 调度器）
+	initOpsCenter()
+	taskScheduler.Start(opsStore)
+
 	// 确保在程序退出时停止速率限制器的清理goroutine
 	defer globalRateLimiter.Stop()
 
@@ -6118,6 +6139,55 @@ func main() {
 
 	// ==================== 隐藏私人空间路由 ====================
 	registerPrivateRoutes(http.DefaultServeMux)
+
+	// ==================== 安全中心 / 自动修复 / 运维任务 ====================
+	// 包装链与全站一致：authMiddleware（登录 + CSRF）→ requirePermission（RBAC）→ securityMiddleware
+	http.HandleFunc("/security", authMiddleware(requireAnyPermission([]string{"security:view", "remediation:view"}, securityMiddleware(securityPageHandler))))
+	http.HandleFunc("/security-events", authMiddleware(requirePermission("security:view", securityMiddleware(securityEventsPageHandler))))
+	http.HandleFunc("/remediation", authMiddleware(requirePermission("remediation:view", securityMiddleware(remediationPageHandler))))
+	http.HandleFunc("/tasks", authMiddleware(requirePermission("task:view", securityMiddleware(tasksPageHandler))))
+	http.HandleFunc("/task-history", authMiddleware(requirePermission("task:view", securityMiddleware(taskHistoryPageHandler))))
+	http.HandleFunc("GET /ws/ops-events", authMiddleware(requireAnyPermission([]string{"security:view", "remediation:view", "task:view"}, securityMiddleware(opsEventsWSHandler))))
+
+	// 安全中心 API
+	http.HandleFunc("GET /api/security/overview", authMiddleware(requireAnyPermission([]string{"security:view", "remediation:view"}, securityMiddleware(securityOverviewHandler))))
+	http.HandleFunc("POST /api/security/scan", authMiddleware(requirePermission("security:scan", securityMiddleware(securityScanStartHandler))))
+	http.HandleFunc("GET /api/security/scan/status", authMiddleware(requirePermission("security:view", securityMiddleware(securityScanStatusHandler))))
+	http.HandleFunc("GET /api/security/findings", authMiddleware(requirePermission("security:view", securityMiddleware(securityFindingsHandler))))
+	http.HandleFunc("GET /api/security/findings/{id}", authMiddleware(requirePermission("security:view", securityMiddleware(securityFindingDetailHandler))))
+	http.HandleFunc("POST /api/security/findings/{id}/ignore", authMiddleware(requirePermission("security:manage", securityMiddleware(securityFindingIgnoreHandler))))
+	http.HandleFunc("POST /api/security/findings/{id}/remediate", authMiddleware(requirePermission("remediation:execute", securityMiddleware(securityFindingRemediateHandler))))
+	http.HandleFunc("GET /api/security/events", authMiddleware(requirePermission("security:view", securityMiddleware(securityEventsHandler))))
+	http.HandleFunc("GET /api/security/checkers", authMiddleware(requirePermission("security:view", securityMiddleware(securityCheckersHandler))))
+	http.HandleFunc("GET /api/security/settings", authMiddleware(requireAnyPermission([]string{"security:view", "security:manage"}, securityMiddleware(securitySettingsHandler))))
+	http.HandleFunc("POST /api/security/settings", authMiddleware(requirePermission("security:manage", securityMiddleware(securitySettingsUpdateHandler))))
+
+	// 自动修复 API
+	http.HandleFunc("GET /api/remediation/rules", authMiddleware(requirePermission("remediation:view", securityMiddleware(remediationRulesHandler))))
+	http.HandleFunc("POST /api/remediation/rules", authMiddleware(requirePermission("remediation:manage", securityMiddleware(remediationRuleCreateHandler))))
+	http.HandleFunc("PUT /api/remediation/rules/{id}", authMiddleware(requirePermission("remediation:manage", securityMiddleware(remediationRuleUpdateHandler))))
+	http.HandleFunc("DELETE /api/remediation/rules/{id}", authMiddleware(requirePermission("remediation:manage", securityMiddleware(remediationRuleDeleteHandler))))
+	http.HandleFunc("GET /api/remediation/actions", authMiddleware(requirePermission("remediation:view", securityMiddleware(remediationActionsHandler))))
+	http.HandleFunc("POST /api/remediation/preview", authMiddleware(requirePermission("remediation:execute", securityMiddleware(remediationPreviewHandler))))
+	http.HandleFunc("GET /api/remediation/executions", authMiddleware(requirePermission("remediation:view", securityMiddleware(remediationExecutionsHandler))))
+	http.HandleFunc("GET /api/remediation/settings", authMiddleware(requirePermission("remediation:view", securityMiddleware(remediationSettingsHandler))))
+	http.HandleFunc("POST /api/remediation/settings", authMiddleware(requirePermission("remediation:manage", securityMiddleware(remediationSettingsHandler))))
+
+	// 运维任务 API
+	http.HandleFunc("GET /api/tasks", authMiddleware(requirePermission("task:view", securityMiddleware(tasksListHandler))))
+	http.HandleFunc("POST /api/tasks", authMiddleware(requirePermission("task:manage", securityMiddleware(taskCreateHandler))))
+	http.HandleFunc("GET /api/tasks/{id}", authMiddleware(requirePermission("task:view", securityMiddleware(taskGetHandler))))
+	http.HandleFunc("PUT /api/tasks/{id}", authMiddleware(requirePermission("task:manage", securityMiddleware(taskUpdateHandler))))
+	http.HandleFunc("DELETE /api/tasks/{id}", authMiddleware(requirePermission("task:delete", securityMiddleware(taskDeleteHandler))))
+	http.HandleFunc("POST /api/tasks/{id}/run", authMiddleware(requirePermission("task:execute", securityMiddleware(taskRunNowHandler))))
+	http.HandleFunc("POST /api/tasks/{id}/cancel", authMiddleware(requirePermission("task:execute", securityMiddleware(taskCancelHandler))))
+	http.HandleFunc("POST /api/tasks/{id}/toggle", authMiddleware(requirePermission("task:manage", securityMiddleware(taskToggleHandler))))
+	http.HandleFunc("GET /api/tasks/{id}/executions", authMiddleware(requirePermission("task:view", securityMiddleware(taskExecutionsHandler))))
+	http.HandleFunc("GET /api/task/executions", authMiddleware(requirePermission("task:view", securityMiddleware(taskExecutionsAllHandler))))
+	http.HandleFunc("GET /api/task/executions/{id}", authMiddleware(requirePermission("task:view", securityMiddleware(taskExecutionDetailHandler))))
+	http.HandleFunc("GET /api/task/templates", authMiddleware(requirePermission("task:view", securityMiddleware(taskTemplatesHandler))))
+	http.HandleFunc("GET /api/task/stats", authMiddleware(requirePermission("task:view", securityMiddleware(taskStatsHandler))))
+
 
 	// 密钥配置健康提示（不输出实际密钥值）
 	if os.Getenv("SERVER_STATUS_SIGNING_KEY") == "" {
