@@ -2283,15 +2283,13 @@
     <script type="text/babel">
         const { Modal, Input, Button, Form, Card, Tabs, Tag, Space, Typography, ConfigProvider, theme, message,
             Drawer, Select, Popconfirm, Dropdown, Empty, Spin, Alert, Switch, Segmented, Tooltip, Image, Divider,
-            Popover, InputNumber, Checkbox, Progress } = window.antd;
+            Popover, InputNumber, Checkbox, Progress, Slider } = window.antd;
         const { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } = React;
         const { darkAlgorithm } = theme;
         const IconSet = window.icons || {};
         const I = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
 
         const baseUrl = window.location.origin;
-        // 高德 Web 服务 key（服务端配置经 /api/private/session 下发），反向地理编码用
-        let amapKey = '';
 
         // ==================== 媒体本地解密（PVMEDIA2 云直链） ====================
         // 原图经 /cloud 接口 302 直连网盘 CDN 取回密文，WebCrypto 本地解密渲染，
@@ -3545,12 +3543,13 @@
                     if (name || (d && d.display_name)) setName(name || d.display_name); else bdc();
                 })
                 .catch(bdc);
-            // 高德优先：国内可达且镇级精度最好；未配置 key（或解析失败）时依次回退 nominatim → BDC → 坐标。
+            // 高德优先：国内可达且镇级精度最好；失败时依次回退 nominatim → BDC → 坐标。
+            // 经服务端 /api/private/geo/regeo 代理调用，key 不下发浏览器；
+            // 服务端未配置 key 时返回 status!=1，同样走回退链。
             // 高德要求 GCJ-02 坐标：传入的 WGS-84 必须先转换，否则地址系统性偏移数百米
             const amap = () => {
-                if (!amapKey) return nominatim();
                 const [mlng, mlat] = wgs2gcj(lng, lat);
-                return fetchTimeout('https://restapi.amap.com/v3/geocode/regeo?key=' + encodeURIComponent(amapKey) + '&location=' + mlng.toFixed(6) + ',' + mlat.toFixed(6), 5000)
+                return fetchTimeout(baseUrl + '/api/private/geo/regeo?location=' + mlng.toFixed(6) + ',' + mlat.toFixed(6), 5000)
                     .then(r => r.json())
                     .then(d => {
                         if (!d || d.status !== '1' || !d.regeocode) return nominatim();
@@ -6274,8 +6273,6 @@
                 // 确认登录并确保会话绑定的 CSRF Cookie 就绪（Double-Submit 的 Token 来源）
                 fetch(baseUrl + '/check-auth', { credentials: 'include' }).catch(() => { });
                 api('/api/private/session').then(d => {
-                    // 记录服务端下发的高德 key（反向地理编码用）
-                    if (d && d.data && d.data.amap_key) amapKey = d.data.amap_key;
                     // 站点登录态失效：就地弹出重登浮层，不再跳转主页丢弃私人空间位置
                     if (d.code === 401) { setPhase('locked'); setRelogin(true); return; }
                     const unlocked = ok(d) && d.data && d.data.unlocked;

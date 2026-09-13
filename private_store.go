@@ -51,7 +51,8 @@ type CardsConfig struct {
 	DefaultHeight int  `json:"default_height"`
 }
 
-// GeoConfig 地理编码配置（反向地理编码服务密钥；高德 Web 服务 key，前端经 session 接口获取）
+// GeoConfig 地理编码配置（高德 Web 服务 key；服务端机密，仅经 /api/private/geo/regeo
+// 代理使用，绝不通过任何接口下发浏览器）
 type GeoConfig struct {
 	AmapKey string `json:"amap_key"`
 }

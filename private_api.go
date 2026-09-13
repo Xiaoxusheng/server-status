@@ -90,6 +90,8 @@ func registerPrivateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/private/session", authMiddleware(requirePermission("private:view", securityMiddleware(privateSessionHandler))))
 	mux.HandleFunc("POST /api/private/setup-password", authMiddleware(requirePermission("role:manage", securityMiddleware(privateSetupPasswordHandler))))
 	mux.HandleFunc("GET /api/private/server-status", authMiddleware(securityMiddleware(privateAuthMiddleware(privateServerStatusHandler))))
+	// 反向地理编码代理：key 仅存服务端，浏览器凭双层认证的会话调用，防止 key 泄漏
+	mux.HandleFunc("GET /api/private/geo/regeo", authMiddleware(securityMiddleware(privateAuthMiddleware(privateRegeoHandler))))
 
 	// 手记
 	mux.HandleFunc("GET /api/private/notes", authMiddleware(securityMiddleware(privateAuthMiddleware(privateListNotesHandler))))
@@ -243,7 +245,8 @@ func privateSessionHandler(w http.ResponseWriter, r *http.Request) {
 		"unlocked":   true,
 		"user":       session.Username,
 		"expires_at": ps.ExpiresAt.Format(time.RFC3339),
-		"amap_key":   privateStore.config.Geo.AmapKey, // 前端反向地理编码用（高德 Web 服务 key）
+		// 注意：不要在这里下发 amap_key —— 高德 key 属服务端机密，
+		// 反向地理编码一律经 /api/private/geo/regeo 服务端代理
 	})
 }
 
