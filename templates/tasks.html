@@ -177,7 +177,7 @@
             if (hasPerm('task:view')) navBtns.push(<Button key="history" icon={<UIIcon name="HistoryOutlined" />} type={active === 'history' ? 'primary' : 'default'} onClick={() => window.location.href = 'task-history.html'}>执行历史</Button>);
             return (
                 <div className="sec-topbar">
-                    <span className="tb-page"><UIIcon name="ClockCircleOutlined" />运维任务</span>
+                    <span className="tb-page"><UIIcon name="CloudServerOutlined" />运维任务</span>
                     <Space wrap style={{ marginLeft: 'auto' }}>
                         {navBtns}
                         <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
