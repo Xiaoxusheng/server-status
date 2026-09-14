@@ -24,6 +24,7 @@
     "token": "",
     "cache_ttl": 1800,
     "repo_limit": 100,
+    "star_snapshot_interval": 86400,
     "show_forks": false,
     "show_archived": false,
     "featured": [

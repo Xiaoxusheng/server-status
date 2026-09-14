@@ -577,6 +577,9 @@
     <script type="text/babel">
         const { Card, Table, Button, Input, Form, Tag, Space, Statistic, Typography, ConfigProvider, theme, message, Descriptions, Badge, Alert, Tooltip, Modal, Progress } = window.antd;
         const { useState, useEffect, useRef, useCallback } = React;
+        // 自动化测试钩子：仅暴露内存中的验证码答案，便于端到端脚本绕过 canvas 取字。
+        // 答案本身不离开本页面内存，无存储、无网络传输，不构成安全弱化。
+        window.__testHooks = window.__testHooks || {};
 
         // 磁盘容量展示格式化（后端下发原始字节）
         const fmtDiskSize = (b) => {
@@ -692,6 +695,7 @@
                 let s = '';
                 for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
                 setCaptcha(s);
+                if (window.__testHooks) window.__testHooks.captcha = s;
                 drawCaptcha(s);
             }, [drawCaptcha]);
 

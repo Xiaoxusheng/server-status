@@ -46,14 +46,15 @@ var errGitHubNotModified = errors.New("GitHub 数据未变化（304）")
 
 // GitHubFileConfig 对应 config.json 中 "github" 段（指针字段区分「未配置」与「配置为 false」）。
 type GitHubFileConfig struct {
-	Enabled      *bool    `json:"enabled"`
-	Username     string   `json:"username"`
-	Token        string   `json:"token"`
-	CacheTTL     int      `json:"cache_ttl"` // 秒；profile/README 缓存，仓库列表固定 10 分钟
-	RepoLimit    int      `json:"repo_limit"`
-	ShowForks    *bool    `json:"show_forks"`
-	ShowArchived *bool    `json:"show_archived"`
-	Featured     []string `json:"featured"`
+	Enabled              *bool    `json:"enabled"`
+	Username             string   `json:"username"`
+	Token                string   `json:"token"`
+	CacheTTL             int      `json:"cache_ttl"` // 秒；profile/README 缓存，仓库列表固定 10 分钟
+	RepoLimit            int      `json:"repo_limit"`
+	ShowForks            *bool    `json:"show_forks"`
+	ShowArchived         *bool    `json:"show_archived"`
+	Featured             []string `json:"featured"`
+	StarSnapshotInterval int      `json:"star_snapshot_interval"` // 秒；Star 快照采集间隔（默认 86400）
 }
 
 // githubFileWrapper 仅解析 config.json 的 "github" 段。
@@ -114,6 +115,9 @@ func loadGitHubConfig() GitHubConfig {
 			if gh.ShowArchived != nil {
 				cfg.ShowArchived = *gh.ShowArchived
 			}
+			if gh.StarSnapshotInterval > 0 {
+				cfg.StarSnapshotInterval = time.Duration(gh.StarSnapshotInterval) * time.Second
+			}
 			cfg.Featured = append(cfg.Featured, gh.Featured...)
 		}
 	}
@@ -154,7 +158,56 @@ var (
 	githubCfg     GitHubConfig
 	githubClient  = &http.Client{Timeout: 10 * time.Second}
 	githubAPIBase = "https://api.github.com" // 测试中替换为 httptest 服务
+
+	// githubRateLimitMu 保护最近一次 GitHub 响应头中的限流快照。
+	// 只记录真实响应头，绝不猜测配额。
+	githubRateLimitMu sync.RWMutex
+	githubLastLimit   githubRateLimitSnapshot
+	githubHasLimit    bool
 )
+
+// githubRateLimitSnapshot GitHub 限流响应头快照（X-RateLimit-*）。
+type githubRateLimitSnapshot struct {
+	Remaining int
+	Limit     int
+	ResetAt   time.Time
+}
+
+// githubRecordRateLimit 记录最近一次 GitHub 响应中的限流头（无头则忽略）。
+func githubRecordRateLimit(h http.Header) {
+	remaining, okR := parseHeaderInt(h.Get("X-RateLimit-Remaining"))
+	limit, okL := parseHeaderInt(h.Get("X-RateLimit-Limit"))
+	if !okR && !okL {
+		return
+	}
+	snap := githubRateLimitSnapshot{Remaining: remaining, Limit: limit}
+	if reset, ok := parseHeaderInt(h.Get("X-RateLimit-Reset")); ok && reset > 0 {
+		snap.ResetAt = time.Unix(int64(reset), 0)
+	}
+	githubRateLimitMu.Lock()
+	githubLastLimit, githubHasLimit = snap, true
+	githubRateLimitMu.Unlock()
+}
+
+// githubLastRateLimit 返回最近一次限流快照（无记录时 ok=false）。
+func githubLastRateLimit() (githubRateLimitSnapshot, bool) {
+	githubRateLimitMu.RLock()
+	defer githubRateLimitMu.RUnlock()
+	return githubLastLimit, githubHasLimit
+}
+
+// parseHeaderInt 解析响应头中的整数（失败返回 false）。
+func parseHeaderInt(v string) (int, bool) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0, false
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
 
 // githubConfig 惰性加载配置（进程内仅加载一次）。
 func githubConfig() GitHubConfig {
@@ -438,6 +491,9 @@ func githubGet(ctx context.Context, path, accept, etag string) ([]byte, string, 
 		return nil, "", fmt.Errorf("GitHub 请求失败: %w", err)
 	}
 	defer resp.Body.Close()
+
+	// 记录真实限流头（供前端展示「剩余 N 次 / 预计重置」）
+	githubRecordRateLimit(resp.Header)
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, githubBodyLimit))
 	if err != nil {

@@ -42,7 +42,7 @@
         .gh-stat .gh-stat-label { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
 
         /* ---- 区块标题 ---- */
-        .gh-section { margin: 18px 0 10px; display: flex; align-items: baseline; gap: 8px; }
+        .gh-section { margin: 18px 0 10px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
         .gh-section .gh-section-title { font-size: 15px; font-weight: 600; color: var(--color-text); }
         .gh-section .gh-section-count { font-size: 12px; color: var(--color-text-tertiary); }
 
@@ -87,9 +87,132 @@
         .gh-card-updated { font-size: 12px; color: var(--color-text-tertiary); }
         .gh-card-foot .ant-btn { margin-left: auto; }
 
-        /* ---- Drawer 内 README ---- */
-        .gh-detail-stats { display: flex; gap: 24px; flex-wrap: wrap; margin: 12px 0; }
-        .gh-detail-stats .gh-stat .gh-stat-value { font-size: 18px; }
+        /* ---- 热度徽标（克制：只有小图标 + 数值 + 文案，不做大面积彩色） ---- */
+        .gh-heat {
+            display: inline-flex; align-items: center; gap: 4px; font-size: 12px;
+            font-variant-numeric: tabular-nums; color: var(--color-text-secondary);
+            border: 1px solid var(--color-border); border-radius: 999px;
+            padding: 1px 8px; line-height: 18px; white-space: nowrap;
+        }
+        .gh-heat-dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 6px; }
+        .gh-heat-very_active { color: var(--color-text); }
+        .gh-heat-very_active .gh-heat-dot { background: var(--color-error); }
+        .gh-heat-active .gh-heat-dot { background: var(--color-warning); }
+        .gh-heat-normal .gh-heat-dot { background: var(--color-primary); }
+        .gh-heat-low .gh-heat-dot { background: var(--color-text-tertiary); }
+        .gh-heat-dormant .gh-heat-dot { background: var(--color-border-strong); }
+        .gh-heat-dormant { color: var(--color-text-tertiary); }
+
+        /* ---- 卡片底部：创建时间 + 项目年龄（弱化，不喧宾夺主） ---- */
+        .gh-card-created {
+            display: flex; align-items: center; gap: 6px; font-size: 12px;
+            color: var(--color-text-tertiary); font-variant-numeric: tabular-nums;
+        }
+        .gh-card-created .gh-sep { opacity: .5; }
+
+        /* ---- CI 状态小徽标 ---- */
+        .gh-ci { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--color-text-tertiary); }
+        .gh-ci-passing { color: var(--color-success); }
+        .gh-ci-failing { color: var(--color-error); }
+        .gh-ci-running { color: var(--color-primary); }
+
+        /* ---- Drawer 布局 ---- */
+        .gh-drawer .ant-drawer-body { padding: 0; }
+        .gh-drawer-body { padding: 0 0 24px; }
+        .gh-drawer-tabs .ant-tabs-nav { padding: 0 20px; margin: 0; position: sticky; top: 0; z-index: 5; background: var(--color-surface); }
+        .gh-drawer-tabs .ant-tabs-content-holder { padding: 16px 20px 8px; }
+        .gh-detail-head { padding: 16px 20px 14px; border-bottom: 1px solid var(--color-border); }
+        .gh-detail-title { font-size: 18px; font-weight: 600; color: var(--color-text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .gh-detail-desc { font-size: 13px; color: var(--color-text-secondary); margin-top: 4px; line-height: 1.6; }
+
+        /* ---- Stats Grid（紧凑，不做 8 个大卡） ---- */
+        .gh-stats-grid {
+            display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px;
+            background: var(--color-border); border: 1px solid var(--color-border);
+            border-radius: var(--radius); overflow: hidden;
+        }
+        .gh-stats-grid .gh-sg-item { background: var(--color-surface); padding: 10px 12px; }
+        .gh-sg-item .gh-sg-label { font-size: 11.5px; color: var(--color-text-tertiary); display: flex; align-items: center; gap: 4px; }
+        .gh-sg-item .gh-sg-value { font-size: 17px; font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums; margin-top: 3px; line-height: 1.25; }
+        .gh-sg-item .gh-sg-sub { font-size: 11.5px; color: var(--color-text-tertiary); margin-top: 1px; }
+        @media (max-width: 640px) { .gh-stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+        /* ---- 增长率 / 窗口切换 ---- */
+        .gh-window-seg { margin-bottom: 10px; }
+        .gh-growth-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 10px; }
+        .gh-growth-row .gh-growth-item { font-variant-numeric: tabular-nums; }
+        .gh-growth-row .gh-growth-label { font-size: 11.5px; color: var(--color-text-tertiary); }
+        .gh-growth-row .gh-growth-value { font-size: 15px; font-weight: 600; color: var(--color-text); }
+        .gh-growth-row .gh-growth-value.gh-up { color: var(--color-success); }
+        .gh-growth-row .gh-growth-value.gh-flat { color: var(--color-text-tertiary); }
+        .gh-rate-chip { font-size: 12px; color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: 999px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
+
+        /* ---- 图表容器：移动端降高 ---- */
+        .gh-chart { width: 100%; height: 200px; }
+        .gh-chart-sm { width: 100%; height: 160px; }
+        @media (max-width: 767px) { .gh-chart { height: 160px; } .gh-chart-sm { height: 130px; } }
+
+        /* ---- 语言分布条形 ---- */
+        .gh-langbar-item { margin-bottom: 8px; }
+        .gh-langbar-head { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--color-text-secondary); margin-bottom: 4px; }
+        .gh-langbar-name { display: inline-flex; align-items: center; gap: 6px; color: var(--color-text); }
+        .gh-langbar-track { height: 7px; border-radius: 999px; background: var(--hover); overflow: hidden; }
+        .gh-langbar-fill { height: 100%; border-radius: 999px; transition: width .3s ease-out; }
+
+        /* ---- 热力图 ---- */
+        .gh-heatmap { display: flex; flex-direction: column; gap: 3px; overflow-x: auto; padding-bottom: 2px; }
+        .gh-heatmap-row { display: flex; align-items: center; gap: 3px; }
+        .gh-heatmap-label { width: 34px; flex: 0 0 34px; font-size: 11px; color: var(--color-text-tertiary); }
+        .gh-heatmap-cell { width: 12px; height: 12px; border-radius: 2px; background: var(--hover); flex: 0 0 12px; }
+        .gh-heatmap-cell.lv1 { background: rgba(22, 119, 255, .25); }
+        .gh-heatmap-cell.lv2 { background: rgba(22, 119, 255, .5); }
+        .gh-heatmap-cell.lv3 { background: rgba(22, 119, 255, .75); }
+        .gh-heatmap-cell.lv4 { background: rgba(22, 119, 255, 1); }
+        .gh-heatmap-foot { display: flex; align-items: center; gap: 6px; justify-content: flex-end; margin-top: 6px; font-size: 11px; color: var(--color-text-tertiary); }
+
+        /* ---- Release / Actions / Contributors / Activity 列表 ---- */
+        .gh-list { border: 1px solid var(--color-border); border-radius: var(--radius); overflow: hidden; }
+        .gh-list-item {
+            display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
+            border-bottom: 1px solid var(--color-border); background: var(--color-surface);
+        }
+        .gh-list-item:last-child { border-bottom: none; }
+        .gh-list-item.gh-clickable { cursor: pointer; }
+        .gh-list-item.gh-clickable:hover { background: var(--hover); }
+        .gh-list-main { min-width: 0; flex: 1 1 auto; }
+        .gh-list-title { font-size: 13px; color: var(--color-text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .gh-list-sub { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .gh-list-right { flex: 0 0 auto; font-size: 12px; color: var(--color-text-tertiary); text-align: right; font-variant-numeric: tabular-nums; }
+
+        /* ---- 贡献者占比条 ---- */
+        .gh-contrib-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+        .gh-contrib-avatar { width: 24px; height: 24px; border-radius: 50%; flex: 0 0 24px; border: 1px solid var(--color-border); background: var(--color-bg); object-fit: cover; }
+        .gh-contrib-name { font-size: 12.5px; color: var(--color-text); width: 96px; flex: 0 0 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .gh-contrib-track { flex: 1 1 auto; height: 6px; border-radius: 999px; background: var(--hover); overflow: hidden; min-width: 40px; }
+        .gh-contrib-fill { height: 100%; background: var(--color-primary); border-radius: 999px; opacity: .8; }
+        .gh-contrib-pct { font-size: 12px; color: var(--color-text-tertiary); width: 48px; flex: 0 0 48px; text-align: right; font-variant-numeric: tabular-nums; }
+
+        /* ---- 活动 Timeline ---- */
+        .gh-timeline { position: relative; padding-left: 18px; }
+        .gh-timeline::before { content: ''; position: absolute; left: 5px; top: 4px; bottom: 4px; width: 1px; background: var(--color-border); }
+        .gh-tl-item { position: relative; padding: 0 0 14px 0; }
+        .gh-tl-item:last-child { padding-bottom: 0; }
+        .gh-tl-dot {
+            position: absolute; left: -18px; top: 4px; width: 11px; height: 11px; border-radius: 50%;
+            border: 2px solid var(--color-surface); background: var(--color-text-tertiary);
+        }
+        .gh-tl-commit { background: var(--color-primary); }
+        .gh-tl-release { background: var(--color-success); }
+        .gh-tl-issue { background: var(--color-warning); }
+        .gh-tl-pull_request { background: #722ed1; }
+        .gh-tl-workflow { background: var(--color-text-tertiary); }
+        .gh-tl-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .gh-tl-type { font-size: 11.5px; color: var(--color-text-tertiary); }
+        .gh-tl-time { font-size: 11.5px; color: var(--color-text-tertiary); margin-left: auto; white-space: nowrap; }
+        .gh-tl-title { font-size: 13px; color: var(--color-text); margin-top: 2px; overflow-wrap: break-word; }
+        .gh-tl-sub { font-size: 12px; color: var(--color-text-tertiary); margin-top: 1px; }
+
+        /* ---- README ---- */
         .gh-readme {
             border: 1px solid var(--color-border); border-radius: var(--radius);
             padding: 12px 14px; background: var(--color-bg); font-size: 13px;
@@ -114,12 +237,39 @@
         .gh-readme blockquote { margin: 8px 0; padding: 2px 12px; border-left: 3px solid var(--color-border-strong); color: var(--color-text-tertiary); }
         .gh-readme ul, .gh-readme ol { margin: 6px 0; padding-left: 22px; }
         .gh-readme img { max-width: 100%; height: auto; border-radius: var(--radius-sm); }
-        .gh-readme table { border-collapse: collapse; margin: 8px 0; width: 100%; font-size: 12.5px; }
+        .gh-readme table { border-collapse: collapse; margin: 8px 0; width: 100%; font-size: 12.5px; display: block; overflow-x: auto; }
         .gh-readme th, .gh-readme td { border: 1px solid var(--color-border); padding: 4px 10px; text-align: left; }
         .gh-readme th { background: var(--hover); color: var(--color-text); }
         .gh-readme hr { border: none; border-top: 1px solid var(--color-border); margin: 12px 0; }
+        .gh-readme .gh-img-fail {
+            display: inline-block; font-size: 12px; color: var(--color-text-tertiary);
+            border: 1px dashed var(--color-border-strong); border-radius: var(--radius-sm);
+            padding: 6px 10px; background: var(--color-surface);
+        }
         .gh-readme-more { margin-top: 6px; }
         .gh-mono { font-family: "JetBrains Mono", Consolas, "Courier New", monospace; font-size: 12px; }
+
+        /* ---- Release Notes / 说明块 ---- */
+        .gh-notes {
+            font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.65;
+            border: 1px solid var(--color-border); border-radius: var(--radius);
+            padding: 10px 12px; background: var(--color-bg); white-space: pre-wrap;
+            overflow-wrap: break-word; max-height: 260px; overflow-y: auto;
+        }
+
+        /* ---- Actions 表格允许横向滚动 ---- */
+        .gh-table-wrap { overflow-x: auto; }
+        .gh-table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 520px; }
+        .gh-table th, .gh-table td { padding: 7px 10px; border-bottom: 1px solid var(--color-border); text-align: left; white-space: nowrap; }
+        .gh-table th { color: var(--color-text-tertiary); font-weight: 500; background: var(--hover); }
+        .gh-table td { color: var(--color-text-secondary); }
+
+        /* ---- Overview 描述列表紧凑化 ---- */
+        .gh-kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 20px; }
+        .gh-kv .gh-kv-item { min-width: 0; }
+        .gh-kv-label { font-size: 11.5px; color: var(--color-text-tertiary); }
+        .gh-kv-value { font-size: 13px; color: var(--color-text); margin-top: 2px; overflow-wrap: break-word; font-variant-numeric: tabular-nums; }
+        @media (max-width: 640px) { .gh-kv { grid-template-columns: 1fr; } }
 
         @media (max-width: 768px) {
             .sec-wrap { padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
@@ -131,6 +281,11 @@
             .gh-card-desc { -webkit-line-clamp: 2; }
             .gh-toolbar .gh-search { width: 100%; }
             .gh-toolbar .gh-select { flex: 1 1 40%; min-width: 0; }
+            .gh-drawer-tabs .ant-tabs-nav { padding: 0 12px; }
+            .gh-drawer-tabs .ant-tabs-content-holder { padding: 12px 12px 8px; }
+            .gh-detail-head { padding: 14px 12px 12px; }
+            .gh-contrib-name { width: 72px; flex-basis: 72px; }
+            .gh-notes { max-height: 200px; }
         }
     </style>
     <script>
@@ -150,11 +305,12 @@
     <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
     <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
     <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
+    <script src="https://registry.npmmirror.com/echarts/5.5.1/files/dist/echarts.min.js"></script>
     <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
     <script type="text/babel">
-        const { Card, Button, Tag, Tooltip, Space, ConfigProvider, theme, Drawer, Skeleton, Empty, Alert,
-            Select, Input, Typography, Descriptions } = window.antd;
-        const { useState, useEffect, useCallback, useMemo } = React;
+        const { Card, Tag, Tooltip, Space, ConfigProvider, theme, Drawer, Skeleton, Empty, Alert,
+            Select, Input, Typography, Segmented, Button, Progress, Tabs, Popover, Avatar } = window.antd;
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
         const { darkAlgorithm } = theme;
         const IconSet = window.icons || {};
         const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
@@ -196,11 +352,13 @@
             'Swift': '#F05138', 'Kotlin': '#A97BFF', 'Dart': '#00B4AB', 'Lua': '#000080',
             'Dockerfile': '#384d54', 'Makefile': '#427819', 'Jupyter Notebook': '#DA5B0B', 'PowerShell': '#012456'
         };
+        const HEAT_LABEL = { very_active: '非常活跃', active: '活跃', normal: '正常', low: '较低', dormant: '沉寂' };
+        function langColor(lang) { return LANG_COLORS[lang] || 'var(--color-text-tertiary)'; }
         function LangDot({ lang }) {
             if (!lang) return null;
             return (
                 <span className="gh-lang">
-                    <span className="gh-lang-dot" style={{ background: LANG_COLORS[lang] || 'var(--color-text-tertiary)' }} />
+                    <span className="gh-lang-dot" style={{ background: langColor(lang) }} />
                     {lang}
                 </span>
             );
@@ -217,9 +375,26 @@
             if (diff < 86400 * 365) return Math.floor(diff / (86400 * 30)) + '个月前';
             return t.format('YYYY-MM-DD');
         }
-        function openGitHub(url) {
-            if (url) window.open(url, '_blank', 'noopener,noreferrer');
+        // 时长（毫秒 -> 2m 31s / 45s）
+        function fmtDuration(ms) {
+            if (!ms || ms <= 0) return '—';
+            const s = Math.round(ms / 1000);
+            if (s < 60) return s + 's';
+            const m = Math.floor(s / 60), rs = s % 60;
+            if (m < 60) return m + 'm ' + rs + 's';
+            return Math.floor(m / 60) + 'h ' + (m % 60) + 'm';
         }
+        function fmtBytes(b) {
+            if (!b || b <= 0) return '0 B';
+            const u = ['B', 'KB', 'MB', 'GB'];
+            let i = 0, v = b;
+            while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+            return (i === 0 ? v : v.toFixed(1)) + ' ' + u[i];
+        }
+        function fmtDate(iso) { return iso ? dayjs(iso).format('YYYY-MM-DD') : '—'; }
+        function openGitHub(url) { if (url) window.open(url, '_blank', 'noopener,noreferrer'); }
+        // 统计值：后端用 -1 表示「取不到」，显示 — 而不是误导性的 0
+        function statValue(v) { return (v === null || v === undefined || v < 0) ? '—' : v; }
 
         // ==================== 安全 Markdown 渲染 ====================
         // 先整体 HTML 转义，再做有限的 Markdown 变换；代码块/行内代码内容永不参与变换；
@@ -230,7 +405,7 @@
         function mdInline(s) {
             s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, src) => {
                 if (!/^https?:\/\//i.test(src)) return alt || '';
-                return '<img src="' + src + '" alt="' + alt + '" loading="lazy" referrerpolicy="no-referrer" />';
+                return '<img src="' + src + '" alt="' + alt + '" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),{className:\'gh-img-fail\',textContent:\'图片加载失败\'}))" />';
             });
             s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, href) => {
                 if (!/^(https?:|mailto:|#)/i.test(href)) return label;
@@ -274,7 +449,6 @@
                 const qm = line.match(/^&gt;\s?(.*)$/);
                 if (qm) { closePara(); closeList(); if (!quote) { html += '<blockquote>'; quote = true; } html += '<p>' + mdInline(qm[1]) + '</p>'; continue; }
                 closeQuote();
-                // 表格：当前行含 | 且下一行为分隔行
                 if (line.indexOf('|') >= 0 && /^\s*\|?[\s:|-]*-[\s:|-]*$/.test(lines[i + 1] || '') && (lines[i + 1] || '').indexOf('-') >= 0) {
                     closeAll();
                     const header = splitRow(line);
@@ -295,11 +469,99 @@
                 para.push(mdInline(line.trim()));
             }
             closeAll();
-            // 兜底还原行内残留的占位符（代码块被段落包裹的极少数情况）
             html = html
                 .replace(/\u0000B(\d+)\u0000/g, (_, idx) => '<pre><code>' + escapeHtml(blocks[Number(idx)] || '') + '</code></pre>')
                 .replace(/\u0000C(\d+)\u0000/g, (_, idx) => '<code>' + (codes[Number(idx)] || '') + '</code>');
             return html;
+        }
+        function githubTruncate(s, n) { return String(s || '').slice(0, n) + '…'; }
+
+        // ==================== ECharts 封装（项目既有图表库，不引入第二套） ====================
+        function useChart(option, deps) {
+            const ref = useRef(null);
+            const inst = useRef(null);
+            useEffect(() => {
+                if (!ref.current) return;
+                inst.current = echarts.init(ref.current, null, { renderer: 'canvas' });
+                const onResize = () => inst.current && inst.current.resize();
+                window.addEventListener('resize', onResize);
+                return () => { window.removeEventListener('resize', onResize); if (inst.current) { inst.current.dispose(); inst.current = null; } };
+            }, []);
+            useEffect(() => {
+                if (inst.current && option) { inst.current.setOption(option, true); }
+            }, [JSON.stringify(option || null), ...(deps || [])]);
+            return ref;
+        }
+        function chartTheme() {
+            const cs = getComputedStyle(document.body);
+            return {
+                text: cs.getPropertyValue('--color-text').trim() || '#000',
+                tertiary: cs.getPropertyValue('--color-text-tertiary').trim() || '#999',
+                border: cs.getPropertyValue('--color-border').trim() || '#eee',
+                primary: cs.getPropertyValue('--color-primary').trim() || '#1677ff',
+                success: cs.getPropertyValue('--color-success').trim() || '#52c41a',
+            };
+        }
+        function StarTrendChart({ points, isDark, heightClass }) {
+            const opt = useMemo(() => {
+                const t = chartTheme();
+                return {
+                    grid: { left: 8, right: 14, top: 16, bottom: 4, containLabel: true },
+                    tooltip: { trigger: 'axis', valueFormatter: v => v + ' ⭐' },
+                    xAxis: {
+                        type: 'category', boundaryGap: false,
+                        data: (points || []).map(p => p.date.slice(5)),
+                        axisLine: { lineStyle: { color: t.border } },
+                        axisLabel: { color: t.tertiary, fontSize: 11, hideOverlap: true },
+                        axisTick: { show: false },
+                    },
+                    yAxis: {
+                        type: 'value', scale: true,
+                        splitLine: { lineStyle: { color: t.border } },
+                        axisLabel: { color: t.tertiary, fontSize: 11 },
+                    },
+                    series: [{
+                        type: 'line', smooth: true, symbol: 'none',
+                        data: (points || []).map(p => p.stars),
+                        lineStyle: { color: t.primary, width: 2 },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: (isDark ? 'rgba(22,119,255,.28)' : 'rgba(22,119,255,.20)') },
+                                { offset: 1, color: 'rgba(22,119,255,0)' },
+                            ]),
+                        },
+                    }],
+                };
+            }, [points, isDark]);
+            const ref = useChart(opt, [points, isDark]);
+            return <div className={'gh-chart ' + (heightClass || '')} ref={ref} />;
+        }
+        function CommitBarChart({ daily, isDark }) {
+            const opt = useMemo(() => {
+                const t = chartTheme();
+                return {
+                    grid: { left: 8, right: 14, top: 16, bottom: 4, containLabel: true },
+                    tooltip: { trigger: 'axis', valueFormatter: v => v + ' commits' },
+                    xAxis: {
+                        type: 'category', data: (daily || []).map(d => d.date.slice(5)),
+                        axisLine: { lineStyle: { color: t.border } },
+                        axisLabel: { color: t.tertiary, fontSize: 11, hideOverlap: true, interval: 'auto' },
+                        axisTick: { show: false },
+                    },
+                    yAxis: {
+                        type: 'value', minInterval: 1,
+                        splitLine: { lineStyle: { color: t.border } },
+                        axisLabel: { color: t.tertiary, fontSize: 11 },
+                    },
+                    series: [{
+                        type: 'bar', data: (daily || []).map(d => d.commits),
+                        itemStyle: { color: t.primary, borderRadius: [2, 2, 0, 0], opacity: .85 },
+                        barMaxWidth: 14,
+                    }],
+                };
+            }, [daily, isDark]);
+            const ref = useChart(opt, [daily, isDark]);
+            return <div className="gh-chart" ref={ref} />;
         }
 
         // ==================== 顶栏 ====================
@@ -323,13 +585,42 @@
             );
         }
 
+        // ==================== 复用小组件 ====================
+        // 热度徽标：只用小图标 + 数值 + 文案，不做大面积彩色
+        function HeatBadge({ score, level, size }) {
+            if (score === null || score === undefined) return null;
+            const lv = level || 'normal';
+            return (
+                <span className={'gh-heat gh-heat-' + lv} style={size === 'sm' ? { fontSize: 11.5, padding: '0 6px' } : undefined}>
+                    <span className="gh-heat-dot" />
+                    {score}
+                    {HEAT_LABEL[lv] && <span style={{ opacity: .75 }}>{HEAT_LABEL[lv]}</span>}
+                </span>
+            );
+        }
+        function CIStatusBadge({ ci }) {
+            if (!ci || !ci.available) return null;
+            const cls = ci.status === 'passing' ? 'gh-ci-passing' : (ci.status === 'failing' ? 'gh-ci-failing' : (ci.status === 'running' ? 'gh-ci-running' : ''));
+            const icon = ci.status === 'passing' ? 'CheckCircleOutlined' : (ci.status === 'failing' ? 'CloseCircleOutlined' : (ci.status === 'running' ? 'SyncOutlined' : 'ExclamationCircleOutlined'));
+            return <span className={'gh-ci ' + cls}><UIIcon name={icon} />{ci.label}</span>;
+        }
+        function StatItem({ icon, label, value, sub, tooltip }) {
+            const content = (
+                <div className="gh-sg-item">
+                    <div className="gh-sg-label">{icon && <UIIcon name={icon} />}{label}</div>
+                    <div className="gh-sg-value">{value}</div>
+                    {sub && <div className="gh-sg-sub">{sub}</div>}
+                </div>
+            );
+            return tooltip ? <Tooltip title={tooltip}>{content}</Tooltip> : content;
+        }
+
         // ==================== 项目卡片 ====================
         function RepoCard({ repo, onDetail }) {
             return (
-                <div className={'gh-card' + (repo.featured ? ' featured' : '')}
-                    onClick={() => openGitHub(repo.html_url)}
-                    role="link" tabIndex={0}
-                    onKeyDown={e => { if (e.key === 'Enter') openGitHub(repo.html_url); }}>
+                <div className="gh-card" onClick={() => onDetail(repo)}
+                    role="button" tabIndex={0}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onDetail(repo); } }}>
                     <div className="gh-card-head">
                         <span className="gh-card-name">{repo.name}</span>
                         {repo.featured && <Tag color="blue" style={{ marginInlineEnd: 0 }}>Featured</Tag>}
@@ -338,12 +629,21 @@
                     <div className="gh-card-desc">{repo.description || '暂无项目描述'}</div>
                     <div className="gh-card-meta">
                         {repo.language && <LangDot lang={repo.language} />}
-                        <span className="gh-meta-item"><UIIcon name="StarOutlined" />{repo.stars}</span>
-                        <span className="gh-meta-item"><UIIcon name="ForkOutlined" />{repo.forks}</span>
-                        <span className="gh-meta-item"><UIIcon name="IssueOutlined" />{repo.issues}</span>
+                        <span className="gh-meta-item" title="Stars"><UIIcon name="StarOutlined" />{repo.stars}</span>
+                        <span className="gh-meta-item" title="Forks"><UIIcon name="ForkOutlined" />{repo.forks}</span>
+                        <span className="gh-meta-item" title="Issues"><UIIcon name="IssueOutlined" />{repo.issues}</span>
+                        {repo.heat_score > 0 && (
+                            <Tooltip title={'热度 ' + repo.heat_score + ' · ' + (HEAT_LABEL[repo.heat_level] || '')}>
+                                <span>🔥 {repo.heat_score}</span>
+                            </Tooltip>
+                        )}
+                    </div>
+                    <div className="gh-card-created">
+                        <span>创建 {fmtDate(repo.created_at)}</span>
+                        {repo.age_label && <><span className="gh-sep">·</span><span>项目年龄 {repo.age_label}</span></>}
                     </div>
                     <div className="gh-card-foot">
-                        <span className="gh-card-updated">Updated {relTime(repo.pushed_at || repo.updated_at)}</span>
+                        <span className="gh-card-updated">更新 {relTime(repo.pushed_at || repo.updated_at)}</span>
                         <Button size="small" onClick={e => { e.stopPropagation(); onDetail(repo); }}>查看详情</Button>
                     </div>
                 </div>
@@ -359,39 +659,671 @@
             );
         }
 
-        // ==================== 详情 Drawer ====================
-        const README_COLLAPSED = 3500;
-        function DetailDrawer({ state, onClose }) {
-            const isMobile = useIsMobile();
-            const [expanded, setExpanded] = useState(false);
-            useEffect(() => { setExpanded(false); }, [state.repo && state.repo.name]);
-            const repo = state.repo;
-            const readme = state.readme;
-            let readmeBody = null;
-            if (state.readmeLoading) {
-                readmeBody = <Skeleton active title={false} paragraph={{ rows: 5 }} />;
-            } else if (state.readmeError || !readme || !readme.content) {
-                readmeBody = <Typography.Text type="secondary" style={{ fontSize: 12 }}>暂无 README 内容</Typography.Text>;
-            } else {
-                const raw = readme.content || '';
-                const clipped = !expanded && raw.length > README_COLLAPSED;
-                const shown = clipped ? githubTruncate(raw, README_COLLAPSED) : raw;
-                readmeBody = (
-                    <>
-                        <div className="gh-readme" dangerouslySetInnerHTML={{ __html: renderMarkdown(shown) }} />
-                        {raw.length > README_COLLAPSED && (
-                            <Button type="link" size="small" className="gh-readme-more" onClick={() => setExpanded(!expanded)}>
-                                {clipped ? '显示更多' : '收起'}
-                            </Button>
-                        )}
-                    </>
+        // ==================== 图表 / 统计分区 ====================
+        const STAR_WINDOWS = [
+            { label: '7D', value: 7 }, { label: '30D', value: 30 },
+            { label: '90D', value: 90 }, { label: '1Y', value: 365 }, { label: 'ALL', value: 0 },
+        ];
+        function GrowthValue({ v, suffix }) {
+            if (!v) return <span className="gh-growth-value gh-flat">+0</span>;
+            return <span className="gh-growth-value gh-up">+{v}{suffix || ''}</span>;
+        }
+        function StarTrendSection({ owner, repo, isDark, onRateLimit }) {
+            const [window, setWindow] = useState(30);
+            const [data, setData] = useState(null);
+            const [err, setErr] = useState(null);
+            useEffect(() => {
+                let cancelled = false;
+                setData(null); setErr(null);
+                ghGet(baseUrl + '/api/github/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/stars?window=' + window)
+                    .then(d => { if (!cancelled) { setData(d); if (onRateLimit && d.rate_limit) onRateLimit(d.rate_limit); } })
+                    .catch(e => { if (!cancelled) setErr(e); });
+                return () => { cancelled = true; };
+            }, [owner, repo, window]);
+
+            if (err) {
+                return (
+                    <Alert type={err.code === 429 ? 'warning' : 'error'} showIcon
+                        message={err.code === 429 ? 'GitHub API 请求次数已达到限制' : 'Star 趋势暂时无法获取'}
+                        action={<Button size="small" onClick={() => setWindow(w => w)}>重新加载</Button>} />
+                );
+            }
+            if (!data) return <Skeleton active title={false} paragraph={{ rows: 4 }} />;
+
+            const g = data.growth || {};
+            if (!g.has_history) {
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <Alert type="info" showIcon
+                            message="正在建立 Star 历史数据"
+                            description={'当前 Star：' + (data.current || 0) + '。GitHub 不提供历史 Star 曲线，本服务每天自动记录一次快照，明日起即可看到趋势。'} />
+                    </div>
                 );
             }
             return (
+                <div>
+                    <div className="gh-growth-row">
+                        <div className="gh-growth-item">
+                            <div className="gh-growth-label">Current</div>
+                            <div className="gh-growth-value">{g.current}</div>
+                        </div>
+                        <div className="gh-growth-item">
+                            <div className="gh-growth-label">7D</div>
+                            <GrowthValue v={g.growth_7d} />
+                        </div>
+                        <div className="gh-growth-item">
+                            <div className="gh-growth-label">30D</div>
+                            <GrowthValue v={g.growth_30d} />
+                        </div>
+                        <div className="gh-growth-item">
+                            <div className="gh-growth-label">90D</div>
+                            <GrowthValue v={g.growth_90d} />
+                        </div>
+                        {g.rate_30d !== 0 && g.growth_30d !== 0 && (
+                            <span className="gh-rate-chip">
+                                增长率 {g.rate_30d > 0 ? '+' : ''}{g.rate_30d}%
+                            </span>
+                        )}
+                        <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--color-text-tertiary)' }}>
+                            自 {g.since} 起 {g.points} 个快照
+                        </span>
+                    </div>
+                    <div className="gh-window-seg">
+                        <Segmented size="small" value={window} onChange={setWindow}
+                            options={STAR_WINDOWS.map(w => ({ label: w.label, value: w.value }))} />
+                    </div>
+                    <StarTrendChart points={data.points} isDark={isDark} />
+                </div>
+            );
+        }
+
+        const COMMIT_WINDOWS = [{ label: '7 Days', value: 7 }, { label: '30 Days', value: 30 }, { label: '90 Days', value: 90 }];
+        function CommitSection({ owner, repo, isDark, onRateLimit }) {
+            const [window, setWindow] = useState(30);
+            const [data, setData] = useState(null);
+            const [err, setErr] = useState(null);
+            useEffect(() => {
+                let cancelled = false;
+                setData(null); setErr(null);
+                ghGet(baseUrl + '/api/github/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/commits')
+                    .then(d => { if (!cancelled) { setData(d); if (onRateLimit && d.rate_limited) onRateLimit({ limited: true }); } })
+                    .catch(e => { if (!cancelled) setErr(e); });
+                return () => { cancelled = true; };
+            }, [owner, repo]);
+
+            if (err) return <Alert type="warning" showIcon message={'提交数据暂时无法获取' + (err.code === 429 ? '（API 限制）' : '')} />;
+            if (!data) return <Skeleton active title={false} paragraph={{ rows: 4 }} />;
+
+            const win = (data.windows || {})[String(window)] || data.activity || {};
+            const daily = win.daily || [];
+            return (
+                <div>
+                    <div className="gh-growth-row">
+                        <div className="gh-growth-item">
+                            <div className="gh-growth-label">Commits</div>
+                            <div className="gh-growth-value">{win.total || 0}</div>
+                        </div>
+                        <div className="gh-growth-item">
+                            <div className="gh-growth-label">活跃天数</div>
+                            <div className="gh-growth-value">{win.active_days || 0}</div>
+                        </div>
+                        <div className="gh-growth-item">
+                            <div className="gh-growth-label">平均</div>
+                            <div className="gh-growth-value" style={{ fontSize: 13 }}>{(win.avg_per_day || 0)} commits/day</div>
+                        </div>
+                        <div className="gh-growth-item">
+                            <div className="gh-growth-label">单日最高</div>
+                            <div className="gh-growth-value">{win.max_per_day || 0}</div>
+                        </div>
+                    </div>
+                    <div className="gh-window-seg">
+                        <Segmented size="small" value={window} onChange={setWindow}
+                            options={COMMIT_WINDOWS.map(w => ({ label: w.label, value: w.value }))} />
+                    </div>
+                    <CommitBarChart daily={daily} isDark={isDark} />
+                    <CommitHeatmap daily={daily} />
+                    <CommitList commits={data.recent || []} owner={owner} repo={repo} />
+                </div>
+            );
+        }
+
+        // 提交热力图：完全复用已有 commits 数据（按周聚合到周一~周日 × 周数），不产生额外请求
+        function CommitHeatmap({ daily }) {
+            const weeks = useMemo(() => {
+                const rows = [[], [], [], [], [], [], []];
+                (daily || []).forEach(d => {
+                    const wd = (dayjs(d.date).day() + 6) % 7; // 周一=0
+                    rows[wd].push(d);
+                });
+                return rows;
+            }, [daily]);
+            const max = useMemo(() => Math.max(1, ...(daily || []).map(d => d.commits)), [daily]);
+            const cols = Math.max(0, ...weeks.map(r => r.length));
+            if (!cols) return null;
+            const level = (n) => n <= 0 ? '' : (n >= max ? 'lv4' : (n >= max * 0.66 ? 'lv3' : (n >= max * 0.33 ? 'lv2' : 'lv1')));
+            const DAY_LABEL = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            return (
+                <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', marginBottom: 6 }}>提交热力图</div>
+                    <div className="gh-heatmap">
+                        {weeks.map((row, ri) => (
+                            <div className="gh-heatmap-row" key={ri}>
+                                <span className="gh-heatmap-label">{DAY_LABEL[ri]}</span>
+                                {Array.from({ length: cols }).map((_, ci) => {
+                                    const cell = row[ci];
+                                    return (
+                                        <Tooltip key={ci} title={cell ? (cell.date + ' · ' + cell.commits + ' commits') : ''}>
+                                            <span className={'gh-heatmap-cell ' + (cell ? level(cell.commits) : '')} />
+                                        </Tooltip>
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                    <div className="gh-heatmap-foot">
+                        <span>少</span>
+                        <span className="gh-heatmap-cell" />
+                        <span className="gh-heatmap-cell lv1" />
+                        <span className="gh-heatmap-cell lv2" />
+                        <span className="gh-heatmap-cell lv3" />
+                        <span className="gh-heatmap-cell lv4" />
+                        <span>多</span>
+                    </div>
+                </div>
+            );
+        }
+
+        function CommitList({ commits, owner, repo }) {
+            const [detail, setDetail] = useState(null);
+            const [loadingSha, setLoadingSha] = useState('');
+            const open = (c) => {
+                setLoadingSha(c.sha);
+                setDetail({ commit: c, loading: true });
+                ghGet(baseUrl + '/api/github/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/commits/' + encodeURIComponent(c.sha))
+                    .then(d => setDetail({ commit: d.commit, loading: false }))
+                    .catch(() => setDetail({ commit: c, loading: false, detailError: true }))
+                    .finally(() => setLoadingSha(''));
+            };
+            if (!commits.length) return null;
+            return (
+                <div style={{ marginTop: 14 }}>
+                    <div style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', marginBottom: 6 }}>最近提交</div>
+                    <div className="gh-list">
+                        {commits.map(c => (
+                            <div className="gh-list-item gh-clickable" key={c.sha} onClick={() => open(c)}>
+                                <div className="gh-list-main">
+                                    <div className="gh-list-title">{c.message || '(无提交信息)'}</div>
+                                    <div className="gh-list-sub">
+                                        {c.author_avatar && <img className="gh-contrib-avatar" src={c.author_avatar} alt="" referrerPolicy="no-referrer" style={{ width: 16, height: 16, flexBasis: 16 }} />}
+                                        <span>{c.author_login || c.author_name || '未知'}</span>
+                                        <span className="gh-mono">{c.short_sha}</span>
+                                        {c.verified && <Tag color="green" style={{ marginInlineEnd: 0, fontSize: 11, lineHeight: '16px' }}>Verified</Tag>}
+                                    </div>
+                                </div>
+                                <div className="gh-list-right">
+                                    {loadingSha === c.sha ? <UIIcon name="LoadingOutlined" /> : relTime(c.date)}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <CommitDetailModal detail={detail} onClose={() => setDetail(null)} />
+                </div>
+            );
+        }
+        function CommitDetailModal({ detail, onClose }) {
+            if (!detail) return null;
+            const c = detail.commit || {};
+            return (
+                <Drawer open={!!detail} onClose={onClose} width={420} title="提交详情" placement="right">
+                    <div className="gh-list-title" style={{ whiteSpace: 'normal', fontSize: 14, fontWeight: 600 }}>{c.message || '(无提交信息)'}</div>
+                    {detail.loading ? <Skeleton active title={false} paragraph={{ rows: 4 }} style={{ marginTop: 12 }} /> : (
+                        <>
+                            {detail.detailError && <Alert type="info" showIcon message="完整差异信息暂时无法获取" style={{ marginTop: 10 }} />}
+                            <div className="gh-kv" style={{ marginTop: 14 }}>
+                                <div className="gh-kv-item"><div className="gh-kv-label">Author</div><div className="gh-kv-value">{c.author_login || c.author_name || '—'}</div></div>
+                                <div className="gh-kv-item"><div className="gh-kv-label">Commit</div><div className="gh-kv-value gh-mono">{c.short_sha || c.sha || '—'}</div></div>
+                                <div className="gh-kv-item"><div className="gh-kv-label">Date</div><div className="gh-kv-value">{relTime(c.date)}</div></div>
+                                {c.files_changed !== undefined && <div className="gh-kv-item"><div className="gh-kv-label">Files changed</div><div className="gh-kv-value">{c.files_changed}</div></div>}
+                                {c.additions !== undefined && <div className="gh-kv-item"><div className="gh-kv-label">Additions</div><div className="gh-kv-value" style={{ color: 'var(--color-success)' }}>+{c.additions}</div></div>}
+                                {c.deletions !== undefined && <div className="gh-kv-item"><div className="gh-kv-label">Deletions</div><div className="gh-kv-value" style={{ color: 'var(--color-error)' }}>-{c.deletions}</div></div>}
+                            </div>
+                            <Button type="primary" block style={{ marginTop: 16 }} icon={<UIIcon name="GithubOutlined" />}
+                                disabled={!c.html_url} onClick={() => openGitHub(c.html_url)}>Open on GitHub</Button>
+                        </>
+                    )}
+                </Drawer>
+            );
+        }
+
+        // ==================== Releases ====================
+        function ReleasesSection({ owner, repo, onRateLimit }) {
+            const [data, setData] = useState(null);
+            const [err, setErr] = useState(null);
+            const [detail, setDetail] = useState(null);
+            const [showAll, setShowAll] = useState(false);
+            useEffect(() => {
+                let cancelled = false;
+                ghGet(baseUrl + '/api/github/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/releases')
+                    .then(d => { if (!cancelled) setData(d); })
+                    .catch(e => { if (!cancelled) setErr(e); });
+                return () => { cancelled = true; };
+            }, [owner, repo]);
+
+            if (err) return <Alert type="warning" showIcon message="Releases 暂时无法获取" />;
+            if (!data) return <Skeleton active title={false} paragraph={{ rows: 3 }} />;
+
+            const list = data.releases || [];
+            if (!list.length) {
+                return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 Release" style={{ padding: '16px 0' }} />;
+            }
+            const shown = showAll ? list : list.slice(0, 3);
+            return (
+                <div>
+                    {data.latest && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+                            <Tag color="blue" style={{ marginInlineEnd: 0 }}>Latest</Tag>
+                            <span className="gh-mono" style={{ fontSize: 14, fontWeight: 600 }}>{data.latest.tag_name}</span>
+                            <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>{relTime(data.latest.published_at)}</span>
+                            <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Assets {data.latest.asset_count}</span>
+                            <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Downloads {data.latest.downloads}</span>
+                        </div>
+                    )}
+                    <div className="gh-list">
+                        {shown.map(r => (
+                            <div className="gh-list-item gh-clickable" key={r.id} onClick={() => setDetail(r)}>
+                                <div className="gh-list-main">
+                                    <div className="gh-list-title">
+                                        <span className="gh-mono">{r.tag_name}</span>
+                                        {r.latest && <Tag color="blue" style={{ marginInlineStart: 6, marginInlineEnd: 0, fontSize: 11, lineHeight: '16px' }}>Latest</Tag>}
+                                        {r.prerelease && <Tag style={{ marginInlineStart: 6, marginInlineEnd: 0, fontSize: 11, lineHeight: '16px' }}>Pre-release</Tag>}
+                                    </div>
+                                    <div className="gh-list-sub">
+                                        <span>{relTime(r.published_at)}</span>
+                                        {r.asset_count > 0 && <span>{r.asset_count} assets</span>}
+                                        {r.downloads > 0 && <span>{r.downloads} downloads</span>}
+                                    </div>
+                                </div>
+                                <div className="gh-list-right"><UIIcon name="RightOutlined" /></div>
+                            </div>
+                        ))}
+                    </div>
+                    {list.length > 3 && (
+                        <Button type="link" size="small" style={{ marginTop: 4, paddingLeft: 0 }}
+                            onClick={() => setShowAll(!showAll)}>{showAll ? '收起' : 'All Releases（共 ' + list.length + ' 个）'}</Button>
+                    )}
+                    <ReleaseDetailDrawer release={detail} onClose={() => setDetail(null)} />
+                </div>
+            );
+        }
+        function ReleaseDetailDrawer({ release, onClose }) {
+            if (!release) return null;
+            const r = release;
+            return (
+                <Drawer open={!!release} onClose={onClose} width={480} title={r.tag_name} placement="right"
+                    footer={<Button type="primary" block icon={<UIIcon name="GithubOutlined" />} onClick={() => openGitHub(r.html_url)}>在 GitHub 查看</Button>}>
+                    <div className="gh-kv">
+                        <div className="gh-kv-item"><div className="gh-kv-label">发布时间</div><div className="gh-kv-value">{fmtDate(r.published_at)}（{relTime(r.published_at)}）</div></div>
+                        <div className="gh-kv-item"><div className="gh-kv-label">发布者</div><div className="gh-kv-value">{r.author || '—'}</div></div>
+                        <div className="gh-kv-item"><div className="gh-kv-label">Assets</div><div className="gh-kv-value">{r.asset_count}</div></div>
+                        <div className="gh-kv-item"><div className="gh-kv-label">Downloads</div><div className="gh-kv-value">{r.downloads}</div></div>
+                    </div>
+                    {r.assets && r.assets.length > 0 && (
+                        <>
+                            <div className="gh-section"><span className="gh-section-title">Assets</span></div>
+                            <div className="gh-list">
+                                {r.assets.map((a, i) => (
+                                    <div className="gh-list-item" key={i}>
+                                        <div className="gh-list-main">
+                                            <div className="gh-list-title gh-mono" style={{ fontSize: 12.5 }}>{a.name}</div>
+                                            <div className="gh-list-sub"><span>{fmtBytes(a.size)}</span><span>下载 {a.download_count}</span></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    )}
+                    <div className="gh-section"><span className="gh-section-title">Release Notes</span>
+                        {r.truncated && <span className="gh-section-count">内容过长，仅展示部分</span>}
+                    </div>
+                    {r.body
+                        ? <div className="gh-readme" dangerouslySetInnerHTML={{ __html: renderMarkdown(r.body) }} />
+                        : <Typography.Text type="secondary" style={{ fontSize: 12 }}>该版本没有填写 Release Notes</Typography.Text>}
+                </Drawer>
+            );
+        }
+
+        // ==================== GitHub Actions ====================
+        function ActionsSection({ owner, repo }) {
+            const [data, setData] = useState(null);
+            const [err, setErr] = useState(null);
+            useEffect(() => {
+                let cancelled = false;
+                ghGet(baseUrl + '/api/github/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/actions')
+                    .then(d => { if (!cancelled) setData(d); })
+                    .catch(e => { if (!cancelled) setErr(e); });
+                return () => { cancelled = true; };
+            }, [owner, repo]);
+
+            if (err) return <Alert type="warning" showIcon message="Actions 数据暂时无法获取" />;
+            if (!data) return <Skeleton active title={false} paragraph={{ rows: 3 }} />;
+
+            const wf = data.workflows || [];
+            const runs = data.runs || [];
+            if (!wf.length && !runs.length) {
+                return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No GitHub Actions" style={{ padding: '16px 0' }} />;
+            }
+            const dot = (st) => {
+                const cls = st === 'passed' ? 'gh-ci-passing' : (st === 'failed' ? 'gh-ci-failing' : (st === 'running' ? 'gh-ci-running' : ''));
+                const txt = st === 'passed' ? 'Passed' : (st === 'failed' ? 'Failed' : (st === 'running' ? 'Running' : (st === 'cancelled' ? 'Cancelled' : 'Unknown')));
+                const ic = st === 'passed' ? 'CheckCircleFilled' : (st === 'failed' ? 'CloseCircleFilled' : (st === 'running' ? 'LoadingOutlined' : 'MinusCircleFilled'));
+                return <span className={'gh-ci ' + cls}><UIIcon name={ic} />{txt}</span>;
+            };
+            return (
+                <div>
+                    {wf.length > 0 && (
+                        <div className="gh-list" style={{ marginBottom: 14 }}>
+                            {wf.map(w => (
+                                <div className="gh-list-item gh-clickable" key={w.name} onClick={() => openGitHub(w.html_url)}>
+                                    <div className="gh-list-main">
+                                        <div className="gh-list-title">{w.name}</div>
+                                        <div className="gh-list-sub">
+                                            <span className="gh-mono">{w.branch || '—'}</span>
+                                            <span className="gh-mono">{w.short_sha || '—'}</span>
+                                            <span>{relTime(w.created_at)}</span>
+                                            {w.duration_ms > 0 && <span>{fmtDuration(w.duration_ms)}</span>}
+                                        </div>
+                                    </div>
+                                    <div className="gh-list-right">{dot(w.status)}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {runs.length > 0 && (
+                        <>
+                            <div className="gh-section"><span className="gh-section-title">最近运行</span><span className="gh-section-count">最近 {runs.length} 次</span></div>
+                            <div className="gh-table-wrap">
+                                <table className="gh-table">
+                                    <thead>
+                                        <tr><th>Workflow</th><th>状态</th><th>分支</th><th>Commit</th><th>时间</th><th>耗时</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {runs.slice(0, 20).map(r => {
+                                            const st = r.status === 'in_progress' || r.status === 'queued' ? 'running'
+                                                : (r.conclusion === 'success' ? 'passed' : (r.conclusion === 'failure' || r.conclusion === 'timed_out' ? 'failed' : (r.conclusion === 'cancelled' ? 'cancelled' : 'unknown')));
+                                            return (
+                                                <tr key={r.id}>
+                                                    <td><a href={r.html_url} target="_blank" rel="noopener noreferrer">{r.name}</a></td>
+                                                    <td>{dot(st)}</td>
+                                                    <td className="gh-mono">{r.branch || '—'}</td>
+                                                    <td className="gh-mono">{r.short_sha || '—'}</td>
+                                                    <td>{relTime(r.created_at)}</td>
+                                                    <td>{fmtDuration(r.duration_ms)}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </>
+                    )}
+                </div>
+            );
+        }
+
+        // ==================== README ====================
+        const README_COLLAPSED = 3500;
+        function ReadmeSection({ state }) {
+            const [expanded, setExpanded] = useState(false);
+            if (state.readmeLoading) return <Skeleton active title={false} paragraph={{ rows: 5 }} />;
+            if (state.readmeError || !state.readme || !state.readme.content) {
+                return <Typography.Text type="secondary" style={{ fontSize: 12 }}>暂无 README 内容</Typography.Text>;
+            }
+            const raw = state.readme.content || '';
+            const clipped = !expanded && raw.length > README_COLLAPSED;
+            const shown = clipped ? githubTruncate(raw, README_COLLAPSED) : raw;
+            return (
+                <>
+                    <div className="gh-readme" dangerouslySetInnerHTML={{ __html: renderMarkdown(shown) }} />
+                    {raw.length > README_COLLAPSED && (
+                        <Button type="link" size="small" className="gh-readme-more" onClick={() => setExpanded(!expanded)}>
+                            {clipped ? '显示更多' : '收起'}
+                        </Button>
+                    )}
+                </>
+            );
+        }
+
+        // ==================== Languages ====================
+        function LanguagesSection({ owner, repo }) {
+            const [data, setData] = useState(null);
+            const [err, setErr] = useState(null);
+            useEffect(() => {
+                let cancelled = false;
+                ghGet(baseUrl + '/api/github/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/languages')
+                    .then(d => { if (!cancelled) setData(d); })
+                    .catch(e => { if (!cancelled) setErr(e); });
+                return () => { cancelled = true; };
+            }, [owner, repo]);
+            if (err) return <Typography.Text type="secondary" style={{ fontSize: 12 }}>语言分布暂时无法获取</Typography.Text>;
+            if (!data) return <Skeleton active title={false} paragraph={{ rows: 3 }} />;
+            const langs = data.languages || [];
+            if (!langs.length) return <Typography.Text type="secondary" style={{ fontSize: 12 }}>暂无语言数据</Typography.Text>;
+            return (
+                <div>
+                    {langs.slice(0, 8).map(l => (
+                        <div className="gh-langbar-item" key={l.name}>
+                            <div className="gh-langbar-head">
+                                <span className="gh-langbar-name"><span className="gh-lang-dot" style={{ background: langColor(l.name) }} />{l.name}</span>
+                                <span>{l.percent}%</span>
+                            </div>
+                            <div className="gh-langbar-track">
+                                <div className="gh-langbar-fill" style={{ width: Math.max(l.percent, 1) + '%', background: langColor(l.name), opacity: .85 }} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        // ==================== Contributors ====================
+        function ContributorsSection({ owner, repo }) {
+            const [data, setData] = useState(null);
+            const [err, setErr] = useState(null);
+            useEffect(() => {
+                let cancelled = false;
+                ghGet(baseUrl + '/api/github/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/contributors')
+                    .then(d => { if (!cancelled) setData(d); })
+                    .catch(e => { if (!cancelled) setErr(e); });
+                return () => { cancelled = true; };
+            }, [owner, repo]);
+            if (err) return <Typography.Text type="secondary" style={{ fontSize: 12 }}>贡献者数据暂时无法获取</Typography.Text>;
+            if (!data) return <Skeleton active title={false} paragraph={{ rows: 3 }} />;
+            const list = data.contributors || [];
+            if (!list.length) return <Typography.Text type="secondary" style={{ fontSize: 12 }}>暂无贡献者数据</Typography.Text>;
+            return (
+                <div>
+                    {list.map(c => (
+                        <div className="gh-contrib-row" key={c.login}>
+                            {c.avatar_url
+                                ? <img className="gh-contrib-avatar" src={c.avatar_url} alt={c.login} loading="lazy" referrerPolicy="no-referrer" />
+                                : <span className="gh-contrib-avatar" />}
+                            <span className="gh-contrib-name" title={c.login}>{c.login}</span>
+                            <span className="gh-contrib-track"><span className="gh-contrib-fill" style={{ width: Math.max(c.percent, 1) + '%' }} /></span>
+                            <span className="gh-contrib-pct">{c.percent}%</span>
+                        </div>
+                    ))}
+                    {data.rest_count > 0 && (
+                        <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)', marginTop: 4 }}>+ {data.rest_count} more</div>
+                    )}
+                </div>
+            );
+        }
+
+        // ==================== 最近活动 ====================
+        const ACTIVITY_TYPES = [
+            { label: 'All', value: 'all' },
+            { label: 'Commits', value: 'commit' },
+            { label: 'Releases', value: 'release' },
+            { label: 'Issues', value: 'issue' },
+            { label: 'Pull Requests', value: 'pull_request' },
+            { label: 'Actions', value: 'workflow' },
+        ];
+        const ACTIVITY_META = {
+            commit: { icon: 'CodeOutlined', label: 'Commit' },
+            release: { icon: 'RocketOutlined', label: 'Release' },
+            issue: { icon: 'IssueOutlined', label: 'Issue' },
+            pull_request: { icon: 'MergeCellsOutlined', label: 'Pull Request' },
+            workflow: { icon: 'ThunderboltOutlined', label: 'Workflow' },
+        };
+        function ActivitySection({ owner, repo }) {
+            const PAGE = 20;
+            const [items, setItems] = useState(null);
+            const [err, setErr] = useState(null);
+            const [hasMore, setHasMore] = useState(false);
+            const [filter, setFilter] = useState('all');
+            const [loadingMore, setLoadingMore] = useState(false);
+
+            const loadPage = useCallback((offset) => {
+                if (offset === 0) { setItems(null); setErr(null); }
+                else setLoadingMore(true);
+                return ghGet(baseUrl + '/api/github/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo) + '/activity?offset=' + offset + '&limit=' + PAGE)
+                    .then(d => {
+                        const got = d.items || [];
+                        setItems(prev => offset === 0 ? got : (prev || []).concat(got));
+                        setHasMore(!!d.has_more);
+                    })
+                    .catch(e => { if (offset === 0) setErr(e); })
+                    .finally(() => setLoadingMore(false));
+            }, [owner, repo]);
+
+            useEffect(() => { loadPage(0); }, [loadPage]);
+
+            if (err) return <Alert type="warning" showIcon message="最近活动暂时无法获取" />;
+            if (!items) return <Skeleton active title={false} paragraph={{ rows: 5 }} />;
+            if (!items.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无活动记录" style={{ padding: '16px 0' }} />;
+
+            const filtered = filter === 'all' ? items : items.filter(i => i.type === filter);
+            return (
+                <div>
+                    <div className="gh-window-seg">
+                        <Segmented size="small" value={filter} onChange={setFilter}
+                            options={ACTIVITY_TYPES.map(t => ({ label: t.label, value: t.value }))} />
+                    </div>
+                    {filtered.length === 0 ? (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选下暂无活动" style={{ padding: '16px 0' }} />
+                    ) : (
+                        <div className="gh-timeline">
+                            {filtered.map((it, i) => {
+                                const meta = ACTIVITY_META[it.type] || { icon: 'ClockCircleOutlined', label: it.type };
+                                return (
+                                    <div className="gh-tl-item" key={it.type + '-' + (it.ref || '') + '-' + i}>
+                                        <span className={'gh-tl-dot gh-tl-' + it.type} />
+                                        <div className="gh-tl-head">
+                                            <span className="gh-tl-type"><UIIcon name={meta.icon} /> {meta.label}</span>
+                                            <span className="gh-tl-time">{relTime(it.time)}</span>
+                                        </div>
+                                        <div className="gh-tl-title">
+                                            <a href={it.html_url} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>{it.title || '—'}</a>
+                                        </div>
+                                        {(it.subtitle || it.author || it.status) && (
+                                            <div className="gh-tl-sub">
+                                                {it.subtitle && <span className="gh-mono">{it.subtitle}</span>}
+                                                {it.author && <span style={{ marginLeft: it.subtitle ? 8 : 0 }}>{it.author}</span>}
+                                                {it.status && <span style={{ marginLeft: 8 }}>{it.status}</span>}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                    {hasMore && (
+                        <Button type="link" size="small" loading={loadingMore} style={{ paddingLeft: 0, marginTop: 4 }}
+                            onClick={() => loadPage(items.length)}>Load more</Button>
+                    )}
+                </div>
+            );
+        }
+
+        // ==================== 详情 Drawer ====================
+        function DetailOverview({ state, repo, stats, heat, age }) {
+            const [readmeExpanded, setReadmeExpanded] = useState(false);
+            const now = dayjs();
+            const created = repo.created_at ? dayjs(repo.created_at) : null;
+            const items = [
+                { k: 'created', label: 'Created', value: created ? created.format('YYYY-MM-DD') : '—' },
+                { k: 'age', label: 'Age', value: age && age.label ? age.label : '—' },
+                { k: 'updated', label: 'Last Update', value: relTime(repo.updated_at) },
+                { k: 'pushed', label: 'Last Push', value: relTime(repo.pushed_at) },
+                { k: 'branch', label: 'Default Branch', value: repo.default_branch || '—', mono: true },
+                { k: 'license', label: 'License', value: repo.license || '—' },
+                { k: 'lang', label: 'Language', value: repo.language || '—', lang: true },
+                { k: 'watchers', label: 'Watchers', value: repo.watchers },
+            ];
+            return (
+                <div>
+                    <div className="gh-kv">
+                        {items.map(it => (
+                            <div className="gh-kv-item" key={it.k}>
+                                <div className="gh-kv-label">{it.label}</div>
+                                <div className={'gh-kv-value' + (it.mono ? ' gh-mono' : '')}>
+                                    {it.lang ? <LangDot lang={it.value === '—' ? '' : it.value} /> : it.value}
+                                    {it.lang && it.value === '—' && '—'}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {repo.homepage && (
+                        <div className="gh-kv-item" style={{ marginTop: 12 }}>
+                            <div className="gh-kv-label">Homepage</div>
+                            <div className="gh-kv-value"><a href={repo.homepage} target="_blank" rel="noopener noreferrer">{repo.homepage}</a></div>
+                        </div>
+                    )}
+
+                    <div className="gh-section"><span className="gh-section-title">Topics</span></div>
+                    {repo.topics && repo.topics.length > 0 ? (
+                        <Space size={[6, 6]} wrap>
+                            {repo.topics.map(tp => <Tag key={tp} style={{ marginInlineEnd: 0 }}>{tp}</Tag>)}
+                        </Space>
+                    ) : (
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>No topics</Typography.Text>
+                    )}
+
+                    <div className="gh-section"><span className="gh-section-title">Languages</span></div>
+                    <LanguagesSection owner={repo.owner} repo={repo.name} />
+                </div>
+            );
+        }
+
+        function DetailDrawer({ state, onClose, isDark }) {
+            const isMobile = useIsMobile();
+            const [tab, setTab] = useState('overview');
+            const [rateLimit, setRateLimit] = useState(null);
+            const repo = state.repo;
+            const stats = state.stats;
+            const heat = state.heat;
+            const age = state.age;
+
+            useEffect(() => { setTab('overview'); setRateLimit(null); }, [repo && repo.name]);
+
+            const tabs = [
+                { key: 'overview', label: 'Overview', children: repo ? <DetailOverview state={state} repo={repo} stats={stats} heat={heat} age={age} /> : null },
+                { key: 'stars', label: 'Star 趋势', children: repo ? <StarTrendSection owner={repo.owner} repo={repo.name} isDark={isDark} onRateLimit={setRateLimit} /> : null },
+                { key: 'commits', label: 'Commit', children: repo ? <CommitSection owner={repo.owner} repo={repo.name} isDark={isDark} onRateLimit={setRateLimit} /> : null },
+                { key: 'releases', label: 'Releases', children: repo ? <ReleasesSection owner={repo.owner} repo={repo.name} onRateLimit={setRateLimit} /> : null },
+                { key: 'actions', label: 'Actions', children: repo ? <ActionsSection owner={repo.owner} repo={repo.name} /> : null },
+                { key: 'contributors', label: 'Contributors', children: repo ? <ContributorsSection owner={repo.owner} repo={repo.name} /> : null },
+                { key: 'activity', label: '最近活动', children: repo ? <ActivitySection owner={repo.owner} repo={repo.name} /> : null },
+                { key: 'readme', label: 'README', children: <ReadmeSection state={state} /> },
+            ];
+
+            return (
                 <Drawer
+                    className="gh-drawer"
                     title="项目详情"
                     placement="right"
-                    width={isMobile ? '100%' : 560}
+                    width={isMobile ? '100%' : 720}
                     open={state.open}
                     onClose={onClose}
                     destroyOnClose
@@ -402,54 +1334,69 @@
                                 disabled={!repo} onClick={() => repo && openGitHub(repo.html_url)}>打开 GitHub</Button>
                         </Space>
                     }>
-                    {state.loading && <Skeleton active title paragraph={{ rows: 6 }} />}
-                    {!state.loading && state.error && (
-                        <Alert type="error" showIcon message="暂时无法获取项目详情"
-                            description={<Typography.Text type="secondary">{state.error.code === 429 ? 'GitHub API 请求次数已达到限制，请稍后再试。' : '请稍后重试。'}</Typography.Text>} />
-                    )}
-                    {!state.loading && repo && (
-                        <>
-                            {state.stale && <Alert type="info" showIcon style={{ marginBottom: 12 }} message="数据来自缓存" />}
-                            {state.rl && !state.stale && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="GitHub API 请求次数已达到限制，请稍后再试" />}
-                            <div className="gh-profile-name" style={{ fontSize: 17 }}>
-                                {repo.name}
-                                {repo.featured && <Tag color="blue" style={{ marginInlineEnd: 0 }}>Featured</Tag>}
+                    <div className="gh-drawer-body">
+                        {state.loading && <div style={{ padding: 20 }}><Skeleton active title paragraph={{ rows: 6 }} /></div>}
+                        {!state.loading && state.error && (
+                            <div style={{ padding: 20 }}>
+                                <Alert type={state.error.code === 429 ? 'warning' : 'error'} showIcon
+                                    message={state.error.code === 429 ? 'GitHub API 请求次数已达到限制' : '暂时无法获取项目详情'}
+                                    description={<Typography.Text type="secondary">{state.error.code === 429 ? '请稍后重试，或查看缓存数据。' : '请稍后重试。'}</Typography.Text>}
+                                    action={<Button size="small" onClick={onClose}>关闭</Button>} />
                             </div>
-                            <Typography.Paragraph type="secondary" style={{ marginTop: 6, marginBottom: 0 }}>
-                                {repo.description || '暂无项目描述'}
-                            </Typography.Paragraph>
-                            <div className="gh-detail-stats">
-                                <div className="gh-stat"><div className="gh-stat-value">{repo.stars}</div><div className="gh-stat-label">Stars</div></div>
-                                <div className="gh-stat"><div className="gh-stat-value">{repo.forks}</div><div className="gh-stat-label">Forks</div></div>
-                                <div className="gh-stat"><div className="gh-stat-value">{repo.issues}</div><div className="gh-stat-label">Issues</div></div>
-                            </div>
-                            <Descriptions size="small" column={1} bordered colon>
-                                {repo.language && <Descriptions.Item label="Language"><LangDot lang={repo.language} /></Descriptions.Item>}
-                                {repo.homepage && <Descriptions.Item label="Homepage"><a href={repo.homepage} target="_blank" rel="noopener noreferrer">{repo.homepage}</a></Descriptions.Item>}
-                                <Descriptions.Item label="Default branch"><span className="gh-mono">{repo.default_branch || '—'}</span></Descriptions.Item>
-                                {repo.license && <Descriptions.Item label="License"><Tag>{repo.license}</Tag></Descriptions.Item>}
-                                <Descriptions.Item label="Created">{relTime(repo.created_at)}</Descriptions.Item>
-                                <Descriptions.Item label="Last updated">{relTime(repo.updated_at)}</Descriptions.Item>
-                                <Descriptions.Item label="Last pushed">{relTime(repo.pushed_at)}</Descriptions.Item>
-                                {repo.topics && repo.topics.length > 0 && (
-                                    <Descriptions.Item label="Topics">
-                                        <Space size={[4, 4]} wrap>{repo.topics.slice(0, 8).map(tp => <Tag key={tp}>{tp}</Tag>)}</Space>
-                                    </Descriptions.Item>
-                                )}
-                                <Descriptions.Item label="Repository">
-                                    <a href={repo.html_url} target="_blank" rel="noopener noreferrer">{repo.html_url}</a>
-                                </Descriptions.Item>
-                            </Descriptions>
-                            <div className="gh-section"><span className="gh-section-title">README</span>
-                                {readme && readme.truncated && <span className="gh-section-count">内容过长，仅展示部分内容</span>}
-                            </div>
-                            {readmeBody}
-                        </>
-                    )}
+                        )}
+                        {!state.loading && repo && (
+                            <>
+                                <div className="gh-detail-head">
+                                    <div className="gh-detail-title">
+                                        {repo.name}
+                                        {repo.featured && <Tag color="blue" style={{ marginInlineEnd: 0 }}>Featured</Tag>}
+                                        {heat && <HeatBadge score={heat.score} level={heat.level} />}
+                                        {state.ci && <CIStatusBadge ci={state.ci} />}
+                                    </div>
+                                    <div className="gh-detail-desc">{repo.description || '暂无项目描述'}</div>
+
+                                    {state.stale && <Alert type="info" showIcon style={{ marginTop: 10, padding: '3px 8px' }} message="数据来自缓存" />}
+                                    {rateLimit && rateLimit.limited && (
+                                        <Alert type="warning" showIcon style={{ marginTop: 10, padding: '3px 8px' }}
+                                            message={'GitHub API 限制' + (rateLimit.remaining !== undefined ? ('（剩余 ' + rateLimit.remaining + ' 次请求' + (rateLimit.reset_in ? '，预计 ' + rateLimit.reset_in + ' 后重置' : '') + '）') : '')} />
+                                    )}
+
+                                    {/* Stats Grid：紧凑，不做 8 个大卡 */}
+                                    {stats && (
+                                        <div className="gh-stats-grid" style={{ marginTop: 12 }}>
+                                            <StatItem icon="StarOutlined" label="Stars" value={statValue(stats.stars)} />
+                                            <StatItem icon="ForkOutlined" label="Forks" value={statValue(stats.forks)} />
+                                            <StatItem icon="IssueOutlined" label="Issues" value={statValue(stats.issues)} />
+                                            <StatItem icon="PullRequestOutlined" label="PR" value={statValue(stats.pull_requests)} />
+                                            <StatItem icon="CodeOutlined" label="Commits / 30d" value={statValue(stats.commits_30d)} />
+                                            <StatItem icon="RocketOutlined" label="Releases" value={statValue(stats.releases)} />
+                                            <StatItem icon="TeamOutlined" label="Contributors" value={statValue(stats.contributors)} />
+                                            <StatItem icon="FireOutlined" label="Heat" value={heat ? heat.score : statValue(stats.heat_score)}
+                                                sub={heat ? (HEAT_LABEL[heat.level] || '') : ''}
+                                                tooltip={heat && heat.parts ? (
+                                                    <div style={{ fontSize: 12 }}>
+                                                        <div style={{ marginBottom: 4 }}>热度构成（近期行为权重更高）</div>
+                                                        {heat.parts.map(p => (
+                                                            <div key={p.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                                                                <span>{p.label}</span>
+                                                                <span>{Math.round(p.score)} / 100 × {p.weight}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : null} />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="gh-drawer-tabs">
+                                    <Tabs activeKey={tab} onChange={setTab} items={tabs.map(t => ({ key: t.key, label: t.label, children: t.children }))} />
+                                </div>
+                            </>
+                        )}
+                    </div>
                 </Drawer>
             );
         }
-        function githubTruncate(s, n) { return String(s || '').slice(0, n) + '…'; }
 
         // ==================== 主应用 ====================
         function App() {
@@ -460,16 +1407,17 @@
             const [profile, setProfile] = useState(null);
             const [repos, setRepos] = useState(null);
             const [flags, setFlags] = useState({ stale: false, rl: false });
+            const [rateLimit, setRateLimit] = useState(null);
             const [reposError, setReposError] = useState(null);
             const [profileError, setProfileError] = useState(null);
             const [loading, setLoading] = useState(true);
-            const [tick, setTick] = useState(0); // 相对时间随刷新更新
+            const [, setTick] = useState(0); // 相对时间随刷新更新
 
             const [q, setQ] = useState('');
             const [lang, setLang] = useState('全部');
             const [sortKey, setSortKey] = useState('pushed');
 
-            const [detail, setDetail] = useState({ open: false, loading: false, error: null, repo: null, stale: false, rl: false, readmeLoading: false, readmeError: false, readme: null });
+            const [detail, setDetail] = useState({ open: false, loading: false, error: null, repo: null, stats: null, heat: null, age: null, ci: null, stale: false, rl: false, readmeLoading: false, readmeError: false, readme: null });
 
             const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
 
@@ -490,7 +1438,7 @@
             }, [isDark]);
 
             const load = useCallback(() => {
-                setLoading(true); setReposError(null); setProfileError(null);
+                setLoading(true); setReposError(null); setProfileError(null); setRateLimit(null);
                 const pf = ghGet(baseUrl + '/api/github/profile')
                     .then(d => { setProfile(d.profile); setFlags(f => ({ ...f, stale: f.stale || d.stale, rl: f.rl || d.rate_limited })); })
                     .catch(e => setProfileError(e));
@@ -525,18 +1473,18 @@
                 list = list.slice().sort((a, b) => {
                     if (sortKey === 'stars') return (b.stars || 0) - (a.stars || 0);
                     if (sortKey === 'forks') return (b.forks || 0) - (a.forks || 0);
+                    if (sortKey === 'heat') return (b.heat_score || 0) - (a.heat_score || 0);
                     if (sortKey === 'name') return (a.name || '').localeCompare(b.name || '');
                     return (b.pushed_at || b.updated_at || '').localeCompare(a.pushed_at || a.updated_at || '');
                 });
                 return list;
-            }, [repos, q, lang, sortKey, tick]);
+            }, [repos, q, lang, sortKey]);
 
             const featuredList = useMemo(() => {
                 if (!repos) return [];
                 const active = q.trim() !== '' || lang !== '全部';
                 if (active) return [];
-                const f = repos.filter(r => r.featured);
-                return f.length ? f : [];
+                return repos.filter(r => r.featured);
             }, [repos, q, lang]);
 
             // Featured 区已展示的项目不再重复出现在 All Projects 列表中
@@ -544,12 +1492,17 @@
                 featuredList.length ? filtered.filter(r => !r.featured) : filtered
             ), [filtered, featuredList]);
 
+            // 打开详情：第一阶段拉聚合详情（repo + stats + heat + age + CI），第二阶段按需拉 README
             const openDetail = (repo) => {
-                setDetail({ open: true, loading: true, error: null, repo: null, stale: false, rl: false, readmeLoading: true, readmeError: false, readme: null });
-                ghGet(baseUrl + '/api/github/repos/' + encodeURIComponent(repo.owner || '') + '/' + encodeURIComponent(repo.name || ''))
-                    .then(d => setDetail(s => ({ ...s, loading: false, repo: d.repo, stale: d.stale, rl: d.rate_limited })))
+                setDetail({ open: true, loading: true, error: null, repo: null, stats: null, heat: null, age: null, ci: null, stale: false, rl: false, readmeLoading: true, readmeError: false, readme: null });
+                const base = baseUrl + '/api/github/repos/' + encodeURIComponent(repo.owner || '') + '/' + encodeURIComponent(repo.name || '');
+                ghGet(base + '/detail')
+                    .then(d => setDetail(s => ({
+                        ...s, loading: false, repo: d.repo, stats: d.stats, heat: d.heat, age: d.age,
+                        ci: d.ci, stale: d.stale || false, rl: d.rate_limited || false,
+                    })))
                     .catch(e => setDetail(s => ({ ...s, loading: false, error: e })));
-                ghGet(baseUrl + '/api/github/repos/' + encodeURIComponent(repo.owner || '') + '/' + encodeURIComponent(repo.name || '') + '/readme')
+                ghGet(base + '/readme')
                     .then(d => setDetail(s => ({ ...s, readmeLoading: false, readme: d.readme, readmeError: false })))
                     .catch(() => setDetail(s => ({ ...s, readmeLoading: false, readmeError: true })));
             };
@@ -572,7 +1525,6 @@
                 );
             }
 
-            const filterActive = q.trim() !== '' || lang !== '全部';
             const banner = flags.rl
                 ? { type: 'warning', msg: flags.stale ? 'GitHub API 请求次数已达到限制，请稍后再试。当前展示的是缓存数据。' : 'GitHub API 请求次数已达到限制，请稍后再试。' }
                 : (flags.stale ? { type: 'info', msg: '数据来自缓存' } : null);
@@ -629,6 +1581,10 @@
 
                         {/* 状态提示 */}
                         {banner && !loading && <Alert type={banner.type} showIcon style={{ marginBottom: 12 }} message={banner.msg} />}
+                        {rateLimit && rateLimit.limited && (
+                            <Alert type="warning" showIcon style={{ marginBottom: 12 }}
+                                message={'GitHub API 限制' + (rateLimit.remaining !== undefined ? ('（剩余 ' + rateLimit.remaining + ' 次请求' + (rateLimit.reset_in ? '，预计 ' + rateLimit.reset_in + ' 后重置' : '') + '）') : '')} />
+                        )}
                         {failed && (
                             <Alert type="error" showIcon style={{ marginBottom: 12 }} message="暂时无法获取 GitHub 项目"
                                 description={<Typography.Text type="secondary">{reposError && reposError.code === 429 ? 'GitHub API 请求次数已达到限制，请稍后再试。' : '请检查网络后重试。'}</Typography.Text>}
@@ -659,6 +1615,7 @@
                                 options={[
                                     { value: 'pushed', label: '最近更新' },
                                     { value: 'stars', label: 'Star 最多' },
+                                    { value: 'heat', label: '热度最高' },
                                     { value: 'forks', label: 'Fork 最多' },
                                     { value: 'name', label: '按名称' },
                                 ]} />
@@ -675,7 +1632,7 @@
                         )}
                     </div>
 
-                    <DetailDrawer state={detail} onClose={() => setDetail(s => ({ ...s, open: false }))} />
+                    <DetailDrawer state={detail} isDark={isDark} onClose={() => setDetail(s => ({ ...s, open: false }))} />
                 </ConfigProvider>
             );
         }

@@ -6214,6 +6214,16 @@ func main() {
 	http.HandleFunc("GET /api/github/overview", authMiddleware(requirePermission("github:view", securityMiddleware(githubOverviewHandler))))
 	http.HandleFunc("GET /api/github/repos/{owner}/{repo}", authMiddleware(requirePermission("github:view", securityMiddleware(githubRepoDetailHandler))))
 	http.HandleFunc("GET /api/github/repos/{owner}/{repo}/readme", authMiddleware(requirePermission("github:view", securityMiddleware(githubReadmeHandler))))
+	// GitHub Developer Dashboard 扩展（聚合详情 / Star 趋势 / 提交 / 发布 / Actions / 语言 / 贡献者 / 最近活动）
+	http.HandleFunc("GET /api/github/repos/{owner}/{repo}/detail", authMiddleware(requirePermission("github:view", securityMiddleware(githubDetailHandler))))
+	http.HandleFunc("GET /api/github/repos/{owner}/{repo}/stars", authMiddleware(requirePermission("github:view", securityMiddleware(githubStarsHandler))))
+	http.HandleFunc("GET /api/github/repos/{owner}/{repo}/commits", authMiddleware(requirePermission("github:view", securityMiddleware(githubCommitsHandler))))
+	http.HandleFunc("GET /api/github/repos/{owner}/{repo}/commits/{sha}", authMiddleware(requirePermission("github:view", securityMiddleware(githubCommitDetailHandler))))
+	http.HandleFunc("GET /api/github/repos/{owner}/{repo}/releases", authMiddleware(requirePermission("github:view", securityMiddleware(githubReleasesHandler))))
+	http.HandleFunc("GET /api/github/repos/{owner}/{repo}/actions", authMiddleware(requirePermission("github:view", securityMiddleware(githubActionsHandler))))
+	http.HandleFunc("GET /api/github/repos/{owner}/{repo}/languages", authMiddleware(requirePermission("github:view", securityMiddleware(githubLanguagesHandler))))
+	http.HandleFunc("GET /api/github/repos/{owner}/{repo}/contributors", authMiddleware(requirePermission("github:view", securityMiddleware(githubContributorsHandler))))
+	http.HandleFunc("GET /api/github/repos/{owner}/{repo}/activity", authMiddleware(requirePermission("github:view", securityMiddleware(githubActivityHandler))))
 
 	// 密钥配置健康提示（不输出实际密钥值）
 	if os.Getenv("SERVER_STATUS_SIGNING_KEY") == "" {
