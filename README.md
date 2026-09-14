@@ -1,6 +1,6 @@
 # server-status
 
-基于 Go 的轻量级服务器监控与运维面板：实时状态监控、Web 终端、文件管理、RBAC 权限，外加一个完全隐藏的私人数字空间。单二进制部署，自带 HTTPS，前端模板随版本分发、更新无需重启。
+基于 Go 的轻量级服务器监控与运维面板：实时状态监控、Web 终端、文件管理、安全中心、GitHub 项目展示、RBAC 权限，外加一个完全隐藏的私人数字空间。单二进制部署，自带 HTTPS，前端模板随版本分发、更新无需重启。
 
 ## 功能特性
 
@@ -11,6 +11,7 @@
 - 📁 **文件管理**：浏览 / 上传 / 新建目录 / 删除，移动端卡片视图，TS 直录流播放
 - 🎥 **媒体服务**：随机图片 / 视频、EPUB 电子书在线阅读
 - 🔑 **授权下载**：下载令牌签发 / 撤销，配额与有效期控制，支持粘贴链接自动解析
+- 🐙 **GitHub 项目展示**：服务端代理 GitHub 公开 API，项目卡片 / 详情 / README 与 Star 趋势，浏览器不直连 GitHub、Token 不下发前端
 - 🚀 **Trojan-Go 监控**：状态 / 在线用户 / 实时流量，用户增删改、限速与 IP 限额，用户档案跨重启持久化（可选功能，见 [TROJAN.md](TROJAN.md)）
 - 🔒 **隐藏私人空间**：普通界面完全无入口；手记 + 图片 + 定位 + 语音 + 卡片生成与加密分享（见下文）
 - 🛡️ **RBAC 权限**：用户 / 角色 / 权限三级管理，接口级细粒度控制
@@ -129,10 +130,12 @@ openssl rand -hex 32
 ├── tls/                   # cert.pem / key.pem
 ├── media/                 # 媒体文件（.jpg .png .jpeg .mp4 .webm 与 EPUB）
 ├── log/                   # 运行日志
-├── config.json            # Trojan-Go 监控配置（可选功能）
+├── config.json            # Trojan-Go 监控 / GitHub 项目展示配置（可选功能）
 ├── private_notes.json     # 私人空间功能配置
 ├── users.json / rbac.json / download_tokens.json / server_data.json   # 运行数据（AES-GCM 加密落盘，0600）
-└── private_notes.db       # 私人空间 SQLite 数据库
+├── private_notes.db       # 私人空间 SQLite 数据库
+├── github_data.db         # GitHub Star 历史快照（SQLite）
+└── ops_center.db          # 安全中心 / 运维任务 SQLite 数据库
 ```
 
 ### TLS 证书
@@ -183,6 +186,49 @@ SERVER_STATUS_EXTRA_ORIGINS=<旧额外跨域来源，逗号分隔>
 - Shell 密码初始化：登录后调用 `POST /api/shell/setup-password`，或配置 `SHELL_PASSWORD_HASH`
 - 改密后自动撤销全部旧认证与运行中的本人 Shell
 
+## GitHub 项目展示
+
+把指定用户的 GitHub 公开项目搬进面板：首页轻量概览（featured 优先，其余按 Star / 最近更新补足）、独立项目页（搜索、按 Star / 更新时间排序、语言与话题筛选）、点开抽屉看仓库详情与 README，并记录每日 Star 快照形成趋势。
+
+**数据不直连前端**：浏览器只访问本服务的 `/api/github/*`，由后端代理 GitHub 公开 API 并转换为自定义 DTO（不透传原始 JSON）。令牌仅后端持有，不落日志、不出现在任何响应里。
+
+- **缓存优先**：命中未过期缓存直接返回；过期后用上次的 `ETag` 发条件请求，GitHub 返回 304 时数据未变且**不消耗速率配额**，直接用旧数据续命
+- **失败降级**：请求失败优先回旧缓存（响应标记 `stale`），完全无数据才报错；失败后进入 30 秒冷却（限流 60 秒），避免每次刷新都穿透到 GitHub
+- **并发去重**：同一 key 的并发请求合并为一次上游调用
+- **Star 趋势**：每日一次快照存入 SQLite（`github_data.db`），重启不丢历史；采集复用仓库列表缓存，不额外消耗配额
+- **安全边界**：`owner` 仅允许配置中的用户（杜绝任意 URL 代理 / SSRF），仓库名按 GitHub 合法命名白名单校验，越界一律按「不存在」处理，不泄露配置边界；上游错误细节不透出，只给友好提示
+
+### 配置
+
+写在数据目录 `config.json` 的 `github` 段（`enabled=false` 即可整段关闭），也可用环境变量覆盖：
+
+| 键 | 环境变量 | 默认 | 说明 |
+|---|---|---|---|
+| `enabled` | `SERVER_STATUS_GITHUB_ENABLED` | `true` | 是否启用该功能 |
+| `username` | `SERVER_STATUS_GITHUB_USERNAME` | `Xiaoxusheng` | 展示哪个用户的公开项目 |
+| `token` | `SERVER_STATUS_GITHUB_TOKEN` | 空 | GitHub Token，填了可显著提高速率配额（**仅后端使用**） |
+| `cache_ttl` | — | `1800` | 秒；profile / README 缓存时长（限 1 分钟 ~ 6 小时），仓库列表固定 10 分钟 |
+| `repo_limit` | — | `100` | 拉取仓库数上限（1 ~ 1000） |
+| `show_forks` / `show_archived` | — | `false` | 是否展示 fork / 已归档仓库 |
+| `featured` | — | `[]` | 精选项目名列表，按配置顺序排在项目页与首页概览最前 |
+
+```json
+{
+  "github": {
+    "enabled": true,
+    "username": "你的用户名",
+    "token": "",
+    "cache_ttl": 1800,
+    "repo_limit": 100,
+    "show_forks": false,
+    "show_archived": false,
+    "featured": ["server-status", "go-auto-uploader"]
+  }
+}
+```
+
+> 页面与全部接口均要求 `github:view` 权限；内置 `operator` / `user` 角色已默认放开，可在 `/rbac.html` 调整。
+
 ## API 概览
 
 所有 `/api/` 接口需登录会话（HttpOnly + Secure + SameSite Cookie）；写操作额外要求 `X-CSRF-Token` 请求头（来自登录会话绑定的 `csrf_token` Cookie，Double-Submit 模式）。
@@ -199,6 +245,7 @@ SERVER_STATUS_EXTRA_ORIGINS=<旧额外跨域来源，逗号分隔>
 | 下载令牌 | `POST /generate-download-token`、`GET /download?token_id=&token=&file=` | `token:issue` / `token:view` |
 | 令牌撤销 | `POST /revoke-download-token` | `token:revoke` 或令牌属主本人 |
 | IP 管理 | `GET /api/ip/blocked`、`POST /api/ip/block`、`POST /api/ip/whitelist` | `ip:manage` |
+| GitHub 项目 | `GET /api/github/profile`、`GET /api/github/repos`、`GET /api/github/overview`、`GET /api/github/repos/{owner}/{repo}`（含 `/readme`） | `github:view` |
 | RBAC | `GET/POST/PUT/DELETE /api/rbac/roles`、`/api/rbac/users` | `role:manage` / `user:manage` |
 
 上传禁止可执行 / 脚本 / 网页类扩展名；下载令牌在校验时同时校验所属账号仍具备 `files:download` 权限，权限收回令牌立即失效。
@@ -218,6 +265,7 @@ SERVER_STATUS_EXTRA_ORIGINS=<旧额外跨域来源，逗号分隔>
 | `ip:manage` | IP 封禁 / 白名单 | `user:view` / `user:manage` | 用户查看 / 管理 |
 | `files:view` | 查看媒体内容 | `role:manage` | 角色与权限管理 |
 | `files:download` | 通过令牌下载文件 | `private:view` | 访问隐藏私人空间（默认仅 admin） |
+| `github:view` | 查看 GitHub 项目展示（默认对 operator / user 开放） | | |
 
 ## 安全特性
 
@@ -257,6 +305,7 @@ go test ./...
 - [shirou/gopsutil](https://github.com/shirou/gopsutil) - 系统监控
 - [golang.org/x/crypto](https://golang.org/x/crypto) - bcrypt
 - [creack/pty](https://github.com/creack/pty) - 伪终端（Web Shell）
+- [modernc.org/sqlite](https://gitlab.com/cznic/sqlite) - 纯 Go SQLite（私人空间 / 安全中心 / GitHub 快照）
 
 ## 许可证
 

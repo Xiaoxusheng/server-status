@@ -817,6 +817,7 @@
             // 安全中心 / 运维任务状态摘要（挂载时一次，克制展示）
             const [secOverview, setSecOverview] = useState(null);
             const [taskStats, setTaskStats] = useState(null);
+            const [ghOverview, setGhOverview] = useState(null);
 
             const hasPerm = p => (user.permissions || []).some(x => x === '*' || x === p);
 
@@ -837,6 +838,12 @@
                 if (hasPerm('task:view')) {
                     secureFetch('/api/task/stats').then(r => r.json())
                         .then(d => { if (d.code === 200) setTaskStats(d.data); })
+                        .catch(() => { });
+                }
+                // GitHub 项目概览：仅挂载时加载一次（后端缓存优先，403 时静默忽略）
+                if (hasPerm('github:view')) {
+                    secureFetch('/api/github/overview?limit=3').then(r => r.json())
+                        .then(d => { if (d.code === 200) setGhOverview(d.data); })
                         .catch(() => { });
                 }
             }, []);
@@ -985,6 +992,7 @@
             navBtns.push(<Button key="ip" icon={<UIIcon name="GlobalOutlined" />} onClick={() => window.location.href = 'ip-panel.html'}>IP 流量</Button>);
             if (hasPerm('service:view') || hasPerm('port:view')) navBtns.push(<Button key="services" icon={<UIIcon name="AppstoreOutlined" />} onClick={() => window.location.href = 'services.html'}>服务端口</Button>);
             if (hasPerm('docker:view') || hasPerm('docker:manage')) navBtns.push(<Button key="docker" icon={<UIIcon name="DockerOutlined" />} onClick={() => window.location.href = 'docker.html'}>Docker</Button>);
+            if (hasPerm('github:view')) navBtns.push(<Button key="github" icon={<UIIcon name="GithubOutlined" />} onClick={() => window.location.href = 'github.html'}>GitHub 项目</Button>);
             if (hasPerm('trojan:view') || hasPerm('trojan:manage')) navBtns.push(<Button key="trojan" icon={<UIIcon name="ApiOutlined" />} onClick={() => window.location.href = '/trojan'}>Trojan-Go</Button>);
             if (hasPerm('shell:use')) navBtns.push(<Button key="shell" icon={<UIIcon name="CodeOutlined" />} onClick={() => window.location.href = 'shell.html'}>Web Shell</Button>);
             if (hasPerm('files:manage')) navBtns.push(<Button key="files" icon={<UIIcon name="FolderOutlined" />} onClick={() => window.location.href = 'files.html'}>文件管理</Button>);
@@ -1101,6 +1109,28 @@
                                             </div>
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {/* GitHub 项目轻量概览：最多 3 个（featured 优先），点击进入 GitHub 项目页 */}
+                            {ghOverview && ghOverview.repos && ghOverview.repos.length > 0 && (
+                                <div className="mini-grid" style={{ gridTemplateColumns: '1fr' }}>
+                                    <div className="mini-stat ms-tall" style={{ cursor: 'pointer' }} onClick={() => window.location.href = 'github.html'}>
+                                        <div className="ms-label"><UIIcon name="GithubOutlined" />GitHub 项目</div>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                                            {ghOverview.repos.map(r => (
+                                                <span key={r.id} style={{
+                                                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                                                    border: '1px solid var(--color-border)', borderRadius: 6,
+                                                    padding: '3px 10px', fontSize: 12.5, color: 'var(--color-text)',
+                                                }}>
+                                                    {r.name}
+                                                    <span style={{ color: 'var(--color-text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>★ {r.stars}</span>
+                                                </span>
+                                            ))}
+                                            <span style={{ fontSize: 12.5, color: 'var(--color-primary)', alignSelf: 'center' }}>查看全部 →</span>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 

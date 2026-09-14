@@ -72,7 +72,7 @@ var (
 	tlsCertFile = getEnvOr("SERVER_STATUS_TLS_CERT", filepath.Join(dataRoot(), "tls", "cert.pem")) // TLS 证书文件路径
 	tlsKeyFile  = getEnvOr("SERVER_STATUS_TLS_KEY", filepath.Join(dataRoot(), "tls", "key.pem"))   // TLS 私钥文件路径
 	tlsDomain   = getEnvOr("SERVER_STATUS_DOMAIN", "localhost")                                    // 证书绑定的主域名（SNI / 跨域白名单用）
-	listenAddr  = getEnvOr("SERVER_STATUS_LISTEN_ADDR", ":9000") // HTTPS 监听地址
+	listenAddr  = getEnvOr("SERVER_STATUS_LISTEN_ADDR", ":9000")                                   // HTTPS 监听地址
 	// 下载令牌配置
 	downloadTokenExpiry = 30 * time.Minute                                  // 下载令牌有效期
 	downloadLimitBytes  = 3 * 1024 * 1024 * 1024                            // 下载限制
@@ -238,6 +238,7 @@ var allPermissions = []PermissionDef{
 	{Key: "task:manage", Name: "管理运维任务", Group: "运维", Description: "创建、修改、启用/停用运维任务"},
 	{Key: "task:execute", Name: "执行运维任务", Group: "运维", Description: "立即执行 / 取消运维任务（动作仅限白名单）"},
 	{Key: "task:delete", Name: "删除运维任务", Group: "运维", Description: "删除运维任务定义（高危）"},
+	{Key: "github:view", Name: "查看 GitHub 项目", Group: "系统", Description: "查看配置用户的 GitHub 公开项目、详情与 README"},
 }
 
 // defaultRoles 返回系统内置的默认角色
@@ -300,6 +301,20 @@ func ensureDefaultRoles() {
 		for _, need := range []string{"security:view", "security:scan", "remediation:view", "task:view"} {
 			if !permSet[need] {
 				role.Permissions = append(role.Permissions, need)
+				changed = true
+			}
+		}
+	}
+
+	// 一次性迁移：GitHub 项目展示为只读功能，向 operator 与 user 内置角色开放
+	for _, roleID := range []string{"operator", "user"} {
+		if role, ok := rbacManager.Roles[roleID]; ok && role != nil {
+			permSet := make(map[string]bool, len(role.Permissions))
+			for _, p := range role.Permissions {
+				permSet[p] = true
+			}
+			if !permSet["github:view"] {
+				role.Permissions = append(role.Permissions, "github:view")
 				changed = true
 			}
 		}
@@ -5912,6 +5927,9 @@ func main() {
 	initOpsCenter()
 	taskScheduler.Start(opsStore)
 
+	// GitHub 项目展示：后台采集器每日记录一次 Star 快照（功能未启用时自动空转）
+	go githubCollectorLoop()
+
 	// 确保在程序退出时停止速率限制器的清理goroutine
 	defer globalRateLimiter.Stop()
 
@@ -6188,6 +6206,14 @@ func main() {
 	http.HandleFunc("GET /api/task/templates", authMiddleware(requirePermission("task:view", securityMiddleware(taskTemplatesHandler))))
 	http.HandleFunc("GET /api/task/stats", authMiddleware(requirePermission("task:view", securityMiddleware(taskStatsHandler))))
 
+	// ==================== GitHub 项目展示 ====================
+	// 只读代理 GitHub 公开 API（缓存优先）；页面与数据均需 github:view 权限
+	http.HandleFunc("/github", authMiddleware(requirePermission("github:view", securityMiddleware(githubPageHandler))))
+	http.HandleFunc("GET /api/github/profile", authMiddleware(requirePermission("github:view", securityMiddleware(githubProfileHandler))))
+	http.HandleFunc("GET /api/github/repos", authMiddleware(requirePermission("github:view", securityMiddleware(githubReposHandler))))
+	http.HandleFunc("GET /api/github/overview", authMiddleware(requirePermission("github:view", securityMiddleware(githubOverviewHandler))))
+	http.HandleFunc("GET /api/github/repos/{owner}/{repo}", authMiddleware(requirePermission("github:view", securityMiddleware(githubRepoDetailHandler))))
+	http.HandleFunc("GET /api/github/repos/{owner}/{repo}/readme", authMiddleware(requirePermission("github:view", securityMiddleware(githubReadmeHandler))))
 
 	// 密钥配置健康提示（不输出实际密钥值）
 	if os.Getenv("SERVER_STATUS_SIGNING_KEY") == "" {

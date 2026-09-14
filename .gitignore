@@ -68,3 +68,6 @@ deploy/**
 # IDE / 本地 AI 工具配置（.idea 为 JetBrains 工程配置，.trae 为 Trae 本地技能，均与项目无关）
 .idea/
 .trae/
+
+# 本地 agent 工作目录
+.agent/

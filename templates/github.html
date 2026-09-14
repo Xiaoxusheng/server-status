@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="robots" content="noindex,nofollow">
+    <title>GitHub 项目 - Server Status</title>
+    <link rel="icon"
+        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-24-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-36%2035.7-63.5s26.9-44.2%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="stylesheet" href="/ui.css">
+    <style>
+        #root { min-height: 100vh; }
+        .sec-topbar {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; height: 52px;
+            background: var(--color-surface); border-bottom: 1px solid var(--color-border);
+        }
+        .tb-page { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--color-text); white-space: nowrap; }
+        .tb-page .anticon { color: var(--color-primary); }
+        .tb-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+        .tb-nav::-webkit-scrollbar { display: none; }
+        .tb-actions { display: flex; align-items: center; gap: 8px; margin-left: 8px; flex: 0 0 auto; }
+        .sec-wrap { padding: 16px 24px 64px; max-width: 1280px; margin: 0 auto; width: 100%; }
+
+        /* ---- Profile 头部：单面板块，不做多层卡片 ---- */
+        .gh-profile {
+            display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+            background: var(--color-surface); border: 1px solid var(--color-border);
+            border-radius: var(--radius-xl); padding: 18px 20px; margin-bottom: 16px;
+        }
+        .gh-avatar {
+            width: 64px; height: 64px; border-radius: 50%; flex: 0 0 64px;
+            border: 1px solid var(--color-border); object-fit: cover; background: var(--color-bg);
+        }
+        .gh-profile-info { min-width: 200px; flex: 1 1 220px; }
+        .gh-profile-name { font-size: 18px; font-weight: 600; color: var(--color-text); line-height: 1.3; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .gh-profile-bio { font-size: 13px; color: var(--color-text-secondary); margin-top: 2px; }
+        .gh-profile-link { font-size: 12.5px; margin-top: 4px; display: inline-flex; align-items: center; gap: 4px; }
+        .gh-stats { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+        .gh-stat .gh-stat-value { font-size: 20px; font-weight: 600; color: var(--color-text); font-variant-numeric: tabular-nums; line-height: 1.2; }
+        .gh-stat .gh-stat-label { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
+
+        /* ---- 区块标题 ---- */
+        .gh-section { margin: 18px 0 10px; display: flex; align-items: baseline; gap: 8px; }
+        .gh-section .gh-section-title { font-size: 15px; font-weight: 600; color: var(--color-text); }
+        .gh-section .gh-section-count { font-size: 12px; color: var(--color-text-tertiary); }
+
+        /* ---- 工具栏 ---- */
+        .gh-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+        .gh-toolbar .gh-search { width: 240px; }
+        .gh-toolbar .gh-select { min-width: 130px; }
+
+        /* ---- 项目网格：桌面 3 列 / 平板 2 列 / 手机 1 列 ---- */
+        .gh-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+        @media (max-width: 1199px) { .gh-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 767px) { .gh-grid { grid-template-columns: 1fr; } }
+
+        /* ---- 项目卡片 ---- */
+        .gh-card {
+            display: flex; flex-direction: column; gap: 8px; cursor: pointer;
+            background: var(--color-surface); border: 1px solid var(--color-border);
+            border-radius: var(--radius); padding: 14px 16px 12px;
+            transition: transform .18s ease-out, border-color .18s ease-out, box-shadow .18s ease-out;
+        }
+        @media (hover: hover) {
+            .gh-card:hover {
+                transform: translateY(-2px);
+                border-color: var(--color-primary);
+                box-shadow: var(--shadow-overlay);
+            }
+            .gh-card:hover .gh-card-name { color: var(--color-primary); }
+            .gh-card:hover .gh-card-glyph { color: var(--color-primary); }
+        }
+        .gh-card-head { display: flex; align-items: center; gap: 8px; }
+        .gh-card-name { font-size: 15px; font-weight: 600; color: var(--color-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: color .18s ease-out; }
+        .gh-card-glyph { margin-left: auto; color: var(--color-text-tertiary); font-size: 14px; transition: color .18s ease-out; flex: 0 0 auto; }
+        .gh-card-desc {
+            font-size: 13px; color: var(--color-text-secondary); line-height: 1.55; min-height: 20px;
+            display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+        }
+        .gh-card-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--color-text-tertiary); }
+        .gh-lang { display: inline-flex; align-items: center; gap: 5px; }
+        .gh-lang-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; opacity: .85; }
+        .gh-card-meta .gh-meta-item { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+        .gh-card-foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 2px; }
+        .gh-card-updated { font-size: 12px; color: var(--color-text-tertiary); }
+        .gh-card-foot .ant-btn { margin-left: auto; }
+
+        /* ---- Drawer 内 README ---- */
+        .gh-detail-stats { display: flex; gap: 24px; flex-wrap: wrap; margin: 12px 0; }
+        .gh-detail-stats .gh-stat .gh-stat-value { font-size: 18px; }
+        .gh-readme {
+            border: 1px solid var(--color-border); border-radius: var(--radius);
+            padding: 12px 14px; background: var(--color-bg); font-size: 13px;
+            color: var(--color-text-secondary); line-height: 1.7; overflow-wrap: break-word;
+        }
+        .gh-readme h1, .gh-readme h2, .gh-readme h3, .gh-readme h4 {
+            color: var(--color-text); font-weight: 600; margin: 14px 0 8px; line-height: 1.35;
+        }
+        .gh-readme h1:first-child, .gh-readme h2:first-child, .gh-readme h3:first-child { margin-top: 0; }
+        .gh-readme h1 { font-size: 18px; } .gh-readme h2 { font-size: 16px; }
+        .gh-readme h3 { font-size: 14.5px; } .gh-readme h4 { font-size: 13.5px; }
+        .gh-readme p { margin: 6px 0; }
+        .gh-readme a { color: var(--color-primary); text-decoration: none; }
+        .gh-readme a:hover { color: var(--color-primary-hover); text-decoration: underline; }
+        .gh-readme code {
+            font-family: "JetBrains Mono", Consolas, "Courier New", monospace; font-size: 12px;
+            background: var(--hover); border: 1px solid var(--color-border);
+            border-radius: 4px; padding: 1px 5px; color: var(--color-text);
+        }
+        .gh-readme pre { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 10px 12px; overflow-x: auto; }
+        .gh-readme pre code { background: none; border: none; padding: 0; }
+        .gh-readme blockquote { margin: 8px 0; padding: 2px 12px; border-left: 3px solid var(--color-border-strong); color: var(--color-text-tertiary); }
+        .gh-readme ul, .gh-readme ol { margin: 6px 0; padding-left: 22px; }
+        .gh-readme img { max-width: 100%; height: auto; border-radius: var(--radius-sm); }
+        .gh-readme table { border-collapse: collapse; margin: 8px 0; width: 100%; font-size: 12.5px; }
+        .gh-readme th, .gh-readme td { border: 1px solid var(--color-border); padding: 4px 10px; text-align: left; }
+        .gh-readme th { background: var(--hover); color: var(--color-text); }
+        .gh-readme hr { border: none; border-top: 1px solid var(--color-border); margin: 12px 0; }
+        .gh-readme-more { margin-top: 6px; }
+        .gh-mono { font-family: "JetBrains Mono", Consolas, "Courier New", monospace; font-size: 12px; }
+
+        @media (max-width: 768px) {
+            .sec-wrap { padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
+            .sec-topbar { padding: 0 12px; }
+            .sec-topbar .tb-text { display: none; }
+            .gh-profile { padding: 14px; gap: 12px; }
+            .gh-avatar { width: 52px; height: 52px; flex-basis: 52px; }
+            .gh-stats { gap: 18px; width: 100%; }
+            .gh-card-desc { -webkit-line-clamp: 2; }
+            .gh-toolbar .gh-search { width: 100%; }
+            .gh-toolbar .gh-select { flex: 1 1 40%; min-width: 0; }
+        }
+    </style>
+    <script>
+        (function () {
+            try {
+                var dark = localStorage.getItem('theme') === 'dark';
+                document.documentElement.classList.toggle('dark', dark);
+            } catch (e) { }
+        })();
+    </script>
+</head>
+
+<body>
+    <div id="root"></div>
+    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
+    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
+    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
+    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
+    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+    <script type="text/babel">
+        const { Card, Button, Tag, Tooltip, Space, ConfigProvider, theme, Drawer, Skeleton, Empty, Alert,
+            Select, Input, Typography, Descriptions } = window.antd;
+        const { useState, useEffect, useCallback, useMemo } = React;
+        const { darkAlgorithm } = theme;
+        const IconSet = window.icons || {};
+        const UIIcon = ({ name, ...props }) => { const C = IconSet[name]; return C ? <C {...props} /> : null; };
+
+        const baseUrl = window.location.origin;
+        function getCsrfToken() { const m = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/); return m ? decodeURIComponent(m[1]) : ''; }
+        function secureFetch(url, options = {}) {
+            const method = options.method || 'GET';
+            const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+            if (/^(POST|PUT|PATCH|DELETE)$/i.test(method)) { const tok = getCsrfToken(); if (tok) headers['X-CSRF-Token'] = tok; }
+            return fetch(url, { method, headers, credentials: 'include', body: options.body });
+        }
+        // GitHub API 响应携带状态标记（stale / rate_limited），需要连同 code 一起上抛
+        async function ghGet(url) {
+            const r = await secureFetch(url);
+            let d = null;
+            try { d = await r.json(); } catch (e) { }
+            if (d && d.code === 200) return d.data;
+            const err = new Error((d && d.message) || ('HTTP ' + r.status));
+            err.code = d ? d.code : r.status;
+            throw err;
+        }
+        function useIsMobile() {
+            const [m, setM] = useState(window.innerWidth <= 768);
+            useEffect(() => {
+                const on = () => setM(window.innerWidth <= 768);
+                window.addEventListener('resize', on);
+                return () => window.removeEventListener('resize', on);
+            }, []);
+            return m;
+        }
+
+        // ==================== 展示工具 ====================
+        const LANG_COLORS = {
+            'Go': '#00ADD8', 'JavaScript': '#f1e05a', 'TypeScript': '#3178c6', 'Vue': '#41b883',
+            'HTML': '#e34c26', 'CSS': '#563d7c', 'SCSS': '#c6538c', 'Python': '#3572A5',
+            'Java': '#b07219', 'C': '#555555', 'C++': '#f34b7d', 'C#': '#178600',
+            'Rust': '#dea584', 'Shell': '#89e051', 'PHP': '#4F5D95', 'Ruby': '#701516',
+            'Swift': '#F05138', 'Kotlin': '#A97BFF', 'Dart': '#00B4AB', 'Lua': '#000080',
+            'Dockerfile': '#384d54', 'Makefile': '#427819', 'Jupyter Notebook': '#DA5B0B', 'PowerShell': '#012456'
+        };
+        function LangDot({ lang }) {
+            if (!lang) return null;
+            return (
+                <span className="gh-lang">
+                    <span className="gh-lang-dot" style={{ background: LANG_COLORS[lang] || 'var(--color-text-tertiary)' }} />
+                    {lang}
+                </span>
+            );
+        }
+        function relTime(iso) {
+            if (!iso) return '—';
+            const t = dayjs(iso);
+            if (!t.isValid()) return '—';
+            const diff = dayjs().diff(t, 'second');
+            if (diff < 60) return '刚刚';
+            if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+            if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+            if (diff < 86400 * 30) return Math.floor(diff / 86400) + '天前';
+            if (diff < 86400 * 365) return Math.floor(diff / (86400 * 30)) + '个月前';
+            return t.format('YYYY-MM-DD');
+        }
+        function openGitHub(url) {
+            if (url) window.open(url, '_blank', 'noopener,noreferrer');
+        }
+
+        // ==================== 安全 Markdown 渲染 ====================
+        // 先整体 HTML 转义，再做有限的 Markdown 变换；代码块/行内代码内容永不参与变换；
+        // 链接仅放行 http/https/mailto/#，图片仅放行 http(s) 并强制 lazy + no-referrer。
+        function escapeHtml(s) {
+            return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+        function mdInline(s) {
+            s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, src) => {
+                if (!/^https?:\/\//i.test(src)) return alt || '';
+                return '<img src="' + src + '" alt="' + alt + '" loading="lazy" referrerpolicy="no-referrer" />';
+            });
+            s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, label, href) => {
+                if (!/^(https?:|mailto:|#)/i.test(href)) return label;
+                return '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + label + '</a>';
+            });
+            s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+            return s;
+        }
+        function renderMarkdown(src) {
+            src = String(src || '').replace(/\r\n/g, '\n').replace(/^\uFEFF/, '');
+            const blocks = [];
+            src = src.replace(/```[^\n]*\n?([\s\S]*?)(?:```|$)/g, (_, code) => {
+                blocks.push(code.replace(/\n+$/, ''));
+                return '\u0000B' + (blocks.length - 1) + '\u0000';
+            });
+            let text = escapeHtml(src);
+            const codes = [];
+            text = text.replace(/`([^`\n]+)`/g, (_, c) => {
+                codes.push(c);
+                return '\u0000C' + (codes.length - 1) + '\u0000';
+            });
+
+            const lines = text.split('\n');
+            let html = '', para = [], list = null, quote = false;
+            const closePara = () => { if (para.length) { html += '<p>' + para.join('<br/>') + '</p>'; para = []; } };
+            const closeList = () => { if (list) { html += list === 'ul' ? '</ul>' : '</ol>'; list = null; } };
+            const closeQuote = () => { if (quote) { html += '</blockquote>'; quote = false; } };
+            const closeAll = () => { closePara(); closeList(); closeQuote(); };
+            const emitCodeBlock = (idx) => { closeAll(); html += '<pre><code>' + escapeHtml(blocks[idx] || '') + '</code></pre>'; };
+            const splitRow = (row) => row.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const bm = line.match(/^\u0000B(\d+)\u0000\s*$/);
+                if (bm) { emitCodeBlock(Number(bm[1])); continue; }
+                if (line.trim() === '') { closePara(); closeList(); closeQuote(); continue; }
+                const hm = line.match(/^(#{1,4})\s+(.*)$/);
+                if (hm) { closeAll(); html += '<h' + hm[1].length + '>' + mdInline(hm[2]) + '</h' + hm[1].length + '>'; continue; }
+                if (/^\s{0,3}((-\s*){3,}|(\*\s*){3,}|(_\s*){3,})$/.test(line)) { closeAll(); html += '<hr/>'; continue; }
+                const qm = line.match(/^&gt;\s?(.*)$/);
+                if (qm) { closePara(); closeList(); if (!quote) { html += '<blockquote>'; quote = true; } html += '<p>' + mdInline(qm[1]) + '</p>'; continue; }
+                closeQuote();
+                // 表格：当前行含 | 且下一行为分隔行
+                if (line.indexOf('|') >= 0 && /^\s*\|?[\s:|-]*-[\s:|-]*$/.test(lines[i + 1] || '') && (lines[i + 1] || '').indexOf('-') >= 0) {
+                    closeAll();
+                    const header = splitRow(line);
+                    i += 2;
+                    const rows = [];
+                    while (i < lines.length && lines[i].trim() !== '' && lines[i].indexOf('|') >= 0) { rows.push(splitRow(lines[i])); i++; }
+                    i--;
+                    html += '<table><thead><tr>' + header.map(c => '<th>' + mdInline(c) + '</th>').join('') + '</tr></thead><tbody>'
+                        + rows.map(r => '<tr>' + header.map((_, k) => '<td>' + mdInline(r[k] || '') + '</td>').join('') + '</tr>').join('')
+                        + '</tbody></table>';
+                    continue;
+                }
+                const um = line.match(/^\s*[-*]\s+(.*)$/);
+                if (um) { closePara(); if (list !== 'ul') { closeList(); html += '<ul>'; list = 'ul'; } html += '<li>' + mdInline(um[1]) + '</li>'; continue; }
+                const om = line.match(/^\s*\d+\.\s+(.*)$/);
+                if (om) { closePara(); if (list !== 'ol') { closeList(); html += '<ol>'; list = 'ol'; } html += '<li>' + mdInline(om[1]) + '</li>'; continue; }
+                closeList();
+                para.push(mdInline(line.trim()));
+            }
+            closeAll();
+            // 兜底还原行内残留的占位符（代码块被段落包裹的极少数情况）
+            html = html
+                .replace(/\u0000B(\d+)\u0000/g, (_, idx) => '<pre><code>' + escapeHtml(blocks[Number(idx)] || '') + '</code></pre>')
+                .replace(/\u0000C(\d+)\u0000/g, (_, idx) => '<code>' + (codes[Number(idx)] || '') + '</code>');
+            return html;
+        }
+
+        // ==================== 顶栏 ====================
+        function GHTopbar({ isDark, setIsDark }) {
+            return (
+                <div className="sec-topbar">
+                    <span className="tb-page"><UIIcon name="GithubOutlined" />GitHub 项目</span>
+                    <div className="tb-nav">
+                        <Button icon={<UIIcon name="DashboardOutlined" />} onClick={() => window.location.href = 'index.html'}><span className="tb-text">首页</span></Button>
+                    </div>
+                    <div className="tb-actions">
+                        <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
+                            <Button onClick={() => setIsDark(!isDark)} icon={<UIIcon name={isDark ? 'SunOutlined' : 'MoonOutlined'} />} />
+                        </Tooltip>
+                        <Button danger icon={<UIIcon name="LogoutOutlined" />} onClick={async () => {
+                            try { await secureFetch(baseUrl + '/logout', { method: 'POST', body: '{}' }); } catch (e) { }
+                            window.location.href = 'index.html';
+                        }}><span className="tb-text">退出</span></Button>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==================== 项目卡片 ====================
+        function RepoCard({ repo, onDetail }) {
+            return (
+                <div className={'gh-card' + (repo.featured ? ' featured' : '')}
+                    onClick={() => openGitHub(repo.html_url)}
+                    role="link" tabIndex={0}
+                    onKeyDown={e => { if (e.key === 'Enter') openGitHub(repo.html_url); }}>
+                    <div className="gh-card-head">
+                        <span className="gh-card-name">{repo.name}</span>
+                        {repo.featured && <Tag color="blue" style={{ marginInlineEnd: 0 }}>Featured</Tag>}
+                        <span className="gh-card-glyph"><UIIcon name="GithubOutlined" /></span>
+                    </div>
+                    <div className="gh-card-desc">{repo.description || '暂无项目描述'}</div>
+                    <div className="gh-card-meta">
+                        {repo.language && <LangDot lang={repo.language} />}
+                        <span className="gh-meta-item"><UIIcon name="StarOutlined" />{repo.stars}</span>
+                        <span className="gh-meta-item"><UIIcon name="ForkOutlined" />{repo.forks}</span>
+                        <span className="gh-meta-item"><UIIcon name="IssueOutlined" />{repo.issues}</span>
+                    </div>
+                    <div className="gh-card-foot">
+                        <span className="gh-card-updated">Updated {relTime(repo.pushed_at || repo.updated_at)}</span>
+                        <Button size="small" onClick={e => { e.stopPropagation(); onDetail(repo); }}>查看详情</Button>
+                    </div>
+                </div>
+            );
+        }
+
+        function RepoCardSkeleton() {
+            return (
+                <div className="gh-card" style={{ cursor: 'default' }}>
+                    <Skeleton active title={{ width: '45%' }} paragraph={{ rows: 2 }} />
+                    <div style={{ height: 18 }} />
+                </div>
+            );
+        }
+
+        // ==================== 详情 Drawer ====================
+        const README_COLLAPSED = 3500;
+        function DetailDrawer({ state, onClose }) {
+            const isMobile = useIsMobile();
+            const [expanded, setExpanded] = useState(false);
+            useEffect(() => { setExpanded(false); }, [state.repo && state.repo.name]);
+            const repo = state.repo;
+            const readme = state.readme;
+            let readmeBody = null;
+            if (state.readmeLoading) {
+                readmeBody = <Skeleton active title={false} paragraph={{ rows: 5 }} />;
+            } else if (state.readmeError || !readme || !readme.content) {
+                readmeBody = <Typography.Text type="secondary" style={{ fontSize: 12 }}>暂无 README 内容</Typography.Text>;
+            } else {
+                const raw = readme.content || '';
+                const clipped = !expanded && raw.length > README_COLLAPSED;
+                const shown = clipped ? githubTruncate(raw, README_COLLAPSED) : raw;
+                readmeBody = (
+                    <>
+                        <div className="gh-readme" dangerouslySetInnerHTML={{ __html: renderMarkdown(shown) }} />
+                        {raw.length > README_COLLAPSED && (
+                            <Button type="link" size="small" className="gh-readme-more" onClick={() => setExpanded(!expanded)}>
+                                {clipped ? '显示更多' : '收起'}
+                            </Button>
+                        )}
+                    </>
+                );
+            }
+            return (
+                <Drawer
+                    title="项目详情"
+                    placement="right"
+                    width={isMobile ? '100%' : 560}
+                    open={state.open}
+                    onClose={onClose}
+                    destroyOnClose
+                    footer={
+                        <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <Button onClick={onClose}>关闭</Button>
+                            <Button type="primary" icon={<UIIcon name="GithubOutlined" />}
+                                disabled={!repo} onClick={() => repo && openGitHub(repo.html_url)}>打开 GitHub</Button>
+                        </Space>
+                    }>
+                    {state.loading && <Skeleton active title paragraph={{ rows: 6 }} />}
+                    {!state.loading && state.error && (
+                        <Alert type="error" showIcon message="暂时无法获取项目详情"
+                            description={<Typography.Text type="secondary">{state.error.code === 429 ? 'GitHub API 请求次数已达到限制，请稍后再试。' : '请稍后重试。'}</Typography.Text>} />
+                    )}
+                    {!state.loading && repo && (
+                        <>
+                            {state.stale && <Alert type="info" showIcon style={{ marginBottom: 12 }} message="数据来自缓存" />}
+                            {state.rl && !state.stale && <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="GitHub API 请求次数已达到限制，请稍后再试" />}
+                            <div className="gh-profile-name" style={{ fontSize: 17 }}>
+                                {repo.name}
+                                {repo.featured && <Tag color="blue" style={{ marginInlineEnd: 0 }}>Featured</Tag>}
+                            </div>
+                            <Typography.Paragraph type="secondary" style={{ marginTop: 6, marginBottom: 0 }}>
+                                {repo.description || '暂无项目描述'}
+                            </Typography.Paragraph>
+                            <div className="gh-detail-stats">
+                                <div className="gh-stat"><div className="gh-stat-value">{repo.stars}</div><div className="gh-stat-label">Stars</div></div>
+                                <div className="gh-stat"><div className="gh-stat-value">{repo.forks}</div><div className="gh-stat-label">Forks</div></div>
+                                <div className="gh-stat"><div className="gh-stat-value">{repo.issues}</div><div className="gh-stat-label">Issues</div></div>
+                            </div>
+                            <Descriptions size="small" column={1} bordered colon>
+                                {repo.language && <Descriptions.Item label="Language"><LangDot lang={repo.language} /></Descriptions.Item>}
+                                {repo.homepage && <Descriptions.Item label="Homepage"><a href={repo.homepage} target="_blank" rel="noopener noreferrer">{repo.homepage}</a></Descriptions.Item>}
+                                <Descriptions.Item label="Default branch"><span className="gh-mono">{repo.default_branch || '—'}</span></Descriptions.Item>
+                                {repo.license && <Descriptions.Item label="License"><Tag>{repo.license}</Tag></Descriptions.Item>}
+                                <Descriptions.Item label="Created">{relTime(repo.created_at)}</Descriptions.Item>
+                                <Descriptions.Item label="Last updated">{relTime(repo.updated_at)}</Descriptions.Item>
+                                <Descriptions.Item label="Last pushed">{relTime(repo.pushed_at)}</Descriptions.Item>
+                                {repo.topics && repo.topics.length > 0 && (
+                                    <Descriptions.Item label="Topics">
+                                        <Space size={[4, 4]} wrap>{repo.topics.slice(0, 8).map(tp => <Tag key={tp}>{tp}</Tag>)}</Space>
+                                    </Descriptions.Item>
+                                )}
+                                <Descriptions.Item label="Repository">
+                                    <a href={repo.html_url} target="_blank" rel="noopener noreferrer">{repo.html_url}</a>
+                                </Descriptions.Item>
+                            </Descriptions>
+                            <div className="gh-section"><span className="gh-section-title">README</span>
+                                {readme && readme.truncated && <span className="gh-section-count">内容过长，仅展示部分内容</span>}
+                            </div>
+                            {readmeBody}
+                        </>
+                    )}
+                </Drawer>
+            );
+        }
+        function githubTruncate(s, n) { return String(s || '').slice(0, n) + '…'; }
+
+        // ==================== 主应用 ====================
+        function App() {
+            const [auth, setAuth] = useState({ loading: true, ok: false, user: null });
+            const [isDark, setIsDark] = useState(() => localStorage.getItem('theme') === 'dark');
+            const isMobile = useIsMobile();
+
+            const [profile, setProfile] = useState(null);
+            const [repos, setRepos] = useState(null);
+            const [flags, setFlags] = useState({ stale: false, rl: false });
+            const [reposError, setReposError] = useState(null);
+            const [profileError, setProfileError] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [tick, setTick] = useState(0); // 相对时间随刷新更新
+
+            const [q, setQ] = useState('');
+            const [lang, setLang] = useState('全部');
+            const [sortKey, setSortKey] = useState('pushed');
+
+            const [detail, setDetail] = useState({ open: false, loading: false, error: null, repo: null, stale: false, rl: false, readmeLoading: false, readmeError: false, readme: null });
+
+            const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
+
+            useEffect(() => {
+                secureFetch(baseUrl + '/check-auth')
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.code === 200) setAuth({ loading: false, ok: true, user: d.user });
+                        else window.location.href = 'index.html';
+                    })
+                    .catch(() => { window.location.href = 'index.html'; });
+            }, []);
+            useEffect(() => {
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                document.documentElement.classList.toggle('dark', isDark);
+                document.body.classList.toggle('dark', isDark);
+                document.body.style.background = isDark ? '#141414' : '#f5f5f5';
+            }, [isDark]);
+
+            const load = useCallback(() => {
+                setLoading(true); setReposError(null); setProfileError(null);
+                const pf = ghGet(baseUrl + '/api/github/profile')
+                    .then(d => { setProfile(d.profile); setFlags(f => ({ ...f, stale: f.stale || d.stale, rl: f.rl || d.rate_limited })); })
+                    .catch(e => setProfileError(e));
+                const rf = ghGet(baseUrl + '/api/github/repos')
+                    .then(d => { setRepos(d.repos || []); setFlags(f => ({ ...f, stale: f.stale || d.stale, rl: f.rl || d.rate_limited })); })
+                    .catch(e => setReposError(e));
+                Promise.allSettled([pf, rf]).then(() => setLoading(false));
+            }, []);
+            useEffect(() => { if (auth.ok) load(); }, [auth.ok, load]);
+
+            // 每分钟刷新相对时间
+            useEffect(() => {
+                const t = setInterval(() => setTick(x => x + 1), 60000);
+                return () => clearInterval(t);
+            }, []);
+
+            const languages = useMemo(() => {
+                if (!repos) return [];
+                return [...new Set(repos.map(r => r.language).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+            }, [repos]);
+
+            const totalStars = useMemo(() => (repos || []).reduce((s, r) => s + (r.stars || 0), 0), [repos]);
+
+            const filtered = useMemo(() => {
+                if (!repos) return [];
+                const kw = q.trim().toLowerCase();
+                let list = repos.filter(r => {
+                    if (lang !== '全部' && r.language !== lang) return false;
+                    if (kw && !(r.name || '').toLowerCase().includes(kw) && !(r.description || '').toLowerCase().includes(kw)) return false;
+                    return true;
+                });
+                list = list.slice().sort((a, b) => {
+                    if (sortKey === 'stars') return (b.stars || 0) - (a.stars || 0);
+                    if (sortKey === 'forks') return (b.forks || 0) - (a.forks || 0);
+                    if (sortKey === 'name') return (a.name || '').localeCompare(b.name || '');
+                    return (b.pushed_at || b.updated_at || '').localeCompare(a.pushed_at || a.updated_at || '');
+                });
+                return list;
+            }, [repos, q, lang, sortKey, tick]);
+
+            const featuredList = useMemo(() => {
+                if (!repos) return [];
+                const active = q.trim() !== '' || lang !== '全部';
+                if (active) return [];
+                const f = repos.filter(r => r.featured);
+                return f.length ? f : [];
+            }, [repos, q, lang]);
+
+            // Featured 区已展示的项目不再重复出现在 All Projects 列表中
+            const gridList = useMemo(() => (
+                featuredList.length ? filtered.filter(r => !r.featured) : filtered
+            ), [filtered, featuredList]);
+
+            const openDetail = (repo) => {
+                setDetail({ open: true, loading: true, error: null, repo: null, stale: false, rl: false, readmeLoading: true, readmeError: false, readme: null });
+                ghGet(baseUrl + '/api/github/repos/' + encodeURIComponent(repo.owner || '') + '/' + encodeURIComponent(repo.name || ''))
+                    .then(d => setDetail(s => ({ ...s, loading: false, repo: d.repo, stale: d.stale, rl: d.rate_limited })))
+                    .catch(e => setDetail(s => ({ ...s, loading: false, error: e })));
+                ghGet(baseUrl + '/api/github/repos/' + encodeURIComponent(repo.owner || '') + '/' + encodeURIComponent(repo.name || '') + '/readme')
+                    .then(d => setDetail(s => ({ ...s, readmeLoading: false, readme: d.readme, readmeError: false })))
+                    .catch(() => setDetail(s => ({ ...s, readmeLoading: false, readmeError: true })));
+            };
+
+            if (auth.loading) {
+                return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: isDark ? '#141414' : '#f5f5f5' }}><Card loading style={{ width: 320 }} /></div>;
+            }
+            if (!hasPerm('github:view')) {
+                return (
+                    <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                        <GHTopbar isDark={isDark} setIsDark={setIsDark} />
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+                            <Card style={{ width: 400, textAlign: 'center' }}>
+                                <div style={{ fontSize: 40, marginBottom: 8 }}><UIIcon name="StopOutlined" /></div>
+                                <Typography.Title level={4}>没有访问权限</Typography.Title>
+                                <Typography.Text type="secondary">当前账号没有「查看 GitHub 项目」权限（github:view）。</Typography.Text>
+                            </Card>
+                        </div>
+                    </ConfigProvider>
+                );
+            }
+
+            const filterActive = q.trim() !== '' || lang !== '全部';
+            const banner = flags.rl
+                ? { type: 'warning', msg: flags.stale ? 'GitHub API 请求次数已达到限制，请稍后再试。当前展示的是缓存数据。' : 'GitHub API 请求次数已达到限制，请稍后再试。' }
+                : (flags.stale ? { type: 'info', msg: '数据来自缓存' } : null);
+            const failed = !!reposError && !repos;
+
+            return (
+                <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
+                    <GHTopbar isDark={isDark} setIsDark={setIsDark} />
+                    <div className="sec-wrap">
+                        <div className="page-head">
+                            <div>
+                                <div className="ph-title"><UIIcon name="GithubOutlined" />GitHub Projects</div>
+                                <div className="ph-sub">展示 {profile ? (profile.name || profile.login) : 'GitHub 用户'} 的公开项目 · 数据由本服务代理并缓存</div>
+                            </div>
+                            <div className="ph-actions">
+                                <Tooltip title="重新加载">
+                                    <Button icon={<UIIcon name="ReloadOutlined" />} onClick={() => { setFlags({ stale: false, rl: false }); load(); setTick(x => x + 1); }} />
+                                </Tooltip>
+                            </div>
+                        </div>
+
+                        {/* 用户信息 */}
+                        {loading && !profile ? (
+                            <div className="gh-profile">
+                                <Skeleton.Avatar active size={64} />
+                                <div style={{ flex: 1 }}>
+                                    <Skeleton active title={{ width: '30%' }} paragraph={{ rows: 1 }} />
+                                </div>
+                            </div>
+                        ) : profile ? (
+                            <div className="gh-profile">
+                                <img className="gh-avatar" src={profile.avatar_url} alt={profile.login} referrerPolicy="no-referrer" />
+                                <div className="gh-profile-info">
+                                    <div className="gh-profile-name">{profile.name || profile.login}{profile.login && <Tag style={{ marginInlineEnd: 0 }}>{profile.login}</Tag>}</div>
+                                    {profile.bio && <div className="gh-profile-bio">{profile.bio}</div>}
+                                    {profile.html_url && (
+                                        <a className="gh-profile-link" href={profile.html_url} target="_blank" rel="noopener noreferrer">
+                                            <UIIcon name="LinkOutlined" />{profile.html_url.replace(/^https?:\/\//, '')}
+                                        </a>
+                                    )}
+                                </div>
+                                <div className="gh-stats">
+                                    <div className="gh-stat"><div className="gh-stat-value">{profile.public_repos}</div><div className="gh-stat-label">Repositories</div></div>
+                                    <div className="gh-stat"><div className="gh-stat-value">{repos ? totalStars : '—'}</div><div className="gh-stat-label">Stars</div></div>
+                                    <div className="gh-stat"><div className="gh-stat-value">{profile.followers}</div><div className="gh-stat-label">Followers</div></div>
+                                    <div className="gh-stat"><div className="gh-stat-value">{profile.following}</div><div className="gh-stat-label">Following</div></div>
+                                </div>
+                            </div>
+                        ) : profileError ? (
+                            <Alert type="warning" showIcon style={{ marginBottom: 16 }}
+                                message="用户信息暂时无法获取"
+                                action={<Button size="small" danger onClick={load}>重新加载</Button>} />
+                        ) : null}
+
+                        {/* 状态提示 */}
+                        {banner && !loading && <Alert type={banner.type} showIcon style={{ marginBottom: 12 }} message={banner.msg} />}
+                        {failed && (
+                            <Alert type="error" showIcon style={{ marginBottom: 12 }} message="暂时无法获取 GitHub 项目"
+                                description={<Typography.Text type="secondary">{reposError && reposError.code === 429 ? 'GitHub API 请求次数已达到限制，请稍后再试。' : '请检查网络后重试。'}</Typography.Text>}
+                                action={<Button size="small" danger icon={<UIIcon name="ReloadOutlined" />} onClick={load}>重新加载</Button>} />
+                        )}
+
+                        {/* Featured Projects */}
+                        {featuredList.length > 0 && (
+                            <>
+                                <div className="gh-section"><span className="gh-section-title">Featured Projects</span><span className="gh-section-count">重点项目</span></div>
+                                <div className="gh-grid">
+                                    {featuredList.map(r => <RepoCard key={'f-' + r.id} repo={r} onDetail={openDetail} />)}
+                                </div>
+                            </>
+                        )}
+
+                        {/* All Projects */}
+                        <div className="gh-section">
+                            <span className="gh-section-title">All Projects</span>
+                            {repos && <span className="gh-section-count">共 {gridList.length} 个项目</span>}
+                        </div>
+                        <div className="gh-toolbar">
+                            <Input className="gh-search" allowClear prefix={<UIIcon name="SearchOutlined" />} placeholder="搜索项目..."
+                                value={q} onChange={e => setQ(e.target.value)} />
+                            <Select className="gh-select" value={lang} onChange={setLang}
+                                options={[{ value: '全部', label: '语言：全部' }].concat(languages.map(l => ({ value: l, label: '语言：' + l })))} />
+                            <Select className="gh-select" value={sortKey} onChange={setSortKey}
+                                options={[
+                                    { value: 'pushed', label: '最近更新' },
+                                    { value: 'stars', label: 'Star 最多' },
+                                    { value: 'forks', label: 'Fork 最多' },
+                                    { value: 'name', label: '按名称' },
+                                ]} />
+                        </div>
+
+                        {loading ? (
+                            <div className="gh-grid">{[1, 2, 3, 4, 5, 6].map(i => <RepoCardSkeleton key={i} />)}</div>
+                        ) : gridList.length === 0 ? (
+                            <Empty description={repos && repos.length ? (filtered.length ? '项目均已在 Featured 区展示' : '没有匹配的项目') : '暂无公开项目'} style={{ padding: '32px 0' }} />
+                        ) : (
+                            <div className="gh-grid">
+                                {gridList.map(r => <RepoCard key={r.id} repo={r} onDetail={openDetail} />)}
+                            </div>
+                        )}
+                    </div>
+
+                    <DetailDrawer state={detail} onClose={() => setDetail(s => ({ ...s, open: false }))} />
+                </ConfigProvider>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>

@@ -17,5 +17,19 @@
       "udp": true,
       "lan_cidr": "192.168.1.0/24"
     }
+  },
+  "github": {
+    "enabled": true,
+    "username": "Xiaoxusheng",
+    "token": "",
+    "cache_ttl": 1800,
+    "repo_limit": 100,
+    "show_forks": false,
+    "show_archived": false,
+    "featured": [
+      "server-status",
+      "go-auto-uploader",
+      "EchoIM"
+    ]
   }
 }
