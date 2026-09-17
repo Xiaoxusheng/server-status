@@ -159,6 +159,12 @@ type mqttScreenDevicePayload struct {
 	SpeedKmh    *float64 `json:"speed_kmh"`
 	Course      *float64 `json:"course"`
 	Hdop        *float64 `json:"hdop"`
+
+	// 以下三项自固件 1.5.3 起提供（设备端静止平均滤波的输出）。
+	// 老固件不报这些字段，解析后为 nil —— 页面据此显示"—"而不是错误结论。
+	Stationary *bool    `json:"stationary"` // 设备端是否判定为静止
+	AccM       *float64 `json:"acc_m"`      // 设备端估计的定位精度（米）
+	AvgN       *int     `json:"avg_n"`      // 参与平均的样本数
 }
 
 // mqttScreenSeriesPoint 上游 /api/health 的时序点（带 unix 秒时间戳）
@@ -198,6 +204,16 @@ type mqttScreenData struct {
 	Rssi        int                    `json:"rssi"`         // WiFi 信号 dBm
 	Track       []mqttScreenTrackPoint `json:"track"`        // 轨迹点
 	UpdatedAt   int64                  `json:"updated_at"`   // 本响应生成时间（unix 秒）
+
+	// Stationary 设备端判定为静止：此时上报的坐标是最近约两分钟样本的均值，
+	// 精度远高于单个解（实测单点散布 ±40 m，均值标准误个位数米）。
+	// 固件 1.5.3 起提供；老固件恒为 false，此时 AvgN 为 0 可作为区分依据。
+	Stationary bool `json:"stationary"`
+	// AccM 设备端给出的定位精度估计（米）：静止时是窗口均值的标准误，
+	// 移动时是前后半窗位移量。0 表示设备端没有提供（老固件）。
+	AccM float64 `json:"acc_m"`
+	// AvgN 参与平均的样本数；0 表示设备端未做平均（老固件或未定位）。
+	AvgN int `json:"avg_n"`
 
 	// ReportInterval 配置的上报间隔（秒），来自 SERVER_STATUS_MQTT_REPORT_INTERVAL，
 	// 作为 ObservedInterval 数据不足时的兜底。
@@ -352,10 +368,23 @@ func fetchMqttScreenData() (*mqttScreenData, error) {
 	if latest.RSSI != nil {
 		out.Rssi = *latest.RSSI
 	}
+	if latest.Stationary != nil {
+		out.Stationary = *latest.Stationary
+	}
+	if latest.AccM != nil {
+		out.AccM = *latest.AccM
+	}
+	if latest.AvgN != nil {
+		out.AvgN = *latest.AvgN
+	}
 
-	// 未定位时不带出无意义的坐标
+	// 未定位时不带出无意义的坐标，定位质量信息同样清零
+	// （否则页面会显示"静止 · 精度 1.6 m"却没有坐标）
 	if !out.Fix {
 		out.Lat, out.Lon = 0, 0
+		out.Stationary = false
+		out.AccM = 0
+		out.AvgN = 0
 	}
 
 	// ---- 2. 最后上报时间：/api/health 的时序点带 unix 时间戳 ----

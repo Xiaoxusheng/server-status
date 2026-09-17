@@ -165,6 +165,71 @@ func TestFetchMqttScreenDataNoFixClearsCoordinates(t *testing.T) {
 	}
 }
 
+// 固件 1.5.3 起设备端会做静止平均滤波，并上报 stationary / acc_m / avg_n。
+// 这三个字段要透出去，页面才能显示"静止 · 精度 ±1.6 m"。
+const mqttTestPayloadV153 = `{"count":53,"uptime_ms":15640179,"ip":"192.168.1.54","wifi":"hm",` +
+	`"version":"1.5.3","rssi":-53,"reboot_count":92,"free_heap":168028,"temperature":23,` +
+	`"humidity":57,"gps_fix":true,"gps_stale":false,"stationary":true,"acc_m":1.6,"avg_n":62,` +
+	`"satellites":7,"sats_in_view":14,"lat":32.016328,"lon":118.789964,"altitude":-2.0,` +
+	`"speed_kmh":0.0,"course":203.0,"fix_mode":3,"hdop":1.3,"pdop":2.1,"vdop":0.0,` +
+	`"gps_time":"082207.000","gps_date":"170926"}`
+
+// 设备端滤波结果必须原样透出去（页面的"定位精度/定位状态"全靠它）
+func TestFetchMqttScreenDataMapsStationaryFields(t *testing.T) {
+	ts := newMqttUpstreamMock(t, mqttTestPayloadV153, time.Now().Unix())
+	defer ts.Close()
+	t.Setenv(mqttScreenUpstreamEnv, ts.URL)
+
+	data, err := fetchMqttScreenData()
+	if err != nil {
+		t.Fatalf("取数失败: %v", err)
+	}
+	if !data.Stationary {
+		t.Error("stationary=true 应映射为 Stationary=true")
+	}
+	if math.Abs(data.AccM-1.6) > 1e-9 {
+		t.Errorf("acc_m 应映射为 1.6，实际 %v", data.AccM)
+	}
+	if data.AvgN != 62 {
+		t.Errorf("avg_n 应映射为 62，实际 %d", data.AvgN)
+	}
+}
+
+// 老固件（1.5.2 及以前）不报这几个字段，必须保持零值：
+// 页面据此显示"—"，绝不能把"没上报"当成"移动中"
+func TestFetchMqttScreenDataStationaryFieldsAbsentOnOldFirmware(t *testing.T) {
+	ts := newMqttUpstreamMock(t, mqttTestPayload, time.Now().Unix())
+	defer ts.Close()
+	t.Setenv(mqttScreenUpstreamEnv, ts.URL)
+
+	data, err := fetchMqttScreenData()
+	if err != nil {
+		t.Fatalf("取数失败: %v", err)
+	}
+	if data.Stationary || data.AccM != 0 || data.AvgN != 0 {
+		t.Errorf("老固件上报不应带出滤波字段: stationary=%v acc=%v n=%v",
+			data.Stationary, data.AccM, data.AvgN)
+	}
+}
+
+// 未定位时定位质量信息一并清零，避免出现"没有坐标却标着静止、精度 1.6 m"
+func TestFetchMqttScreenDataNoFixClearsStationaryFields(t *testing.T) {
+	payload := `{"temperature":20,"humidity":40,"gps_fix":false,"lat":0,"lon":0,` +
+		`"stationary":true,"acc_m":1.6,"avg_n":62}`
+	ts := newMqttUpstreamMock(t, payload, time.Now().Unix())
+	defer ts.Close()
+	t.Setenv(mqttScreenUpstreamEnv, ts.URL)
+
+	data, err := fetchMqttScreenData()
+	if err != nil {
+		t.Fatalf("取数失败: %v", err)
+	}
+	if data.Stationary || data.AccM != 0 || data.AvgN != 0 {
+		t.Errorf("未定位时滤波字段应清零: stationary=%v acc=%v n=%v",
+			data.Stationary, data.AccM, data.AvgN)
+	}
+}
+
 // 上游整体不可达时必须报错，由 handler 转成通用提示（不能把上游地址透出去）
 func TestFetchMqttScreenDataUpstreamDown(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

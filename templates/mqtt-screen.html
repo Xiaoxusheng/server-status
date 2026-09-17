@@ -873,9 +873,9 @@
             </div>
             <div class="map-note">
                 <span>地图标记受坐标系转换与瓦片精度影响可能存在偏移，位置以右侧<b>经纬度数值</b>为准；
-                    未定位时显示<b>最后已知位置</b>（灰色标记）。标记与轨迹已做<b>抖动抑制</b>：
-                    设备静止时 GPS 仍有几十米散布，原始点直连会画成一团乱线，这里用滑动中位数平滑后再绘制，
-                    右侧表格里仍是<b>原始上报值</b>。</span>
+                    未定位时显示<b>最后已知位置</b>（灰色标记）。设备侧已对定位做<b>静止平均</b>
+                    （固件 1.5.3 起，精度见右侧"定位精度"），页面在此基础上再做一层<b>抖动抑制</b>
+                    （中位平滑 + 抽稀）作为兜底；右侧表格里始终是<b>原始上报值</b>。</span>
             </div>
         </section>
 
@@ -933,6 +933,14 @@
                     <div class="metric">
                         <div class="metric-label">航向</div>
                         <div class="metric-value" id="mCourse">—<span class="metric-unit">°</span></div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">定位精度</div>
+                        <div class="metric-value" id="mAcc">—</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">定位状态</div>
+                        <div class="metric-value" id="mState">—</div>
                     </div>
                 </div>
             </div>
@@ -1406,6 +1414,33 @@
                 setMetric('mSpeed', fmtNum(data.speed_kmh, 1) + '<span class="metric-unit">km/h</span>');
                 setMetric('mAlt', fmtNum(data.altitude, 1) + '<span class="metric-unit">m</span>');
                 setMetric('mCourse', fmtNum(data.course, 1) + '<span class="metric-unit">°</span>');
+
+                // 设备端静止平均滤波的结果（固件 1.5.3 起上报）。
+                // avg_n 是参与平均的样本数，为 0 说明设备没提供（老固件），
+                // 这时一律显示"—"，绝不能把"没上报"当成"移动中"。
+                var avgN = Number(data.avg_n) || 0;
+                var accM = Number(data.acc_m) || 0;
+                // 设备端做了平均才有这两个指标。未定位时服务端已把三个字段清零，
+                // 这里再兜一层，免得以后后端改了、页面出现"没坐标却标着静止"
+                var filtered = fix && avgN > 0;
+                setMetric('mAcc', filtered && accM > 0
+                    ? '±' + fmtNum(accM, 1) + '<span class="metric-unit">m</span>'
+                    : '—');
+                var stateText;
+                if (!fix) {
+                    stateText = '未定位';
+                } else if (filtered) {
+                    // acc_m 为 0 表示窗口还没攒够、正在建立均值
+                    stateText = data.stationary ? '静止' : (accM > 0 ? '移动中' : '校准中');
+                } else {
+                    stateText = '—'; // 老固件不提供这个信息，不能瞎猜
+                }
+                setMetric('mState', stateText);
+                var accEl = $('mAcc');
+                accEl.title = filtered
+                    ? '设备端取最近 ' + avgN + ' 个定位样本求均值（静止时上报均值，移动时上报最新解）；± 为均值标准误'
+                    : '需要设备固件 1.5.3 及以上';
+                $('mState').title = '静止 = 设备端判定为静止，坐标取窗口均值；移动中 = 跟随最新定位解；校准中 = 正在积累样本';
 
                 // 当前位置：可读地址 + 原始坐标
                 if (fix) {
