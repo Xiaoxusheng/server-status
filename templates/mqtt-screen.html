@@ -747,6 +747,39 @@
             color: var(--color-text-secondary);
         }
 
+        /* "回到设备"按钮：视角不再无条件回弹（拖动后不会被立刻拽回中心），
+           只在偏离中心时出现，点一下回中。放在缩放控件下方，与常见的定位按钮位置一致。 */
+        #map .map-recenter {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            background: var(--color-surface);
+            color: var(--color-text-secondary);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background .15s, color .15s, border-color .15s;
+        }
+
+        /* .map-recenter 显式 display 会盖掉 hidden 的默认 display:none，必须单独兜住 */
+        #map .map-recenter[hidden] {
+            display: none;
+        }
+
+        #map .map-recenter:hover {
+            background: var(--color-primary-bg);
+            color: var(--color-primary);
+            border-color: var(--color-primary);
+        }
+
+        #map .map-recenter svg {
+            width: 16px;
+            height: 16px;
+        }
+
         /* ---------- 窄屏 ---------- */
         @media (max-width: 1080px) {
             body {
@@ -840,7 +873,9 @@
             </div>
             <div class="map-note">
                 <span>地图标记受坐标系转换与瓦片精度影响可能存在偏移，位置以右侧<b>经纬度数值</b>为准；
-                    未定位时显示<b>最后已知位置</b>（灰色标记），视角始终保持标记居中。</span>
+                    未定位时显示<b>最后已知位置</b>（灰色标记）。标记与轨迹已做<b>抖动抑制</b>：
+                    设备静止时 GPS 仍有几十米散布，原始点直连会画成一团乱线，这里用滑动中位数平滑后再绘制，
+                    右侧表格里仍是<b>原始上报值</b>。</span>
             </div>
         </section>
 
@@ -950,6 +985,56 @@
             var mapFitted = false;   // 首个焦点是否已落位（决定初始缩放级别）
             var lastValues = {};
             var lastTrackKey = ''; // 轨迹表内容指纹，没变就不重绘
+            var recenterBtn = null; // "回到设备"按钮，偏离中心时才出现
+
+            // ---------- 抖动抑制 ----------
+            // 这台设备的 GPS 静止时也有几十米随机散布（实测相对真实位置中位偏差 37 m、
+            // 最大 140 m，仅有 7~9 颗星且多路径严重）。把原始点直接连成线，静止的设备会画成
+            // 一团来回穿越的锯齿，标记也会每 5 分钟跳一次。所以绘图前做三步处理，
+            // **只作用于地图显示，右侧表格里仍是原始上报值**：
+            //   1) 中位平滑：逐点取窗口内各分量的中位数。中位数对单个离群点免疫
+            //      （一次 100 m 的坏定位不会把线带偏）。窗口在**中段居中**（前后各取
+            //      半个窗口），靠近两端时整体回退，保证末端仍是完整的尾随窗口：
+            //      中段用上后一个点才能真正抹平"来回穿越"的锯齿（只做尾随的窗口
+            //      只能把线整体往后拖，锯齿依旧），末端退化成尾随中位又不会甩出拖尾。
+            //      代价是滞后约半个窗口，而设备移动时上报频率会从 10 分钟自动加快到
+            //      几秒，真正需要精度时滞后反而最小。
+            //   2) 抽稀：平滑后仍与上一保留点相距不足 DECIMATE_M 的点不参与绘制，
+            //      免得线上全是肉眼分辨不出的折角。
+            //   3) 位移门限：地图只在中心偏离 ≥ RECENTER_M 时才重新居中，
+            //      不再每轮都平移底图，拖动后也不会被立刻拽回去（用"回到设备"按钮回中）。
+            var SMOOTH_WIN = 5;   // 中位平滑窗口（点），奇数
+            var DECIMATE_M = 10;  // 抽稀阈值（米）
+            var RECENTER_M = 20;  // 中心偏离多少米才重新居中（米）
+
+            // 设备大致位置（WGS-84）。只用于首屏视角，避免首帧落在错误的位置上。
+            var HOME_WGS = { lat: 32.016193, lon: 118.789988 };
+
+            var EARTH_LAT_M = 111132;  // 每度纬度约多少米
+            var EARTH_LON_M = 111320;  // 赤道处每度经度约多少米（按纬度乘 cos）
+
+            // 两点距离（米）。只用于几十~几百米的量级判断，等距圆柱近似足够且更便宜。
+            function metersBetween(a, b) {
+                var mid = (a[0] + b[0]) / 2 * Math.PI / 180;
+                var dy = (b[0] - a[0]) * EARTH_LAT_M;
+                var dx = (b[1] - a[1]) * EARTH_LON_M * Math.cos(mid);
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+
+            function median(nums) {
+                var s = nums.slice().sort(function (x, y) { return x - y; });
+                var m = s.length >> 1;
+                return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+            }
+
+            // 坐标合法性。设备异常时可能报 (0,0) 或干脆是乱值，这种点绝不能参与绘图与居中，
+            // 否则地图会直接飞到几内亚湾，而且再也回不来。
+            function validLatLng(lat, lon) {
+                if (typeof lat !== 'number' || typeof lon !== 'number') return false;
+                if (!isFinite(lat) || !isFinite(lon)) return false;
+                if (lat === 0 && lon === 0) return false;
+                return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+            }
 
             // ---------- WGS-84 → GCJ-02：GPS 原始坐标叠加高德底图必须做这一步，否则有数百米偏移 ----------
             function wgs84ToGcj02(lat, lon) {
@@ -984,6 +1069,55 @@
                 ret += (20.0 * Math.sin(x * PI) + 40.0 * Math.sin(x / 3.0 * PI)) * 2.0 / 3.0;
                 ret += (150.0 * Math.sin(x / 12.0 * PI) + 300.0 * Math.sin(x / 30.0 * PI)) * 2.0 / 3.0;
                 return ret;
+            }
+
+            // ---------- 轨迹平滑（把原始上报点变成"看起来像轨迹"的线） ----------
+            // 输入原始轨迹（WGS-84），输出 { points: [[lat,lon],…], current: [lat,lon]|null }，
+            // 坐标已是 GCJ-02 可直接上高德底图；current 是平滑后的最新位置，同时也是
+            // points 的末点，保证标记永远压在线端上。
+            function smoothTrack(raw, win) {
+                raw = raw || [];
+                win = win || SMOOTH_WIN;
+                var g = [], i;
+                for (i = 0; i < raw.length; i++) {
+                    if (!validLatLng(raw[i].lat, raw[i].lon)) continue;
+                    var c = wgs84ToGcj02(raw[i].lat, raw[i].lon);
+                    g.push([c.lat, c.lon]);
+                }
+                if (!g.length) return { points: [], current: null };
+
+                // 样本太少时缩小窗口：窗口一旦撑到整个数组，所有点的中位数会变成同一个点，
+                // 整条轨迹缩成一个点。样本只有两三个时就干脆不平滑（win = 1 即原样通过）。
+                if (win > g.length - 1) win = g.length >= 4 ? 3 : 1;
+                var half = win >> 1;
+
+                // 1) 中位平滑：窗口中段居中、两端回退（末端因此是完整的尾随窗口）
+                var smooth = [];
+                for (i = 0; i < g.length; i++) {
+                    var start = i - half;
+                    if (start + win > g.length) start = g.length - win;
+                    if (start < 0) start = 0;
+                    var end = Math.min(g.length, start + win);
+                    var lats = [], lons = [];
+                    for (var k = start; k < end; k++) {
+                        lats.push(g[k][0]);
+                        lons.push(g[k][1]);
+                    }
+                    smooth.push([median(lats), median(lons)]);
+                }
+
+                // 2) 抽稀：与上一个保留点太近的直接丢掉
+                var out = [smooth[0]];
+                for (i = 1; i < smooth.length; i++) {
+                    if (metersBetween(out[out.length - 1], smooth[i]) >= DECIMATE_M) out.push(smooth[i]);
+                }
+
+                // 抽稀可能把最新点丢掉，导致标记落在线外 —— 末点必须就是 current
+                // （与上一个保留点已经重合时就不重复添加，免得留一段零长线段）
+                var last = smooth[smooth.length - 1];
+                if (metersBetween(out[out.length - 1], last) >= 1) out.push(last);
+
+                return { points: out, current: last };
             }
 
             // ---------- 工具 ----------
@@ -1081,6 +1215,10 @@
                     $('mapFallback').hidden = false;
                     return;
                 }
+                // 首屏视角必须用**转换后的 GCJ-02** 坐标：直接拿 WGS-84 数值当 GCJ-02 用，
+                // 首帧会落在偏西/偏北约 500 m 的位置，等第一包数据到达再猛跳一次。
+                var home = wgs84ToGcj02(HOME_WGS.lat, HOME_WGS.lon);
+
                 map = L.map('map', {
                     zoomControl: true,
                     preferCanvas: true,
@@ -1089,7 +1227,7 @@
                     doubleClickZoom: 'center',
                     // 关掉拖动惯性：惯性滑行会让中心漂走，再回中会多一次回弹
                     inertia: false
-                }).setView([32.016, 118.79], 16);
+                }).setView([home.lat, home.lon], 16);
 
                 // 保留地图版权署名（瓦片服务方要求）
                 L.tileLayer(TILE_URL, {
@@ -1099,20 +1237,62 @@
                     attribution: '&copy; <a href="https://www.amap.com/" target="_blank" rel="noopener">高德地图</a>'
                 }).addTo(map);
 
-                // 任何视角变动都把定位点拉回中心：拖动、缩放、容器尺寸变化。
-                // 只改中心不改缩放级别，用户自己选的层级会一直保留。
-                map.on('zoomend dragend resize', function () { recenter(true); });
+                // 视角不再无条件回弹：拖动/缩放后不会被立刻拽回中心（那会让地图"按不住"），
+                // 只有设备确实移动（见 recenter 的位移门限）才会重新居中；
+                // 中途想看别处就拖走，靠"回到设备"按钮回中。
+                // 注意必须监听 move：Leaflet 拖动过程中只发 move/drag，不保证发 moveend，
+                // 只挂 moveend 的话按钮永远不会出现。
+                map.on('move moveend zoomend dragend', updateRecenterBtn);
+                initRecenterControl();
                 mapReady = true;
             }
 
-            // 把定位点拉回地图中心；已经居中就不动，避免反复触发 move 事件
-            function recenter(animate) {
+            // 地图中心偏离定位点多少米。只做量级判断，经纬度直算即可。
+            function offCenterMeters() {
+                if (!map || !focusLatLng || !mapReady) return 0;
+                var c = map.getCenter();
+                return metersBetween([c.lat, c.lng], [focusLatLng.lat, focusLatLng.lng]);
+            }
+
+            // "回到设备"按钮：只在偏离中心超过门限时出现
+            function updateRecenterBtn() {
+                if (!recenterBtn) return;
+                recenterBtn.hidden = offCenterMeters() < RECENTER_M;
+            }
+
+            function initRecenterControl() {
+                var RecenterControl = L.Control.extend({
+                    options: { position: 'topleft' },
+                    onAdd: function () {
+                        var btn = L.DomUtil.create('button', 'map-recenter');
+                        btn.type = 'button';
+                        btn.title = '回到设备位置';
+                        btn.setAttribute('aria-label', '回到设备位置');
+                        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+                            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                            '<circle cx="12" cy="12" r="7.2"/><circle cx="12" cy="12" r="2.6"/>' +
+                            '<path d="M12 2.4v2.4M12 19.2v2.4M2.4 12h2.4M19.2 12h2.4"/></svg>';
+                        // 按钮在 map 容器内，必须拦住点击/滚动事件，否则会连带拖动地图或缩放
+                        L.DomEvent.disableClickPropagation(btn);
+                        L.DomEvent.on(btn, 'click', function (e) {
+                            L.DomEvent.stop(e);
+                            recenter(true, true);
+                        });
+                        recenterBtn = btn;
+                        return btn;
+                    }
+                });
+                map.addControl(new RecenterControl());
+                updateRecenterBtn();
+            }
+
+            // 把定位点拉回地图中心。只改中心不改缩放级别，用户自己选的层级一直保留。
+            // force=true（点"回到设备"按钮）时忽略位移门限，立刻回中。
+            function recenter(animate, force) {
                 if (!mapReady || !focusLatLng || !map) return;
-                var z = map.getZoom();
-                var target = map.project(focusLatLng, z).round();
-                var cur = map.project(map.getCenter(), z).round();
-                if (target.distanceTo(cur) < 1) return;
-                map.setView(focusLatLng, z, { animate: !!animate });
+                if (!force && offCenterMeters() < RECENTER_M) return;
+                map.setView(focusLatLng, map.getZoom(), { animate: !!animate });
+                updateRecenterBtn();
             }
 
             // stale=true 渲染成灰色无脉冲：表示"最后已知位置"，不是实时定位
@@ -1128,58 +1308,69 @@
             function renderMap(data) {
                 if (!mapReady) return;
 
-                var points = (data.track || []).map(function (p) {
-                    var g = wgs84ToGcj02(p.lat, p.lon);
-                    return [g.lat, g.lon];
-                });
+                // 轨迹与标记位置来自同一条平滑管线，保证标记永远压在线端上。
+                // 平滑窗口随上报节奏自适应：设备移动时上报会从 10 分钟加快到几秒，
+                // 这时窗口开大就只剩滞后了（中位窗口的滞后约半个窗口，样本越密滞后越小），
+                // 所以按"实测上报间隔"判断是否在移动，移动中改用小窗口。
+                var observed = Number(data.observed_interval) || 0;
+                var win = (observed > 0 && observed < 120) ? 3 : SMOOTH_WIN;
+                var trail = smoothTrack(data.track || [], win);
 
-                if (trailLine) {
-                    trailLine.setLatLngs(points);
-                } else if (points.length > 1) {
-                    trailLine = L.polyline(points, {
+                if (trail.points.length > 1) {
+                    if (trailLine) trailLine.setLatLngs(trail.points);
+                    else trailLine = L.polyline(trail.points, {
                         color: '#1677ff',
                         weight: 2.5,
                         opacity: .85,
-                        lineJoin: 'round'
+                        lineJoin: 'round',
+                        lineCap: 'round'
                     }).addTo(map);
+                } else if (trailLine) {
+                    trailLine.setLatLngs([]);
                 }
 
-                // 焦点点：实时定位 > 轨迹末点（最后已知位置）> 无
-                if (data.fix && isFinite(data.lat) && isFinite(data.lon)) {
-                    var g = wgs84ToGcj02(data.lat, data.lon);
-                    focusLatLng = L.latLng(g.lat, g.lon);
-                    focusStale = false;
-                } else if (points.length) {
-                    focusLatLng = L.latLng(points[points.length - 1][0], points[points.length - 1][1]);
-                    focusStale = true;
+                // 焦点点：平滑后的最新位置 > 原始定位值 > 无（轨迹为空时的兜底）
+                var current = trail.current;
+                if (!current && data.fix && validLatLng(data.lat, data.lon)) {
+                    var c = wgs84ToGcj02(data.lat, data.lon);
+                    current = [c.lat, c.lon];
+                }
+                var hasLiveFix = !!(data.fix && validLatLng(data.lat, data.lon));
+                if (current) {
+                    focusLatLng = L.latLng(current[0], current[1]);
+                    focusStale = !hasLiveFix; // 不是实时定位 = 最后已知位置
                 } else {
                     focusLatLng = null;
                     focusStale = false;
                 }
 
                 if (focusLatLng) {
+                    var tip = (data.device || '设备') + (focusStale
+                        ? ' · 最后已知位置'
+                        : (trail.current ? ' · 已做抖动抑制' : ''));
                     if (!marker) {
                         marker = L.marker(focusLatLng, { icon: deviceIcon(focusStale), keyboard: false }).addTo(map);
                         markerStale = focusStale;
-                        marker.bindTooltip('', { direction: 'top', offset: [0, -12] });
+                        marker.bindTooltip(tip, { direction: 'top', offset: [0, -12] });
                     } else {
                         marker.setLatLng(focusLatLng);
                         if (markerStale !== focusStale) {
                             marker.setIcon(deviceIcon(focusStale));
                             markerStale = focusStale;
                         }
+                        if (marker.getTooltip()) marker.setTooltipContent(tip);
+                        else marker.bindTooltip(tip, { direction: 'top', offset: [0, -12] });
                     }
-                    var tip = (data.device || '设备') + (focusStale ? ' · 最后已知位置' : '');
-                    if (marker.getTooltip()) marker.setTooltipContent(tip);
-                    else marker.bindTooltip(tip, { direction: 'top', offset: [0, -12] });
 
-                    // 焦点永远居中：首次落位定一个初始层级，之后只平移、不动缩放
+                    // 首次落位定一个初始层级；之后只在设备确实移动时才平移地图
+                    // （recenter 内部有位移门限，避免每轮轮询都把底图挪一下）
                     if (!mapFitted) {
                         mapFitted = true;
-                        map.setView(focusLatLng, 17, { animate: false });
+                        map.setView(focusLatLng, 16, { animate: false });
                     } else {
                         recenter(true);
                     }
+                    updateRecenterBtn();
                 } else if (marker) {
                     map.removeLayer(marker);
                     marker = null;
