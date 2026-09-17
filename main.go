@@ -5258,6 +5258,24 @@ var (
 	templateCacheInit sync.Once                      // 保证首次访问时完成一次加载
 )
 
+// publicTemplatePages 无需登录即可访问的页面模板（键为小写文件名）。
+// 只收录登录入口与对外分享/下载页——它们本身就是给未登录访客看的。
+// 其余模板（rbac / security / trojan / services / files / log / pv-* 等）会完整暴露
+// 后台的 API 路径、权限点名称与功能结构，必须登录后才能取到。
+// 注意：shell.html 与 private.html 由各自更具体的路由接管（见 shell.go / private_api.go），
+// 不会走到兜底 handler，因此无需在此登记，也不应登记为公开。
+var publicTemplatePages = map[string]bool{
+	"index.html":        true, // 登录入口（登录表单与前端框架都在这一页）
+	"share.html":        true, // 卡片公开分享页
+	"pv-share.html":     true, // 卡片公开分享页（设计迭代版本）
+	"pv-share-pw.html":  true, // 卡片分享·密码验证页
+	"pv-share-bad.html": true, // 卡片分享·失效提示页
+	"audio-share.html":  true, // 语音公开分享页
+	"dl.html":           true, // 令牌下载页
+	"download.html":     true, // 令牌下载页
+	"mqtt-screen.html":  true, // 设备定位大屏（公开投屏页，数据经 /api/public/mqtt/screen 裁剪）
+}
+
 // loadTemplateCache 将模板目录全部文件读入内存并预压缩。
 // 压缩使用 gzip.BestSpeed：压缩率略低但 CPU 开销最小，适合大 HTML 文件的一次性预压缩。
 func loadTemplateCache() {
@@ -5380,6 +5398,44 @@ func serveTemplateCached(w http.ResponseWriter, r *http.Request, name string) bo
 	w.Header().Set("Content-Length", strconv.Itoa(len(entry.raw)))
 	w.Write(entry.raw)
 	return true
+}
+
+// staticFileHandler 静态文件与页面兜底路由（注册在 "/"）。
+// 两层防护：
+//  1. 敏感后缀拦截：备份/配置/源码/证书/日志等文件一律 404，防止误放文件被直接下载；
+//  2. 页面外壳访问控制：.html 模板会完整暴露后台的 API 路径、权限点与功能结构，
+//     因此除 publicTemplatePages 登记的公开页外一律要求已登录。未登录时跳回首页
+//     （与 privatePageHandler 行为一致，避免暴露"该页面是否存在"）。
+//     非 .html 的静态资源（ui.css / 字体 / 前端库）不设限，否则公开分享页会丢失样式与脚本。
+//
+// 独立成函数是为了让访问控制可被测试直接覆盖（见 static_page_access_test.go）。
+func staticFileHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		lower := strings.ToLower(r.URL.Path)
+		for _, pat := range []string{".bak", ".json", ".go", ".sh", ".key", ".pem", ".log", ".db", ".tmp", "~"} {
+			if strings.Contains(lower, pat) {
+				http.NotFound(w, r)
+				return
+			}
+		}
+		// 模板缓存命中时由 serveTemplateCached 设置 ETag 协商缓存（no-cache：每次校验、未变 304），
+		// 未命中回退路径保持 no-store，防止敏感文件被缓存
+		name := path.Base(r.URL.Path)
+		if name == "/" || name == "." {
+			name = "index.html"
+		}
+		if strings.HasSuffix(strings.ToLower(name), ".html") && !publicTemplatePages[strings.ToLower(name)] {
+			if _, ok := getSessionFromRequest(r); !ok {
+				http.Redirect(w, r, "/index.html", http.StatusFound)
+				return
+			}
+		}
+		if serveTemplateCached(w, r, name) {
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		http.FileServer(http.Dir(indexPath)).ServeHTTP(w, r)
+	}
 }
 
 // ==================== SSL 证书到期检测 ====================
@@ -6001,6 +6057,9 @@ func main() {
 	http.HandleFunc("/check-auth", securityMiddleware(checkAuthHandler))
 	// 版本信息：公开只读接口（不含敏感数据），供前端页脚/关于面板展示
 	http.HandleFunc("GET /api/version", securityMiddleware(versionHandler))
+	// MQTT 设备定位大屏：公开只读接口，供未登录的大屏直接投屏。
+	// 服务端代理本机 mqtt-dashboard 并做字段白名单裁剪，不透传 payload 原文与设备内部信息。
+	http.HandleFunc("GET /api/public/mqtt/screen", securityMiddleware(publicMqttScreenHandler))
 
 	// 注册下载相关路由
 	http.HandleFunc("/generate-download-token", authMiddleware(requirePermission("token:issue", securityMiddleware(generateDownloadTokenHandler))))
@@ -6012,26 +6071,7 @@ func main() {
 
 	// 使用认证中间件和安全中间件包装所有处理函数
 	// 静态文件服务：拦截备份/配置/源码等敏感文件，防止泄露
-	http.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		lower := strings.ToLower(r.URL.Path)
-		for _, pat := range []string{".bak", ".json", ".go", ".sh", ".key", ".pem", ".log", ".db", ".tmp", "~"} {
-			if strings.Contains(lower, pat) {
-				http.NotFound(w, r)
-				return
-			}
-		}
-		// 模板缓存命中时由 serveTemplateCached 设置 ETag 协商缓存（no-cache：每次校验、未变 304），
-		// 未命中回退路径保持 no-store，防止敏感文件被缓存
-		name := path.Base(r.URL.Path)
-		if name == "/" || name == "." {
-			name = "index.html"
-		}
-		if serveTemplateCached(w, r, name) {
-			return
-		}
-		w.Header().Set("Cache-Control", "no-store")
-		http.FileServer(http.Dir(indexPath)).ServeHTTP(w, r)
-	}))
+	http.Handle("/", staticFileHandler())
 	http.HandleFunc("/ws", authMiddleware(requirePermission("system:view", securityMiddleware(wsHandler))))
 	http.HandleFunc("/video", authMiddleware(requirePermission("files:view", securityMiddleware(homeHandler))))
 	http.HandleFunc("/status-ifaces", authMiddleware(requirePermission("system:view", securityMiddleware(ifacesHandler))))
