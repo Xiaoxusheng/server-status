@@ -6005,6 +6005,9 @@ func main() {
 	// 启动时预热 Docker 缓存（docker stats 采集慢，预热后首屏秒开）
 	go warmDockerCaches()
 
+	// 启动容器守护：异常停止自动重启，窗口内超限后邮件告警（config.json docker_guard.enabled 控制）
+	go dockerGuardLoop()
+
 	// 定时保存数据
 	go func() {
 		t := time.NewTicker(time.Second * 30)
