@@ -6,34 +6,28 @@
 <style>
   :root { color-scheme: light; }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; padding: 32px 24px 48px; background: #f7f8fa;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', Roboto, sans-serif;
-    color: #101828;
-  }
-  header { max-width: 1360px; margin: 0 auto 24px; }
-  h1 { margin: 0 0 6px; font-size: 20px; font-weight: 700; letter-spacing: -0.2px; }
-  p.lead { margin: 0; font-size: 13px; line-height: 20px; color: #667085; }
-  .grid {
-    max-width: 1360px; margin: 0 auto; display: grid; gap: 20px;
-    grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
-  }
-  .card { margin: 0; background: #fff; border: 1px solid #eaecf0; border-radius: 14px; overflow: hidden;
-          box-shadow: 0 1px 2px rgba(16,24,40,.04); }
-  figcaption { padding: 14px 16px 12px; border-bottom: 1px solid #f2f4f7; }
-  figcaption b { display: block; font-size: 13px; font-weight: 600; }
-  figcaption span { display: block; margin-top: 2px; font-size: 12px; line-height: 18px; color: #667085; }
-  iframe { display: block; width: 100%; height: 760px; border: 0; background: #f2f4f7; }
+  body { margin:0; padding:28px 24px 40px; background:#f7f8fa;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',Roboto,sans-serif; color:#1f2328; }
+  header { max-width:1280px; margin:0 auto 20px; }
+  h1 { margin:0 0 6px; font-size:19px; font-weight:700; }
+  p.lead { margin:0; font-size:13px; line-height:20px; color:#667085; }
+  .grid { max-width:1280px; margin:0 auto; display:grid; gap:16px;
+    grid-template-columns:repeat(auto-fit, minmax(560px, 1fr)); }
+  .card { margin:0; background:#fff; border:1px solid #e8eaed; border-radius:10px; overflow:hidden; }
+  figcaption { padding:12px 16px 10px; border-bottom:1px solid #f2f4f7; }
+  figcaption b { display:block; font-size:13px; font-weight:600; }
+  figcaption span { display:block; margin-top:2px; font-size:12px; line-height:18px; color:#667085; }
+  iframe { display:block; width:100%; height:420px; border:0; background:#fff; }
 </style>
 </head>
 <body>
   <header>
     <h1>告警邮件预览</h1>
-    <p class="lead">table 布局 + 内联样式，600px 卡片，不依赖外部图片；颜色随严重度变化，恢复通知整封转绿。下面是当前代码实际渲染的结果。</p>
+    <p class="lead">朴素通知风格：白底、一条状态色短横线、紧凑键值行，不用卡片/徽标/按钮。以下是当前代码的实际输出。</p>
   </header>
   <div class="grid">
       <figure class="card">
-        <figcaption><b>触发 · 警告</b><span>橙色主色，磁盘 88.6% 越过 85% 阈值，带占用进度条</span></figcaption>
+        <figcaption><b>触发 · 警告</b><span>橙色短横线，磁盘 88.6% 越过 85% 阈值</span></figcaption>
         <iframe title="触发 · 警告" srcdoc="&lt;!DOCTYPE html&gt;
 &lt;html lang=&quot;zh-CN&quot;&gt;
 &lt;head&gt;
@@ -42,105 +36,51 @@
 &lt;meta name=&quot;color-scheme&quot; content=&quot;light only&quot;&gt;
 &lt;title&gt;[警告] 磁盘空间不足&lt;/title&gt;
 &lt;/head&gt;
-&lt;body style=&quot;margin:0;padding:0;background:#f2f4f7;-webkit-text-size-adjust:100%;&quot;&gt;
-&lt;div style=&quot;display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;&quot;&gt;磁盘使用率 高于：当前 88.6%，阈值 85.0%（持续 5 分钟）&lt;/div&gt;
-&lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;background:#f2f4f7;&quot;&gt;
-  &lt;tr&gt;&lt;td align=&quot;center&quot; style=&quot;padding:28px 12px;&quot;&gt;
+&lt;body style=&quot;margin:0;padding:0;background:#ffffff;-webkit-text-size-adjust:100%;&quot;&gt;
+&lt;div style=&quot;display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;&quot;&gt;磁盘使用率 高于：当前 88.6%，阈值 85.0%（持续 5 分钟）。&lt;/div&gt;
+&lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;background:#ffffff;&quot;&gt;
+  &lt;tr&gt;&lt;td align=&quot;center&quot; style=&quot;padding:24px 16px 36px;&quot;&gt;
+    &lt;table role=&quot;presentation&quot; width=&quot;600&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:600px;max-width:600px;&quot;&gt;
 
-    &lt;table role=&quot;presentation&quot; width=&quot;600&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:600px;max-width:600px;background:#ffffff;border:1px solid #eaecf0;border-radius:14px;overflow:hidden;&quot;&gt;
-
-      &lt;tr&gt;&lt;td height=&quot;4&quot; style=&quot;height:4px;background:#dc6803;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;
-
-      &lt;tr&gt;&lt;td style=&quot;padding:22px 28px 0;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:700;color:#101828;letter-spacing:-0.2px;&quot;&gt;server-status&lt;/td&gt;
-            &lt;td align=&quot;right&quot; style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#98a2b3;&quot;&gt;LAPTOP-1QNEFCO3&lt;/td&gt;
-          &lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-
-      &lt;tr&gt;&lt;td style=&quot;padding:18px 28px 0;&quot;&gt;
+      &lt;tr&gt;&lt;td style=&quot;padding:0 0 0 0;&quot;&gt;
         &lt;table role=&quot;presentation&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;&lt;td style=&quot;background:#fffaeb;border:1px solid #fedf89;border-radius:999px;padding:4px 11px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;line-height:16px;color:#b54708;&quot;&gt;警告&lt;/td&gt;&lt;/tr&gt;
+          &lt;tr&gt;&lt;td height=&quot;3&quot; width=&quot;40&quot; style=&quot;height:3px;width:40px;background:#d08a1e;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;
         &lt;/table&gt;
       &lt;/td&gt;&lt;/tr&gt;
 
-      &lt;tr&gt;&lt;td style=&quot;padding:12px 28px 0;&quot;&gt;
-        &lt;h1 style=&quot;margin:0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:22px;line-height:30px;font-weight:600;color:#101828;&quot;&gt;磁盘空间不足&lt;/h1&gt;
-        &lt;p style=&quot;margin:8px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:22px;color:#475467;&quot;&gt;磁盘使用率 高于：当前 88.6%，阈值 85.0%（持续 5 分钟）&lt;/p&gt;
+      &lt;tr&gt;&lt;td style=&quot;padding:16px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8a8f98;&quot;&gt;server-status&lt;/td&gt;&lt;/tr&gt;
+
+      &lt;tr&gt;&lt;td style=&quot;padding:6px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:18px;line-height:27px;font-weight:600;color:#1f2328;&quot;&gt;
+        &lt;span style=&quot;color:#9a6512;&quot;&gt;警告&lt;/span&gt; · 磁盘空间不足
       &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:20px 28px 0;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;background:#f9fafb;border:1px solid #eaecf0;border-radius:12px;&quot;&gt;
-          &lt;tr&gt;
-            &lt;td width=&quot;33%&quot; style=&quot;padding:16px 18px;&quot;&gt;
-              &lt;div style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#667085;&quot;&gt;当前值&lt;/div&gt;
-              &lt;div style=&quot;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:26px;line-height:32px;font-weight:700;color:#dc6803;&quot;&gt;88.6%&lt;/div&gt;
-            &lt;/td&gt;
-            &lt;td width=&quot;33%&quot; style=&quot;padding:16px 18px;border-left:1px solid #eaecf0;&quot;&gt;
-              &lt;div style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#667085;&quot;&gt;阈值&lt;/div&gt;
-              &lt;div style=&quot;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:20px;line-height:28px;font-weight:600;color:#344054;&quot;&gt;85.0%&lt;/div&gt;
-            &lt;/td&gt;
-            &lt;td width=&quot;33%&quot; style=&quot;padding:16px 18px;border-left:1px solid #eaecf0;&quot;&gt;
-              &lt;div style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#667085;&quot;&gt;持续时长&lt;/div&gt;
-              &lt;div style=&quot;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:20px;line-height:28px;font-weight:600;color:#344054;&quot;&gt;5 分钟&lt;/div&gt;
-            &lt;/td&gt;
-          &lt;/tr&gt;
+
+      &lt;tr&gt;&lt;td style=&quot;padding:8px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:23px;color:#4a5058;&quot;&gt;磁盘使用率 高于：当前 88.6%，阈值 85.0%（持续 5 分钟）。&lt;/td&gt;&lt;/tr&gt;
+
+      &lt;tr&gt;&lt;td style=&quot;padding:14px 0 0;&quot;&gt;
+        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;border-top:1px solid #e8eaed;&quot;&gt;
+        &lt;tr&gt;
+          &lt;td width=&quot;88&quot; style=&quot;width:88px;padding:7px 12px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#8a8f98;vertical-align:top;&quot;&gt;主机&lt;/td&gt;
+          &lt;td style=&quot;padding:7px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#1f2328;&quot;&gt;LAPTOP-1QNEFCO3&lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr&gt;
+          &lt;td width=&quot;88&quot; style=&quot;width:88px;padding:7px 12px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#8a8f98;vertical-align:top;&quot;&gt;时间&lt;/td&gt;
+          &lt;td style=&quot;padding:7px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#1f2328;&quot;&gt;2026-11-11 15:54:46&lt;/td&gt;
+        &lt;/tr&gt;
         &lt;/table&gt;
       &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:10px 28px 2px;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;height:8px;&quot;&gt;
-          &lt;tr&gt;
-            &lt;td width=&quot;89%&quot; height=&quot;8&quot; style=&quot;background:#dc6803;height:8px;border-radius:4px;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/td&gt;
-            &lt;td width=&quot;11%&quot; height=&quot;8&quot; style=&quot;background:#eaecf0;height:8px;border-radius:4px;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/td&gt;
-          &lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:18px 28px 0;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;触发条件&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;磁盘使用率 高于 85.0%&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;主机&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;LAPTOP-1QNEFCO3&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;时间&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;2026-11-11 15:54:46&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;规则&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;磁盘空间不足 · 警告&lt;/td&gt;
-          &lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:22px 28px 4px;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;&lt;td style=&quot;background:#101828;border-radius:9px;&quot;&gt;
-            &lt;a href=&quot;https://LAPTOP-1QNEFCO3:9000/alerts&quot; style=&quot;display:inline-block;padding:11px 20px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;line-height:20px;color:#ffffff;text-decoration:none;&quot;&gt;打开告警中心 &amp;rarr;&lt;/a&gt;
-          &lt;/td&gt;&lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:18px 28px 0;&quot;&gt;
-        &lt;div style=&quot;height:1px;background:#eaecf0;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/div&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:14px 28px 24px;&quot;&gt;
-        &lt;p style=&quot;margin:0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#98a2b3;&quot;&gt;本邮件由 server-status 告警中心自动发送，请勿直接回复。可在「告警中心 → 设置」调整通知渠道与静默窗口。&lt;/p&gt;
-      &lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style=&quot;padding:16px 0 0;border-top:1px solid #e8eaed;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#4a5058;&quot;&gt;
+      查看详情：&lt;a href=&quot;https://LAPTOP-1QNEFCO3:9000/alerts&quot; style=&quot;color:#0b62d6;text-decoration:none;&quot;&gt;https://LAPTOP-1QNEFCO3:9000/alerts&lt;/a&gt;
+    &lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style=&quot;padding:14px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#8a8f98;&quot;&gt;本邮件由 server-status 告警中心自动发送，请勿回复。可在「告警中心 → 设置」调整规则与静默窗口。&lt;/td&gt;&lt;/tr&gt;
 
     &lt;/table&gt;
-
-    &lt;div style=&quot;margin-top:14px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;color:#98a2b3;&quot;&gt;server-status 1.0.0&lt;/div&gt;
-
   &lt;/td&gt;&lt;/tr&gt;
 &lt;/table&gt;
 &lt;/body&gt;
 &lt;/html&gt;" loading="lazy"></iframe>
       </figure>
       <figure class="card">
-        <figcaption><b>触发 · 严重</b><span>红色主色，关键服务掉线，非百分比指标不画进度条</span></figcaption>
+        <figcaption><b>触发 · 严重</b><span>红色短横线，关键服务掉线，含监控对象</span></figcaption>
         <iframe title="触发 · 严重" srcdoc="&lt;!DOCTYPE html&gt;
 &lt;html lang=&quot;zh-CN&quot;&gt;
 &lt;head&gt;
@@ -149,101 +89,55 @@
 &lt;meta name=&quot;color-scheme&quot; content=&quot;light only&quot;&gt;
 &lt;title&gt;[严重告警] 关键服务掉线&lt;/title&gt;
 &lt;/head&gt;
-&lt;body style=&quot;margin:0;padding:0;background:#f2f4f7;-webkit-text-size-adjust:100%;&quot;&gt;
-&lt;div style=&quot;display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;&quot;&gt;关键服务掉线 高于：当前 2 个，阈值 0 个（持续 1 分钟），掉线：nginx、firewalld&lt;/div&gt;
-&lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;background:#f2f4f7;&quot;&gt;
-  &lt;tr&gt;&lt;td align=&quot;center&quot; style=&quot;padding:28px 12px;&quot;&gt;
+&lt;body style=&quot;margin:0;padding:0;background:#ffffff;-webkit-text-size-adjust:100%;&quot;&gt;
+&lt;div style=&quot;display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;&quot;&gt;关键服务掉线 高于：当前 2 个，阈值 0 个（持续 1 分钟），掉线：nginx、firewalld。&lt;/div&gt;
+&lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;background:#ffffff;&quot;&gt;
+  &lt;tr&gt;&lt;td align=&quot;center&quot; style=&quot;padding:24px 16px 36px;&quot;&gt;
+    &lt;table role=&quot;presentation&quot; width=&quot;600&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:600px;max-width:600px;&quot;&gt;
 
-    &lt;table role=&quot;presentation&quot; width=&quot;600&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:600px;max-width:600px;background:#ffffff;border:1px solid #eaecf0;border-radius:14px;overflow:hidden;&quot;&gt;
-
-      &lt;tr&gt;&lt;td height=&quot;4&quot; style=&quot;height:4px;background:#d92d20;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;
-
-      &lt;tr&gt;&lt;td style=&quot;padding:22px 28px 0;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:700;color:#101828;letter-spacing:-0.2px;&quot;&gt;server-status&lt;/td&gt;
-            &lt;td align=&quot;right&quot; style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#98a2b3;&quot;&gt;LAPTOP-1QNEFCO3&lt;/td&gt;
-          &lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-
-      &lt;tr&gt;&lt;td style=&quot;padding:18px 28px 0;&quot;&gt;
+      &lt;tr&gt;&lt;td style=&quot;padding:0 0 0 0;&quot;&gt;
         &lt;table role=&quot;presentation&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;&lt;td style=&quot;background:#fef3f2;border:1px solid #fecdca;border-radius:999px;padding:4px 11px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;line-height:16px;color:#b42318;&quot;&gt;严重告警&lt;/td&gt;&lt;/tr&gt;
+          &lt;tr&gt;&lt;td height=&quot;3&quot; width=&quot;40&quot; style=&quot;height:3px;width:40px;background:#c9382c;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;
         &lt;/table&gt;
       &lt;/td&gt;&lt;/tr&gt;
 
-      &lt;tr&gt;&lt;td style=&quot;padding:12px 28px 0;&quot;&gt;
-        &lt;h1 style=&quot;margin:0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:22px;line-height:30px;font-weight:600;color:#101828;&quot;&gt;关键服务掉线&lt;/h1&gt;
-        &lt;p style=&quot;margin:8px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:22px;color:#475467;&quot;&gt;关键服务掉线 高于：当前 2 个，阈值 0 个（持续 1 分钟），掉线：nginx、firewalld&lt;/p&gt;
+      &lt;tr&gt;&lt;td style=&quot;padding:16px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8a8f98;&quot;&gt;server-status&lt;/td&gt;&lt;/tr&gt;
+
+      &lt;tr&gt;&lt;td style=&quot;padding:6px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:18px;line-height:27px;font-weight:600;color:#1f2328;&quot;&gt;
+        &lt;span style=&quot;color:#a92e24;&quot;&gt;严重告警&lt;/span&gt; · 关键服务掉线
       &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:20px 28px 0;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;background:#f9fafb;border:1px solid #eaecf0;border-radius:12px;&quot;&gt;
-          &lt;tr&gt;
-            &lt;td width=&quot;33%&quot; style=&quot;padding:16px 18px;&quot;&gt;
-              &lt;div style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#667085;&quot;&gt;当前值&lt;/div&gt;
-              &lt;div style=&quot;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:26px;line-height:32px;font-weight:700;color:#d92d20;&quot;&gt;2 个&lt;/div&gt;
-            &lt;/td&gt;
-            &lt;td width=&quot;33%&quot; style=&quot;padding:16px 18px;border-left:1px solid #eaecf0;&quot;&gt;
-              &lt;div style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#667085;&quot;&gt;阈值&lt;/div&gt;
-              &lt;div style=&quot;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:20px;line-height:28px;font-weight:600;color:#344054;&quot;&gt;0 个&lt;/div&gt;
-            &lt;/td&gt;
-            &lt;td width=&quot;33%&quot; style=&quot;padding:16px 18px;border-left:1px solid #eaecf0;&quot;&gt;
-              &lt;div style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#667085;&quot;&gt;持续时长&lt;/div&gt;
-              &lt;div style=&quot;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:20px;line-height:28px;font-weight:600;color:#344054;&quot;&gt;1 分钟&lt;/div&gt;
-            &lt;/td&gt;
-          &lt;/tr&gt;
+
+      &lt;tr&gt;&lt;td style=&quot;padding:8px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:23px;color:#4a5058;&quot;&gt;关键服务掉线 高于：当前 2 个，阈值 0 个（持续 1 分钟），掉线：nginx、firewalld。&lt;/td&gt;&lt;/tr&gt;
+
+      &lt;tr&gt;&lt;td style=&quot;padding:14px 0 0;&quot;&gt;
+        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;border-top:1px solid #e8eaed;&quot;&gt;
+        &lt;tr&gt;
+          &lt;td width=&quot;88&quot; style=&quot;width:88px;padding:7px 12px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#8a8f98;vertical-align:top;&quot;&gt;监控对象&lt;/td&gt;
+          &lt;td style=&quot;padding:7px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#1f2328;&quot;&gt;nginx, firewalld&lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr&gt;
+          &lt;td width=&quot;88&quot; style=&quot;width:88px;padding:7px 12px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#8a8f98;vertical-align:top;&quot;&gt;主机&lt;/td&gt;
+          &lt;td style=&quot;padding:7px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#1f2328;&quot;&gt;LAPTOP-1QNEFCO3&lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr&gt;
+          &lt;td width=&quot;88&quot; style=&quot;width:88px;padding:7px 12px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#8a8f98;vertical-align:top;&quot;&gt;时间&lt;/td&gt;
+          &lt;td style=&quot;padding:7px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#1f2328;&quot;&gt;2026-11-11 15:54:46&lt;/td&gt;
+        &lt;/tr&gt;
         &lt;/table&gt;
       &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:18px 28px 0;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;触发条件&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;关键服务掉线 高于 0 个&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;监控对象&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;nginx, firewalld&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;主机&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;LAPTOP-1QNEFCO3&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;时间&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;2026-11-11 15:54:46&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;规则&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;关键服务掉线 · 严重告警&lt;/td&gt;
-          &lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:22px 28px 4px;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;&lt;td style=&quot;background:#101828;border-radius:9px;&quot;&gt;
-            &lt;a href=&quot;https://LAPTOP-1QNEFCO3:9000/alerts&quot; style=&quot;display:inline-block;padding:11px 20px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;line-height:20px;color:#ffffff;text-decoration:none;&quot;&gt;打开告警中心 &amp;rarr;&lt;/a&gt;
-          &lt;/td&gt;&lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:18px 28px 0;&quot;&gt;
-        &lt;div style=&quot;height:1px;background:#eaecf0;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/div&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:14px 28px 24px;&quot;&gt;
-        &lt;p style=&quot;margin:0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#98a2b3;&quot;&gt;本邮件由 server-status 告警中心自动发送，请勿直接回复。可在「告警中心 → 设置」调整通知渠道与静默窗口。&lt;/p&gt;
-      &lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style=&quot;padding:16px 0 0;border-top:1px solid #e8eaed;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#4a5058;&quot;&gt;
+      查看详情：&lt;a href=&quot;https://LAPTOP-1QNEFCO3:9000/alerts&quot; style=&quot;color:#0b62d6;text-decoration:none;&quot;&gt;https://LAPTOP-1QNEFCO3:9000/alerts&lt;/a&gt;
+    &lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style=&quot;padding:14px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#8a8f98;&quot;&gt;本邮件由 server-status 告警中心自动发送，请勿回复。可在「告警中心 → 设置」调整规则与静默窗口。&lt;/td&gt;&lt;/tr&gt;
 
     &lt;/table&gt;
-
-    &lt;div style=&quot;margin-top:14px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;color:#98a2b3;&quot;&gt;server-status 1.0.0&lt;/div&gt;
-
   &lt;/td&gt;&lt;/tr&gt;
 &lt;/table&gt;
 &lt;/body&gt;
 &lt;/html&gt;" loading="lazy"></iframe>
       </figure>
       <figure class="card">
-        <figcaption><b>恢复通知</b><span>整封转绿，去掉进度条避免误读为指标仍处高位</span></figcaption>
+        <figcaption><b>恢复通知</b><span>整封绿色状态词，摘要说明已回落</span></figcaption>
         <iframe title="恢复通知" srcdoc="&lt;!DOCTYPE html&gt;
 &lt;html lang=&quot;zh-CN&quot;&gt;
 &lt;head&gt;
@@ -252,97 +146,51 @@
 &lt;meta name=&quot;color-scheme&quot; content=&quot;light only&quot;&gt;
 &lt;title&gt;[已恢复] 内存占用过高&lt;/title&gt;
 &lt;/head&gt;
-&lt;body style=&quot;margin:0;padding:0;background:#f2f4f7;-webkit-text-size-adjust:100%;&quot;&gt;
-&lt;div style=&quot;display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;&quot;&gt;内存使用率 已恢复：当前 62.4%，低于触发阈值 90.0%&lt;/div&gt;
-&lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;background:#f2f4f7;&quot;&gt;
-  &lt;tr&gt;&lt;td align=&quot;center&quot; style=&quot;padding:28px 12px;&quot;&gt;
+&lt;body style=&quot;margin:0;padding:0;background:#ffffff;-webkit-text-size-adjust:100%;&quot;&gt;
+&lt;div style=&quot;display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;&quot;&gt;内存使用率 已恢复：当前 62.4%，低于触发阈值 90.0%。&lt;/div&gt;
+&lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;background:#ffffff;&quot;&gt;
+  &lt;tr&gt;&lt;td align=&quot;center&quot; style=&quot;padding:24px 16px 36px;&quot;&gt;
+    &lt;table role=&quot;presentation&quot; width=&quot;600&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:600px;max-width:600px;&quot;&gt;
 
-    &lt;table role=&quot;presentation&quot; width=&quot;600&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:600px;max-width:600px;background:#ffffff;border:1px solid #eaecf0;border-radius:14px;overflow:hidden;&quot;&gt;
-
-      &lt;tr&gt;&lt;td height=&quot;4&quot; style=&quot;height:4px;background:#039855;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;
-
-      &lt;tr&gt;&lt;td style=&quot;padding:22px 28px 0;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:700;color:#101828;letter-spacing:-0.2px;&quot;&gt;server-status&lt;/td&gt;
-            &lt;td align=&quot;right&quot; style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#98a2b3;&quot;&gt;LAPTOP-1QNEFCO3&lt;/td&gt;
-          &lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-
-      &lt;tr&gt;&lt;td style=&quot;padding:18px 28px 0;&quot;&gt;
+      &lt;tr&gt;&lt;td style=&quot;padding:0 0 0 0;&quot;&gt;
         &lt;table role=&quot;presentation&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;&lt;td style=&quot;background:#ecfdf3;border:1px solid #a6f4c5;border-radius:999px;padding:4px 11px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;line-height:16px;color:#027a48;&quot;&gt;已恢复&lt;/td&gt;&lt;/tr&gt;
+          &lt;tr&gt;&lt;td height=&quot;3&quot; width=&quot;40&quot; style=&quot;height:3px;width:40px;background:#2f9e6f;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;
         &lt;/table&gt;
       &lt;/td&gt;&lt;/tr&gt;
 
-      &lt;tr&gt;&lt;td style=&quot;padding:12px 28px 0;&quot;&gt;
-        &lt;h1 style=&quot;margin:0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:22px;line-height:30px;font-weight:600;color:#101828;&quot;&gt;内存占用过高&lt;/h1&gt;
-        &lt;p style=&quot;margin:8px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:22px;color:#475467;&quot;&gt;内存使用率 已恢复：当前 62.4%，低于触发阈值 90.0%&lt;/p&gt;
+      &lt;tr&gt;&lt;td style=&quot;padding:16px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8a8f98;&quot;&gt;server-status&lt;/td&gt;&lt;/tr&gt;
+
+      &lt;tr&gt;&lt;td style=&quot;padding:6px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:18px;line-height:27px;font-weight:600;color:#1f2328;&quot;&gt;
+        &lt;span style=&quot;color:#1f7a55;&quot;&gt;已恢复&lt;/span&gt; · 内存占用过高
       &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:20px 28px 0;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;background:#f9fafb;border:1px solid #eaecf0;border-radius:12px;&quot;&gt;
-          &lt;tr&gt;
-            &lt;td width=&quot;33%&quot; style=&quot;padding:16px 18px;&quot;&gt;
-              &lt;div style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#667085;&quot;&gt;当前值&lt;/div&gt;
-              &lt;div style=&quot;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:26px;line-height:32px;font-weight:700;color:#039855;&quot;&gt;62.4%&lt;/div&gt;
-            &lt;/td&gt;
-            &lt;td width=&quot;33%&quot; style=&quot;padding:16px 18px;border-left:1px solid #eaecf0;&quot;&gt;
-              &lt;div style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#667085;&quot;&gt;阈值&lt;/div&gt;
-              &lt;div style=&quot;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:20px;line-height:28px;font-weight:600;color:#344054;&quot;&gt;90.0%&lt;/div&gt;
-            &lt;/td&gt;
-            &lt;td width=&quot;33%&quot; style=&quot;padding:16px 18px;border-left:1px solid #eaecf0;&quot;&gt;
-              &lt;div style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#667085;&quot;&gt;持续时长&lt;/div&gt;
-              &lt;div style=&quot;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:20px;line-height:28px;font-weight:600;color:#344054;&quot;&gt;5 分钟&lt;/div&gt;
-            &lt;/td&gt;
-          &lt;/tr&gt;
+
+      &lt;tr&gt;&lt;td style=&quot;padding:8px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:23px;color:#4a5058;&quot;&gt;内存使用率 已恢复：当前 62.4%，低于触发阈值 90.0%。&lt;/td&gt;&lt;/tr&gt;
+
+      &lt;tr&gt;&lt;td style=&quot;padding:14px 0 0;&quot;&gt;
+        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;border-top:1px solid #e8eaed;&quot;&gt;
+        &lt;tr&gt;
+          &lt;td width=&quot;88&quot; style=&quot;width:88px;padding:7px 12px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#8a8f98;vertical-align:top;&quot;&gt;主机&lt;/td&gt;
+          &lt;td style=&quot;padding:7px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#1f2328;&quot;&gt;LAPTOP-1QNEFCO3&lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr&gt;
+          &lt;td width=&quot;88&quot; style=&quot;width:88px;padding:7px 12px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#8a8f98;vertical-align:top;&quot;&gt;时间&lt;/td&gt;
+          &lt;td style=&quot;padding:7px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#1f2328;&quot;&gt;2026-11-11 15:54:46&lt;/td&gt;
+        &lt;/tr&gt;
         &lt;/table&gt;
       &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:18px 28px 0;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;触发条件&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;内存使用率 高于 90.0%&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;主机&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;LAPTOP-1QNEFCO3&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;时间&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;2026-11-11 15:54:46&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;规则&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;内存占用过高 · 警告&lt;/td&gt;
-          &lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:22px 28px 4px;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;&lt;td style=&quot;background:#101828;border-radius:9px;&quot;&gt;
-            &lt;a href=&quot;https://LAPTOP-1QNEFCO3:9000/alerts&quot; style=&quot;display:inline-block;padding:11px 20px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;line-height:20px;color:#ffffff;text-decoration:none;&quot;&gt;打开告警中心 &amp;rarr;&lt;/a&gt;
-          &lt;/td&gt;&lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:18px 28px 0;&quot;&gt;
-        &lt;div style=&quot;height:1px;background:#eaecf0;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/div&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:14px 28px 24px;&quot;&gt;
-        &lt;p style=&quot;margin:0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#98a2b3;&quot;&gt;该告警已恢复，无需处理。本邮件由 server-status 告警中心自动发送。&lt;/p&gt;
-      &lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style=&quot;padding:16px 0 0;border-top:1px solid #e8eaed;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#4a5058;&quot;&gt;
+      查看详情：&lt;a href=&quot;https://LAPTOP-1QNEFCO3:9000/alerts&quot; style=&quot;color:#0b62d6;text-decoration:none;&quot;&gt;https://LAPTOP-1QNEFCO3:9000/alerts&lt;/a&gt;
+    &lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style=&quot;padding:14px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#8a8f98;&quot;&gt;该告警已恢复，无需处理。本邮件由 server-status 告警中心自动发送。&lt;/td&gt;&lt;/tr&gt;
 
     &lt;/table&gt;
-
-    &lt;div style=&quot;margin-top:14px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;color:#98a2b3;&quot;&gt;server-status 1.0.0&lt;/div&gt;
-
   &lt;/td&gt;&lt;/tr&gt;
 &lt;/table&gt;
 &lt;/body&gt;
 &lt;/html&gt;" loading="lazy"></iframe>
       </figure>
       <figure class="card">
-        <figcaption><b>容器守护</b><span>容器反复重启未恢复，与告警邮件共用同一套外壳</span></figcaption>
+        <figcaption><b>容器守护</b><span>容器反复重启未恢复，与告警共用同一套排版</span></figcaption>
         <iframe title="容器守护" srcdoc="&lt;!DOCTYPE html&gt;
 &lt;html lang=&quot;zh-CN&quot;&gt;
 &lt;head&gt;
@@ -351,90 +199,56 @@
 &lt;meta name=&quot;color-scheme&quot; content=&quot;light only&quot;&gt;
 &lt;title&gt;[严重告警] 容器 nginx-web 反复重启未恢复&lt;/title&gt;
 &lt;/head&gt;
-&lt;body style=&quot;margin:0;padding:0;background:#f2f4f7;-webkit-text-size-adjust:100%;&quot;&gt;
-&lt;div style=&quot;display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;&quot;&gt;异常停止后已自动重启 3 次仍未能拉起，守护已暂停对该容器的自动重启，冷却 30 分钟 后重新接管。&lt;/div&gt;
-&lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;background:#f2f4f7;&quot;&gt;
-  &lt;tr&gt;&lt;td align=&quot;center&quot; style=&quot;padding:28px 12px;&quot;&gt;
+&lt;body style=&quot;margin:0;padding:0;background:#ffffff;-webkit-text-size-adjust:100%;&quot;&gt;
+&lt;div style=&quot;display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;&quot;&gt;异常停止后已自动重启 3 次仍未能拉起，守护已暂停自动重启，30 分钟后重新接管。&lt;/div&gt;
+&lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;background:#ffffff;&quot;&gt;
+  &lt;tr&gt;&lt;td align=&quot;center&quot; style=&quot;padding:24px 16px 36px;&quot;&gt;
+    &lt;table role=&quot;presentation&quot; width=&quot;600&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:600px;max-width:600px;&quot;&gt;
 
-    &lt;table role=&quot;presentation&quot; width=&quot;600&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:600px;max-width:600px;background:#ffffff;border:1px solid #eaecf0;border-radius:14px;overflow:hidden;&quot;&gt;
-
-      &lt;tr&gt;&lt;td height=&quot;4&quot; style=&quot;height:4px;background:#d92d20;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;
-
-      &lt;tr&gt;&lt;td style=&quot;padding:22px 28px 0;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:15px;font-weight:700;color:#101828;letter-spacing:-0.2px;&quot;&gt;server-status&lt;/td&gt;
-            &lt;td align=&quot;right&quot; style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#98a2b3;&quot;&gt;LAPTOP-1QNEFCO3&lt;/td&gt;
-          &lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-
-      &lt;tr&gt;&lt;td style=&quot;padding:18px 28px 0;&quot;&gt;
+      &lt;tr&gt;&lt;td style=&quot;padding:0 0 0 0;&quot;&gt;
         &lt;table role=&quot;presentation&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;&lt;td style=&quot;background:#fef3f2;border:1px solid #fecdca;border-radius:999px;padding:4px 11px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;font-weight:600;line-height:16px;color:#b42318;&quot;&gt;容器异常&lt;/td&gt;&lt;/tr&gt;
+          &lt;tr&gt;&lt;td height=&quot;3&quot; width=&quot;40&quot; style=&quot;height:3px;width:40px;background:#c9382c;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/td&gt;&lt;/tr&gt;
         &lt;/table&gt;
       &lt;/td&gt;&lt;/tr&gt;
 
-      &lt;tr&gt;&lt;td style=&quot;padding:12px 28px 0;&quot;&gt;
-        &lt;h1 style=&quot;margin:0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:22px;line-height:30px;font-weight:600;color:#101828;&quot;&gt;容器 nginx-web 反复重启未能恢复&lt;/h1&gt;
-        &lt;p style=&quot;margin:8px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:22px;color:#475467;&quot;&gt;异常停止后已自动重启 3 次仍未能拉起，守护已暂停对该容器的自动重启，冷却 30 分钟 后重新接管。&lt;/p&gt;
+      &lt;tr&gt;&lt;td style=&quot;padding:16px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#8a8f98;&quot;&gt;server-status&lt;/td&gt;&lt;/tr&gt;
+
+      &lt;tr&gt;&lt;td style=&quot;padding:6px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:18px;line-height:27px;font-weight:600;color:#1f2328;&quot;&gt;
+        &lt;span style=&quot;color:#a92e24;&quot;&gt;容器异常&lt;/span&gt; · nginx-web
       &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:20px 28px 0;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;background:#f9fafb;border:1px solid #eaecf0;border-radius:12px;&quot;&gt;
-          &lt;tr&gt;
-            &lt;td width=&quot;33%&quot; style=&quot;padding:16px 18px;&quot;&gt;
-              &lt;div style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#667085;&quot;&gt;重启次数&lt;/div&gt;
-              &lt;div style=&quot;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:26px;line-height:32px;font-weight:700;color:#d92d20;&quot;&gt;3 次&lt;/div&gt;
-            &lt;/td&gt;
-            &lt;td width=&quot;33%&quot; style=&quot;padding:16px 18px;border-left:1px solid #eaecf0;&quot;&gt;
-              &lt;div style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#667085;&quot;&gt;当前状态&lt;/div&gt;
-              &lt;div style=&quot;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:20px;line-height:28px;font-weight:600;color:#344054;&quot;&gt;exited&lt;/div&gt;
-            &lt;/td&gt;
-            &lt;td width=&quot;33%&quot; style=&quot;padding:16px 18px;border-left:1px solid #eaecf0;&quot;&gt;
-              &lt;div style=&quot;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#667085;&quot;&gt;冷却时长&lt;/div&gt;
-              &lt;div style=&quot;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:20px;line-height:28px;font-weight:600;color:#344054;&quot;&gt;30 分钟&lt;/div&gt;
-            &lt;/td&gt;
-          &lt;/tr&gt;
+
+      &lt;tr&gt;&lt;td style=&quot;padding:8px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:23px;color:#4a5058;&quot;&gt;异常停止后已自动重启 3 次仍未能拉起，守护已暂停自动重启，30 分钟后重新接管。&lt;/td&gt;&lt;/tr&gt;
+
+      &lt;tr&gt;&lt;td style=&quot;padding:14px 0 0;&quot;&gt;
+        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;border-top:1px solid #e8eaed;&quot;&gt;
+        &lt;tr&gt;
+          &lt;td width=&quot;88&quot; style=&quot;width:88px;padding:7px 12px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#8a8f98;vertical-align:top;&quot;&gt;容器&lt;/td&gt;
+          &lt;td style=&quot;padding:7px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#1f2328;&quot;&gt;nginx-web&lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr&gt;
+          &lt;td width=&quot;88&quot; style=&quot;width:88px;padding:7px 12px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#8a8f98;vertical-align:top;&quot;&gt;当前状态&lt;/td&gt;
+          &lt;td style=&quot;padding:7px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#1f2328;&quot;&gt;exited&lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr&gt;
+          &lt;td width=&quot;88&quot; style=&quot;width:88px;padding:7px 12px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#8a8f98;vertical-align:top;&quot;&gt;状态详情&lt;/td&gt;
+          &lt;td style=&quot;padding:7px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#1f2328;&quot;&gt;Exited (1) 12 seconds ago&lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr&gt;
+          &lt;td width=&quot;88&quot; style=&quot;width:88px;padding:7px 12px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#8a8f98;vertical-align:top;&quot;&gt;主机&lt;/td&gt;
+          &lt;td style=&quot;padding:7px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#1f2328;&quot;&gt;LAPTOP-1QNEFCO3&lt;/td&gt;
+        &lt;/tr&gt;
+        &lt;tr&gt;
+          &lt;td width=&quot;88&quot; style=&quot;width:88px;padding:7px 12px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#8a8f98;vertical-align:top;&quot;&gt;时间&lt;/td&gt;
+          &lt;td style=&quot;padding:7px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#1f2328;&quot;&gt;2026-11-11 16:07:35&lt;/td&gt;
+        &lt;/tr&gt;
         &lt;/table&gt;
       &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:18px 28px 0;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;容器&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;nginx-web&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;状态详情&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;Exited (1) 12 seconds ago&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;主机&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;LAPTOP-1QNEFCO3&lt;/td&gt;
-          &lt;/tr&gt;
-          &lt;tr&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#667085;width:96px;&quot;&gt;时间&lt;/td&gt;
-            &lt;td style=&quot;padding:10px 0 0;font-size:13px;line-height:20px;color:#101828;&quot;&gt;2026-11-11 16:01:15&lt;/td&gt;
-          &lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:22px 28px 4px;&quot;&gt;
-        &lt;table role=&quot;presentation&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot;&gt;
-          &lt;tr&gt;&lt;td style=&quot;background:#101828;border-radius:9px;&quot;&gt;
-            &lt;a href=&quot;https://LAPTOP-1QNEFCO3:9000/docker.html&quot; style=&quot;display:inline-block;padding:11px 20px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;line-height:20px;color:#ffffff;text-decoration:none;&quot;&gt;查看容器日志 &amp;rarr;&lt;/a&gt;
-          &lt;/td&gt;&lt;/tr&gt;
-        &lt;/table&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:18px 28px 0;&quot;&gt;
-        &lt;div style=&quot;height:1px;background:#eaecf0;font-size:0;line-height:0;&quot;&gt;&amp;nbsp;&lt;/div&gt;
-      &lt;/td&gt;&lt;/tr&gt;
-      &lt;tr&gt;&lt;td style=&quot;padding:14px 28px 24px;&quot;&gt;
-        &lt;p style=&quot;margin:0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#98a2b3;&quot;&gt;请登录面板查看容器日志并排查根因。本邮件由容器守护自动发送，请勿回复。&lt;/p&gt;
-      &lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style=&quot;padding:16px 0 0;border-top:1px solid #e8eaed;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:13px;line-height:21px;color:#4a5058;&quot;&gt;
+      查看详情：&lt;a href=&quot;https://LAPTOP-1QNEFCO3:9000/docker.html&quot; style=&quot;color:#0b62d6;text-decoration:none;&quot;&gt;https://LAPTOP-1QNEFCO3:9000/docker.html&lt;/a&gt;
+    &lt;/td&gt;&lt;/tr&gt;
+    &lt;tr&gt;&lt;td style=&quot;padding:14px 0 0;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:19px;color:#8a8f98;&quot;&gt;请登录面板查看容器日志并排查根因。本邮件由容器守护自动发送，请勿回复。&lt;/td&gt;&lt;/tr&gt;
 
     &lt;/table&gt;
-
-    &lt;div style=&quot;margin-top:14px;font-family:-apple-system,BlinkMacSystemFont,&#x27;Segoe UI&#x27;,&#x27;Microsoft YaHei&#x27;,Roboto,Helvetica,Arial,sans-serif;font-size:11px;line-height:16px;color:#98a2b3;&quot;&gt;server-status 1.0.0&lt;/div&gt;
-
   &lt;/td&gt;&lt;/tr&gt;
 &lt;/table&gt;
 &lt;/body&gt;
