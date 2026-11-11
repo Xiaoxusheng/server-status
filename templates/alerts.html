@@ -71,6 +71,15 @@
         html.dark .panel { background: #1f1f1f; }
         .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 
+        /* 弹窗表单：两列栅格，避免 Form.Item 在 Space 里宽度失控、右侧被裁 */
+        .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+        .form-grid .ant-form-item { margin-bottom: 0; min-width: 0; }
+        .form-grid .span-2 { grid-column: 1 / -1; }
+        @media (max-width: 640px) {
+            .form-grid { grid-template-columns: minmax(0, 1fr); }
+            .form-grid .span-2 { grid-column: auto; }
+        }
+
         .rule-name { font-weight: 600; }
         .muted-text { color: rgba(0, 0, 0, .45); font-size: 12px; }
         html.dark .muted-text { color: rgba(255, 255, 255, .45); }
@@ -467,97 +476,97 @@
 
                         <Modal open={ruleModal.open} title={ruleModal.editing ? '编辑规则' : '新建规则'}
                             onCancel={() => setRuleModal({ open: false, editing: null })}
-                            onOk={submitRule} confirmLoading={saving} okText="保存" cancelText="取消" width={620}>
+                            onOk={submitRule} confirmLoading={saving} okText="保存" cancelText="取消" width={680}>
                             <Form form={form} layout="vertical" size="middle">
-                                <Form.Item name="name" label="规则名称" rules={[{ required: true, message: '给规则起个名字' }]}>
-                                    <Input placeholder="例如：磁盘空间不足" />
-                                </Form.Item>
-                                <Space size={12} wrap style={{ display: 'flex' }}>
-                                    <Form.Item name="metric" label="监控指标" style={{ minWidth: 200 }}>
+                                <div className="form-grid">
+                                    <Form.Item name="name" label="规则名称" className="span-2" rules={[{ required: true, message: '给规则起个名字' }]}>
+                                        <Input placeholder="例如：磁盘空间不足" />
+                                    </Form.Item>
+                                    <Form.Item name="metric" label="监控指标">
                                         <Select options={METRICS} />
                                     </Form.Item>
-                                    <Form.Item name="op" label="比较方式" style={{ minWidth: 110 }}>
+                                    <Form.Item name="op" label="比较方式">
                                         <Select options={[{ value: 'gt', label: '高于' }, { value: 'lt', label: '低于' }]} />
                                     </Form.Item>
-                                    <Form.Item name="threshold" label="阈值" style={{ minWidth: 110 }}>
+                                    <Form.Item name="threshold" label="阈值">
                                         <InputNumber style={{ width: '100%' }} />
                                     </Form.Item>
-                                    <Form.Item name="severity" label="严重程度" style={{ minWidth: 120 }}>
+                                    <Form.Item name="severity" label="严重程度">
                                         <Select options={[{ value: 'critical', label: '严重' }, { value: 'warning', label: '警告' }, { value: 'info', label: '提示' }]} />
                                     </Form.Item>
-                                </Space>
-                                <Space size={12} wrap style={{ display: 'flex' }}>
-                                    <Form.Item name="duration_sec" label="持续多久才触发（秒）" style={{ minWidth: 200 }}>
+                                    <Form.Item name="duration_sec" label="持续多久才触发（秒）">
                                         <InputNumber min={0} max={86400} style={{ width: '100%' }} />
                                     </Form.Item>
-                                    <Form.Item name="cooldown_sec" label="通知冷却（秒）" style={{ minWidth: 180 }}>
+                                    <Form.Item name="cooldown_sec" label="通知冷却（秒）">
                                         <InputNumber min={0} max={604800} style={{ width: '100%' }} />
                                     </Form.Item>
-                                    <Form.Item name="target" label="目标服务（仅服务掉线）" style={{ minWidth: 200 }}>
-                                        <Input placeholder="留空=全部被监控服务" allowClear />
+                                    <Form.Item name="target" label="目标服务（仅“关键服务掉线”生效）" className="span-2">
+                                        <Input placeholder="留空 = 全部被监控服务" allowClear />
                                     </Form.Item>
-                                </Space>
-                                <Form.Item name="channels" label="通知渠道">
-                                    <Checkbox.Group options={[{ label: '邮件', value: 'email' }, { label: 'Webhook', value: 'webhook' }]} />
-                                </Form.Item>
-                                <Space size={12} wrap style={{ display: 'flex' }}>
-                                    <Form.Item name="mute_start" label="静默开始（HH:MM，留空跟随全局）" style={{ minWidth: 240 }}>
+                                    <Form.Item name="channels" label="通知渠道" className="span-2">
+                                        <Checkbox.Group options={[{ label: '邮件', value: 'email' }, { label: 'Webhook', value: 'webhook' }]} />
+                                    </Form.Item>
+                                    <Form.Item name="mute_start" label="静默开始（留空跟随全局）">
                                         <Input placeholder="23:00" allowClear />
                                     </Form.Item>
-                                    <Form.Item name="mute_end" label="静默结束" style={{ minWidth: 140 }}>
+                                    <Form.Item name="mute_end" label="静默结束">
                                         <Input placeholder="08:00" allowClear />
                                     </Form.Item>
                                     <Form.Item name="enabled" label="启用" valuePropName="checked">
                                         <Switch />
                                     </Form.Item>
-                                </Space>
+                                </div>
                             </Form>
                         </Modal>
 
-                        <Modal open={cfgModal} title="告警中心设置" width={640} confirmLoading={saving}
+                        <Modal open={cfgModal} title="告警中心设置" width={720} confirmLoading={saving}
                             onCancel={() => setCfgModal(false)} onOk={saveCfg} okText="保存" cancelText="取消">
-                            <Form form={cfgForm} layout="vertical">
-                                <Space size={12} wrap style={{ display: 'flex' }}>
+                            <Form form={cfgForm} layout="vertical" size="middle">
+                                <div className="form-grid">
                                     <Form.Item name="enabled" label="启用告警" valuePropName="checked">
                                         <Switch />
                                     </Form.Item>
-                                    <Form.Item name="interval_sec" label="采样间隔（秒）" style={{ minWidth: 160 }}>
+                                    <Form.Item name="interval_sec" label="采样间隔（秒）">
                                         <InputNumber min={10} max={3600} style={{ width: '100%' }} />
                                     </Form.Item>
-                                    <Form.Item name="mute_start" label="静默开始" style={{ minWidth: 140 }}>
+                                    <Form.Item name="mute_start" label="静默开始">
                                         <Input placeholder="23:00" allowClear />
                                     </Form.Item>
-                                    <Form.Item name="mute_end" label="静默结束" style={{ minWidth: 140 }}>
+                                    <Form.Item name="mute_end" label="静默结束">
                                         <Input placeholder="08:00" allowClear />
                                     </Form.Item>
-                                </Space>
-                                <Typography.Text strong>邮件（SMTP）</Typography.Text>
-                                <Space size={12} wrap style={{ display: 'flex', marginTop: 8 }}>
-                                    <Form.Item name="email_host" label="服务器" style={{ minWidth: 200 }}>
+
+                                    <div className="span-2" style={{ paddingTop: 2 }}>
+                                        <Typography.Text strong>邮件（SMTP）</Typography.Text>
+                                    </div>
+                                    <Form.Item name="email_host" label="服务器">
                                         <Input placeholder="smtp.qq.com" />
                                     </Form.Item>
-                                    <Form.Item name="email_port" label="端口" style={{ minWidth: 110 }}>
+                                    <Form.Item name="email_port" label="端口">
                                         <InputNumber min={1} max={65535} style={{ width: '100%' }} />
                                     </Form.Item>
-                                    <Form.Item name="email_username" label="账号" style={{ minWidth: 200 }}>
+                                    <Form.Item name="email_username" label="账号">
                                         <Input placeholder="you@qq.com" />
                                     </Form.Item>
-                                    <Form.Item name="email_password" label="密码/授权码" style={{ minWidth: 180 }}>
+                                    <Form.Item name="email_password" label="密码/授权码">
                                         <Input.Password placeholder="留空则保持不变" />
                                     </Form.Item>
-                                    <Form.Item name="email_from" label="发件人" style={{ minWidth: 200 }}>
+                                    <Form.Item name="email_from" label="发件人">
                                         <Input placeholder="留空取账号" />
                                     </Form.Item>
-                                    <Form.Item name="email_to" label="收件人（逗号分隔）" style={{ minWidth: 280 }}>
+                                    <Form.Item name="email_to" label="收件人（逗号分隔）">
                                         <Input placeholder="a@x.com, b@y.com" />
                                     </Form.Item>
-                                </Space>
-                                <Typography.Text strong>Webhook</Typography.Text>
-                                <Form.Item name="webhook_url" label="URL（企业微信机器人地址会自动适配格式）" style={{ marginTop: 8 }}>
-                                    <Input placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." allowClear />
-                                </Form.Item>
-                                <Alert type="info" showIcon
-                                    message="邮件配置留空时会自动沿用「容器守护 docker_guard」里的 SMTP 设置。" />
+
+                                    <div className="span-2" style={{ paddingTop: 2 }}>
+                                        <Typography.Text strong>Webhook</Typography.Text>
+                                    </div>
+                                    <Form.Item name="webhook_url" label="URL（企业微信机器人地址会自动适配格式）" className="span-2">
+                                        <Input placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." allowClear />
+                                    </Form.Item>
+                                    <Alert className="span-2" type="info" showIcon
+                                        message="邮件配置留空时会自动沿用「容器守护 docker_guard」里的 SMTP 设置。" />
+                                </div>
                             </Form>
                         </Modal>
                     </div>
