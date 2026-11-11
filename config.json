@@ -32,5 +32,22 @@
       "go-auto-uploader",
       "EchoIM"
     ]
+  },
+  "docker_guard": {
+    "enabled": true,
+    "check_interval": 30,
+    "max_restarts": 3,
+    "window_minutes": 60,
+    "cooldown_minutes": 30,
+    "exclude": [],
+    "exclude_patterns": [],
+    "alert_email": {
+      "host": "smtp.qq.com",
+      "port": 465,
+      "username": "你的QQ号@qq.com",
+      "password": "QQ邮箱设置里生成的SMTP授权码",
+      "from": "",
+      "to": ["你的QQ号@qq.com"]
+    }
   }
 }

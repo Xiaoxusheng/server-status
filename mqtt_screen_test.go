@@ -676,3 +676,122 @@ func TestFetchMqttScreenDataNoFixSkipsGeocode(t *testing.T) {
 		t.Errorf("未定位不应请求高德，实际 %d 次", *hits)
 	}
 }
+
+// 实测散布：中位中心 + p75，个别飞点不能主导结果
+func TestMqttScreenTrackScatter(t *testing.T) {
+	mk := func(offsets ...float64) []mqttScreenTrackPoint {
+		pts := make([]mqttScreenTrackPoint, len(offsets))
+		for i, m := range offsets {
+			pts[i] = mqttScreenTrackPoint{T: int64(i) * 600, Lat: 32.0 + m/111132.0, Lon: 118.0}
+		}
+		return pts
+	}
+
+	// 0/10/20/30/40 m 向北：中位中心在 20 m，距离 [20 10 0 10 20]，
+	// p75 取排序后第 (5-1)*3/4=3 个 → 20 m
+	v, n := mqttScreenTrackScatter(mk(0, 10, 20, 30, 40), 20)
+	if n != 5 || math.Abs(v-20) > 0.5 {
+		t.Errorf("5 点应得到 n=5/p75≈20，实际 n=%d v=%.1f", n, v)
+	}
+
+	// 两个 500 m 飞点：中位中心被拉到 30 m，但 p75 仍然只有 30 m，不能被飞点带跑
+	v, n = mqttScreenTrackScatter(mk(0, 10, 20, 30, 40, 500, 500), 20)
+	if n != 7 || math.Abs(v-30) > 0.5 {
+		t.Errorf("飞点不应主导散布，实际 n=%d v=%.1f", n, v)
+	}
+
+	// 少于 5 个点：样本不足
+	if v, n = mqttScreenTrackScatter(mk(0, 10, 20, 30), 20); n != 0 || v != 0 {
+		t.Errorf("少于 5 个点应返回 0，实际 n=%d v=%.1f", n, v)
+	}
+
+	// 散布超过上限：说明轨迹混入了搬移/飞点，不能当"精度"展示
+	if v, n = mqttScreenTrackScatter(mk(0, 100, 200, 300, 400), 20); v != 0 || n != 5 {
+		t.Errorf("散布过大应返回 0，实际 n=%d v=%.1f", n, v)
+	}
+}
+
+// 实测散布只在慢节奏（静止）时下发；移动中上报间隔会缩短，散布没有意义
+func TestFetchMqttScreenDataScatterOnlyWhenStationaryCadence(t *testing.T) {
+	stubMqttScreenAmap(t, "")
+	base := time.Now().Unix() - 3000
+
+	newMock := func(step int64, payload string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/messages":
+				json.NewEncoder(w).Encode([]map[string]string{
+					{"time": "07:47:25", "client": "esp32-d8d514", "topic": "esp32/data", "payload": payload},
+				})
+			case "/api/health":
+				json.NewEncoder(w).Encode(map[string]interface{}{"range": "1h", "rssi": []map[string]interface{}{{"t": base + 5*step, "v": -53}}})
+			default:
+				pts := make([]map[string]interface{}, 6)
+				for i := range pts {
+					pts[i] = map[string]interface{}{
+						"t": base + int64(i)*step,
+						// 0/10/20/30/40/50 m 向北
+						"lat": 32.0 + float64(i*10)/111132.0,
+						"lon": 118.0,
+					}
+				}
+				json.NewEncoder(w).Encode(map[string]interface{}{"points": pts})
+			}
+		}))
+	}
+
+	// 静止节奏 600 s：应算出散布（中位中心 25 m，p75=15 m）
+	ts := newMock(600, mqttTestPayload)
+	defer ts.Close()
+	t.Setenv(mqttScreenUpstreamEnv, ts.URL)
+	data, err := fetchMqttScreenData()
+	if err != nil {
+		t.Fatalf("取数失败: %v", err)
+	}
+	if data.ScatterN != 6 || data.ScatterM <= 0 || data.ScatterM > 30 {
+		t.Errorf("静止节奏应下发实测散布，实际 n=%d v=%.1f", data.ScatterN, data.ScatterM)
+	}
+
+	// 移动节奏 15 s：散布没有意义，必须为 0
+	ts2 := newMock(15, mqttTestPayload)
+	defer ts2.Close()
+	t.Setenv(mqttScreenUpstreamEnv, ts2.URL)
+	data, err = fetchMqttScreenData()
+	if err != nil {
+		t.Fatalf("取数失败: %v", err)
+	}
+	if data.ScatterM != 0 || data.ScatterN != 0 {
+		t.Errorf("移动中不应下发散布，实际 n=%d v=%.1f", data.ScatterN, data.ScatterM)
+	}
+
+	// 设备端已判定静止，但上报节奏还没回到 5 分钟（刚重启/丢星）：
+	// 设备明确说静止时仍应统计散布，否则页面会一直显示"—"。
+	stationaryPayload := strings.Replace(mqttTestPayload,
+		`"gps_fix":true`, `"gps_fix":true,"stationary":true,"avg_n":121`, 1)
+	ts3 := newMock(15, stationaryPayload)
+	defer ts3.Close()
+	t.Setenv(mqttScreenUpstreamEnv, ts3.URL)
+	data, err = fetchMqttScreenData()
+	if err != nil {
+		t.Fatalf("取数失败: %v", err)
+	}
+	if data.ScatterN != 6 || data.ScatterM <= 0 {
+		t.Errorf("设备判定静止时应下发散布，实际 n=%d v=%.1f", data.ScatterN, data.ScatterM)
+	}
+}
+
+// 设备端 stale 要透传：页面据此把标记显示成"最后已知位置"
+func TestFetchMqttScreenDataMapsStale(t *testing.T) {
+	payload := strings.Replace(mqttTestPayload, `"gps_stale":false`, `"gps_stale":true`, 1)
+	ts := newMqttUpstreamMock(t, payload, time.Now().Unix())
+	defer ts.Close()
+	t.Setenv(mqttScreenUpstreamEnv, ts.URL)
+
+	data, err := fetchMqttScreenData()
+	if err != nil {
+		t.Fatalf("取数失败: %v", err)
+	}
+	if !data.Stale {
+		t.Error("gps_stale=true 应映射为 Stale=true")
+	}
+}

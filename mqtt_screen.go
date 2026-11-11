@@ -67,6 +67,14 @@ const (
 	mqttScreenGeoGrid = 3
 	// mqttScreenGeoCacheMax 缓存条数上限，超过即整体重置（网格很小，正常不会触达）
 	mqttScreenGeoCacheMax = 512
+
+	// mqttScreenScatterWindow 计算"实测散布"最多取最近这么多个轨迹点。
+	// 设备静止时约 5 分钟一报，20 个点覆盖约 1.5 小时，足够稳健又不会把
+	// 很久以前的搬移混进来。
+	mqttScreenScatterWindow = 20
+	// mqttScreenScatterMax 散布超过该值时，说明轨迹里混入了搬移/飞点，
+	// 不再当作"定位精度"展示（否则会画出一个几百米的圈，误导比不画更糟）。
+	mqttScreenScatterMax = 150.0
 )
 
 // mqttScreenObservedWindow 推算实际间隔时只看最近这么多个轨迹点
@@ -105,6 +113,66 @@ func mqttScreenObservedInterval(points []mqttScreenTrackPoint) int {
 	}
 	sort.Slice(diffs, func(i, j int) bool { return diffs[i] < diffs[j] })
 	return int(diffs[len(diffs)/2])
+}
+
+// mqttScreenTrackScatter 计算最近轨迹点的实测散布（米）：
+// 各点到中位中心距离的 75 分位。中位数和分位数都不受个别飞点影响，
+// 衡量的是"设备静止时页面上的位置到底会飘多远"，包含多路径造成的系统性偏差。
+//
+// 返回 0 表示样本不足，或散布大到像是轨迹里混入了搬移/飞点——这时画一个
+// 几百米的误差圈只会误导，不如不画。
+func mqttScreenTrackScatter(points []mqttScreenTrackPoint, limit int) (float64, int) {
+	if limit <= 0 || len(points) < 5 {
+		return 0, 0
+	}
+	pts := make([]mqttScreenTrackPoint, len(points))
+	copy(pts, points)
+	sort.Slice(pts, func(i, j int) bool { return pts[i].T < pts[j].T })
+	if len(pts) > limit {
+		pts = pts[len(pts)-limit:]
+	}
+
+	n := len(pts)
+	lats := make([]float64, n)
+	lons := make([]float64, n)
+	for i, p := range pts {
+		lats[i] = p.Lat
+		lons[i] = p.Lon
+	}
+	clat := mqttScreenMedian(lats)
+	clon := mqttScreenMedian(lons)
+
+	dists := make([]float64, n)
+	for i, p := range pts {
+		dists[i] = mqttScreenDistanceM(clat, clon, p.Lat, p.Lon)
+	}
+	sort.Float64s(dists)
+	p75 := dists[(n-1)*3/4]
+	if p75 > mqttScreenScatterMax {
+		return 0, n
+	}
+	return p75, n
+}
+
+func mqttScreenMedian(values []float64) float64 {
+	sorted := make([]float64, len(values))
+	copy(sorted, values)
+	sort.Float64s(sorted)
+	n := len(sorted)
+	if n%2 == 1 {
+		return sorted[n/2]
+	}
+	return (sorted[n/2-1] + sorted[n/2]) / 2
+}
+
+// mqttScreenDistanceM 两点距离（米）。只做几十~几百米量级的统计，
+// 等距圆柱近似足够，且不依赖外部库。
+func mqttScreenDistanceM(lat1, lon1, lat2, lon2 float64) float64 {
+	const metersPerDegLat = 111132.0
+	metersPerDegLon := 111320.0 * math.Cos((lat1+lat2)/2*math.Pi/180)
+	dy := (lat2 - lat1) * metersPerDegLat
+	dx := (lon2 - lon1) * metersPerDegLon
+	return math.Hypot(dx, dy)
 }
 
 // mqttScreenReportInterval 返回设备上报间隔（秒）。
@@ -151,6 +219,7 @@ type mqttScreenDevicePayload struct {
 	Humidity    *float64 `json:"humidity"`
 	RSSI        *int     `json:"rssi"`
 	GPSFix      *bool    `json:"gps_fix"`
+	GPSStale    *bool    `json:"gps_stale"` // 设备端滤波结果是否已过期（样本一直被质量/飞点门限拒绝）
 	Satellites  *int     `json:"satellites"`
 	SatsInView  *int     `json:"sats_in_view"`
 	Lat         *float64 `json:"lat"`
@@ -190,6 +259,7 @@ type mqttScreenData struct {
 	Online      bool                   `json:"online"`       // 是否在线（按最后上报时间判定）
 	LastSeen    int64                  `json:"last_seen"`    // 最后上报时间（unix 秒）
 	Fix         bool                   `json:"fix"`          // GPS 是否已定位
+	Stale       bool                   `json:"stale"`        // 设备端滤波结果过期：当前坐标是最后可信位置
 	Lat         float64                `json:"lat"`          // 纬度（WGS-84）
 	Lon         float64                `json:"lon"`          // 经度（WGS-84）
 	Address     string                 `json:"address"`      // 逆地理编码出的可读地址（拿不到为空串）
@@ -209,11 +279,20 @@ type mqttScreenData struct {
 	// 精度远高于单个解（实测单点散布 ±40 m，均值标准误个位数米）。
 	// 固件 1.5.3 起提供；老固件恒为 false，此时 AvgN 为 0 可作为区分依据。
 	Stationary bool `json:"stationary"`
-	// AccM 设备端给出的定位精度估计（米）：静止时是窗口均值的标准误，
-	// 移动时是前后半窗位移量。0 表示设备端没有提供（老固件）。
+	// AccM 设备端给出的定位精度估计（米）：固件 1.5.4 起静止时是窗口内
+	// 真实散布（1σ），移动时是前后半窗位移量；1.5.3 及以前是均值标准误，
+	// 数值明显偏小（见页面说明）。0 表示设备端没有提供。
 	AccM float64 `json:"acc_m"`
 	// AvgN 参与平均的样本数；0 表示设备端未做平均（老固件或未定位）。
 	AvgN int `json:"avg_n"`
+
+	// ScatterM 实测散布（米）：最近若干轨迹点到其稳健中心距离的 75 分位。
+	// 它回答的是"设备静止时页面上的位置会飘多远"，包含多路径造成的系统性偏差，
+	// 比设备端 acc_m（均值标准误）更接近用户实际看到的误差。
+	// 0 表示样本不足、设备在移动或轨迹里混入了搬移/飞点，此时不展示。
+	ScatterM float64 `json:"scatter_m"`
+	// ScatterN 参与 ScatterM 统计的轨迹点数。
+	ScatterN int `json:"scatter_n"`
 
 	// ReportInterval 配置的上报间隔（秒），来自 SERVER_STATUS_MQTT_REPORT_INTERVAL，
 	// 作为 ObservedInterval 数据不足时的兜底。
@@ -335,6 +414,9 @@ func fetchMqttScreenData() (*mqttScreenData, error) {
 	if latest.GPSFix != nil {
 		out.Fix = *latest.GPSFix
 	}
+	if latest.GPSStale != nil {
+		out.Stale = *latest.GPSStale
+	}
 	if latest.Lat != nil {
 		out.Lat = *latest.Lat
 	}
@@ -382,9 +464,11 @@ func fetchMqttScreenData() (*mqttScreenData, error) {
 	// （否则页面会显示"静止 · 精度 1.6 m"却没有坐标）
 	if !out.Fix {
 		out.Lat, out.Lon = 0, 0
+		out.Stale = false
 		out.Stationary = false
 		out.AccM = 0
 		out.AvgN = 0
+		out.ScatterM, out.ScatterN = 0, 0
 	}
 
 	// ---- 2. 最后上报时间：/api/health 的时序点带 unix 时间戳 ----
@@ -419,6 +503,15 @@ func fetchMqttScreenData() (*mqttScreenData, error) {
 	}
 	// 实际观测到的上报间隔；样本不足时为 0，由前端回退到配置值
 	out.ObservedInterval = mqttScreenObservedInterval(out.Track)
+
+	// ---- 3b. 实测散布：设备静止时页面上的位置到底会飘多远 ----
+	// 设备端判定静止时，即便上报节奏因刚重启/丢星还没回到 5 分钟，轨迹点仍然
+	// 围绕同一位置，散布是有意义的；只有明确在移动时才跳过。stale 时也不统计——
+	// 那说明样本一直被拒，当前坐标是最后可信位置，不能拿旧轨迹的散布冒充当前精度。
+	if out.Fix && !out.Stale &&
+		(out.Stationary || out.ObservedInterval == 0 || out.ObservedInterval >= 120) {
+		out.ScatterM, out.ScatterN = mqttScreenTrackScatter(out.Track, mqttScreenScatterWindow)
+	}
 
 	// ---- 4. 可读地址：逆地理编码，失败留空，绝不影响定位主数据 ----
 	if out.Fix && (out.Lat != 0 || out.Lon != 0) {

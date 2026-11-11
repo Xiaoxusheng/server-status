@@ -223,6 +223,8 @@ var allPermissions = []PermissionDef{
 	{Key: "trojan:manage", Name: "管理 Trojan-Go", Group: "服务与端口", Description: "查看 Trojan-Go 状态并管理用户"},
 	{Key: "docker:view", Name: "查看 Docker 容器", Group: "服务与端口", Description: "查看容器列表、状态、资源占用与日志"},
 	{Key: "docker:manage", Name: "管理 Docker 容器", Group: "服务与端口", Description: "启动、停止、重启容器"},
+	{Key: "alerts:view", Name: "查看告警中心", Group: "告警", Description: "查看告警规则与触发历史"},
+	{Key: "alerts:manage", Name: "管理告警规则", Group: "告警", Description: "新建/修改/删除告警规则，配置通知渠道与静默窗口"},
 	{Key: "private:view", Name: "访问隐藏私人空间", Group: "系统", Description: "通过隐藏入口进入私人空间（默认仅超级管理员拥有）"},
 	{Key: "shell:use", Name: "使用 Web Shell", Group: "系统", Description: "通过 Web 终端登录主机 Shell（等同主机用户权限，高危，默认仅超级管理员）"},
 	{Key: "trojan:view", Name: "查看 Trojan-Go", Group: "服务与端口", Description: "查看 Trojan-Go 状态、用户列表与连接信息（只读）"},
@@ -257,7 +259,7 @@ func defaultRoles() map[string]*Role {
 			RoleID:      "operator",
 			Name:        "运维人员",
 			Description: "负责服务器日常运维，可查看状态与日志",
-			Permissions: []string{"system:view", "system:log", "files:view", "files:download", "token:issue", "token:view", "token:revoke", "user:view", "trojan:manage", "docker:view", "docker:manage"},
+			Permissions: []string{"system:view", "system:log", "files:view", "files:download", "token:issue", "token:view", "token:revoke", "user:view", "trojan:manage", "docker:view", "docker:manage", "alerts:view", "alerts:manage"},
 			IsSystem:    true,
 			CreatedAt:   now,
 		},
@@ -535,8 +537,10 @@ func getUserEffectivePermissions(username string) []string {
 		permSet[p] = true
 	}
 
-	// 兜底：admin 用户即使角色缺失也拥有全部权限
-	if roleID == "" && username == "admin" {
+	// 兜底：admin 始终拥有全部权限。
+	// 不只是"角色缺失"时兜底——新增权限点（如 alerts:*）不会回填到已存在的角色数据里，
+	// 若只判断 roleID==""，超管会因为角色里没有新 key 而被自己的面板拦住。
+	if username == "admin" {
 		permSet["*"] = true
 	}
 
@@ -4618,8 +4622,10 @@ func loadData() {
 	accessStats.Unlock()
 
 	// 解析启动时间
+	// 注意：保存时用的是本地时间（Format），解析必须按本地时区，否则会被当成 UTC，
+	// 导致运行时间凭空多出时区偏移量（东八区多 8 小时）。
 	if data.StartTime != "" {
-		parsedTime, err := time.Parse("2006-01-02 15:04:05", data.StartTime)
+		parsedTime, err := time.ParseInLocation("2006-01-02 15:04:05", data.StartTime, time.Local)
 		if err != nil {
 			log.Printf("解析启动时间失败: %v，使用当前时间", err)
 			serverStartTime = time.Now()
@@ -5137,6 +5143,35 @@ func recordAccess(r *http.Request) {
 // ---------------- 媒体文件 ----------------
 
 // randomMediaHandler HTTP 端点：分发流媒体挂载链接（含严密高并发处理防竞争）
+// collectMediaFiles 递归收集媒体目录下的图片/视频，返回**相对 root 的斜杠路径**。
+// 之所以不能只存文件名：媒体目录存在多级子目录（如 斗鱼直播/南妹儿呀/xxx.mp4），
+// 只存文件名的，/api/media 会把它拼回 root 根目录，随机抽中就是 404，前端表现为图片裂开。
+func collectMediaFiles(root string) ([]string, error) {
+	list := make([]string, 0, 64)
+	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		ext := strings.ToLower(filepath.Ext(d.Name()))
+		if ext != ".jpg" && ext != ".png" && ext != ".jpeg" && ext != ".mp4" && ext != ".webm" {
+			return nil
+		}
+		rel, relErr := filepath.Rel(root, p)
+		if relErr != nil || rel == "." || strings.HasPrefix(rel, "..") {
+			return nil
+		}
+		list = append(list, filepath.ToSlash(rel))
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 // mediaSrcURL 生成随机媒体的访问地址：同源 /api/media（会话 + files:view 鉴权），
 // 不再依赖独立静态服务器 / 8081 外链，部署零额外组件。
 func mediaSrcURL(name string) string {
@@ -5189,25 +5224,14 @@ func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 		num = 0
 		files = nil
 		files = make([]string, 0, 40)
-		err := filepath.WalkDir(mediaDir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				return nil
-			}
-			ext := strings.ToLower(filepath.Ext(d.Name()))
-			if ext == ".jpg" || ext == ".png" || ext == ".jpeg" || ext == ".mp4" || ext == ".webm" {
-				files = append(files, d.Name())
-				num++
-			}
-			return nil
-		})
+		collected, err := collectMediaFiles(mediaDir)
 		if err != nil {
 			log.Println(err)
 			http.Error(w, "Error reading media folder", http.StatusInternalServerError)
 			return
 		}
+		files = collected
+		num = len(collected)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
@@ -5674,6 +5698,41 @@ func getInterfaceIP(iface string) string {
 	return ""
 }
 
+// formatUptimeCN 把运行时长格式化为「X年X天X小时X分X秒」。
+// 从最大的非零单位开始显示：不足一年不显示"0年"，不足一天不显示"0天"，秒始终显示。
+// 例：352小时32分59秒 → 14天16小时32分59秒。
+func formatUptimeCN(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	const (
+		daySeconds  = int64(86400)
+		yearSeconds = daySeconds * 365
+	)
+	total := int64(d / time.Second)
+	years := total / yearSeconds
+	days := total % yearSeconds / daySeconds
+	hours := total % daySeconds / 3600
+	minutes := total % 3600 / 60
+	seconds := total % 60
+
+	parts := make([]string, 0, 5)
+	if years > 0 {
+		parts = append(parts, fmt.Sprintf("%d年", years))
+	}
+	if years > 0 || days > 0 {
+		parts = append(parts, fmt.Sprintf("%d天", days))
+	}
+	if years > 0 || days > 0 || hours > 0 {
+		parts = append(parts, fmt.Sprintf("%d小时", hours))
+	}
+	if years > 0 || days > 0 || hours > 0 || minutes > 0 {
+		parts = append(parts, fmt.Sprintf("%d分", minutes))
+	}
+	parts = append(parts, fmt.Sprintf("%d秒", seconds))
+	return strings.Join(parts, "")
+}
+
 // getServerStatus 查询深层探针系统状态。现已引入O(1)级全局锁定防并发灾变与1秒时效高能缓存调度体系
 func getServerStatus(iface string) (*ServerStatus, error) {
 	// ====== 高能缓存命中逻辑开始 ======
@@ -5848,10 +5907,7 @@ func getServerStatus(iface string) (*ServerStatus, error) {
 
 	// 使用持久化的服务器启动时间计算运行时间
 	uptime := time.Since(serverStartTime)
-	hours := int(uptime.Hours())
-	minutes := int(uptime.Minutes()) % 60
-	seconds := int(uptime.Seconds()) % 60
-	uptimeStr := fmt.Sprintf("%d小时%d分%d秒", hours, minutes, seconds)
+	uptimeStr := formatUptimeCN(uptime)
 
 	// 获取在线用户统计信息和详细列表
 	onlineCount, uniqueIPs, onlineUsersList := getOnlineUsersStats()
@@ -5983,6 +6039,14 @@ func main() {
 	initOpsCenter()
 	taskScheduler.Start(opsStore)
 
+	// 告警中心：首次启动写入默认规则，然后拉起采样循环
+	if opsStore != nil {
+		if err := opsStore.ensureDefaultAlertRules(); err != nil {
+			log.Printf("初始化默认告警规则失败: %v", err)
+		}
+		StartAlertsEngine(context.Background())
+	}
+
 	// GitHub 项目展示：后台采集器每日记录一次 Star 快照（功能未启用时自动空转）
 	go githubCollectorLoop()
 
@@ -6060,6 +6124,11 @@ func main() {
 	http.HandleFunc("/check-auth", securityMiddleware(checkAuthHandler))
 	// 版本信息：公开只读接口（不含敏感数据），供前端页脚/关于面板展示
 	http.HandleFunc("GET /api/version", securityMiddleware(versionHandler))
+	// 探活：给外部监控（Uptime Kuma / 云监控）用。
+	// 刻意不挂 securityMiddleware——探针的 User-Agent 未必带浏览器标识，
+	// 也不一定发 Accept-Language，套上中间件会一律 403，探活就失去意义。
+	// 响应只含状态码 + 布尔检查项 + 版本号，不含路径/配置/用户信息。
+	http.HandleFunc("GET /healthz", healthzHandler)
 	// MQTT 设备定位大屏：公开只读接口，供未登录的大屏直接投屏。
 	// 服务端代理本机 mqtt-dashboard 并做字段白名单裁剪，不透传 payload 原文与设备内部信息。
 	http.HandleFunc("GET /api/public/mqtt/screen", securityMiddleware(publicMqttScreenHandler))
@@ -6182,6 +6251,17 @@ func main() {
 	http.HandleFunc("POST /api/docker/action", authMiddleware(requirePermission("docker:manage", securityMiddleware(dockerActionHandler))))
 	http.HandleFunc("POST /api/docker/remove", authMiddleware(requirePermission("docker:manage", securityMiddleware(dockerRemoveHandler))))
 	http.HandleFunc("/docker", authMiddleware(requireAnyPermission([]string{"docker:view", "docker:manage"}, securityMiddleware(dockerPageHandler))))
+
+	// 告警中心：规则 / 事件 / 配置 / 测试通知
+	http.HandleFunc("/alerts", authMiddleware(requireAnyPermission([]string{"alerts:view", "alerts:manage"}, securityMiddleware(alertsPageHandler))))
+	http.HandleFunc("GET /api/alerts/overview", authMiddleware(requirePermission("alerts:view", securityMiddleware(alertsOverviewHandler))))
+	http.HandleFunc("GET /api/alerts/rules", authMiddleware(requirePermission("alerts:view", securityMiddleware(alertsRulesHandler))))
+	http.HandleFunc("POST /api/alerts/rules", authMiddleware(requirePermission("alerts:manage", securityMiddleware(alertsSaveRuleHandler))))
+	http.HandleFunc("DELETE /api/alerts/rules/{id}", authMiddleware(requirePermission("alerts:manage", securityMiddleware(alertsDeleteRuleHandler))))
+	http.HandleFunc("GET /api/alerts/events", authMiddleware(requirePermission("alerts:view", securityMiddleware(alertsEventsHandler))))
+	http.HandleFunc("GET /api/alerts/config", authMiddleware(requireAnyPermission([]string{"alerts:view", "alerts:manage"}, securityMiddleware(alertsConfigHandler))))
+	http.HandleFunc("POST /api/alerts/config", authMiddleware(requirePermission("alerts:manage", securityMiddleware(alertsConfigHandler))))
+	http.HandleFunc("POST /api/alerts/test", authMiddleware(requirePermission("alerts:manage", securityMiddleware(alertsTestHandler))))
 	// 容器列表数据推送（纯缓存直推，替代阻塞式 HTTP 轮询首载）
 	http.HandleFunc("GET /ws/docker", authMiddleware(requireAnyPermission([]string{"docker:view", "docker:manage"}, securityMiddleware(dockerWSHandler))))
 

@@ -71,3 +71,6 @@ deploy/**
 
 # 本地 agent 工作目录
 .agent/
+
+# 本地 agent 记忆与工作目录
+.workbuddy/

@@ -7,6 +7,7 @@ package main
 // 单连接 + WAL，写入串行化，避免锁冲突；所有时间以 RFC3339 TEXT 存储。
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -20,22 +21,22 @@ import (
 
 // SecurityFinding 一条安全风险发现（跨扫描通过 check_id + dedupe_key 合并）
 type SecurityFinding struct {
-	ID             string     `json:"id"`
-	CheckID        string     `json:"check_id"`
-	DedupeKey      string     `json:"dedupe_key"`
-	Category       string     `json:"category"`
-	Severity       string     `json:"severity"` // critical/high/medium/low/info
-	Title          string     `json:"title"`
-	Description    string     `json:"description"`
-	Evidence       string     `json:"evidence"`
-	Recommendation string     `json:"recommendation"`
-	Status         string     `json:"status"` // open/ignored/fixing/resolved/failed
-	DetectedAt     time.Time  `json:"detected_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	ResolvedAt     *time.Time `json:"resolved_at,omitempty"`
-	Remediable     bool       `json:"remediable"`
-	Occurrences    int        `json:"occurrences"`
-	LastExecError  string     `json:"last_exec_error,omitempty"`
+	ID             string         `json:"id"`
+	CheckID        string         `json:"check_id"`
+	DedupeKey      string         `json:"dedupe_key"`
+	Category       string         `json:"category"`
+	Severity       string         `json:"severity"` // critical/high/medium/low/info
+	Title          string         `json:"title"`
+	Description    string         `json:"description"`
+	Evidence       string         `json:"evidence"`
+	Recommendation string         `json:"recommendation"`
+	Status         string         `json:"status"` // open/ignored/fixing/resolved/failed
+	DetectedAt     time.Time      `json:"detected_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	ResolvedAt     *time.Time     `json:"resolved_at,omitempty"`
+	Remediable     bool           `json:"remediable"`
+	Occurrences    int            `json:"occurrences"`
+	LastExecError  string         `json:"last_exec_error,omitempty"`
 	Context        map[string]any `json:"context,omitempty"` // 检查器附带的动作参数上下文（service/ip/port 等），持久化
 }
 
@@ -43,8 +44,8 @@ type SecurityFinding struct {
 type SecurityEvent struct {
 	ID     string    `json:"id"`
 	Time   time.Time `json:"time"`
-	Level  string    `json:"level"`  // info/warning/error/critical
-	Type   string    `json:"type"`   // finding.open / finding.resolved / scan.completed / remediation.* / task.*
+	Level  string    `json:"level"` // info/warning/error/critical
+	Type   string    `json:"type"`  // finding.open / finding.resolved / scan.completed / remediation.* / task.*
 	Title  string    `json:"title"`
 	Source string    `json:"source"` // 来源检查器或模块
 	RefID  string    `json:"ref_id,omitempty"`
@@ -77,8 +78,8 @@ type RemediationExecution struct {
 	FindingID    string            `json:"finding_id,omitempty"`
 	RuleID       string            `json:"rule_id,omitempty"`
 	ActionID     string            `json:"action_id"`
-	Trigger      string            `json:"trigger"`   // manual/auto
-	Operator     string            `json:"operator"`  // 用户名或 system
+	Trigger      string            `json:"trigger"`  // manual/auto
+	Operator     string            `json:"operator"` // 用户名或 system
 	ParamsDigest string            `json:"params_digest,omitempty"`
 	Status       string            `json:"status"` // running/success/failed/timeout
 	Message      string            `json:"message,omitempty"`
@@ -114,10 +115,10 @@ type Task struct {
 
 // TaskTrigger 事件触发条件
 type TaskTrigger struct {
-	Type      string `json:"type"`                 // cpu_high/disk_high/service_stopped/security_finding/docker_container_exit/ip_abnormal
-	Threshold int    `json:"threshold,omitempty"`  // 阈值（百分比/个数）
-	Match     string `json:"match,omitempty"`      // 过滤：服务名 / 容器名 / 最低严重级
-	CooldownSec int  `json:"cooldown_sec,omitempty"` // 触发冷却，防止重复触发
+	Type        string `json:"type"`                   // cpu_high/disk_high/service_stopped/security_finding/docker_container_exit/ip_abnormal
+	Threshold   int    `json:"threshold,omitempty"`    // 阈值（百分比/个数）
+	Match       string `json:"match,omitempty"`        // 过滤：服务名 / 容器名 / 最低严重级
+	CooldownSec int    `json:"cooldown_sec,omitempty"` // 触发冷却，防止重复触发
 }
 
 // TaskExecution 任务执行历史（一条 = 一次触发，含重试）
@@ -125,7 +126,7 @@ type TaskExecution struct {
 	ID           string            `json:"id"`
 	TaskID       string            `json:"task_id"`
 	TaskName     string            `json:"task_name"`
-	Status       string            `json:"status"` // queued/running/success/failed/cancelled/timeout/skipped
+	Status       string            `json:"status"`       // queued/running/success/failed/cancelled/timeout/skipped
 	TriggerType  string            `json:"trigger_type"` // schedule/manual/event/retry
 	Attempt      int               `json:"attempt"`
 	MaxAttempts  int               `json:"max_attempts"`
@@ -172,6 +173,16 @@ func (s *OpsStore) Close() error {
 		return s.db.Close()
 	}
 	return nil
+}
+
+// Ping 探活：确认底层 SQLite 连接仍可用（/healthz 使用）。
+// 只跑一次最轻的 SELECT，不碰任何业务表，也不会加写锁。
+func (s *OpsStore) Ping(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("ops store 未初始化")
+	}
+	var one int
+	return s.db.QueryRowContext(ctx, "SELECT 1").Scan(&one)
 }
 
 // migrate 建表（幂等）
@@ -289,6 +300,42 @@ func (s *OpsStore) migrate() error {
 			value TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
+		// 告警中心：规则与事件
+		`CREATE TABLE IF NOT EXISTS alert_rules (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			metric TEXT NOT NULL,
+			op TEXT NOT NULL,
+			threshold REAL NOT NULL DEFAULT 0,
+			duration_sec INTEGER NOT NULL DEFAULT 300,
+			severity TEXT NOT NULL DEFAULT 'warning',
+			channels TEXT NOT NULL DEFAULT 'email',
+			enabled INTEGER NOT NULL DEFAULT 1,
+			target TEXT NOT NULL DEFAULT '',
+			cooldown_sec INTEGER NOT NULL DEFAULT 1800,
+			mute_start TEXT NOT NULL DEFAULT '',
+			mute_end TEXT NOT NULL DEFAULT '',
+			last_fired_at TEXT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS alert_events (
+			id TEXT PRIMARY KEY,
+			rule_id TEXT NOT NULL,
+			rule_name TEXT NOT NULL,
+			metric TEXT NOT NULL,
+			severity TEXT NOT NULL,
+			status TEXT NOT NULL,
+			value REAL NOT NULL DEFAULT 0,
+			threshold REAL NOT NULL DEFAULT 0,
+			message TEXT NOT NULL DEFAULT '',
+			notified INTEGER NOT NULL DEFAULT 0,
+			muted INTEGER NOT NULL DEFAULT 0,
+			notify_error TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_alert_events_time ON alert_events(created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_alert_events_rule ON alert_events(rule_id, created_at DESC)`,
 	}
 	for _, stmt := range schema {
 		if _, err := s.db.Exec(stmt); err != nil {
