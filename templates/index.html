@@ -744,6 +744,11 @@
                         SessionManager.save(d.user, !!v.remember);
                         message.success('登录成功');
                         onLogin(d.user);
+                        // 被鉴权拦下来的页面（?next=/alerts），登录后直接回到原处
+                        const next = new URLSearchParams(window.location.search).get('next');
+                        if (next && next.startsWith('/') && !next.startsWith('//')) {
+                            window.location.replace(next);
+                        }
                     } else {
                         message.error(d.message || '登录失败');
                         genCaptcha();

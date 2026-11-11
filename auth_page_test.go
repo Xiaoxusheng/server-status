@@ -17,8 +17,8 @@ func TestRejectUnauthenticatedPageVsAPI(t *testing.T) {
 	if rec.Code != 302 {
 		t.Fatalf("页面导航应 302，实际 %d", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/index.html" {
-		t.Errorf("跳转地址 = %q", loc)
+	if loc := rec.Header().Get("Location"); loc != "/index.html?next=%2Falerts" {
+		t.Errorf("跳转地址应带回跳参数，实际 %q", loc)
 	}
 
 	// 2) 前端 fetch（Accept: */*）
@@ -47,7 +47,16 @@ func TestRejectUnauthenticatedPageVsAPI(t *testing.T) {
 		t.Errorf("/api/ 前缀即使 Accept 是 html 也应 401，实际 %d", rec3.Code)
 	}
 
-	// 4) POST 表单提交不当作页面导航（避免把接口错误变成跳转）
+	// 4) 首页本身不带 next（避免 /index.html?next=/index.html 这种回环）
+	reqHome := httptest.NewRequest("GET", "/", nil)
+	reqHome.Header.Set("Accept", "text/html")
+	recHome := httptest.NewRecorder()
+	rejectUnauthenticated(recHome, reqHome)
+	if loc := recHome.Header().Get("Location"); loc != "/index.html" {
+		t.Errorf("首页不应带 next，实际 %q", loc)
+	}
+
+	// 5) POST 表单提交不当作页面导航（避免把接口错误变成跳转）
 	req4 := httptest.NewRequest("POST", "/login", nil)
 	req4.Header.Set("Accept", "text/html")
 	rec4 := httptest.NewRecorder()

@@ -3903,7 +3903,12 @@ func getSessionFromRequest(r *http.Request) (*Session, bool) {
 // 浏览器导航跳登录页，接口调用返回 401 JSON（带 charset，否则手机浏览器会按 GBK 解出乱码）。
 func rejectUnauthenticated(w http.ResponseWriter, r *http.Request) {
 	if isPageNavigation(r) {
-		http.Redirect(w, r, "/index.html", http.StatusFound)
+		// 带上原路径，登录成功后前端会跳回来（仅站内相对路径，防开放重定向）
+		target := "/index.html"
+		if p := r.URL.Path; p != "" && p != "/" && p != "/index.html" {
+			target += "?next=" + url.QueryEscape(p)
+		}
+		http.Redirect(w, r, target, http.StatusFound)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
