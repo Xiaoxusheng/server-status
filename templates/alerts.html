@@ -521,7 +521,7 @@
 
                         <Modal open={cfgModal} title="告警中心设置" width={720} confirmLoading={saving}
                             onCancel={() => setCfgModal(false)} onOk={saveCfg} okText="保存" cancelText="取消">
-                            <Form form={cfgForm} layout="vertical" size="middle">
+                            <Form form={cfgForm} layout="vertical" size="middle" autoComplete="off">
                                 <div className="form-grid">
                                     <Form.Item name="enabled" label="启用告警" valuePropName="checked">
                                         <Switch />
@@ -538,6 +538,9 @@
 
                                     <div className="span-2" style={{ paddingTop: 2 }}>
                                         <Typography.Text strong>邮件（SMTP）</Typography.Text>
+                                        <span className="muted-text" style={{ marginLeft: 8 }}>
+                                            首次会自动带出 config.json 里 docker_guard 的账号，点密码框右侧眼睛可看授权码
+                                        </span>
                                     </div>
                                     <Form.Item name="email_host" label="服务器">
                                         <Input placeholder="smtp.qq.com" />
@@ -546,10 +549,10 @@
                                         <InputNumber min={1} max={65535} style={{ width: '100%' }} />
                                     </Form.Item>
                                     <Form.Item name="email_username" label="账号">
-                                        <Input placeholder="you@qq.com" />
+                                        <Input placeholder="you@qq.com" autoComplete="off" />
                                     </Form.Item>
                                     <Form.Item name="email_password" label="密码/授权码">
-                                        <Input.Password placeholder="留空则保持不变" />
+                                        <Input.Password placeholder="留空则保持不变" autoComplete="new-password" />
                                     </Form.Item>
                                     <Form.Item name="email_from" label="发件人">
                                         <Input placeholder="留空取账号" />

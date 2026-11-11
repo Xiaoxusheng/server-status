@@ -319,6 +319,9 @@ func (s *OpsStore) GetAlertsConfig() alertsConfig {
 	cfg := alertsConfig{Enabled: false, IntervalSec: 30, MuteStart: "23:00", MuteEnd: "08:00"}
 	if raw := s.GetSetting(alertsConfigKey, ""); raw != "" {
 		_ = json.Unmarshal([]byte(raw), &cfg)
+	} else if g := loadDockerGuardConfig(); g.AlertEmail != nil && g.AlertEmail.Host != "" {
+		// 首次使用告警中心：把容器守护里已经配好的 SMTP 直接带过来，用户不用重填
+		cfg.Email = g.AlertEmail
 	}
 	if cfg.IntervalSec < 10 {
 		cfg.IntervalSec = 10

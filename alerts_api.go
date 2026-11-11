@@ -149,7 +149,9 @@ func alertsConfigHandler(w http.ResponseWriter, r *http.Request) {
 		out := cfg
 		if out.Email != nil {
 			cp := *out.Email
-			if cp.Password != "" {
+			// 有管理权限的人看明文（面板是自用的，授权码本来就写在 config.json 里）；
+			// 只有查看权限的账号仍然打码，避免顺手泄露凭据。
+			if cp.Password != "" && !hasPermissionFromRequest(r, "alerts:manage") {
 				cp.Password = "******"
 			}
 			out.Email = &cp
