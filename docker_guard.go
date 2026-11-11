@@ -1,11 +1,11 @@
 // docker_guard.go -- Docker 容器守护：异常停止自动重启 + 超限邮件告警
 //
 // 工作方式（后台轮询，无需 docker events 依赖）：
-//   1. 每 check_interval 秒执行 `docker ps -a` 快照全部容器状态；
-//   2. 服务启动时已处于停止状态的容器记入基线（视为用户有意停止），永不干预；
-//   3. 运行中容器出现异常停止（退出码非 0/143 的 exited、dead 状态）时执行 `docker start` 自动拉起；
-//   4. 滑动窗口内自动重启达到 max_restarts 仍异常 → 发送告警邮件并暂停重启，冷却期满后清零重新守护；
-//   5. 正常退出（退出码 0/143，即手动 stop/优雅停止）只记入基线，不重启不告警。
+//  1. 每 check_interval 秒执行 `docker ps -a` 快照全部容器状态；
+//  2. 服务启动时已处于停止状态的容器记入基线（视为用户有意停止），永不干预；
+//  3. 运行中容器出现异常停止（退出码非 0/143 的 exited、dead 状态）时执行 `docker start` 自动拉起；
+//  4. 滑动窗口内自动重启达到 max_restarts 仍异常 → 发送告警邮件并暂停重启，冷却期满后清零重新守护；
+//  5. 正常退出（退出码 0/143，即手动 stop/优雅停止）只记入基线，不重启不告警。
 //
 // 配置：config.json 的 "docker_guard" 段（SMTP 凭据等敏感值不入库日志，失败仅记录错误摘要）。
 package main
@@ -31,14 +31,14 @@ import (
 
 // dockerGuardFileConfig 对应 config.json 中 "docker_guard" 段（Enabled 用指针区分「未配置」与「配置为 false」）
 type dockerGuardFileConfig struct {
-	Enabled        *bool             `json:"enabled"`          // 是否启用守护（默认 false，需显式开启）
-	CheckInterval  int               `json:"check_interval"`   // 状态检查间隔（秒），默认 30
-	MaxRestarts    int               `json:"max_restarts"`     // 窗口内最大自动重启次数，超过则告警并暂停，默认 3
-	WindowMinutes  int               `json:"window_minutes"`   // 重启计数滑动窗口（分钟），默认 60
-	CooldownMin    int               `json:"cooldown_minutes"` // 告警邮件冷却（分钟），默认 30
-	Exclude        []string          `json:"exclude"`          // 排除的容器名（精确匹配，不守护不告警）
-	ExcludePatterns []string         `json:"exclude_patterns"` // 排除的容器名模式（glob，如 "temp-*"）
-	AlertEmail     *alertEmailConfig `json:"alert_email"`      // 告警邮箱 SMTP 配置
+	Enabled         *bool             `json:"enabled"`          // 是否启用守护（默认 false，需显式开启）
+	CheckInterval   int               `json:"check_interval"`   // 状态检查间隔（秒），默认 30
+	MaxRestarts     int               `json:"max_restarts"`     // 窗口内最大自动重启次数，超过则告警并暂停，默认 3
+	WindowMinutes   int               `json:"window_minutes"`   // 重启计数滑动窗口（分钟），默认 60
+	CooldownMin     int               `json:"cooldown_minutes"` // 告警邮件冷却（分钟），默认 30
+	Exclude         []string          `json:"exclude"`          // 排除的容器名（精确匹配，不守护不告警）
+	ExcludePatterns []string          `json:"exclude_patterns"` // 排除的容器名模式（glob，如 "temp-*"）
+	AlertEmail      *alertEmailConfig `json:"alert_email"`      // 告警邮箱 SMTP 配置
 }
 
 // alertEmailConfig 告警邮件 SMTP 配置（凭据仅用于发送，不打日志）
@@ -149,10 +149,10 @@ type containerGuardState struct {
 
 // dockerGuard 容器守护器（持全局状态，单 goroutine 串行访问，字段加锁仅为测试并发安全）
 type dockerGuard struct {
-	mu      sync.Mutex
-	cfg     dockerGuardConfig
-	states  map[string]*containerGuardState // 容器名 -> 守护状态
-	baseline map[string]bool                // 启动时已停止/守护期间正常停止的容器（不干预）
+	mu       sync.Mutex
+	cfg      dockerGuardConfig
+	states   map[string]*containerGuardState // 容器名 -> 守护状态
+	baseline map[string]bool                 // 启动时已停止/守护期间正常停止的容器（不干预）
 }
 
 // 全局守护器（dockerGuardLoop 启动时加载配置，dockerActionHandler 手动操作后可联动）
@@ -327,21 +327,7 @@ func (g *dockerGuard) sendAlert(name, state, status string) {
 		log.Printf("⚠️ 容器 %s 达到重启上限但未配置告警邮箱（docker_guard.alert_email），仅记录日志", name)
 		return
 	}
-	host, _ := os.Hostname()
-	subject := fmt.Sprintf("【server-status】容器异常告警: %s 自动重启 %d 次失败", name, g.cfg.MaxRestarts)
-	body := fmt.Sprintf(`<div style="font-family:-apple-system,'Segoe UI',Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
-<div style="background:#dc2626;color:#fff;padding:14px 20px;font-size:16px;font-weight:600">🚨 Docker 容器异常告警</div>
-<div style="padding:20px;color:#374151;font-size:14px;line-height:1.8">
-<p>容器 <b style="color:#111">%s</b> 异常停止后已自动重启 <b>%d</b> 次仍未能恢复运行，守护进程已暂停对该容器的自动重启（冷却 %s 后将重新开始守护）。</p>
-<table style="border-collapse:collapse;margin:12px 0">
-<tr><td style="padding:4px 16px 4px 0;color:#6b7280">主机</td><td>%s</td></tr>
-<tr><td style="padding:4px 16px 4px 0;color:#6b7280">容器</td><td>%s</td></tr>
-<tr><td style="padding:4px 16px 4px 0;color:#6b7280">当前状态</td><td>%s</td></tr>
-<tr><td style="padding:4px 16px 4px 0;color:#6b7280">状态详情</td><td>%s</td></tr>
-<tr><td style="padding:4px 16px 4px 0;color:#6b7280">检测时间</td><td>%s</td></tr>
-</table>
-<p style="color:#9ca3af;font-size:12px">请登录 server-status 面板查看容器日志并排查根因。本邮件由容器守护自动发送，请勿回复。</p>
-</div></div>`, name, g.cfg.MaxRestarts, g.cfg.Cooldown, host, name, state, status, time.Now().Format("2006-01-02 15:04:05"))
+	subject, body := renderContainerAlertEmail(name, state, status, g.cfg.MaxRestarts, g.cfg.Cooldown)
 
 	if err := sendAlertEmail(mail, subject, body); err != nil {
 		log.Printf("⚠️ 容器 %s 告警邮件发送失败: %v", name, err)

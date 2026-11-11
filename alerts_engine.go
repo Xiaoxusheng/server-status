@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -164,8 +163,13 @@ func (e *alertEngine) emit(cfg alertsConfig, r *AlertRule, val float64, detail s
 		ev.Message = fmt.Sprintf("%s 已恢复：当前 %s，低于触发阈值 %s", label, formatAlertValue(r.Metric, val), formatAlertValue(r.Metric, r.Threshold))
 	} else {
 		ev.Status = "firing"
-		ev.Message = fmt.Sprintf("%s %s：当前 %s，阈值 %s（持续 %d 秒）",
-			label, opText, formatAlertValue(r.Metric, val), formatAlertValue(r.Metric, r.Threshold), r.DurationSec)
+		// 持续时长 <= 1 秒视为"立即触发"，别写成"（持续 1 秒）"这种别扭文案
+		lasting := ""
+		if r.DurationSec > 1 {
+			lasting = fmt.Sprintf("（持续 %s）", humanDurationCN(r.DurationSec))
+		}
+		ev.Message = fmt.Sprintf("%s %s：当前 %s，阈值 %s%s",
+			label, opText, formatAlertValue(r.Metric, val), formatAlertValue(r.Metric, r.Threshold), lasting)
 		if detail != "" {
 			ev.Message += "，" + detail
 		}
@@ -389,7 +393,8 @@ func sendAlertNotification(cfg alertsConfig, r *AlertRule, ev *AlertEvent) (bool
 				errs = append(errs, "邮件未配置")
 				continue
 			}
-			if err := sendAlertEmail(mail, alertEmailSubject(ev), alertEmailBody(ev)); err != nil {
+			subject, htmlBody := renderAlertEmail(ev, r)
+			if err := sendAlertEmail(mail, subject, htmlBody); err != nil {
 				errs = append(errs, "邮件发送失败: "+err.Error())
 			} else {
 				sent = true
@@ -427,43 +432,6 @@ func severityLabel(s string) string {
 		return "提示"
 	}
 	return "告警"
-}
-
-func severityColor(s string) string {
-	switch s {
-	case "critical":
-		return "#dc2626"
-	case "warning":
-		return "#d97706"
-	}
-	return "#2563eb"
-}
-
-func alertEmailBody(ev *AlertEvent) string {
-	host, _ := osHostname()
-	statusText := "触发中"
-	if ev.Status == "resolved" {
-		statusText = "已恢复"
-	}
-	return fmt.Sprintf(`<div style="font-family:-apple-system,Segoe UI,Microsoft YaHei,sans-serif;color:#111827">
-<h2 style="color:%s;margin:0 0 12px">%s</h2>
-<table style="border-collapse:collapse;font-size:14px">
-<tr><td style="padding:4px 16px 4px 0;color:#6b7280">规则</td><td>%s</td></tr>
-<tr><td style="padding:4px 16px 4px 0;color:#6b7280">状态</td><td>%s</td></tr>
-<tr><td style="padding:4px 16px 4px 0;color:#6b7280">详情</td><td>%s</td></tr>
-<tr><td style="padding:4px 16px 4px 0;color:#6b7280">主机</td><td>%s</td></tr>
-<tr><td style="padding:4px 16px 4px 0;color:#6b7280">时间</td><td>%s</td></tr>
-</table>
-<p style="color:#9ca3af;font-size:12px">本邮件由 server-status 告警中心自动发送，请勿回复。</p>
-</div>`, severityColor(ev.Severity), alertEmailSubject(ev), ev.RuleName, statusText, ev.Message, host, ev.CreatedAt.Format("2006-01-02 15:04:05"))
-}
-
-func osHostname() (string, error) {
-	h, err := os.Hostname()
-	if err != nil || h == "" {
-		return "server", nil
-	}
-	return h, nil
 }
 
 // postAlertWebhook 发送 webhook：企业微信机器人走 markdown 格式，其它按通用 JSON
