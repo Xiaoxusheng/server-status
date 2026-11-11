@@ -1146,6 +1146,12 @@
             return null;
         }
 
+        // 是否值得提供"预览"入口（图片 / 视频 / 办公文档）
+        function canPreviewFile(rec) {
+            if (!rec || rec.is_dir) return false;
+            return !!docPreviewKind(rec.name) || ['image', 'video'].includes(fileCategory(rec.name));
+        }
+
         // 按需加载本地 vendor 脚本（同一地址只加载一次）
         const loadedScripts = {};
         function loadScript(url) {
@@ -1264,7 +1270,16 @@
                             description={<Typography.Text>{errText}。<a href={mediaUrl(file.path)} download={file.name}>下载原文件</a></Typography.Text>} />
                     )}
                     {phase === 'ready' && kind === 'pdf' && (
-                        <iframe title="pdf-preview" src={pdfUrl} style={{ width: '100%', height: '62vh', border: '1px solid #d9d9d9', borderRadius: 8, marginBottom: 12 }} />
+                        <div>
+                            <iframe title="pdf-preview" src={pdfUrl} style={{ width: '100%', height: '62vh', border: '1px solid #d9d9d9', borderRadius: 8 }} />
+                            <div style={{ padding: '8px 0 12px', fontSize: 13 }}>
+                                <Space split={<span style={{ color: '#d9d9d9' }}>|</span>}>
+                                    <a href={pdfUrl} target="_blank" rel="noreferrer">新窗口打开</a>
+                                    <a href={pdfUrl} download={file.name}>下载 PDF</a>
+                                    <Typography.Text type="secondary">移动端若显示空白，请用上面两种方式查看</Typography.Text>
+                                </Space>
+                            </div>
+                        </div>
                     )}
                     {phase === 'ready' && (kind === 'docx' || kind === 'sheet') && (
                         <div className="office-wrap" dangerouslySetInnerHTML={{ __html: html }} />
@@ -2094,13 +2109,16 @@
                 { title: '大小', dataIndex: 'size', width: 110, render: (v, rec) => rec.is_dir ? '-' : <span className="fm-size">{formatBytes(v)}</span> },
                 { title: '修改时间', dataIndex: 'mod_time', width: 170, render: v => <Typography.Text type="secondary">{fmtTime(v)}</Typography.Text> },
                 {
-                    title: '操作', key: 'op', width: 190, fixed: 'right',
+                    title: '操作', key: 'op', width: 260, fixed: 'right',
                     render: (_, rec) => rec.is_dir
                         ? <Space>
                             <Button size="small" onClick={() => load(rec.path)}>打开</Button>
                             <Dropdown menu={dirMenu(rec)} trigger={['click']}><Button size="small" icon={<UIIcon name="MoreOutlined" />} /></Dropdown>
                         </Space>
                         : <Space wrap>
+                            {canPreviewFile(rec) && (
+                                <Button size="small" icon={<UIIcon name="EyeOutlined" />} onClick={() => setDrawerFile(rec)}>预览</Button>
+                            )}
                             <Button size="small" type="primary" ghost icon={<UIIcon name="SafetyCertificateOutlined" />} onClick={() => openToken(rec.path)}>签发令牌</Button>
                             <Dropdown menu={fileMenu(rec)} trigger={['click']}><Button size="small" icon={<UIIcon name="MoreOutlined" />} /></Dropdown>
                         </Space>
@@ -2385,7 +2403,7 @@
                             open={!!drawerFile}
                             onClose={() => setDrawerFile(null)}
                             placement={isMobile ? 'bottom' : 'right'}
-                            width={isMobile ? undefined : 460}
+                            width={isMobile ? undefined : (drawerFile && docPreviewKind(drawerFile.name) ? 820 : 460)}
                             height={isMobile ? '85%' : undefined}
                             footer={drawerFile && (
                                 <Space wrap style={{ display: 'flex', justifyContent: 'flex-end' }}>
