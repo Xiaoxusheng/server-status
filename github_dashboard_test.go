@@ -84,7 +84,7 @@ func TestGitHubReadmeBase64DecodeAndTruncate(t *testing.T) {
 	}
 	buf, _ := json.Marshal(payload)
 	ts, _ := setupGitHubTest(t, testGitHubConfig, "", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = w.Write(buf)
 	})
 	_ = ts
@@ -180,7 +180,7 @@ func TestGitHubValidateOwnerRepoRejectsTraversal(t *testing.T) {
 // 同一 key 在 TTL 内重复读取必须命中缓存，不产生第二次上游请求。
 func TestGitHubCacheHitAvoidsSecondRequest(t *testing.T) {
 	_, hits := setupGitHubTest(t, testGitHubConfig, "", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = w.Write([]byte(mockProfileJSON()))
 	})
 
@@ -244,7 +244,7 @@ func TestGitHubCacheServesStaleOnFailure(t *testing.T) {
 			http.Error(w, `{"message":"boom"}`, http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = w.Write([]byte(`"cached-payload"`))
 	})
 
@@ -329,7 +329,7 @@ func TestGitHubTokenNeverLeaksInResponse(t *testing.T) {
 		if !strings.Contains(r.Header.Get("Authorization"), "Bearer") {
 			t.Errorf("请求未携带 Bearer 鉴权头")
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = w.Write([]byte(reposJSON))
 	})
 
@@ -367,7 +367,7 @@ func TestGitHubRepoDTODropsInternalFields(t *testing.T) {
 	  "clone_url":"https://github.com/Xiaoxusheng/r.git","ssh_url":"git@github.com:x/r.git"}]`
 
 	_, _ = setupGitHubTest(t, testGitHubConfig, "", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = w.Write([]byte(reposJSON))
 	})
 
@@ -422,7 +422,7 @@ func TestGitHubCacheInflightDedup(t *testing.T) {
 	_, hits := setupGitHubTest(t, testGitHubConfig, "", func(w http.ResponseWriter, r *http.Request) {
 		slow.Add(1)
 		time.Sleep(80 * time.Millisecond) // 拉长窗口以暴露并发穿透
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_, _ = w.Write([]byte(mockProfileJSON()))
 	})
 

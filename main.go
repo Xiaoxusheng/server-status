@@ -581,17 +581,12 @@ func requirePermission(perm string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		session, valid := getSessionFromRequest(r)
 		if !valid {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"code":    http.StatusUnauthorized,
-				"message": "请先登录",
-			})
+			rejectUnauthenticated(w, r)
 			return
 		}
 
 		if !hasPermission(session.Username, perm) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusForbidden)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"code":    http.StatusForbidden,
@@ -610,12 +605,7 @@ func requireAnyPermission(perms []string, next http.HandlerFunc) http.HandlerFun
 	return func(w http.ResponseWriter, r *http.Request) {
 		session, valid := getSessionFromRequest(r)
 		if !valid {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"code":    http.StatusUnauthorized,
-				"message": "请先登录",
-			})
+			rejectUnauthenticated(w, r)
 			return
 		}
 
@@ -626,7 +616,7 @@ func requireAnyPermission(perms []string, next http.HandlerFunc) http.HandlerFun
 			}
 		}
 
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusForbidden,
@@ -723,7 +713,7 @@ type UpdateUserRequest struct {
 
 // listPermissionsHandler 返回系统全部权限定义
 func listPermissionsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
 		"message": "获取权限列表成功",
@@ -772,7 +762,7 @@ func listRolesHandler(w http.ResponseWriter, r *http.Request) {
 		return roleList[i].RoleID < roleList[j].RoleID
 	})
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
 		"message": "获取角色列表成功",
@@ -814,7 +804,7 @@ func getRoleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	userManager.RUnlock()
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
 		"message": "获取角色成功",
@@ -1147,7 +1137,7 @@ func listRbacUsersHandler(w http.ResponseWriter, r *http.Request) {
 		return userList[i].Username < userList[j].Username
 	})
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
 		"message": "获取用户列表成功",
@@ -1435,7 +1425,7 @@ func deleteRbacUserHandler(w http.ResponseWriter, r *http.Request) {
 
 // writeJSON 统一 JSON 响应
 func writeJSON(w http.ResponseWriter, code int, message string, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    code,
 		"message": message,
@@ -1445,7 +1435,7 @@ func writeJSON(w http.ResponseWriter, code int, message string, data interface{}
 
 // writeJSONError 统一 JSON 错误响应
 func writeJSONError(w http.ResponseWriter, code int, message string) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    code,
@@ -2764,7 +2754,7 @@ func generateDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	session, valid := getSessionFromRequest(r)
 	if !valid {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusUnauthorized,
@@ -2844,7 +2834,7 @@ func generateDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	tokenResponse, err := generateDownloadToken(targetUsername, boundFilePath, r, req.Description, expiresIn, maxBytes)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusInternalServerError,
@@ -2856,7 +2846,7 @@ func generateDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 	auditAction(r, "token.issue", fmt.Sprintf("target=%s file=%s expiry_min=%d quota_bytes=%d",
 		targetUsername, boundFilePath, int(expiresIn.Minutes()), maxBytes))
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
 		"message": "下载令牌生成成功",
@@ -2875,7 +2865,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 暴力枚举防护：同一 IP 短窗口内令牌验证失败过多则直接限速
 	if downloadFailLimited(clientIP) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusTooManyRequests)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusTooManyRequests,
@@ -2890,7 +2880,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	filePath := r.URL.Query().Get("file")
 
 	if token == "" || filePath == "" || TokenValues == "" {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusBadRequest,
@@ -2903,7 +2893,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	downloadToken, err := validateDownloadToken(token, TokenValues, r)
 	if err != nil {
 		recordDownloadFail(clientIP)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusForbidden,
@@ -2915,7 +2905,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// RBAC 授权校验：令牌所属账号必须仍拥有文件下载权限
 	if !hasPermission(downloadToken.Username, "files:download") {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusForbidden,
@@ -2931,7 +2921,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(filePath, "http://") || strings.HasPrefix(filePath, "https://") {
 		parsedURL, err := url.Parse(filePath)
 		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusBadRequest)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"code":    http.StatusBadRequest,
@@ -2956,7 +2946,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	// 令牌与文件绑定校验：签发时绑定了文件路径的令牌只能下载该文件
 	if downloadToken.FilePath != "" && downloadToken.FilePath != relativePath {
 		recordDownloadFail(clientIP)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusForbidden,
@@ -2969,7 +2959,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 安全检查：确保文件路径在允许的目录内
 	if !isSafeFilePath(fullPath, mediaDir) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusForbidden,
@@ -2981,7 +2971,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	// 检查文件是否存在
 	fileInfo, err := os.Stat(fullPath)
 	if os.IsNotExist(err) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusNotFound,
@@ -2992,7 +2982,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 检查是否是目录
 	if fileInfo.IsDir() {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusBadRequest,
@@ -3004,7 +2994,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	// 配额预检：非 Range 请求要求文件完整放入剩余配额（Range 断点续传由运行时配额截断兜底）
 	isRangeRequest := r.Header.Get("Range") != ""
 	if !isRangeRequest && downloadToken.UsedBytes+fileInfo.Size() > downloadToken.MaxBytes {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusForbidden,
@@ -3027,7 +3017,7 @@ func secureDownloadHandler(w http.ResponseWriter, r *http.Request) {
 	// 打开文件后交给 ServeContent：自动支持 Range/206 断点续传、If-Range、Content-Length
 	file, err := os.Open(fullPath)
 	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusInternalServerError,
@@ -3062,7 +3052,7 @@ func downloadInfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	clientIP := getClientIP(r)
 	if downloadFailLimited(clientIP) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusTooManyRequests)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusTooManyRequests,
@@ -3075,7 +3065,7 @@ func downloadInfoHandler(w http.ResponseWriter, r *http.Request) {
 	tokenValue := r.URL.Query().Get("token")
 	filePath := r.URL.Query().Get("file")
 	if tokenID == "" || tokenValue == "" || filePath == "" {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusBadRequest,
@@ -3087,7 +3077,7 @@ func downloadInfoHandler(w http.ResponseWriter, r *http.Request) {
 	downloadToken, err := validateDownloadToken(tokenID, tokenValue, r)
 	if err != nil {
 		recordDownloadFail(clientIP)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusForbidden,
@@ -3098,7 +3088,7 @@ func downloadInfoHandler(w http.ResponseWriter, r *http.Request) {
 	clearDownloadFail(clientIP)
 
 	if !hasPermission(downloadToken.Username, "files:download") {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusForbidden,
@@ -3113,7 +3103,7 @@ func downloadInfoHandler(w http.ResponseWriter, r *http.Request) {
 	relativePath = strings.TrimPrefix(filepath.ToSlash(filepath.Clean("/"+relativePath)), "/")
 	if downloadToken.FilePath != "" && downloadToken.FilePath != relativePath {
 		recordDownloadFail(clientIP)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusForbidden,
@@ -3124,7 +3114,7 @@ func downloadInfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	fullPath := filepath.Join(mediaDir, relativePath)
 	if !isSafeFilePath(fullPath, mediaDir) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusForbidden,
@@ -3135,7 +3125,7 @@ func downloadInfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	fileInfo, err := os.Stat(fullPath)
 	if err != nil || fileInfo.IsDir() {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusNotFound,
@@ -3144,7 +3134,7 @@ func downloadInfoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
 		"message": "ok",
@@ -3164,7 +3154,7 @@ func downloadInfoHandler(w http.ResponseWriter, r *http.Request) {
 func listDownloadTokensHandler(w http.ResponseWriter, r *http.Request) {
 	session, valid := getSessionFromRequest(r)
 	if !valid {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusUnauthorized,
@@ -3202,7 +3192,7 @@ func listDownloadTokensHandler(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
 		"message": "获取令牌列表成功",
@@ -3219,7 +3209,7 @@ func revokeDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	session, valid := getSessionFromRequest(r)
 	if !valid {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusUnauthorized,
@@ -3230,7 +3220,7 @@ func revokeDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	tokenID := r.URL.Query().Get("token_id")
 	if tokenID == "" {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusBadRequest,
@@ -3244,7 +3234,7 @@ func revokeDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	token, exists := downloadTokenManager.Tokens[tokenID]
 	if !exists {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusNotFound)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusNotFound,
@@ -3256,7 +3246,7 @@ func revokeDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 	// 撤销令牌统一要求 token:revoke 权限（高危操作）：
 	// 普通用户即使是自己签发的令牌也不能撤销，避免令牌被滥用后销毁痕迹
 	if !hasPermission(session.Username, "token:revoke") {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusForbidden)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusForbidden,
@@ -3270,7 +3260,7 @@ func revokeDownloadTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	auditAction(r, "token.revoke", fmt.Sprintf("token_id=%s owner=%s by=%s", tokenID, token.Username, session.Username))
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
 		"message": "令牌已撤销",
@@ -3719,7 +3709,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	clientIP := getClientIP(r)
 	if !loginLimiter.allowed(clientIP) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusTooManyRequests)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusTooManyRequests,
@@ -3766,7 +3756,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	// 设置会话Cookie（有效期与会话空闲超时一致）
 	http.SetCookie(w, sessionCookieFor(sessionID, session))
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
 		"message": "登录成功",
@@ -3808,7 +3798,7 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 	})
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
 		"message": "登出成功",
@@ -3819,7 +3809,7 @@ func logoutHandler(w http.ResponseWriter, r *http.Request) {
 func checkAuthHandler(w http.ResponseWriter, r *http.Request) {
 	session, valid := getSessionFromRequest(r)
 	if !valid {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusUnauthorized,
@@ -3833,7 +3823,7 @@ func checkAuthHandler(w http.ResponseWriter, r *http.Request) {
 	userManager.RUnlock()
 
 	if !exists {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusUnauthorized,
@@ -3850,7 +3840,7 @@ func checkAuthHandler(w http.ResponseWriter, r *http.Request) {
 		http.SetCookie(w, sessionCookieFor(cookie.Value, session))
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
 		"message": "已登录",
@@ -3909,6 +3899,33 @@ func getSessionFromRequest(r *http.Request) (*Session, bool) {
 	return session, valid
 }
 
+// rejectUnauthenticated 未登录时的统一出口：
+// 浏览器导航跳登录页，接口调用返回 401 JSON（带 charset，否则手机浏览器会按 GBK 解出乱码）。
+func rejectUnauthenticated(w http.ResponseWriter, r *http.Request) {
+	if isPageNavigation(r) {
+		http.Redirect(w, r, "/index.html", http.StatusFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(http.StatusUnauthorized)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"code":    http.StatusUnauthorized,
+		"message": "请先登录",
+	})
+}
+
+// isPageNavigation 判断这次请求是不是"浏览器地址栏导航"（而不是前端 fetch）。
+// 页面导航未登录应该 302 去登录页；接口调用才返回 401 JSON。
+func isPageNavigation(r *http.Request) bool {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		return false
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/") {
+		return false
+	}
+	return strings.Contains(r.Header.Get("Accept"), "text/html")
+}
+
 // authMiddleware 全局会话认证拦截中间件，提供接口级别越权防卫体系
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -3920,12 +3937,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		session, valid := getSessionFromRequest(r)
 		if !valid {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"code":    http.StatusUnauthorized,
-				"message": "请先登录",
-			})
+			rejectUnauthenticated(w, r)
 			return
 		}
 
@@ -3933,7 +3945,7 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		// 使用会话绑定的随机 CSRF Token（Double-Submit Cookie），恒定时间比较。
 		if isWriteMethod(r.Method) {
 			if !validCSRFToken(session, r) {
-				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
 				w.WriteHeader(http.StatusForbidden)
 				json.NewEncoder(w).Encode(map[string]interface{}{
 					"code":    http.StatusForbidden,
@@ -3972,7 +3984,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !loginLimiter.allowed("reg:" + getClientIP(r)) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusTooManyRequests)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusTooManyRequests,
@@ -3992,7 +4004,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 验证输入
 	if err := validateRegistration(req.Username, req.Email, req.Password); err != nil {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusBadRequest,
@@ -4007,7 +4019,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	userManager.RUnlock()
 
 	if exists {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusConflict,
@@ -4018,7 +4030,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 检查邮箱是否已存在
 	if isEmailExists(req.Email) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusConflict,
@@ -4031,7 +4043,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("密码加密失败: %v", err)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusInternalServerError,
@@ -4060,7 +4072,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		log.Printf("保存用户数据失败: %v", err)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code":    http.StatusInternalServerError,
@@ -4090,7 +4102,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 	})
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"code":    http.StatusOK,
 		"message": "注册成功",
@@ -4484,7 +4496,7 @@ func securityMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// 安全验证
 		if !verifySecurityHeaders(r) {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.WriteHeader(http.StatusForbidden)
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"code":    http.StatusForbidden,
@@ -4901,7 +4913,7 @@ func listEpubs(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Printf("总共找到 %d 个 EPUB 文件\n", len(epubURLs)) // 添加日志
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(epubURLs) // 修正变量名
 }
 
@@ -5098,7 +5110,7 @@ func accessStatsHandler(w http.ResponseWriter, r *http.Request) {
 		"start_time":    serverStartTime.Format("2006-01-02 15:04:05"), // 添加启动时间到响应
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(stats)
 }
 
@@ -5182,7 +5194,7 @@ func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 	// 添加速率限制检查
 	clientIP := getClientIP(r)
 	if !globalRateLimiter.Allow(clientIP) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusTooManyRequests)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"code": http.StatusTooManyRequests,
@@ -5232,7 +5244,7 @@ func randomMediaHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		files = collected
 		num = len(collected)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 
 		if len(files) == 0 {
@@ -5510,7 +5522,7 @@ func loadFileCertificate() (*x509.Certificate, error) {
 
 // sslExpiryHandler HTTP 端点：返回当前生效 TLS 证书的到期信息（需登录且具备 system:view 权限）
 func sslExpiryHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	cert, err := probeLiveCertificate()
 	source := "live"
 	if err != nil {

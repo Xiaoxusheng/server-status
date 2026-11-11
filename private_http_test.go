@@ -61,7 +61,7 @@ func TestPrivateHTTPFlow(t *testing.T) {
 		r.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
 		r.Header.Set("Accept-Encoding", "gzip, deflate")
 		if body != "" {
-			r.Header.Set("Content-Type", "application/json")
+			r.Header.Set("Content-Type", "application/json; charset=utf-8")
 		}
 		// 会话 + CSRF（Double-Submit：携 csrf_token Cookie 与 X-CSRF-Token 头）
 		r.Header.Set(csrfHeaderName, testCSRFToken)
@@ -91,7 +91,7 @@ func TestPrivateHTTPFlow(t *testing.T) {
 	// 1. 未登录（无 session cookie）→ 401
 	r := httptest.NewRequest("GET", "/api/private/session", nil)
 	r.Header.Set("User-Agent", "Mozilla/5.0 Chrome/120.0")
-	r.Header.Set("Accept", "application/json")
+	r.Header.Set("Accept", "application/json; charset=utf-8")
 	r.Header.Set("Accept-Language", "zh-CN")
 	r.Header.Set("Accept-Encoding", "gzip")
 	if rec := do(r); rec.Code != http.StatusUnauthorized {
@@ -359,7 +359,7 @@ func TestPrivateAPINeedsDoubleAuth(t *testing.T) {
 
 	r := httptest.NewRequest("GET", "/api/private/notes", nil)
 	r.Header.Set("User-Agent", "Mozilla/5.0 Chrome/120.0")
-	r.Header.Set("Accept", "application/json")
+	r.Header.Set("Accept", "application/json; charset=utf-8")
 	r.Header.Set("Accept-Language", "zh-CN")
 	r.Header.Set("Accept-Encoding", "gzip")
 	r.Header.Set("Cookie", "session_id="+sid)
@@ -414,7 +414,7 @@ func TestPrivatePageEntryGate(t *testing.T) {
 	// 3. 未登录调用入口接口 → 401
 	r3 := httptest.NewRequest("POST", "/api/private/entry", nil)
 	r3.Header.Set("User-Agent", "Mozilla/5.0 Chrome/120.0")
-	r3.Header.Set("Accept", "application/json")
+	r3.Header.Set("Accept", "application/json; charset=utf-8")
 	r3.Header.Set("Accept-Language", "zh-CN")
 	r3.Header.Set("Accept-Encoding", "gzip")
 	rec3 := httptest.NewRecorder()

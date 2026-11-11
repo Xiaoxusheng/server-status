@@ -14,7 +14,7 @@ func TestHealthzResponseShape(t *testing.T) {
 
 	healthzHandler(rec, req)
 
-	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json; charset=utf-8") {
 		t.Fatalf("content-type = %q, want application/json", ct)
 	}
 

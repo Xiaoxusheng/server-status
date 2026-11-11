@@ -85,7 +85,7 @@ func secureReq(sess *Session, method, path, body string, csrf bool) *http.Reques
 	r.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
 	r.Header.Set("Accept-Encoding", "gzip, deflate")
 	if body != "" {
-		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Content-Type", "application/json; charset=utf-8")
 	}
 	cookies := []string{"session_id=" + sess.SessionID}
 	if csrf {
@@ -473,10 +473,10 @@ func TestDownloadTokenFullFlow(t *testing.T) {
 	loginRec := httptest.NewRecorder()
 	loginReq := httptest.NewRequest("POST", "/login", strings.NewReader(`{"username":"admin","password":"AdminPass123"}`))
 	loginReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0")
-	loginReq.Header.Set("Accept", "application/json")
+	loginReq.Header.Set("Accept", "application/json; charset=utf-8")
 	loginReq.Header.Set("Accept-Language", "zh-CN")
 	loginReq.Header.Set("Accept-Encoding", "gzip")
-	loginReq.Header.Set("Content-Type", "application/json")
+	loginReq.Header.Set("Content-Type", "application/json; charset=utf-8")
 	mux.ServeHTTP(loginRec, loginReq)
 	if loginRec.Code != http.StatusOK {
 		t.Fatalf("登录失败: %d %s", loginRec.Code, loginRec.Body.String())
@@ -503,7 +503,7 @@ func TestDownloadTokenFullFlow(t *testing.T) {
 			"Accept":          "application/json, text/plain, */*",
 			"Accept-Language": "zh-CN,zh;q=0.9",
 			"Accept-Encoding": "gzip, deflate",
-			"Content-Type":    "application/json",
+			"Content-Type":    "application/json; charset=utf-8",
 		} {
 			req.Header.Set(k, v)
 		}

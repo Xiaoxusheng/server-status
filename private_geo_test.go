@@ -86,10 +86,10 @@ func TestPrivateRegeoProxy(t *testing.T) {
 	{
 		r := httptest.NewRequest("POST", "/api/private/unlock", strings.NewReader(`{"password":"secret-2026"}`))
 		r.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0")
-		r.Header.Set("Accept", "application/json")
+		r.Header.Set("Accept", "application/json; charset=utf-8")
 		r.Header.Set("Accept-Language", "zh-CN")
 		r.Header.Set("Accept-Encoding", "gzip")
-		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Content-Type", "application/json; charset=utf-8")
 		r.Header.Set(csrfHeaderName, testCSRFToken)
 		r.Header.Set("Cookie", "session_id="+sid+"; csrf_token="+testCSRFToken)
 		rec := do(r)

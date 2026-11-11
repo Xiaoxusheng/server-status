@@ -538,7 +538,7 @@ func trojanAuthedRequest(method, path, sessionID, body string) *http.Request {
 	r.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
 	r.Header.Set("Accept-Encoding", "gzip, deflate")
 	if body != "" {
-		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Content-Type", "application/json; charset=utf-8")
 	}
 	// 写请求携带会话绑定 CSRF（Double-Submit：Cookie + X-CSRF-Token 头）
 	r.Header.Set(csrfHeaderName, testCSRFToken)

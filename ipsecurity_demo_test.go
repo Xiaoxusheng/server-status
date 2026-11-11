@@ -158,7 +158,7 @@ func TestIPBlockDemo(t *testing.T) {
 	fmt.Println("\n===== ④ 手动封禁（1 小时 / 暴力尝试 / 备注） =====")
 	body := `{"ip":"` + ipManual + `","duration":"1h","reason":"暴力尝试","note":"演示测试手动封禁"}`
 	req := httptest.NewRequest("POST", "/api/ip/block", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	rec := httptest.NewRecorder()
 	blockIPHandler(rec, req)
 	fmt.Printf("  POST /api/ip/block → HTTP %d，响应：%s\n", rec.Code, strings.TrimSpace(rec.Body.String()))
@@ -186,7 +186,7 @@ func TestIPBlockDemo(t *testing.T) {
 	// ===== ⑥ 手动解封（自动封禁归档历史） =====
 	fmt.Println("\n===== ⑥ 手动解封自动封禁 IP =====")
 	req3 := httptest.NewRequest("POST", "/api/ip/unblock", strings.NewReader(`{"ip":"`+ipRate+`"}`))
-	req3.Header.Set("Content-Type", "application/json")
+	req3.Header.Set("Content-Type", "application/json; charset=utf-8")
 	rec3 := httptest.NewRecorder()
 	unblockIPHandler(rec3, req3)
 	fmt.Printf("  POST /api/ip/unblock(%s) → HTTP %d，响应：%s\n", ipRate, rec3.Code, strings.TrimSpace(rec3.Body.String()))

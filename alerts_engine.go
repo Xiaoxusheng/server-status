@@ -456,7 +456,7 @@ func postAlertWebhook(url string, ev *AlertEvent) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err

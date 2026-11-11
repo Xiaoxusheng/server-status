@@ -1699,7 +1699,7 @@ func trojanSingboxDownloadHandler(w http.ResponseWriter, r *http.Request) {
 		cfg.WebSocket.Path, cfg.WebSocket.Host,
 		cfg.UDP, cfg.WebSocket.Enabled,
 	)
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-singbox.json"`, hash))
 	_, _ = w.Write([]byte(singbox))
 }

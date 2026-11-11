@@ -244,7 +244,7 @@ func ipAccessMiddleware(next http.Handler) http.Handler {
 func ipinfoHandler(w http.ResponseWriter, r *http.Request) {
 	ip := strings.TrimSpace(r.URL.Query().Get("ip"))
 	if ip == "" {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(ipAccess.snapshotList())
 		return
 	}
@@ -258,6 +258,6 @@ func ipinfoHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("IP not found"))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(map[string]interface{}{"stats": st, "records": recs})
 }

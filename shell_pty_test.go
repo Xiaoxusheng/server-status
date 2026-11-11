@@ -179,8 +179,8 @@ func e2eServer(t *testing.T, password string) (*httptest.Server, *Session) {
 func e2eAuth(t *testing.T, srv *httptest.Server, sess *Session, password string) string {
 	body := `{"password":"` + password + `"}`
 	req, _ := http.NewRequest("POST", srv.URL+"/api/shell/auth", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	req.Header.Set("Accept", "application/json; charset=utf-8")
 	req.Header.Set("Accept-Encoding", "gzip, deflate")
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120")

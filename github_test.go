@@ -69,7 +69,7 @@ func TestGitHubProfileNormalResponse(t *testing.T) {
 			http.Error(w, "unexpected path", http.StatusNotFound)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		fmt.Fprint(w, mockProfileJSON())
 	})
 
@@ -105,7 +105,7 @@ func TestGitHubTokenSentAndNotLeaked(t *testing.T) {
 	var gotAuth string
 	setupGitHubTest(t, testGitHubConfig, secret, func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		fmt.Fprint(w, mockProfileJSON())
 	})
 
@@ -125,7 +125,7 @@ func TestGitHubTokenSentAndNotLeaked(t *testing.T) {
 
 func TestGitHubProfileCacheHitAndExpiry(t *testing.T) {
 	_, hits := setupGitHubTest(t, testGitHubConfig, "", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		fmt.Fprint(w, mockProfileJSON())
 	})
 
@@ -174,7 +174,7 @@ func TestGitHubStaleFallbackOnFailure(t *testing.T) {
 			http.Error(w, "boom", http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		fmt.Fprint(w, mockProfileJSON())
 	})
 
@@ -313,7 +313,7 @@ func TestGitHubReposPaginationFilterAndDTO(t *testing.T) {
 			}
 			repos = append(repos, m)
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(repos)
 	})
 
@@ -396,7 +396,7 @@ func TestGitHubRepoDetailNormal(t *testing.T) {
 			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusNotFound)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		fmt.Fprint(w, `{"id":1,"name":"server-status","full_name":"Xiaoxusheng/server-status","description":"d","html_url":"https://github.com/Xiaoxusheng/server-status","stargazers_count":15,"forks_count":3,"open_issues_count":1,"language":"Go","default_branch":"main","license":{"spdx_id":"MIT","key":"mit","name":"MIT License"},"topics":["go"],"created_at":"2024-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","pushed_at":"2026-02-03T00:00:00Z","owner":{"login":"Xiaoxusheng"}}`)
 	})
 
@@ -429,7 +429,7 @@ func TestGitHubReadmeFetchAndTruncation(t *testing.T) {
 		if strings.Contains(r.URL.Path, "bigrepo") {
 			content = long
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(map[string]any{
 			"name": "README.md", "path": "README.md",
 			"html_url": "https://github.com/Xiaoxusheng/x/blob/main/README.md",
@@ -511,7 +511,7 @@ func TestGitHubConvertRepoDTO(t *testing.T) {
 
 func TestGitHubOverviewPicksFeaturedThenStars(t *testing.T) {
 	setupGitHubTest(t, testGitHubConfig, "", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode([]map[string]any{
 			{"id": 1, "name": "plain-star", "full_name": "Xiaoxusheng/plain-star", "html_url": "u1", "stargazers_count": 99, "pushed_at": "2026-01-01T00:00:00Z", "owner": map[string]any{"login": "Xiaoxusheng"}},
 			{"id": 2, "name": "Server-Status", "full_name": "Xiaoxusheng/Server-Status", "html_url": "u2", "stargazers_count": 1, "pushed_at": "2026-01-01T00:00:00Z", "owner": map[string]any{"login": "Xiaoxusheng"}},
@@ -544,7 +544,7 @@ func TestGitHubConcurrentRequestsDeduplicated(t *testing.T) {
 	release := make(chan struct{})
 	_, hits := setupGitHubTest(t, testGitHubConfig, "", func(w http.ResponseWriter, r *http.Request) {
 		<-release // 挂住首个请求，制造并发窗口
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		fmt.Fprint(w, mockProfileJSON())
 	})
 
@@ -589,7 +589,7 @@ func TestGitHubETagConditionalRequest(t *testing.T) {
 			return
 		}
 		w.Header().Set("ETag", etagValue)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		fmt.Fprint(w, mockProfileJSON())
 	})
 
@@ -657,12 +657,12 @@ func TestGitHubETagChangedFallsBackToFreshFetch(t *testing.T) {
 		if r.Header.Get("If-None-Match") == `"old"` {
 			// 数据已变化：GitHub 会忽略条件头返回 200 + 新内容 + 新 ETag
 			w.Header().Set("ETag", `"new"`)
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			fmt.Fprint(w, `{"login":"Xiaoxusheng","name":"NewName","html_url":"https://github.com/Xiaoxusheng","public_repos":9,"followers":1,"following":1}`)
 			return
 		}
 		w.Header().Set("ETag", `"old"`)
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		fmt.Fprint(w, mockProfileJSON())
 	})
 

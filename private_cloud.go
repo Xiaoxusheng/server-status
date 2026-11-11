@@ -396,7 +396,7 @@ func openlistRawURL(cfg CloudSyncConfig, relPath string) (string, error) {
 		return "", err
 	}
 	req.Header.Set("Authorization", cfg.OpenlistToken)
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	resp, err := openlistHTTPClient.Do(req)
 	if err != nil {
 		return "", err
