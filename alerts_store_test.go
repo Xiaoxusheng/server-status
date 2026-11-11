@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -236,5 +239,55 @@ func TestAlertEngineEvaluateLifecycle(t *testing.T) {
 	}
 	if events[0].Status != "resolved" {
 		t.Errorf("最新事件应为 resolved，实际 %s", events[0].Status)
+	}
+}
+
+// 线上真实场景：开过总开关后 alerts.config 已写入但没有 email 字段，
+// 此时仍要从 docker_guard 继承 SMTP，否则设置面板永远空白。
+func TestAlertsConfigAlwaysInheritsDockerSMTP(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("SERVER_STATUS_HOME", dir)
+	dockerCfg := `{"docker_guard":{"alert_email":{"host":"smtp.qq.com","port":465,"username":"u@qq.com","password":"secret","to":["a@b.com"]}}}`
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(dockerCfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := newTestOpsStore(t)
+
+	// 1) 从未保存过
+	cfg := s.GetAlertsConfig()
+	if cfg.Email == nil || cfg.Email.Host != "smtp.qq.com" || len(cfg.Email.To) != 1 {
+		t.Fatalf("未保存过时应继承 docker_guard: %+v", cfg.Email)
+	}
+
+	// 2) 保存过配置但没有邮件（正是线上的状态）
+	if err := s.SetSetting(alertsConfigKey, `{"enabled":true,"interval_sec":30,"mute_start":"23:00","mute_end":"08:00","webhook_url":""}`); err != nil {
+		t.Fatal(err)
+	}
+	cfg = s.GetAlertsConfig()
+	if cfg.Email == nil || cfg.Email.Host != "smtp.qq.com" {
+		t.Fatalf("已有配置但没填邮件时也应继承: %+v", cfg.Email)
+	}
+	if !cfg.Enabled || cfg.IntervalSec != 30 {
+		t.Errorf("继承不应覆盖已有配置: %+v", cfg)
+	}
+
+	// 3) 自己填了邮件配置就用自己填的
+	if err := s.SetSetting(alertsConfigKey, `{"enabled":true,"email":{"host":"smtp.163.com","port":465,"username":"me@163.com","to":["x@y.com"]}}`); err != nil {
+		t.Fatal(err)
+	}
+	if cfg = s.GetAlertsConfig(); cfg.Email == nil || cfg.Email.Host != "smtp.163.com" {
+		t.Fatalf("应使用用户自己填的 SMTP: %+v", cfg.Email)
+	}
+
+	// 4) 保存空邮件配置时应落 nil，保证下次还能继承
+	if err := s.SaveAlertsConfig(alertsConfig{Enabled: true, IntervalSec: 30, Email: &alertEmailConfig{Host: "  "}}); err != nil {
+		t.Fatal(err)
+	}
+	if raw := s.GetSetting(alertsConfigKey, ""); strings.Contains(raw, `"email"`) {
+		t.Errorf("空邮件配置不应落库: %s", raw)
+	}
+	if cfg = s.GetAlertsConfig(); cfg.Email == nil || cfg.Email.Host != "smtp.qq.com" {
+		t.Errorf("清空后应回落到 docker_guard: %+v", cfg.Email)
 	}
 }

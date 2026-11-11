@@ -319,9 +319,14 @@ func (s *OpsStore) GetAlertsConfig() alertsConfig {
 	cfg := alertsConfig{Enabled: false, IntervalSec: 30, MuteStart: "23:00", MuteEnd: "08:00"}
 	if raw := s.GetSetting(alertsConfigKey, ""); raw != "" {
 		_ = json.Unmarshal([]byte(raw), &cfg)
-	} else if g := loadDockerGuardConfig(); g.AlertEmail != nil && g.AlertEmail.Host != "" {
-		// 首次使用告警中心：把容器守护里已经配好的 SMTP 直接带过来，用户不用重填
-		cfg.Email = g.AlertEmail
+	}
+	// 邮件没配（从未保存过，或保存时留空）就沿用容器守护那套 SMTP。
+	// 注意不能只在"首次"继承：只要开过总开关就会写入 alerts.config（里面没有 email 字段），
+	// 之后永远走不到分支，表单就一直是空的。
+	if cfg.Email == nil || strings.TrimSpace(cfg.Email.Host) == "" {
+		if g := loadDockerGuardConfig(); g.AlertEmail != nil && strings.TrimSpace(g.AlertEmail.Host) != "" {
+			cfg.Email = g.AlertEmail
+		}
 	}
 	if cfg.IntervalSec < 10 {
 		cfg.IntervalSec = 10
@@ -332,6 +337,11 @@ func (s *OpsStore) GetAlertsConfig() alertsConfig {
 func (s *OpsStore) SaveAlertsConfig(cfg alertsConfig) error {
 	if cfg.IntervalSec < 10 {
 		cfg.IntervalSec = 10
+	}
+	// 邮件主机为空视为"没配"，存 nil 而不是空壳对象，
+	// 这样下次读取还能继续继承 docker_guard 的配置
+	if cfg.Email != nil && strings.TrimSpace(cfg.Email.Host) == "" {
+		cfg.Email = nil
 	}
 	raw, err := json.Marshal(cfg)
 	if err != nil {
