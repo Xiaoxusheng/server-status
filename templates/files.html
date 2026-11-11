@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>文件管理 - Server Status</title>
-    <link rel="icon"
-        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <link rel="alternate icon" href="/favicon.ico?v=2" sizes="16x16 32x32 48x48">
     <link rel="stylesheet" href="/ui.css">
     <style>
         html,
@@ -73,14 +73,14 @@
             } catch (e) { }
         })();
     </script>
-    <script crossorigin src="https://registry.npmmirror.com/react/18.3.1/files/umd/react.production.min.js"></script>
+    <script crossorigin src="/react.min.js"></script>
     <script crossorigin
-        src="https://registry.npmmirror.com/react-dom/18.3.1/files/umd/react-dom.production.min.js"></script>
-    <script src="https://registry.npmmirror.com/dayjs/1.11.13/files/dayjs.min.js"></script>
-    <script src="https://registry.npmmirror.com/antd/5.21.6/files/dist/antd.min.js"></script>
-    <script src="https://registry.npmmirror.com/@ant-design/icons/5.4.0/files/dist/index.umd.js"></script>
-    <script src="https://registry.npmmirror.com/mpegts.js/1.7.3/files/dist/mpegts.js"></script>
-    <script src="https://registry.npmmirror.com/@babel/standalone/7.24.7/files/babel.min.js"></script>
+        src="/react-dom.min.js"></script>
+    <script src="/dayjs.min.js"></script>
+    <script src="/antd.min.js"></script>
+    <script src="/ant-design-icons.min.js"></script>
+    <script src="/mpegts.js"></script>
+    <script src="/babel.min.js"></script>
     <style>
         body {
             margin: 0;
@@ -589,6 +589,352 @@
             align-items: center;
         }
 
+        /* ===== 拖拽上传：全屏投放提示层 ===== */
+        .fm-drop-mask {
+            position: fixed;
+            inset: 0;
+            z-index: 1200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            pointer-events: none;
+            background: rgba(245, 245, 245, .68);
+            -webkit-backdrop-filter: blur(3px);
+            backdrop-filter: blur(3px);
+            animation: fmFade .12s ease-out;
+        }
+
+        html.dark .fm-drop-mask {
+            background: rgba(20, 20, 20, .76);
+        }
+
+        .fm-drop-box {
+            width: min(520px, 100%);
+            padding: 34px 24px 28px;
+            text-align: center;
+            border: 2px dashed #91caff;
+            border-radius: var(--radius-xl);
+            background: var(--card);
+            box-shadow: var(--shadow-overlay);
+            transition: border-color .15s, background .15s;
+        }
+
+        .fm-drop-box.on-folder {
+            border-color: #1677ff;
+            background: #e6f4ff;
+        }
+
+        html.dark .fm-drop-box {
+            border-color: #153b6f;
+        }
+
+        html.dark .fm-drop-box.on-folder {
+            border-color: #4096ff;
+            background: #11243c;
+        }
+
+        .fm-drop-icon {
+            display: inline-flex;
+            font-size: 44px;
+            line-height: 1;
+            color: #1677ff;
+            margin-bottom: 14px;
+        }
+
+        .fm-drop-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 6px;
+            word-break: break-all;
+        }
+
+        .fm-drop-sub {
+            font-size: 12px;
+            color: var(--secondary);
+            line-height: 1.6;
+            word-break: break-all;
+        }
+
+        /* 文件夹卡片：拖拽悬停高亮（投放目标） */
+        .fm-card.fm-drop-over {
+            border-color: #1677ff;
+            box-shadow: inset 0 0 0 1px #1677ff;
+            background: #e6f4ff;
+            transform: translateY(-2px);
+        }
+
+        html.dark .fm-card.fm-drop-over {
+            background: #11243c;
+            border-color: #4096ff;
+            box-shadow: inset 0 0 0 1px #4096ff;
+        }
+
+        /* ===== 上传队列面板 ===== */
+        .fm-up-panel {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            z-index: 1100;
+            width: 400px;
+            max-width: calc(100vw - 32px);
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-float);
+            overflow: hidden;
+            animation: fmUpIn .18s ease-out;
+        }
+
+        .fm-up-head {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 10px 10px 12px;
+        }
+
+        .fm-up-head-ico {
+            display: inline-flex;
+            font-size: 16px;
+            color: #1677ff;
+        }
+
+        .fm-up-head-ico.is-error {
+            color: #ff4d4f;
+        }
+
+        .fm-up-head-ico.is-done {
+            color: #52c41a;
+        }
+
+        .fm-up-head-text {
+            min-width: 0;
+            flex: 1;
+            line-height: 1.35;
+        }
+
+        .fm-up-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .fm-up-count {
+            font-size: 12px;
+            color: var(--secondary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .fm-up-total {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text);
+            font-variant-numeric: tabular-nums;
+            margin-right: 2px;
+        }
+
+        /* 总进度条（头部下方 2px 细线） */
+        .fm-up-progress {
+            height: 2px;
+            background: rgba(0, 0, 0, .06);
+            overflow: hidden;
+        }
+
+        html.dark .fm-up-progress {
+            background: rgba(255, 255, 255, .1);
+        }
+
+        .fm-up-progress i {
+            display: block;
+            height: 100%;
+            background: #1677ff;
+            transition: width .18s ease;
+        }
+
+        .fm-up-progress i.is-error {
+            background: #ff4d4f;
+        }
+
+        .fm-up-progress i.is-done {
+            background: #52c41a;
+        }
+
+        .fm-up-list {
+            max-height: 268px;
+            overflow-y: auto;
+            border-top: 1px solid var(--border);
+        }
+
+        .fm-up-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 9px;
+            padding: 9px 10px 9px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .fm-up-item:last-child {
+            border-bottom: none;
+        }
+
+        .fm-up-item:hover {
+            background: var(--hover);
+        }
+
+        .fm-up-ico {
+            flex: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 7px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            background: #fafafa;
+            border: 1px solid var(--border);
+        }
+
+        html.dark .fm-up-ico {
+            background: #262626;
+        }
+
+        .fm-up-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .fm-up-line {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+        }
+
+        .fm-up-name {
+            flex: 1;
+            min-width: 0;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .fm-up-state {
+            flex: none;
+            font-size: 12px;
+            color: var(--secondary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .fm-up-state.is-uploading {
+            color: #1677ff;
+        }
+
+        .fm-up-state.is-done {
+            color: #52c41a;
+        }
+
+        .fm-up-state.is-error {
+            color: #ff4d4f;
+        }
+
+        html.dark .fm-up-state.is-uploading {
+            color: #4096ff;
+        }
+
+        .fm-up-bar {
+            height: 3px;
+            margin: 6px 0 5px;
+            border-radius: 2px;
+            background: rgba(0, 0, 0, .06);
+            overflow: hidden;
+        }
+
+        html.dark .fm-up-bar {
+            background: rgba(255, 255, 255, .12);
+        }
+
+        .fm-up-bar i {
+            display: block;
+            height: 100%;
+            border-radius: 2px;
+            background: #1677ff;
+            transition: width .18s ease;
+        }
+
+        .fm-up-bar i.is-done {
+            background: #52c41a;
+        }
+
+        .fm-up-bar i.is-error {
+            background: #ff4d4f;
+        }
+
+        .fm-up-bar i.is-canceled {
+            background: #bfbfbf;
+        }
+
+        .fm-up-sub {
+            font-size: 11px;
+            color: var(--secondary);
+            line-height: 1.45;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .fm-up-sub.is-error {
+            color: #ff4d4f;
+            white-space: normal;
+            word-break: break-all;
+        }
+
+        .fm-up-act {
+            flex: none;
+            width: 22px;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .fm-up-act .ant-btn {
+            width: 22px;
+            height: 22px;
+            min-width: 22px;
+            padding: 0;
+            color: var(--secondary);
+        }
+
+        .fm-up-act .ant-btn:hover {
+            color: #1677ff;
+        }
+
+        @keyframes fmFade {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes fmUpIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         /* 移动端适配 */
         @media (max-width: 768px) {
             .topbar {
@@ -665,6 +1011,31 @@
 
             .fm-grid {
                 grid-template-columns: 1fr;
+            }
+
+            /* 移动端：上传面板贴底通栏，投放提示层缩小留白 */
+            .fm-up-panel {
+                right: 10px;
+                left: 10px;
+                bottom: 10px;
+                width: auto;
+                max-width: none;
+            }
+
+            .fm-up-list {
+                max-height: 216px;
+            }
+
+            .fm-drop-mask {
+                padding: 14px;
+            }
+
+            .fm-drop-box {
+                padding: 26px 16px 22px;
+            }
+
+            .fm-drop-icon {
+                font-size: 36px;
             }
         }
     </style>
@@ -978,6 +1349,237 @@
             // 只看收藏（当前目录过滤开关）
             const [favOnly, setFavOnly] = useState(false);
 
+            // ==================== 上传队列（拖拽 / 多选 / 实时进度） ====================
+            // 每个文件单独一个 XHR，才能拿到真实的 upload 进度事件；最多 3 个并发，其余排队。
+            const UP_CONCURRENCY = 3;
+            const UP_SIZE_LIMIT = 1 << 30; // 与后端一致：单文件 1GB
+            const [uploads, setUploads] = useState([]);
+            const [upCollapsed, setUpCollapsed] = useState(false);
+            // 拖拽投放层
+            const [dragging, setDragging] = useState(false);
+            const [dropFolder, setDropFolder] = useState(null);
+            const uploadsRef = useRef([]);
+            const xhrMapRef = useRef({});
+            const pathRef = useRef(path);
+            const dragDepthRef = useRef(0);
+            const dragActiveRef = useRef(false);
+            const upRoundRef = useRef(0);
+            const upNotifiedRef = useRef(-1);
+            pathRef.current = path;
+
+            const syncUploads = () => setUploads(uploadsRef.current);
+
+            const patchUpload = (id, patch) => {
+                uploadsRef.current = uploadsRef.current.map(t => t.id === id ? { ...t, ...patch } : t);
+                syncUploads();
+            };
+
+            // 一轮上传全部结束时刷新列表并提示（用 roundId 避免重复提示）
+            const maybeFinishUploads = () => {
+                const list = uploadsRef.current;
+                if (!list.length) return;
+                if (list.some(t => t.status === 'waiting' || t.status === 'uploading')) return;
+                if (upNotifiedRef.current === upRoundRef.current) return;
+                upNotifiedRef.current = upRoundRef.current;
+                const ok = list.filter(t => t.status === 'done').length;
+                const fail = list.filter(t => t.status === 'error').length;
+                if (ok && !fail) message.success(`已上传 ${ok} 个文件`);
+                else if (ok && fail) message.warning(`上传完成：成功 ${ok} 个，失败 ${fail} 个`);
+                else if (fail) message.error(`${fail} 个文件上传失败`);
+                if (ok) load(pathRef.current);
+            };
+
+            // 派发排队中的任务（并发已满时什么都不做，完成一个再派一个）
+            const pumpUploads = () => {
+                const list = uploadsRef.current;
+                const running = list.filter(t => t.status === 'uploading').length;
+                const slots = UP_CONCURRENCY - running;
+                if (slots <= 0) return;
+                list.filter(t => t.status === 'waiting').slice(0, slots).forEach(t => startUpload(t));
+            };
+
+            const startUpload = (task) => {
+                patchUpload(task.id, { status: 'uploading', percent: 0, loaded: 0, error: '', startedAt: Date.now() });
+                const xhr = new XMLHttpRequest();
+                xhrMapRef.current[task.id] = xhr;
+                // 结束（成功 / 失败 / 取消 / 中断）统一收口：清句柄 → 更新状态 → 派发下一个 → 检查整轮结束
+                const settle = (patch) => {
+                    delete xhrMapRef.current[task.id];
+                    patchUpload(task.id, patch);
+                    pumpUploads();
+                    maybeFinishUploads();
+                };
+                xhr.open('POST', baseUrl + '/api/files/upload', true);
+                xhr.withCredentials = true;
+                const tok = getCsrfToken();
+                if (tok) xhr.setRequestHeader('X-CSRF-Token', tok);
+                xhr.upload.onprogress = (e) => {
+                    if (!e.lengthComputable) return;
+                    // 传输阶段最高 99%，等服务端落盘返回 200 才置为 100%
+                    const pct = Math.min(99, Math.round(e.loaded / e.total * 100));
+                    const cur = uploadsRef.current.find(t => t.id === task.id);
+                    // 百分比不变就不 patch，避免整个页面被高频 progress 事件反复重渲染
+                    if (!cur || cur.status !== 'uploading' || cur.percent === pct) return;
+                    patchUpload(task.id, { percent: pct, loaded: e.loaded });
+                };
+                xhr.onload = () => {
+                    let d = null;
+                    try { d = JSON.parse(xhr.responseText || 'null'); } catch (e) { }
+                    if (xhr.status >= 200 && xhr.status < 300 && d && d.code === 200) {
+                        settle({ status: 'done', percent: 100, loaded: task.size });
+                    } else {
+                        settle({ status: 'error', percent: 0, error: (d && d.message) || ('上传失败（HTTP ' + xhr.status + '）') });
+                    }
+                };
+                xhr.onerror = () => settle({ status: 'error', percent: 0, error: '网络异常，传输中断' });
+                xhr.onabort = () => settle({ status: 'canceled', percent: 0 });
+                const fd = new FormData();
+                fd.append('path', task.targetPath);
+                fd.append('file', task.file, task.name);
+                xhr.send(fd);
+            };
+
+            // 加入队列：targetPath 为空时上传到当前目录；拖到文件夹卡片上则上传到该目录
+            const pushUploads = (fileList, targetPath) => {
+                const list = Array.prototype.slice.call(fileList || []);
+                if (!list.length) return;
+                const target = typeof targetPath === 'string' ? targetPath : pathRef.current;
+                const stamp = Date.now().toString(36);
+                const added = list.map((f, i) => {
+                    const size = f.size || 0;
+                    const tooBig = size > UP_SIZE_LIMIT;
+                    return {
+                        id: stamp + '-' + i + '-' + Math.random().toString(36).slice(2, 6),
+                        file: f,
+                        name: f.name || '未命名文件',
+                        size: size,
+                        targetPath: target,
+                        percent: 0,
+                        loaded: 0,
+                        status: tooBig ? 'error' : 'waiting',
+                        error: tooBig ? '文件超过 1GB 上限，未上传' : '',
+                        startedAt: 0
+                    };
+                });
+                upRoundRef.current += 1;
+                upNotifiedRef.current = -1;
+                // 新一轮开始时清掉上一轮已完成/已取消的条目，避免面板越积越长
+                const keep = uploadsRef.current.filter(t => t.status === 'uploading' || t.status === 'waiting');
+                uploadsRef.current = keep.concat(added);
+                setUpCollapsed(false);
+                syncUploads();
+                pumpUploads();
+            };
+
+            const retryUpload = (id) => {
+                const t = uploadsRef.current.find(x => x.id === id);
+                if (!t) return;
+                // 超限文件重试也过不去，直接维持错误状态并提示
+                if ((t.size || 0) > UP_SIZE_LIMIT) {
+                    patchUpload(id, { status: 'error', percent: 0, error: '文件超过 1GB 上限，未上传' });
+                    return;
+                }
+                upRoundRef.current += 1;
+                upNotifiedRef.current = -1;
+                patchUpload(id, { status: 'waiting', percent: 0, loaded: 0, error: '', startedAt: 0 });
+                pumpUploads();
+            };
+
+            const cancelUpload = (id) => {
+                const xhr = xhrMapRef.current[id];
+                if (xhr) { try { xhr.abort(); } catch (e) { } return; }
+                patchUpload(id, { status: 'canceled', percent: 0 });
+                maybeFinishUploads();
+            };
+
+            const removeUpload = (id) => {
+                uploadsRef.current = uploadsRef.current.filter(t => t.id !== id);
+                syncUploads();
+            };
+
+            // 关闭面板：仍有任务在跑时改为收起，等跑完再关
+            const closeUploadPanel = () => {
+                if (uploadsRef.current.some(t => t.status === 'waiting' || t.status === 'uploading')) { setUpCollapsed(true); return; }
+                uploadsRef.current = [];
+                syncUploads();
+            };
+
+            // 全局拖拽投放：window 上监听（overlay 用 pointer-events:none，不挡 elementFromPoint）
+            useEffect(() => {
+                const isFileDrag = (e) => {
+                    const dt = e.dataTransfer;
+                    if (!dt || !dt.types) return false;
+                    for (let i = 0; i < dt.types.length; i++) if (dt.types[i] === 'Files') return true;
+                    return false;
+                };
+                const folderAt = (x, y) => {
+                    const el = document.elementFromPoint(x, y);
+                    const card = el && el.closest ? el.closest('[data-folder-path]') : null;
+                    return card ? { path: card.getAttribute('data-folder-path') || '', name: card.getAttribute('data-folder-name') || '' } : null;
+                };
+                let leaveTimer = null;
+                const reset = () => {
+                    if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
+                    dragDepthRef.current = 0;
+                    dragActiveRef.current = false;
+                    setDragging(false);
+                    setDropFolder(null);
+                };
+                const onDragEnter = (e) => {
+                    if (!isFileDrag(e)) return;
+                    e.preventDefault();
+                    if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
+                    dragDepthRef.current += 1;
+                    if (!dragActiveRef.current) { dragActiveRef.current = true; setDragging(true); }
+                };
+                const onDragOver = (e) => {
+                    if (!isFileDrag(e)) return;
+                    e.preventDefault();
+                    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+                    if (leaveTimer) { clearTimeout(leaveTimer); leaveTimer = null; }
+                    if (!dragDepthRef.current) dragDepthRef.current = 1;
+                    if (!dragActiveRef.current) { dragActiveRef.current = true; setDragging(true); }
+                    const next = folderAt(e.clientX, e.clientY);
+                    setDropFolder(prev => {
+                        if (!prev && !next) return prev;
+                        if (prev && next && prev.path === next.path) return prev;
+                        return next;
+                    });
+                };
+                // 元素间移动时 enter/leave 顺序不保证，深度归零后延迟复位，避免遮罩闪烁
+                const onDragLeave = () => {
+                    if (!dragDepthRef.current) return;
+                    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+                    if (dragDepthRef.current === 0) {
+                        if (leaveTimer) clearTimeout(leaveTimer);
+                        leaveTimer = setTimeout(reset, 80);
+                    }
+                };
+                const onDrop = (e) => {
+                    if (!isFileDrag(e)) return;
+                    e.preventDefault();
+                    const target = folderAt(e.clientX, e.clientY);
+                    reset();
+                    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+                        pushUploads(e.dataTransfer.files, target ? target.path : pathRef.current);
+                    }
+                };
+                window.addEventListener('dragenter', onDragEnter);
+                window.addEventListener('dragover', onDragOver);
+                window.addEventListener('dragleave', onDragLeave);
+                window.addEventListener('drop', onDrop);
+                // 拖出窗口（dragleave 有时不触发）或切走标签页时兜底复位
+                window.addEventListener('blur', reset);
+                return () => {
+                    if (leaveTimer) clearTimeout(leaveTimer);
+                    window.removeEventListener('dragenter', onDragEnter);
+                    window.removeEventListener('dragover', onDragOver);
+                    window.removeEventListener('dragleave', onDragLeave);
+                    window.removeEventListener('drop', onDrop);
+                    window.removeEventListener('blur', reset);
+                };
+            }, []);
+
             const hasPerm = (p) => auth.user && (auth.user.permissions || []).some(x => x === '*' || x === p);
 
             useEffect(() => {
@@ -1232,23 +1834,13 @@
                 }
             });
 
+            // 选择文件后统一交给上传队列（并发控制 / 进度 / 失败重试）
             const uploadProps = {
                 multiple: true,
                 showUploadList: false,
-                customRequest: async ({ file, onSuccess, onError }) => {
-                    const fd = new FormData();
-                    fd.append('path', path);
-                    fd.append('file', file);
-                    try {
-                        const r = await fetch(baseUrl + '/api/files/upload', { method: 'POST', headers: { 'X-CSRF-Token': getCsrfToken() }, body: fd, credentials: 'include' });
-                        const d = await r.json();
-                        if (d.code === 200) { message.success(`上传成功: ${file.name}`); onSuccess(); }
-                        else { message.error(d.message || '上传失败'); onError(); }
-                        load(path);
-                    } catch (e) {
-                        message.error('上传失败: ' + e.message);
-                        onError();
-                    }
+                customRequest: ({ file, onSuccess }) => {
+                    pushUploads([file]);
+                    if (onSuccess) onSuccess({}, file);
                 }
             };
 
@@ -1406,7 +1998,11 @@
                 const checked = selected.includes(f.path);
                 const faved = favs.some(x => x.path === f.path);
                 return (
-                    <div key={f.path} className={'fm-card' + (checked ? ' fm-checked' : '')} onClick={() => load(f.path)}>
+                    <div key={f.path}
+                        data-folder-path={f.path}
+                        data-folder-name={f.name}
+                        className={'fm-card' + (checked ? ' fm-checked' : '') + (dropFolder && dropFolder.path === f.path ? ' fm-drop-over' : '')}
+                        onClick={() => load(f.path)}>
                         <div className="fm-card-media">
                             <Checkbox className="fm-check" checked={checked} onClick={e => e.stopPropagation()} onChange={() => toggleSelect(f.path)} />
                             <Tooltip title={faved ? '取消收藏' : '收藏'} placement="left">
@@ -1511,6 +2107,15 @@
                 }
             ];
 
+            // 上传队列汇总（面板头部与总进度条使用）
+            const upBusy = uploads.some(t => t.status === 'waiting' || t.status === 'uploading');
+            const upDoneCount = uploads.filter(t => t.status === 'done').length;
+            const upFailCount = uploads.filter(t => t.status === 'error').length;
+            const upTotalBytes = uploads.reduce((s, t) => s + (t.size || 0), 0);
+            const upLoadedBytes = uploads.reduce((s, t) => s + (t.status === 'done' ? (t.size || 0) : (t.loaded || 0)), 0);
+            const upPercent = upTotalBytes ? Math.min(100, Math.round(upLoadedBytes / upTotalBytes * 100)) : (upBusy ? 0 : 100);
+            const upTitleText = upBusy ? '正在上传…' : (upFailCount ? '部分文件上传失败' : '上传完成');
+
             return (
                 <ConfigProvider theme={{ algorithm: isDark ? darkAlgorithm : undefined, token: { colorBgLayout: isDark ? '#141414' : '#f5f5f5', colorBgContainer: isDark ? '#1f1f1f' : '#ffffff' } }}>
                     <div className={'sp-app' + (isDark ? ' dark' : '')} style={{ minHeight: '100vh', background: isDark ? '#141414' : '#f5f5f5' }}>
@@ -1531,7 +2136,9 @@
                                 title={<Space size={6}><UIIcon name="BankOutlined" />服务器文件</Space>}
                                 extra={<Space wrap>
                                     <Upload {...uploadProps}>
-                                        <Button type="primary" icon={<span><UIIcon name="CloudUploadOutlined" style={{ fontSize: 15 }} /></span>}>上传文件</Button>
+                                        <Tooltip title="支持多选；也可以直接把文件拖到页面任意位置">
+                                            <Button type="primary" icon={<span><UIIcon name="CloudUploadOutlined" style={{ fontSize: 15 }} /></span>}>上传文件</Button>
+                                        </Tooltip>
                                     </Upload>
                                     <Button icon={<UIIcon name="FolderAddOutlined" />} onClick={() => setMkModal(true)}>新建文件夹</Button>
                                     <Button icon={<UIIcon name="ReloadOutlined" />} onClick={() => load(path)}>刷新</Button>
@@ -1624,7 +2231,12 @@
                                             {visibleFiles.slice(0, shown).map(f => f.is_dir ? renderFolderCard(f) : renderFileCard(f))}
                                         </div>
                                         {!loading && !visibleFiles.length && (
-                                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={favOnly ? '当前目录暂无收藏' : (files.length ? '无匹配文件' : '空目录')} style={{ padding: 40 }} />
+                                            <div style={{ textAlign: 'center' }}>
+                                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={favOnly ? '当前目录暂无收藏' : (files.length ? '无匹配文件' : '空目录')} style={{ padding: 40 }} />
+                                                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                                                    把文件拖到页面任意位置即可上传到 媒体目录/{path || '根目录'}
+                                                </Typography.Text>
+                                            </div>
                                         )}
                                         {visibleFiles.length > shown && (
                                             <div style={{ textAlign: 'center', marginTop: 12 }}>
@@ -1813,6 +2425,106 @@
                                 </div>
                             )}
                         </Drawer>
+
+                        {/* 拖拽上传投放层：拖入文件时全屏提示，悬停到文件夹卡片则改变目标 */}
+                        {dragging && (
+                            <div className="fm-drop-mask">
+                                <div className={'fm-drop-box' + (dropFolder ? ' on-folder' : '')}>
+                                    <span className="fm-drop-icon" style={dropFolder ? { color: '#1677ff' } : undefined}>
+                                        <UIIcon name={dropFolder ? 'FolderOpenOutlined' : 'CloudUploadOutlined'} />
+                                    </span>
+                                    <div className="fm-drop-title">{dropFolder ? `释放到「${dropFolder.name}」` : '松开鼠标，上传到当前目录'}</div>
+                                    <div className="fm-drop-sub">
+                                        目标：媒体目录/{dropFolder ? dropFolder.path : (path || '根目录')}
+                                        <br />
+                                        可同时拖入多个文件 · 单文件最大 1GB · html / js / sh 等脚本文件不可上传
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 上传队列面板：总数 / 总进度 / 每个文件进度，可收起，完成后自动可关闭 */}
+                        {uploads.length > 0 && (
+                            <div className="fm-up-panel">
+                                <div className="fm-up-head">
+                                    <span className={'fm-up-head-ico' + (upBusy ? '' : (upFailCount ? ' is-error' : ' is-done'))}>
+                                        <UIIcon name={upBusy ? 'CloudUploadOutlined' : (upFailCount ? 'ExclamationCircleOutlined' : 'CheckCircleOutlined')} />
+                                    </span>
+                                    <div className="fm-up-head-text">
+                                        <div className="fm-up-title">{upTitleText}</div>
+                                        <div className="fm-up-count">
+                                            {upDoneCount}/{uploads.length} 已完成{upFailCount ? ` · ${upFailCount} 个失败` : ''} · {formatBytes(upLoadedBytes)} / {formatBytes(upTotalBytes)}
+                                        </div>
+                                    </div>
+                                    <span className="fm-up-total">{upPercent}%</span>
+                                    <Tooltip title={upCollapsed ? '展开' : '收起'}>
+                                        <Button type="text" size="small"
+                                            icon={<UIIcon name={upCollapsed ? 'UpOutlined' : 'DownOutlined'} />}
+                                            onClick={() => setUpCollapsed(!upCollapsed)} />
+                                    </Tooltip>
+                                    {!upBusy && (
+                                        <Tooltip title="关闭">
+                                            <Button type="text" size="small" icon={<UIIcon name="CloseOutlined" />} onClick={closeUploadPanel} />
+                                        </Tooltip>
+                                    )}
+                                </div>
+                                <div className="fm-up-progress">
+                                    <i className={upBusy ? '' : (upFailCount ? 'is-error' : 'is-done')} style={{ width: Math.max(2, upPercent) + '%' }} />
+                                </div>
+                                {!upCollapsed && (
+                                    <div className="fm-up-list">
+                                        {uploads.map(t => {
+                                            const meta = CAT_META[fileCategory(t.name)];
+                                            const secs = t.startedAt ? Math.max(0.3, (Date.now() - t.startedAt) / 1000) : 0;
+                                            const speed = t.status === 'uploading' && secs ? (t.loaded || 0) / secs : 0;
+                                            const pct = t.status === 'done' ? 100 : (t.status === 'error' || t.status === 'canceled' ? 0 : t.percent);
+                                            const barCls = t.status === 'done' ? 'is-done' : (t.status === 'error' ? 'is-error' : (t.status === 'canceled' ? 'is-canceled' : ''));
+                                            const stateText = t.status === 'uploading' ? t.percent + '%'
+                                                : t.status === 'waiting' ? '排队'
+                                                    : t.status === 'done' ? '完成'
+                                                        : t.status === 'error' ? '失败' : '已取消';
+                                            const stateCls = t.status === 'uploading' ? ' is-uploading'
+                                                : t.status === 'done' ? ' is-done'
+                                                    : t.status === 'error' ? ' is-error' : '';
+                                            let sub = '';
+                                            if (t.status === 'error') sub = t.error || '上传失败';
+                                            else if (t.status === 'waiting') sub = formatBytes(t.size) + ' · 等待上传';
+                                            else if (t.status === 'uploading') sub = formatBytes(t.loaded || 0) + ' / ' + formatBytes(t.size) + (speed ? ' · ' + formatBytes(speed) + '/s' : '');
+                                            else if (t.status === 'done') sub = formatBytes(t.size) + ' · 已保存到 媒体目录/' + (t.targetPath || '根目录');
+                                            else sub = formatBytes(t.size) + ' · 已取消';
+                                            return (
+                                                <div className="fm-up-item" key={t.id}>
+                                                    <span className="fm-up-ico" style={{ color: meta.color }}><UIIcon name={fileIconName(t.name)} /></span>
+                                                    <div className="fm-up-main">
+                                                        <div className="fm-up-line">
+                                                            <span className="fm-up-name" title={t.name}>{t.name}</span>
+                                                            <span className={'fm-up-state' + stateCls}>{stateText}</span>
+                                                        </div>
+                                                        <div className="fm-up-bar"><i className={barCls} style={{ width: pct + '%' }} /></div>
+                                                        <div className={'fm-up-sub' + (t.status === 'error' ? ' is-error' : '')}>{sub}</div>
+                                                    </div>
+                                                    <div className="fm-up-act">
+                                                        {t.status === 'error' ? (
+                                                            <Tooltip title="重新上传">
+                                                                <Button type="text" size="small" icon={<UIIcon name="ReloadOutlined" />} onClick={() => retryUpload(t.id)} />
+                                                            </Tooltip>
+                                                        ) : (t.status === 'uploading' || t.status === 'waiting') ? (
+                                                            <Tooltip title="取消上传">
+                                                                <Button type="text" size="small" icon={<UIIcon name="CloseOutlined" />} onClick={() => cancelUpload(t.id)} />
+                                                            </Tooltip>
+                                                        ) : (
+                                                            <Tooltip title="移除记录">
+                                                                <Button type="text" size="small" icon={<UIIcon name="CloseOutlined" />} onClick={() => removeUpload(t.id)} />
+                                                            </Tooltip>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* 回到顶部：滚动超过 400px 出现，点击平滑滚回页面顶部 */}
                         {auth.ok && <FloatButton.BackTop tooltip="回到顶部" visibilityHeight={400} />}

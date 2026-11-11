@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>设备定位大屏 - Server Status</title>
-    <link rel="icon"
-        href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201024%201024%22%20fill%3D%22%231677ff%22%3E%3Cpath%20d%3D%22M704%20446H320c-4.4%200-8%203.6-8%208v402c0%204.4%203.6%208%208%208h384c4.4%200%208-3.6%208-8V454c0-4.4-3.6-8-8-8zm-328%2064h272v117H376V510zm272%20290H376V683h272v117z%22%2F%3E%3Cpath%20d%3D%22M424%20748a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200zm0-178a32%2032%200%201%200%2064%200%2032%2032%200%201%200-64%200z%22%2F%3E%3Cpath%20d%3D%22M811.4%20368.9C765.6%20248%20648.9%20162%20512.2%20162S258.8%20247.9%20213%20368.8C126.9%20391.5%2063.5%20470.2%2064%20563.6%2064.6%20668%20145.6%20752.9%20247.6%20762c4.7.4%208.7-3.3%208.7-8v-60.4c0-4-3-7.4-7-7.9-27-3.4-52.5-15.2-72.1-34.5-24-23.5-37.2-55.1-37.2-88.6%200-28%209.1-54.4%2026.2-76.4%2016.7-21.4%2040.2-36.9%2066.1-43.7l37.9-10%2013.9-36.7c8.6-22.8%2020.6-44.2%2035.7-63.5%2014.9-19.2%2032.6-36%2052.4-50%2041.1-28.9%2089.5-44.2%20140-44.2s98.9%2015.3%20140%2044.3c19.9%2014%2037.5%2030.8%2052.4%2050%2015.1%2019.3%2027.1%2040.7%2035.7%2063.5l13.8%2036.6%2037.8%2010c54.2%2014.4%2092.1%2063.7%2092.1%20120%200%2033.6-13.2%2065.1-37.2%2088.6-19.5%2019.2-44.9%2031.1-71.9%2034.5-4%20.5-6.9%203.9-6.9%207.9V754c0%204.7%204.1%208.4%208.8%208%20101.7-9.2%20182.5-94%20183.2-198.2.6-93.4-62.7-172.1-148.6-194.9z%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+    <link rel="alternate icon" href="/favicon.ico?v=2" sizes="16x16 32x32 48x48">
     <link rel="stylesheet" href="/ui.css">
     <link rel="stylesheet" href="/leaflet.css">
     <script>
@@ -19,24 +19,63 @@
     </script>
     <style>
         /* =====================================================================
-           设备定位大屏 —— 复用全站 ui.css 设计令牌，跟随 light / dark 主题。
+           设备定位大屏 —— 克制的浅色控制台
 
-           只写布局与组件样式，颜色/圆角一律取 ui.css 的令牌，不再自带一套色板。
-           地图瓦片在暗色主题下压暗，保证与界面协调。
+           刻意不用玻璃拟态/渐变光晕/大阴影/胶囊标签：暖白画布 + 白色面板 +
+           发丝线 + 等宽数字 + 单一深蓝强调色。目标是"真实产品"，不是模板。
+           颜色仍取自 ui.css 的令牌，本页只在 body.mqtt-screen 上做暖白/墨色
+           的局部覆盖，不影响其他页面。
            ===================================================================== */
 
-        /* ---------- Ant Design Motion ----------
-           时长与缓动曲线照搬 antd 的 motion 令牌，关键帧也用它的标准命名
-           （antFadeIn / antSlideUpBigIn / antZoomIn …），让动效节奏与全站一致。 */
-        :root {
-            --motion-duration-fast: 0.1s;
-            --motion-duration-mid: 0.2s;
-            --motion-duration-slow: 0.3s;
-            --motion-ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
-            --motion-ease-in-out: cubic-bezier(0.645, 0.045, 0.355, 1);
-            --motion-ease-out-circ: cubic-bezier(0.08, 0.82, 0.17, 1);
-            --motion-ease-in-out-circ: cubic-bezier(0.78, 0.14, 0.15, 0.86);
-            --motion-ease-out-back: cubic-bezier(0.12, 0.4, 0.29, 1.46);
+        body.mqtt-screen {
+            --color-bg: #f6f6f4;
+            --color-surface: #ffffff;
+            --color-border: #e7e5e0;
+            --color-border-strong: #d6d3cc;
+            --color-text: #17181c;
+            --color-text-secondary: #565c66;
+            --color-text-tertiary: #8b8f97;
+            --color-primary: #1f4ed8;
+            --color-primary-hover: #2f5ee8;
+            --color-primary-bg: #eef2ff;
+            --color-success: #0e9f6e;
+            --color-warning: #b45309;
+            --color-error: #b42318;
+            --ms-mono: "SFMono-Regular", "JetBrains Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+        }
+
+        html.dark body.mqtt-screen {
+            --color-bg: #0d0f12;
+            --color-surface: #14171c;
+            --color-border: #262b33;
+            --color-border-strong: #353b45;
+            --color-text: #e9edf2;
+            --color-text-secondary: #a3aab5;
+            --color-text-tertiary: #6f7783;
+            --color-primary: #7b9cff;
+            --color-primary-hover: #9ab3ff;
+            --color-primary-bg: rgba(80, 110, 255, .14);
+            --color-success: #34d399;
+            --color-warning: #fbbf24;
+            --color-error: #fb7185;
+        }
+
+        /* Ant Design 的数值刷新手感，保留但收敛 */
+        @keyframes antValueBump {
+            0% {
+                transform: scale(1);
+                color: var(--color-primary);
+            }
+
+            40% {
+                transform: scale(1.04);
+                color: var(--color-primary);
+            }
+
+            100% {
+                transform: scale(1);
+                color: var(--color-text);
+            }
         }
 
         @keyframes antFadeIn {
@@ -49,70 +88,27 @@
             }
         }
 
-        @keyframes antSlideUpBigIn {
-            from {
-                transform: translateY(32px);
-                opacity: 0;
+        @keyframes pulseDot {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(14, 159, 110, .35);
             }
 
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        @keyframes antSlideUpIn {
-            from {
-                transform: scaleY(.8);
-                transform-origin: 0% 0%;
-                opacity: 0;
-            }
-
-            to {
-                transform: scaleY(1);
-                transform-origin: 0% 0%;
-                opacity: 1;
+            55% {
+                box-shadow: 0 0 0 5px rgba(14, 159, 110, 0);
             }
         }
 
-        @keyframes antZoomIn {
-            from {
-                transform: scale(.2);
-                opacity: 0;
-            }
-
-            to {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-
-        /* 数值刷新：antd 的 ease-out-back 才有这个"弹一下"的手感 */
-        @keyframes antValueBump {
+        @keyframes dmPulse {
             0% {
-                transform: scale(1);
-                color: var(--color-primary);
-            }
-
-            40% {
-                transform: scale(1.08);
-                color: var(--color-primary);
+                transform: translate(-50%, -50%) scale(.55);
+                opacity: .7;
             }
 
             100% {
-                transform: scale(1);
-                color: var(--color-text);
-            }
-        }
-
-        /* antd Skeleton 的 shimmer，用于加载态 */
-        @keyframes antSkeletonShimmer {
-            0% {
-                background-position: 100% 50%;
-            }
-
-            100% {
-                background-position: 0 50%;
+                transform: translate(-50%, -50%) scale(1.25);
+                opacity: 0;
             }
         }
 
@@ -124,66 +120,31 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-            font-size: 14px;
+            font-size: 13px;
             color: var(--color-text);
             background: var(--color-bg);
             -webkit-font-smoothing: antialiased;
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            padding: 16px;
             overflow: hidden;
         }
 
-        /* ---------- 面板：1px 边框 + 表面色，无阴影 ---------- */
-        .panel {
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-            overflow: hidden;
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius-xl);
-            animation: antSlideUpBigIn var(--motion-duration-slow) var(--motion-ease-out-circ) both;
-        }
-
-        /* 按阅读顺序错开入场，做出层次感（antd 的 stagger 做法） */
-        .screen-body>.map-panel {
-            animation-delay: 40ms;
-        }
-
-        .side>.panel:nth-child(1) {
-            animation-delay: 80ms;
-        }
-
-        .side>.panel:nth-child(2) {
-            animation-delay: 130ms;
-        }
-
-        .side>.panel:nth-child(3) {
-            animation-delay: 180ms;
-        }
-
-        /* ---------- 顶栏 ---------- */
+        /* ---------- 顶栏：通栏白条 + 发丝线，不做浮动卡片 ---------- */
         .topbar {
             position: relative;
             flex: 0 0 auto;
             flex-direction: row;
+            display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 16px;
-            flex-wrap: wrap;
-            padding: 12px 18px;
-            /* 给右上角固定的主题按钮留位，避免换行后的内容压到它下面 */
-            padding-right: 62px;
-        }
-
-        /* 主题按钮固定在顶栏右上角，**不参与 flex 换行** ——
-           窄屏下顶栏元素一多，放进 .tb-right 会被挤到第二行。 */
-        .theme-toggle {
-            position: absolute;
-            top: 12px;
-            right: 18px;
+            min-height: 60px;
+            padding: 10px 20px;
+            padding-right: 64px;
+            background: var(--color-surface);
+            border: none;
+            border-bottom: 1px solid var(--color-border);
+            border-radius: 0;
         }
 
         .tb-left {
@@ -191,31 +152,36 @@
             align-items: center;
             gap: 10px;
             min-width: 0;
+            flex: 1 1 auto;
         }
 
         .brand-mark {
             width: 26px;
             height: 26px;
             flex: 0 0 26px;
-            border-radius: var(--radius-sm);
-            background: var(--color-primary);
             display: grid;
             place-items: center;
+            border-radius: 6px;
+            background: var(--color-primary);
             color: #fff;
-            font-size: 14px;
-            font-weight: 700;
+        }
+
+        .brand-mark svg {
+            width: 14px;
+            height: 14px;
+            display: block;
         }
 
         .tb-title {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
             letter-spacing: -.01em;
-            line-height: 1.25;
+            line-height: 1.3;
             white-space: nowrap;
         }
 
         .tb-sub {
-            font-size: 12px;
+            font-size: 11.5px;
             color: var(--color-text-tertiary);
             white-space: nowrap;
             overflow: hidden;
@@ -225,12 +191,10 @@
         .tb-right {
             display: flex;
             align-items: center;
-            gap: 18px;
-            flex-wrap: wrap;
+            gap: 16px;
+            flex: 0 0 auto;
         }
 
-        /* 顶栏指标：纯文字（标签 + 数值两行），不加底色不加边框不加圆角。
-           一旦给个小填充块就变成"按钮"，层级靠字号/字重/间距表达。 */
         .stat {
             display: flex;
             flex-direction: column;
@@ -239,23 +203,23 @@
         }
 
         .stat-label {
-            font-size: 11px;
+            font-size: 10.5px;
             color: var(--color-text-tertiary);
         }
 
         .stat-value {
-            font-size: 14px;
+            font-size: 12.5px;
             font-weight: 600;
             font-variant-numeric: tabular-nums;
             color: var(--color-text);
         }
 
-        /* 状态：小圆点 + 文字 */
+        /* 状态：小圆点 + 文字，不做胶囊 */
         .status {
             display: inline-flex;
             align-items: center;
             gap: 7px;
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 500;
             color: var(--color-text-secondary);
             white-space: nowrap;
@@ -263,11 +227,11 @@
 
         .status::before {
             content: "";
-            width: 7px;
-            height: 7px;
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
             background: var(--color-text-tertiary);
-            flex: 0 0 7px;
+            flex: 0 0 6px;
         }
 
         .status.is-online::before {
@@ -283,29 +247,29 @@
             background: var(--color-warning);
         }
 
-        @keyframes pulseDot {
-
-            0%,
-            100% {
-                box-shadow: 0 0 0 0 rgba(82, 196, 26, .45);
-            }
-
-            55% {
-                box-shadow: 0 0 0 5px rgba(82, 196, 26, 0);
-            }
+        .version {
+            font-size: 11px;
+            color: var(--color-text-tertiary);
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            padding-left: 14px;
+            border-left: 1px solid var(--color-border);
         }
 
-        /* 主题切换：轻量图标按钮，沿用全站交互习惯 */
+        .version:empty {
+            display: none;
+        }
+
         .icon-btn {
-            width: 32px;
-            height: 32px;
-            flex: 0 0 32px;
+            width: 30px;
+            height: 30px;
+            flex: 0 0 30px;
             display: grid;
             place-items: center;
-            border-radius: var(--radius-sm);
             border: none;
+            border-radius: 6px;
             background: transparent;
-            color: var(--color-text-tertiary);
+            color: var(--color-text-secondary);
             cursor: pointer;
             padding: 0;
             transition: background .15s ease, color .15s ease;
@@ -332,7 +296,6 @@
             display: none;
         }
 
-        /* 亮色下显示月亮（点击切到暗色），暗色下显示太阳 */
         html:not(.dark) .icon-btn .icon-moon {
             display: block;
         }
@@ -341,17 +304,10 @@
             display: block;
         }
 
-        .version {
-            font-size: 11.5px;
-            color: var(--color-text-tertiary);
-            font-variant-numeric: tabular-nums;
-            white-space: nowrap;
-            padding-left: 18px;
-            border-left: 1px solid var(--color-border);
-        }
-
-        .version:empty {
-            display: none;
+        .theme-toggle {
+            position: absolute;
+            top: 15px;
+            right: 20px;
         }
 
         /* ---------- 主体 ---------- */
@@ -359,79 +315,81 @@
             flex: 1 1 auto;
             min-height: 0;
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 384px;
+            grid-template-columns: minmax(0, 1fr) 372px;
             gap: 12px;
+            padding: 16px 20px 20px;
         }
 
-        /* ---------- 地图 ---------- */
-        .map-panel {
-            gap: 10px;
-            /* 头带是通栏的，这里只给内容区留白，左侧与标题左边缘对齐 */
-            padding: 0 16px 14px;
+        .panel {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 10px;
         }
 
-        /* 卡片头做成"下沉一级"的色带：卡片本体是 surface，头带用页面底色，
-           形成 页面底 → 卡片 → 头带 → 内容 的嵌套关系。
-           全站约定阴影只给浮层，所以层次一律靠"底色下沉 + 1px 边框"做出来。 */
         .panel-head {
             flex: 0 0 auto;
             display: flex;
             align-items: baseline;
             justify-content: space-between;
             gap: 10px;
-            padding: 10px 16px;
-            background: var(--color-bg);
+            padding: 12px 16px 10px;
             border-bottom: 1px solid var(--color-border);
         }
 
-        /* 标题前的短竖条只做层级提示，不用渐变/光效 */
         .panel-title {
-            position: relative;
-            padding-left: 11px;
-            font-size: 13.5px;
+            font-size: 12.5px;
             font-weight: 600;
         }
 
-        .panel-title::before {
-            content: "";
-            position: absolute;
-            left: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 3px;
-            height: 12px;
-            border-radius: 2px;
-            background: var(--color-primary);
-        }
-
         .panel-hint {
-            font-size: 11.5px;
+            font-size: 11px;
             color: var(--color-text-tertiary);
             font-variant-numeric: tabular-nums;
+        }
+
+        /* ---------- 地图 ---------- */
+        .map-panel {
+            gap: 0;
+            padding: 0;
         }
 
         #map {
             flex: 1 1 auto;
             min-height: 0;
-            border-radius: var(--radius);
+            margin: 12px 16px 0;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
             overflow: hidden;
             background: var(--color-bg);
-            border: 1px solid var(--color-border);
         }
 
-        /* 暗色主题下压暗瓦片，与界面协调；亮色主题保持原色。
-           作用在 img.leaflet-tile 而不是 .leaflet-tile-pane：
-           pane 自身没有尺寸（瓦片是绝对定位溢出的），filter 的作用区域不明确；
-           直接挂在瓦片图片上行为确定、可测量（实测暗色下地图区域平均亮度 230 → 127）。 */
         html.dark #map .leaflet-tile {
             filter: brightness(.6) saturate(.45) contrast(1.12);
         }
 
+        #map .leaflet-control-zoom {
+            border: 1px solid var(--color-border) !important;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: none;
+        }
+
         #map .leaflet-control-zoom a {
+            width: 28px;
+            height: 28px;
+            line-height: 28px;
             background: var(--color-surface);
             color: var(--color-text-secondary);
-            border-color: var(--color-border);
+            border-bottom: 1px solid var(--color-border);
             font-size: 15px;
+        }
+
+        #map .leaflet-control-zoom a:last-child {
+            border-bottom: none;
         }
 
         #map .leaflet-control-zoom a:hover {
@@ -442,8 +400,8 @@
         #map .leaflet-control-attribution {
             background: var(--color-surface);
             color: var(--color-text-tertiary);
-            font-size: 10.5px;
-            border-radius: var(--radius-sm) 0 0 0;
+            font-size: 10px;
+            border-radius: 4px 0 0 0;
         }
 
         #map .leaflet-control-attribution a {
@@ -458,23 +416,22 @@
             text-align: center;
             padding: 0 24px;
             color: var(--color-text-tertiary);
-            font-size: 13px;
+            font-size: 12.5px;
             line-height: 1.7;
         }
 
-        /* 显式 display 会盖掉 hidden 的默认 display:none，必须单独兜住 */
         .map-fallback[hidden] {
             display: none;
         }
 
-        /* 设备标记 */
+        /* 设备标记：外圈脉冲 + 实心点 */
         .dev-marker {
             position: relative;
         }
 
         .dev-marker .dm-dot {
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             background: var(--color-primary);
             border: 2px solid #fff;
@@ -485,18 +442,17 @@
         }
 
         .dev-marker .dm-pulse {
-            width: 30px;
-            height: 30px;
+            width: 26px;
+            height: 26px;
             border-radius: 50%;
-            background: rgba(22, 119, 255, .22);
+            background: rgba(31, 78, 216, .16);
             position: absolute;
             left: 50%;
             top: 50%;
             transform: translate(-50%, -50%);
-            animation: dmPulse 2.6s ease-out infinite;
+            animation: dmPulse 2.8s ease-out infinite;
         }
 
-        /* 未定位时显示的是"最后已知位置"：灰色实心点、不脉冲，与实时定位区分开 */
         .dev-marker.is-stale .dm-dot {
             background: var(--color-text-tertiary);
         }
@@ -505,16 +461,49 @@
             display: none;
         }
 
-        @keyframes dmPulse {
-            0% {
-                transform: translate(-50%, -50%) scale(.5);
-                opacity: .85;
-            }
+        #map .map-recenter {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            background: var(--color-surface);
+            color: var(--color-text-secondary);
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background .15s, color .15s, border-color .15s;
+        }
 
-            100% {
-                transform: translate(-50%, -50%) scale(1.35);
-                opacity: 0;
-            }
+        #map .map-recenter[hidden] {
+            display: none;
+        }
+
+        #map .map-recenter:hover {
+            background: var(--color-primary-bg);
+            color: var(--color-primary);
+            border-color: var(--color-primary);
+        }
+
+        #map .map-recenter svg {
+            width: 15px;
+            height: 15px;
+        }
+
+        .map-note {
+            flex: 0 0 auto;
+            margin: 10px 16px 14px;
+            padding: 10px 0 0;
+            border-top: 1px solid var(--color-border);
+            font-size: 11px;
+            line-height: 1.6;
+            color: var(--color-text-tertiary);
+        }
+
+        .map-note b {
+            font-weight: 600;
+            color: var(--color-text-secondary);
         }
 
         /* ---------- 右栏 ---------- */
@@ -527,16 +516,13 @@
             padding-right: 2px;
         }
 
-        /* 卡片绝不收缩：数据一多若被压缩，overflow:hidden 会把内容裁掉（"被挡住"） */
         .side>.panel {
             flex: 0 0 auto;
         }
 
-        /* 轨迹卡片填充剩余空间：可增长也可收缩（收到底线为止），多出的行内部滚动。
-           不能用 flex-shrink:0 —— 那样几十个点会把卡片撑到几千像素，右栏被迫滚动。 */
         .side>.track-panel {
             flex: 1 1 auto;
-            min-height: 232px;
+            min-height: 200px;
         }
 
         .side::-webkit-scrollbar,
@@ -557,16 +543,17 @@
 
         /* ---------- 当前位置 ---------- */
         .addr-body {
-            padding: 14px 16px 16px;
+            padding: 14px 16px 14px;
         }
 
         .addr-text {
-            font-size: 15px;
+            font-size: 16px;
             font-weight: 600;
-            line-height: 1.5;
+            line-height: 1.45;
+            letter-spacing: -.01em;
             color: var(--color-text);
             word-break: break-all;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .addr-text.is-empty {
@@ -575,14 +562,66 @@
             color: var(--color-text-tertiary);
         }
 
-        /* 坐标区下沉成卡片内的色块，与上方的可读地址形成主次（同样不加边框） */
+        /* 状态 + 实测散布：一行纯文本，不做胶囊 */
+        .pos-tags {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 0;
+            border: none;
+            border-radius: 0;
+            background: transparent;
+            font-size: 12px;
+            font-weight: 500;
+            line-height: 1.5;
+            color: var(--color-text-secondary);
+            white-space: nowrap;
+        }
+
+        .tag.state::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            flex: 0 0 6px;
+        }
+
+        .tag.is-ok {
+            color: var(--color-success);
+        }
+
+        .tag.is-move {
+            color: var(--color-primary);
+        }
+
+        .tag.is-warn {
+            color: var(--color-warning);
+        }
+
+        .tag.is-off {
+            color: var(--color-text-tertiary);
+        }
+
+        #mAcc {
+            font-variant-numeric: tabular-nums;
+            color: var(--color-text-secondary);
+        }
+
         .coord-list {
             display: flex;
             flex-direction: column;
-            gap: 7px;
-            padding: 10px 12px;
-            background: var(--color-bg);
-            border-radius: var(--radius);
+            gap: 0;
+            padding: 0;
+            border-top: 1px solid var(--color-border);
         }
 
         .coord-row {
@@ -590,32 +629,67 @@
             align-items: baseline;
             justify-content: space-between;
             gap: 10px;
-            font-size: 12.5px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--color-border);
+            font-size: 12px;
+        }
+
+        .coord-row:last-child {
+            border-bottom: none;
         }
 
         .coord-label {
             color: var(--color-text-tertiary);
             flex: 0 0 auto;
+            font-size: 11px;
         }
 
         .coord-value {
-            color: var(--color-text-secondary);
+            color: var(--color-text);
+            font-family: var(--ms-mono);
+            font-size: 12px;
             font-variant-numeric: tabular-nums;
             word-break: break-all;
         }
 
-        /* ---------- 环境数据 ---------- */
+        .pos-warn {
+            margin-top: 12px;
+            padding: 0 0 0 10px;
+            border-left: 2px solid var(--color-warning);
+            font-size: 11.5px;
+            line-height: 1.6;
+            color: var(--color-text-secondary);
+        }
+
+        .pos-warn[hidden] {
+            display: none;
+        }
+
+        /* ---------- 环境数据：2×4 发丝线网格，不做灰瓦片 ---------- */
         .metric-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 16px 18px;
-            padding: 14px 16px 16px;
+            gap: 0;
+        }
+
+        .metric {
+            min-width: 0;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .metric:nth-child(odd) {
+            border-right: 1px solid var(--color-border);
+        }
+
+        .metric:nth-last-child(-n+2) {
+            border-bottom: none;
         }
 
         .metric-label {
-            font-size: 11.5px;
+            font-size: 10.5px;
             color: var(--color-text-tertiary);
-            margin-bottom: 5px;
+            margin-bottom: 6px;
         }
 
         .metric-value {
@@ -635,45 +709,15 @@
             margin-left: 3px;
         }
 
-        /* 数值变化时弹一下并高亮（功能性反馈，不是装饰） */
         .metric-value.bump {
-            animation: antValueBump var(--motion-duration-slow) var(--motion-ease-out-back);
+            animation: antValueBump .3s cubic-bezier(0.12, 0.4, 0.29, 1.46);
         }
 
-        /* 地址更新时淡入，避免文字硬切换 */
-        .addr-text.swap {
-            animation: antFadeIn var(--motion-duration-slow) var(--motion-ease-out);
-        }
-
-        /* 轨迹表整体刷新时淡入（数据变了才播，见 JS 里的 lastTrackKey 判断） */
-        .track-list.swap {
-            animation: antFadeIn var(--motion-duration-mid) var(--motion-ease-out);
-        }
-
-        /* 状态文案切换（在线/离线、已定位/未定位）用 antd 的淡入，不硬切 */
+        .addr-text.swap,
+        .track-list.swap,
         .status.swap,
         .stat-value.swap {
-            animation: antFadeIn var(--motion-duration-mid) var(--motion-ease-out);
-        }
-
-        /* 首次加载的骨架条：antd Skeleton 的 shimmer */
-        .skeleton-line {
-            height: 12px;
-            border-radius: var(--radius-sm);
-            background: linear-gradient(90deg,
-                    var(--color-border) 25%,
-                    var(--color-bg) 37%,
-                    var(--color-border) 63%);
-            background-size: 400% 100%;
-            animation: antSkeletonShimmer 1.4s ease infinite;
-        }
-
-        .skeleton-line.w60 {
-            width: 60%;
-        }
-
-        .skeleton-line.w40 {
-            width: 40%;
+            animation: antFadeIn .2s ease-out;
         }
 
         /* ---------- 轨迹 ---------- */
@@ -681,14 +725,12 @@
             flex: 1 1 auto;
             min-height: 0;
             overflow: auto;
-            /* 列表区整块下沉，视觉上像"嵌进卡片的表格槽" */
-            background: var(--color-bg);
         }
 
         .track-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 12px;
+            font-size: 11.5px;
         }
 
         .track-table th {
@@ -696,11 +738,11 @@
             top: 0;
             z-index: 1;
             text-align: left;
-            font-size: 11px;
+            font-size: 10.5px;
             font-weight: 500;
             color: var(--color-text-tertiary);
-            padding: 9px 16px;
-            background: var(--color-bg);
+            padding: 8px 16px;
+            background: var(--color-surface);
             border-bottom: 1px solid var(--color-border);
             white-space: nowrap;
         }
@@ -727,57 +769,10 @@
         }
 
         .empty-hint {
-            padding: 26px 14px;
+            padding: 24px 14px;
             text-align: center;
             color: var(--color-text-tertiary);
-            font-size: 12.5px;
-        }
-
-        /* 地图说明：坐标系转换与瓦片精度都会带来视觉偏差，必须讲清楚 */
-        .map-note {
-            flex: 0 0 auto;
-            padding: 2px 0 0;
-            font-size: 11.5px;
-            line-height: 1.5;
-            color: var(--color-text-tertiary);
-        }
-
-        .map-note b {
-            font-weight: 600;
-            color: var(--color-text-secondary);
-        }
-
-        /* "回到设备"按钮：视角不再无条件回弹（拖动后不会被立刻拽回中心），
-           只在偏离中心时出现，点一下回中。放在缩放控件下方，与常见的定位按钮位置一致。 */
-        #map .map-recenter {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 30px;
-            height: 30px;
-            padding: 0;
-            background: var(--color-surface);
-            color: var(--color-text-secondary);
-            border: 1px solid var(--color-border);
-            border-radius: var(--radius-sm);
-            cursor: pointer;
-            transition: background .15s, color .15s, border-color .15s;
-        }
-
-        /* .map-recenter 显式 display 会盖掉 hidden 的默认 display:none，必须单独兜住 */
-        #map .map-recenter[hidden] {
-            display: none;
-        }
-
-        #map .map-recenter:hover {
-            background: var(--color-primary-bg);
-            color: var(--color-primary);
-            border-color: var(--color-primary);
-        }
-
-        #map .map-recenter svg {
-            width: 16px;
-            height: 16px;
+            font-size: 12px;
         }
 
         /* ---------- 窄屏 ---------- */
@@ -785,11 +780,18 @@
             body {
                 height: auto;
                 overflow: auto;
-                padding: 12px;
             }
 
-            /* 窄屏纵向空间宝贵：隐藏次要信息，避免顶栏被撑成三行
-               （实测 360px 宽时顶栏会到 161px，占掉屏幕两成多） */
+            .topbar {
+                padding: 10px 14px;
+                padding-right: 58px;
+            }
+
+            .theme-toggle {
+                top: 15px;
+                right: 14px;
+            }
+
             .version,
             .stat-time {
                 display: none;
@@ -798,10 +800,8 @@
             .screen-body {
                 grid-template-columns: minmax(0, 1fr);
                 flex: 0 0 auto;
-            }
-
-            .map-panel {
-                height: 56vh;
+                padding: 12px;
+                gap: 10px;
             }
 
             .side {
@@ -811,30 +811,75 @@
             .side>.track-panel {
                 max-height: 360px;
             }
+
+            #map {
+                flex: none;
+                height: 52vh;
+                margin: 10px 12px 0;
+            }
+
+            .map-panel {
+                height: auto;
+            }
+
+            .panel-head {
+                padding: 11px 14px 9px;
+            }
+
+            .map-note {
+                margin: 8px 12px 12px;
+            }
+
+            .addr-body {
+                padding: 12px 14px 14px;
+            }
+
+            .metric {
+                padding: 11px 12px;
+            }
+
+            .track-table th,
+            .track-table td {
+                padding: 8px 12px;
+            }
+        }
+
+        /* 顶栏是页面外壳，不是卡片：必须压过 .panel 基类的纵向 flex 与圆角 */
+        header.topbar {
+            flex-direction: row;
+            border: none;
+            border-bottom: 1px solid var(--color-border);
+            border-radius: 0;
+            background: var(--color-surface);
         }
 
         /* ---------- 尊重降低动效 ---------- */
         @media (prefers-reduced-motion: reduce) {
 
-            .panel,
             .status.is-online::before,
             .dev-marker .dm-pulse,
             .metric-value.bump,
             .addr-text.swap,
             .track-list.swap,
             .status.swap,
-            .stat-value.swap,
-            .skeleton-line {
+            .stat-value.swap {
                 animation: none;
             }
         }
+
     </style>
 </head>
 
-<body>
+<body class="mqtt-screen">
     <header class="panel topbar">
         <div class="tb-left">
-            <div class="brand-mark" aria-hidden="true">⌖</div>
+            <div class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+                    <circle cx="12" cy="10" r="3" />
+                </svg>
+            </div>
             <div style="min-width:0">
                 <div class="tb-title">设备定位大屏</div>
                 <div class="tb-sub" id="deviceName">正在获取设备…</div>
@@ -872,10 +917,10 @@
                 地图组件未能加载，定位数值仍可在右侧查看。
             </div>
             <div class="map-note">
-                <span>地图标记受坐标系转换与瓦片精度影响可能存在偏移，位置以右侧<b>经纬度数值</b>为准；
-                    未定位时显示<b>最后已知位置</b>（灰色标记）。设备侧已对定位做<b>静止平均</b>
-                    （固件 1.5.3 起，精度见右侧"定位精度"），页面在此基础上再做一层<b>抖动抑制</b>
-                    （中位平滑 + 抽稀）作为兜底；右侧表格里始终是<b>原始上报值</b>。</span>
+                <span>地图标记经 WGS-84 → GCJ-02 转换；蓝色圆圈为<b>实测散布</b>（含多路径/遮挡误差），
+                    不是设备端上报的统计误差。灰色标记 = <b>最后已知位置</b>；轨迹做了抖动抑制，
+                    右侧表格为原始上报值。卫星少或受遮挡时偏差几十米属正常，把设备移到窗边/室外、
+                    天线朝上可明显改善。</span>
             </div>
         </section>
 
@@ -883,9 +928,14 @@
             <div class="panel">
                 <div class="panel-head">
                     <span class="panel-title">当前位置</span>
+                    <span class="panel-hint">WGS-84</span>
                 </div>
                 <div class="addr-body">
                     <div class="addr-text is-empty" id="mAddr">正在获取…</div>
+                    <div class="pos-tags">
+                        <span class="tag state is-off" id="mState">—</span>
+                        <span class="tag" id="mAcc">实测散布 —</span>
+                    </div>
                     <div class="coord-list">
                         <div class="coord-row">
                             <span class="coord-label">纬度</span>
@@ -896,11 +946,15 @@
                             <span class="coord-value" id="cLon">—</span>
                         </div>
                     </div>
+                    <div class="pos-warn" id="posWarn" hidden></div>
                 </div>
             </div>
 
             <div class="panel">
-                <div class="panel-head"><span class="panel-title">环境数据</span></div>
+                <div class="panel-head">
+                    <span class="panel-title">环境与遥测</span>
+                    <span class="panel-hint">30 秒轮询</span>
+                </div>
                 <div class="metric-grid">
                     <div class="metric">
                         <div class="metric-label">温度</div>
@@ -933,14 +987,6 @@
                     <div class="metric">
                         <div class="metric-label">航向</div>
                         <div class="metric-value" id="mCourse">—<span class="metric-unit">°</span></div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">定位精度</div>
-                        <div class="metric-value" id="mAcc">—</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">定位状态</div>
-                        <div class="metric-value" id="mState">—</div>
                     </div>
                 </div>
             </div>
@@ -994,6 +1040,7 @@
             var lastValues = {};
             var lastTrackKey = ''; // 轨迹表内容指纹，没变就不重绘
             var recenterBtn = null; // "回到设备"按钮，偏离中心时才出现
+            var accCircle = null;   // 实测散布误差圈
 
             // ---------- 抖动抑制 ----------
             // 这台设备的 GPS 静止时也有几十米随机散布（实测相对真实位置中位偏差 37 m、
@@ -1015,8 +1062,9 @@
             var DECIMATE_M = 10;  // 抽稀阈值（米）
             var RECENTER_M = 20;  // 中心偏离多少米才重新居中（米）
 
-            // 设备大致位置（WGS-84）。只用于首屏视角，避免首帧落在错误的位置上。
-            var HOME_WGS = { lat: 32.016193, lon: 118.789988 };
+            // 设备大致位置（WGS-84）。只用于首屏视角，数据到达后立刻以实际坐标为准。
+            // 设备 2026-10-30 已从夫子庙搬到浦口康华新村，这里同步更新；以后再搬只需要改这一处。
+            var HOME_WGS = { lat: 32.067455, lon: 118.638701 };
 
             var EARTH_LAT_M = 111132;  // 每度纬度约多少米
             var EARTH_LON_M = 111320;  // 赤道处每度经度约多少米（按纬度乘 cos）
@@ -1228,7 +1276,8 @@
                 var home = wgs84ToGcj02(HOME_WGS.lat, HOME_WGS.lon);
 
                 map = L.map('map', {
-                    zoomControl: true,
+                    // 控件放右上角：左上角留给浮动的标题胶囊
+                    zoomControl: false,
                     preferCanvas: true,
                     // 缩放围绕**地图中心**而不是鼠标位置：滚轮/双击缩放后定位点不会跑偏
                     scrollWheelZoom: 'center',
@@ -1236,6 +1285,8 @@
                     // 关掉拖动惯性：惯性滑行会让中心漂走，再回中会多一次回弹
                     inertia: false
                 }).setView([home.lat, home.lon], 16);
+
+                L.control.zoom({ position: 'topright' }).addTo(map);
 
                 // 保留地图版权署名（瓦片服务方要求）
                 L.tileLayer(TILE_URL, {
@@ -1270,7 +1321,7 @@
 
             function initRecenterControl() {
                 var RecenterControl = L.Control.extend({
-                    options: { position: 'topleft' },
+                    options: { position: 'topright' },
                     onAdd: function () {
                         var btn = L.DomUtil.create('button', 'map-recenter');
                         btn.type = 'button';
@@ -1343,7 +1394,9 @@
                     var c = wgs84ToGcj02(data.lat, data.lon);
                     current = [c.lat, c.lon];
                 }
-                var hasLiveFix = !!(data.fix && validLatLng(data.lat, data.lon));
+                // stale = 设备端滤波结果已过期（样本一直被质量/飞点门限拒绝），
+                // 即便 gps_fix=true，当前坐标也只是最后可信位置，标记要显示成灰色
+                var hasLiveFix = !!(data.fix && !data.stale && validLatLng(data.lat, data.lon));
                 if (current) {
                     focusLatLng = L.latLng(current[0], current[1]);
                     focusStale = !hasLiveFix; // 不是实时定位 = 最后已知位置
@@ -1384,12 +1437,37 @@
                     marker = null;
                     markerStale = null;
                 }
+
+                // 误差圈：半径 = 服务端算出的实测散布（p75）。它把"偏差"变成
+                // 可解释的信息，而不是让用户以为标记本该分毫不差。
+                // 只在有实时可信定位时显示；stale / 移动中 / 样本不足时不画。
+                var scatter = Number(data.scatter_m) || 0;
+                if (focusLatLng && data.fix && !data.stale && scatter > 0) {
+                    if (!accCircle) {
+                        accCircle = L.circle(focusLatLng, {
+                            radius: scatter,
+                            color: '#1677ff',
+                            weight: 1,
+                            opacity: .45,
+                            fillColor: '#1677ff',
+                            fillOpacity: .07,
+                            interactive: false
+                        }).addTo(map);
+                    } else {
+                        accCircle.setLatLng(focusLatLng);
+                        accCircle.setRadius(scatter);
+                    }
+                } else if (accCircle) {
+                    map.removeLayer(accCircle);
+                    accCircle = null;
+                }
             }
 
             // ---------- 数据渲染 ----------
             function render(data) {
                 var online = !!data.online;
                 var fix = !!data.fix;
+                var stale = !!data.stale;
 
                 var dot = $('statusDot');
                 dot.className = 'status ' + (online ? 'is-online' : 'is-offline');
@@ -1415,32 +1493,62 @@
                 setMetric('mAlt', fmtNum(data.altitude, 1) + '<span class="metric-unit">m</span>');
                 setMetric('mCourse', fmtNum(data.course, 1) + '<span class="metric-unit">°</span>');
 
-                // 设备端静止平均滤波的结果（固件 1.5.3 起上报）。
-                // avg_n 是参与平均的样本数，为 0 说明设备没提供（老固件），
-                // 这时一律显示"—"，绝不能把"没上报"当成"移动中"。
+                // ---- 定位精度显示"实测散布"，而不是设备端的均值标准误 ----
+                // 设备端 acc_m 在 1.5.3 及以前是 σ/√n（小到 0.2 m），把多路径造成的
+                // 系统性偏差完全藏掉了：地图偏几十米、页面却写 ±0.2 m，只会让人
+                // 以为是页面 bug。这里以服务端算出的轨迹 p75 散布为准，设备值放进 tooltip。
                 var avgN = Number(data.avg_n) || 0;
-                var accM = Number(data.acc_m) || 0;
-                // 设备端做了平均才有这两个指标。未定位时服务端已把三个字段清零，
+                var devAcc = Number(data.acc_m) || 0;
+                var scatter = Number(data.scatter_m) || 0;
+                var scatterN = Number(data.scatter_n) || 0;
+                // 设备端做了平均才有状态指标。未定位时服务端已把相关字段清零，
                 // 这里再兜一层，免得以后后端改了、页面出现"没坐标却标着静止"
                 var filtered = fix && avgN > 0;
-                setMetric('mAcc', filtered && accM > 0
-                    ? '±' + fmtNum(accM, 1) + '<span class="metric-unit">m</span>'
-                    : '—');
+
+                // 位置摘要做成两个标签：状态 + 实测散布。比塞进遥测网格更像"结论"，
+                // 也让环境数据区回到 4×2 的整齐网格。
+                var accText = (fix && !stale && scatter > 0)
+                    ? '实测散布 ±' + fmtNum(scatter, 0) + ' m'
+                    : '实测散布 —';
+                var accEl = $('mAcc');
+                if (accEl.textContent !== accText) accEl.textContent = accText;
+
                 var stateText;
                 if (!fix) {
                     stateText = '未定位';
+                } else if (stale) {
+                    stateText = '最后已知';
                 } else if (filtered) {
                     // acc_m 为 0 表示窗口还没攒够、正在建立均值
-                    stateText = data.stationary ? '静止' : (accM > 0 ? '移动中' : '校准中');
+                    stateText = data.stationary ? '静止' : (devAcc > 0 ? '移动中' : '校准中');
                 } else {
                     stateText = '—'; // 老固件不提供这个信息，不能瞎猜
                 }
-                setMetric('mState', stateText);
-                var accEl = $('mAcc');
-                accEl.title = filtered
-                    ? '设备端取最近 ' + avgN + ' 个定位样本求均值（静止时上报均值，移动时上报最新解）；± 为均值标准误'
-                    : '需要设备固件 1.5.3 及以上';
-                $('mState').title = '静止 = 设备端判定为静止，坐标取窗口均值；移动中 = 跟随最新定位解；校准中 = 正在积累样本';
+                var stateEl = $('mState');
+                if (stateEl.textContent !== stateText) stateEl.textContent = stateText;
+                var stateCls = 'tag state';
+                if (!fix) stateCls += ' is-off';
+                else if (stale) stateCls += ' is-warn';
+                else if (stateText === '静止') stateCls += ' is-ok';
+                else if (stateText === '移动中') stateCls += ' is-move';
+                else if (stateText === '校准中') stateCls += ' is-warn';
+                else stateCls += ' is-off';
+                if (stateEl.className !== stateCls) stateEl.className = stateCls;
+
+                var devAccText = devAcc > 0 ? fmtNum(devAcc, 1) : '—';
+                if (!fix) {
+                    accEl.title = '未定位，暂无实测散布';
+                } else if (stale) {
+                    accEl.title = '设备暂时没有可信定位解，暂无实测散布';
+                } else if (scatter > 0) {
+                    accEl.title = '最近 ' + scatterN + ' 个轨迹点到稳定中心的 75 分位距离，' +
+                        '包含多路径/遮挡造成的系统性偏差；设备端上报 ±' + devAccText +
+                        ' m（固件 1.5.4 起为窗口散布，老固件是均值标准误，偏小）';
+                } else {
+                    accEl.title = '样本不足或设备正在移动，暂不统计散布；设备端上报 ±' + devAccText + ' m';
+                }
+                $('mState').title = '静止 = 设备端判定为静止，坐标取窗口均值；移动中 = 跟随最新定位解；' +
+                    '校准中 = 正在积累样本；最后已知 = 当前没有可信的新定位解';
 
                 // 当前位置：可读地址 + 原始坐标
                 if (fix) {
@@ -1450,8 +1558,17 @@
                     setText('cLat', '—');
                     setText('cLon', '—');
                 }
-                var addrText = !fix ? '等待卫星信号' : (data.address || '地址解析中…');
-                var addrCls = (!fix || !data.address) ? 'addr-text is-empty' : 'addr-text';
+                var addrText, addrCls;
+                if (!fix) {
+                    addrText = '等待卫星信号';
+                    addrCls = 'addr-text is-empty';
+                } else if (stale) {
+                    addrText = data.address ? '最后已知位置 · ' + data.address : '最后已知位置';
+                    addrCls = 'addr-text is-empty';
+                } else {
+                    addrText = data.address || '地址解析中…';
+                    addrCls = data.address ? 'addr-text' : 'addr-text is-empty';
+                }
                 var addrEl = $('mAddr');
                 if (addrEl.textContent !== addrText) {
                     addrEl.textContent = addrText;
@@ -1460,6 +1577,24 @@
                     setTimeout(function () { addrEl.className = addrCls; }, 500);
                 } else if (addrEl.className !== addrCls) {
                     addrEl.className = addrCls;
+                }
+
+                // ---- 定位质量提示：把"为什么有偏差"直接说清楚 ----
+                var warnEl = $('posWarn');
+                var warnText = '';
+                if (fix && stale) {
+                    warnText = '设备暂时没有可信定位解，地图显示的是最后已知位置；恢复后会自动更新。';
+                } else if (fix && scatter >= 50) {
+                    warnText = '定位环境较差（卫星少或受遮挡），实测偏差约 ±' + fmtNum(scatter, 0) +
+                        ' m。把设备移到窗边或室外、天线朝上，精度会明显改善。';
+                } else if (fix && data.satellites > 0 && data.satellites < 5) {
+                    warnText = '参与定位的卫星只有 ' + data.satellites + ' 颗，偏差可能较大；建议移到视野开阔处。';
+                }
+                if (warnText) {
+                    if (warnEl.textContent !== warnText) warnEl.textContent = warnText;
+                    warnEl.hidden = false;
+                } else {
+                    warnEl.hidden = true;
                 }
 
                 // 轨迹表（倒序，最新在上）。时间带完整年月日，跨天也能分清。
